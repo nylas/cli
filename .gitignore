@@ -1,0 +1,131 @@
+###### Nylas Developing #####
+# Used to store sync snapshots. See redwood/admin/snapshot
+.snapshots
+
+# Used to store local data generated from dev runs like logs and message
+# parts
+.dev_data
+
+# Used by nylas/services/sync/scripts/compare-account-status
+account_statuses.*
+
+
+###### Nylas Testing #####
+# Unit test / coverage reports
+.cache
+.coverage
+.hypothesis
+nosetests.xml
+pytestdebug.log
+.pytest_cache
+.test_data/
+
+###### Nylas Building #####
+# Ignorable Debian files when dpkg runs
+debian/cloud-core*
+debian/debhelper-build-stamp
+debian/.debhelper
+debian/files
+build/
+
+# Build dirs for FaaS systems (e.g. AWS Lambda)
+fn_build/
+
+
+###### Python #####
+# Ignore common virtualenv names
+venv
+.venv
+venv3
+.venv3
+
+# Created when installing python packages
+*.egg
+*.egg-info
+.Python
+bin/wheel
+pip-log.txt
+pip-selfcheck.json
+
+# Ignore Python binary files & metadata
+*.py[cod]
+__pycache__
+
+# Used for mypy linter
+.mypy_cache
+
+# pycharm
+.idea/
+
+# autoflake
+.magicindex.json
+
+
+###### Javascript #####
+node_modules
+lerna-debug.log
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+###### OS #####
+# Ignore Mac folder metadata
+.DS_Store
+
+# Vagrant
+.vagrant
+
+# Translations
+*.mo
+
+# vim temporary files
+*.swp
+*.swo
+
+# emacs files
+*~
+*#
+
+# ctags
+tags
+TAGS
+.tags
+.tags1
+
+# terraform state directories
+.terraform/
+*.tfstate.backup
+.terraform
+
+# terragrunt exclusions
+.terragrunt-cache/
+provider.tf
+backend.tf
+
+# Ignore local vimrcs
+.vimrc
+.vemv/
+
+# Ignore VS Code files
+.vscode
+
+# For Ack ignores that aren't in .gitignore
+.ignore
+
+###### Infrastructure ######
+# Ansible
+.boto
+vault-password-file.txt
+.vaults.txt
+.ansible-test
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+# testing area
+area51
+
+###### Docker ######
+!.docker/**
