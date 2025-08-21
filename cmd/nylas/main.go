@@ -1,7 +1,7 @@
 package main
 
 import (
-	"nylas-cli/pkg/cmd"
+	"github.com/nylas/cli/internal/cmd"
 )
 
 func main() {

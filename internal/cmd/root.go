@@ -10,7 +10,7 @@ import (
 var root = &cobra.Command{
 	Use:   "nylas",
 	Short: "The official CLI for Nylas",
-	Long:  "The official CLI for Nylas.\n\nBefore using the CLI, you'll need to log into your Nylas account:\n    $ nylas auth",
+	Long:  "The official CLI for Nylas.\n\nBefore using the CLI, you'll need to set your Nylas API Key:\n    $ nylas init",
 }
 
 func Execute() {

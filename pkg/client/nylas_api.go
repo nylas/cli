@@ -1,21 +1,17 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 )
 
 type NylasAPI struct {
-	BaseURL     string
-	AppClientID string
-	AppAPIKey   string
-	AccessToken string
-	HttpClient  *http.Client
+	BaseURL    string
+	AppAPIKey  string
+	HttpClient *http.Client
 }
 
 func CreateNylasAPIClient(BaseURL string) *NylasAPI {
@@ -28,35 +24,6 @@ func CreateNylasAPIClient(BaseURL string) *NylasAPI {
 type Data struct {
 	RequestID string                 `json:"request_id"`
 	Data      map[string]interface{} `json:"data"`
-}
-
-type Application struct {
-	ApplicationID   string `json:"application_id"`
-	OrganizationID  string `json:"organization_id"`
-	Region          string `json:"region"`
-	Environment     string `json:"environment"`
-	V2ApplicationID string `json:"v2_application_id,omitempty"`
-	Branding        struct {
-		Name        string `json:"name"`
-		IconURL     string `json:"icon_url"`
-		WebsiteURL  string `json:"website_url"`
-		Description string `json:"description"`
-	} `json:"branding"`
-	HostedAuthentication struct {
-		BackgroundImageURL string `json:"background_image_url"`
-		Alignment          string `json:"alignment"`
-		ColorPrimary       string `json:"color_primary"`
-		ColorSecondary     string `json:"color_secondary"`
-		Title              string `json:"title"`
-		Subtitle           string `json:"subtitle"`
-		BackgroundColor    string `json:"background_color"`
-		Spacing            int    `json:"spacing"`
-	} `json:"hosted_authentication"`
-	CallbackURIs []struct {
-		Platform string `json:"platform"`
-		ID       string `json:"id"`
-		URL      string `json:"url"`
-	} `json:"callback_uris"`
 }
 
 type IPAddresses struct {
@@ -72,35 +39,8 @@ type APIError struct {
 	} `json:"error"`
 }
 
-type Grant struct {
-	ID          string   `json:"id"`
-	Provider    string   `json:"provider"`
-	AccountID   string   `json:"account_id"`
-	GrantStatus string   `json:"grant_status"`
-	Email       string   `json:"email"`
-	Scope       []string `json:"scope"`
-	UserAgent   string   `json:"user_agent"`
-	Settings    struct {
-	} `json:"settings"`
-	IP        string `json:"ip"`
-	State     string `json:"state"`
-	Blocked   bool   `json:"blocked"`
-	CreatedAt int    `json:"created_at"`
-	UpdatedAt int    `json:"updated_at"`
-}
-
-type Webhook struct {
-	ID            string   `json:"id,omitempty" bson:",,omitempty"`
-	ApplicationID string   `json:"application_id,omitempty" bson:",,omitempty"`
-	CallbackURL   string   `json:"callback_url" bson:","`
-	Provider      string   `json:"provider,omitempty" bson:",omitempty"`
-	State         string   `json:"state" bson:","`
-	Version       string   `json:"version,omitempty" bson:",omitempty"`
-	Triggers      []string `json:"triggers" bson:","`
-}
-
-func (nylasApi *NylasAPI) RawRequest(method string, path string, body io.Reader, headers map[string]string) ([]byte, http.Header, error) {
-	url := fmt.Sprintf("%s/%s", strings.TrimSuffix(nylasApi.BaseURL, "/"), strings.TrimPrefix(path, "/"))
+func (nylasAPI *NylasAPI) RawRequest(method string, path string, body io.Reader, headers map[string]string) ([]byte, http.Header, error) {
+	url := fmt.Sprintf("%s/%s", strings.TrimSuffix(nylasAPI.BaseURL, "/"), strings.TrimPrefix(path, "/"))
 	req, err := http.NewRequest(strings.ToUpper(method), url, body)
 	if err != nil {
 		return nil, nil, err
@@ -110,21 +50,21 @@ func (nylasApi *NylasAPI) RawRequest(method string, path string, body io.Reader,
 		req.Header.Add(key, value) // How we set the Bearer token
 	}
 
-	resp, err := nylasApi.HttpClient.Do(req)
+	resp, err := nylasAPI.HttpClient.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	defer resp.Body.Close()
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		apiError := APIError{}
-		if resp.Header.Get("Content-Type") == "application/json" {
+		if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 			jsonError := json.Unmarshal(bodyBytes, &apiError)
 			if jsonError != nil {
 				return nil, nil, jsonError
@@ -145,8 +85,8 @@ func (nylasApi *NylasAPI) RawRequest(method string, path string, body io.Reader,
 	return bodyBytes, resp.Header, nil
 }
 
-func (nylasApi *NylasAPI) Request(response interface{}, method string, path string, requestBody io.Reader, apiKey string) error {
-	url := fmt.Sprintf("%s/%s", strings.TrimSuffix(nylasApi.BaseURL, "/"), strings.TrimPrefix(path, "/"))
+func (nylasAPI *NylasAPI) Request(response interface{}, method string, path string, requestBody io.Reader, apiKey string) error {
+	url := fmt.Sprintf("%s/%s", strings.TrimSuffix(nylasAPI.BaseURL, "/"), strings.TrimPrefix(path, "/"))
 	req, err := http.NewRequest(strings.ToUpper(method), url, requestBody)
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
@@ -156,7 +96,7 @@ func (nylasApi *NylasAPI) Request(response interface{}, method string, path stri
 	if err != nil {
 		return err
 	}
-	resp, err := nylasApi.HttpClient.Do(req)
+	resp, err := nylasAPI.HttpClient.Do(req)
 
 	if err != nil {
 		return err
@@ -164,10 +104,9 @@ func (nylasApi *NylasAPI) Request(response interface{}, method string, path stri
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		apiError := APIError{}
-		if resp.Header.Get("Content-Type") == "application/json" {
-			fmt.Println(string(body))
+		if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 			jsonError := json.Unmarshal(body, &apiError)
 			if jsonError != nil {
 				return jsonError
@@ -197,65 +136,4 @@ func (nylasApi *NylasAPI) Request(response interface{}, method string, path stri
 	}
 
 	return err
-}
-
-// APPLICATION MANAGEMENT
-func (nylasApi *NylasAPI) GetApplication(apiKey string) (Application, error) {
-	var application Application
-
-	err := nylasApi.Request(&application, http.MethodGet,
-		"/v3/applications", nil, "Bearer "+apiKey)
-	return application, err
-}
-
-func (nylasApi *NylasAPI) UpdateApplication(application Application, apiKey string) (Application, error) {
-	var updatedApplication Application
-
-	jsonString, jsonError := json.Marshal(application)
-	if jsonError != nil {
-		return updatedApplication, jsonError
-	}
-
-	err := nylasApi.Request(&updatedApplication, http.MethodPatch,
-		"/v3/applications", bytes.NewBuffer(jsonString), "Bearer "+apiKey)
-	return updatedApplication, err
-}
-
-func (nylasApi *NylasAPI) ListGrants(apiKey string) ([]Grant, error) {
-	var grants []Grant
-	err := nylasApi.Request(&grants, http.MethodGet,
-		"/v3/grants", nil, "Bearer "+apiKey)
-	return grants, err
-}
-
-func (nylasApi *NylasAPI) GetGrant(apiKey, grantID string) (Grant, error) {
-	var grant Grant
-	err := nylasApi.Request(&grant, http.MethodGet,
-		"/v3/grants/"+grantID, nil, "Bearer "+apiKey)
-	return grant, err
-}
-
-func (nylasApi *NylasAPI) DeleteGrant(apiKey, grantID string) error {
-	return nylasApi.Request(nil, http.MethodDelete,
-		"/v3/grants/"+grantID, nil, "Bearer "+apiKey)
-}
-
-func (nylasApi *NylasAPI) ListWebhooks(apiKey string) ([]Webhook, error) {
-	var webhooks []Webhook
-	err := nylasApi.Request(&webhooks, http.MethodGet,
-		"/v3/webhooks", nil, "Bearer "+apiKey)
-	return webhooks, err
-}
-
-func (nylasApi *NylasAPI) CreateWebhook(apiKey string, webhook Webhook) (Webhook, error) {
-	var created Webhook
-	reqBody, _ := json.Marshal(webhook)
-	err := nylasApi.Request(&created, http.MethodPost,
-		"/v3/webhooks", bytes.NewBuffer(reqBody), "Bearer "+apiKey)
-	return created, err
-}
-
-func (nylasApi *NylasAPI) DeleteWebhook(apiKey, webhookID string) error {
-	return nylasApi.Request(nil, http.MethodDelete,
-		"/v3/webhooks/"+webhookID, nil, "Bearer "+apiKey)
 }

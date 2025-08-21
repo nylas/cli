@@ -2,12 +2,16 @@ package cmd
 
 import (
 	"fmt"
-	"log"
-	"nylas-cli/pkg/client"
-	"nylas-cli/pkg/util"
+	"os"
+
+	"github.com/nylas/cli/pkg/client"
+	"github.com/nylas/cli/pkg/util"
+
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/zalando/go-keyring"
+	"golang.org/x/term"
 )
 
 func saveToken(t string, token string) error {
@@ -24,20 +28,27 @@ var initialize = &cobra.Command{
 			fmt.Println("Visit the dashboard at https://dashboard-v3.nylas.com and create a new API key if you do not have one.")
 
 			fmt.Print("Enter your API key: ")
-			fmt.Scanln(&apiKey)
+			bytes, err := term.ReadPassword(syscall.Stdin)
+			if err != nil {
+				fmt.Printf("An error occured while reading API key: %v\n", err)
+				os.Exit(1)
+			}
+			apiKey = string(bytes)
 		} else {
 			apiKey = args[0]
 		}
 
-		nylasApi := client.CreateNylasAPIClient(util.RegionConfig["us"].NylasAPIURL)
-		_, appErr := nylasApi.GetApplication(apiKey)
+		nylasAPI := client.CreateNylasAPIClient(util.RegionConfig["us"].NylasAPIURL)
+		_, err := nylasAPI.GetApplication(apiKey)
 
-		if appErr != nil {
+		if err != nil {
 			fmt.Println("<red>Could not initialize the app with credentials provided. Please check your API key and try again.<red>")
-			fmt.Println(appErr)
+			fmt.Println(err)
+			os.Exit(1)
 		} else {
 			if err := saveToken("api-key", apiKey); err != nil {
-				log.Fatal(err)
+				fmt.Printf("An error occurred while trying to save the API key: %v\n", err)
+				os.Exit(1)
 				return
 			}
 

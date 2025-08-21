@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"nylas-cli/pkg/util"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/nylas/cli/pkg/util"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -19,60 +22,84 @@ func getToken(t string) (string, error) {
 	return key, err
 }
 
+func handleError(Body io.ReadCloser) {
+	err := Body.Close()
+	if err != nil {
+		fmt.Printf("An error occurred while waiting for a response: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 var tunnelUrl string
+var webhookBase = &cobra.Command{
+	Use:   "webhook",
+	Short: "Manages various parts of a Nylas webhook",
+	Long:  "Manages various parts of a Nylas webhook. Currently only supports tunneling a webhook connection.",
+}
 var webhook = &cobra.Command{
-	Use:   "webhook tunnel",
+	Use:   "tunnel",
 	Short: "Creates a connection to Nylas's webhook server and receives events locally",
 	Long:  "Creates a streaming connection to Nylas's webhook server to receive events from locally. Capable of forwarding these events to a specified URL if the --forward flag is defined.",
 	Run: func(cmd *cobra.Command, args []string) {
 		c := &http.Client{
-			Timeout: 3.6e+12, // 1 hour timeout
+			Timeout: time.Hour,
 		}
 		// Nylas webhook challenge
 		if tunnelUrl != "" {
 			challenge := uuid.New().String()
 			req, err := http.NewRequest("GET", strings.TrimSuffix(tunnelUrl, "/")+"?challenge="+challenge, nil)
 			if err != nil {
-				log.Fatal("Error occurred while sending challenge request: ", err)
+				fmt.Printf("Error occurred while sending challenge request: %v\n", err)
+				os.Exit(1)
 			}
 			resp, err := c.Do(req)
 			if err != nil {
-				log.Fatal("Error occurred while sending challenge request: ", err)
+				fmt.Printf("Error occurred while sending challenge request: %v\n", err)
+				os.Exit(1)
 			}
-			defer resp.Body.Close()
+			defer handleError(resp.Body)
 
 			if resp.StatusCode != 200 {
-				log.Fatalf("Tunnel URL returned non-200 status: %d", resp.StatusCode)
+				fmt.Printf("Tunnel URL returned non-200 status: %d", resp.StatusCode)
+				os.Exit(1)
 			}
 			body, err := io.ReadAll(resp.Body)
 			if string(body) != challenge {
-				log.Fatalf("Returned value (%s) does not match challenge string (%s)", string(body), challenge)
+				fmt.Printf("Returned value (%s) does not match challenge string (%s)", string(body), challenge)
+				os.Exit(1)
 			}
 		}
 
 		key, err := getToken("api-key")
 		if err != nil {
-			log.Fatalf("Error occurred while retrieving app ID: %v", err)
+			fmt.Printf("Error occurred while retrieving app ID: %v", err)
+			os.Exit(1)
 		}
 
 		req, err := http.NewRequest("GET", util.RegionConfig["us"].StreamEndpointURL, nil)
 		if err != nil {
-			log.Fatalf("Error creating request: %v", err)
+			fmt.Printf("Error creating request: %v\n", err)
+			os.Exit(1)
 		}
 		req.Header.Set("Accept", "text/event-stream")
 		req.Header.Set("Authorization", "Bearer "+key)
 
 		resp, err := c.Do(req)
 		if err != nil {
-			log.Fatalf("Error making request: %v", err)
+			fmt.Printf("Error making request: %v\n", err)
+			os.Exit(1)
 		}
-		defer resp.Body.Close()
+		defer handleError(resp.Body)
 
 		if resp.StatusCode != http.StatusOK {
-			log.Fatalf("Server returned non-200 status: %d", resp.StatusCode)
+			fmt.Printf("Server returned non-200 status: %d\n", resp.StatusCode)
+			os.Exit(1)
 		}
 
 		reader := bufio.NewReader(resp.Body)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		for {
 			line, err := reader.ReadString('\n')
@@ -81,7 +108,8 @@ var webhook = &cobra.Command{
 					fmt.Println("Server closed the connection.")
 					break
 				}
-				log.Fatalf("Error reading from stream: %v", err)
+				fmt.Printf("Error reading from stream: %v\n", err)
+				os.Exit(1)
 			}
 
 			// Remove leading/trailing whitespace
@@ -91,7 +119,23 @@ var webhook = &cobra.Command{
 				data := strings.TrimPrefix(line, "data: ")
 				if tunnelUrl != "" {
 					// Forward the data to the tunnel URL
-					http.Post(tunnelUrl, "application/json", strings.NewReader(data))
+					req, err = http.NewRequestWithContext(ctx, http.MethodPost, tunnelUrl, strings.NewReader(data))
+					if err != nil {
+						fmt.Printf("Error forwarding webhook event: %v\n", err)
+						os.Exit(1)
+					}
+					req.Header.Set("Content-Type", "application/json")
+
+					resp, err := http.DefaultClient.Do(req)
+					if err != nil {
+						fmt.Printf("Error forwarding webhook event: %v\n", err)
+						os.Exit(1)
+					}
+					defer handleError(resp.Body)
+
+					if resp.StatusCode != http.StatusOK {
+						fmt.Printf("Tunnel returned non-200 status: %d\n", resp.StatusCode)
+					}
 				} else {
 					fmt.Printf("Received message: %s\n", data)
 				}
@@ -104,5 +148,6 @@ var webhook = &cobra.Command{
 
 func init() {
 	webhook.Flags().StringVar(&tunnelUrl, "forward", "", "The locally hosted URL (http://localhost:PORT) to forward webhook messages to")
-	root.AddCommand(webhook)
+	webhookBase.AddCommand(webhook)
+	root.AddCommand(webhookBase)
 }
