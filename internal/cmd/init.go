@@ -38,11 +38,12 @@ var initialize = &cobra.Command{
 			apiKey = args[0]
 		}
 
-		nylasAPI := client.CreateNylasAPIClient(util.RegionConfig["us"].NylasAPIURL)
+		debugf("Using region: %s", region)
+		nylasAPI := client.CreateNylasAPIClient(util.RegionConfig[region].NylasAPIURL)
 		_, err := nylasAPI.GetApplication(apiKey)
 
 		if err != nil {
-			fmt.Println("<red>Could not initialize the app with credentials provided. Please check your API key and try again.<red>")
+			fmt.Println("Could not initialize the app with credentials provided. Please check your API key and try again.")
 			fmt.Println(err)
 			os.Exit(1)
 		} else {
@@ -52,7 +53,7 @@ var initialize = &cobra.Command{
 				return
 			}
 
-			fmt.Println("<green>Successfully saved your application credentials.<green>")
+			fmt.Println("Successfully saved your application credentials.")
 		}
 	},
 }

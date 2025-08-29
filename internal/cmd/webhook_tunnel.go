@@ -76,7 +76,8 @@ var webhook = &cobra.Command{
 			os.Exit(1)
 		}
 
-		req, err := http.NewRequest("GET", util.RegionConfig["us"].StreamEndpointURL, nil)
+		debugf("Using region: %s", region)
+		req, err := http.NewRequest("GET", util.RegionConfig[region].StreamEndpointURL, nil)
 		if err != nil {
 			fmt.Printf("Error creating request: %v\n", err)
 			os.Exit(1)
@@ -140,7 +141,9 @@ var webhook = &cobra.Command{
 					fmt.Printf("Received message: %s\n", data)
 				}
 			} else if strings.HasPrefix(line, ":") { // Comments
-				fmt.Println("Received comment: " + line[1:])
+				if line != ":heartbeat" { // Ignore heartbeats
+					fmt.Println("Received comment: " + line[1:])
+				}
 			}
 		}
 	},
