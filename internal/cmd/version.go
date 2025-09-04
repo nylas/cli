@@ -14,26 +14,26 @@ var (
 
 // Get build info
 func SetBuildInfo(v string, c string, d string) {
-    if v != "" {
-        version = v
-    }
-    if c != "" {
-        commit = c
-    }
-    if d != "" {
-        date = d
-    }
+	if v != "" {
+		version = v
+	}
+	if c != "" {
+		commit = c
+	}
+	if d != "" {
+		date = d
+	}
 }
 
-var version = &cobra.Command{
+var versionCmd = &cobra.Command{
 	Use:     "version",
 	Aliases: []string{"-v", "--version"},
 	Short:   "Display the CLI's version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Nylas CLI version \x1B[1m%s\x1B[22m (commit %s, built %s)\n", cliVersion, cliCommit, cliDate)
+		fmt.Printf("Nylas CLI version \x1B[1m%s\x1B[22m (commit %s, built %s)\n", version, commit, date)
 	},
 }
 
 func init() {
-	root.AddCommand(version)
+	root.AddCommand(versionCmd)
 }
