@@ -24,4 +24,11 @@ var RegionConfig = map[string]RegionConfiguration{
 		CallbackDomain:    "cb.nylas.com",
 		TelemetryAPIURL:   "https://cli.nylas.com",
 	},
+	"dev": {
+		NylasAPIURL:       "https://api.dev.nylas.com",
+		DashboardAPIURL:   "https://dashboard-api.dev.nylas.com",
+		StreamEndpointURL: "http://localhost:8080/stream",
+		CallbackDomain:    "cb.dev.nylas.com",
+		TelemetryAPIURL:   "https://cli.dev.nylas.com",
+	},
 }
