@@ -31,6 +31,7 @@ func handleError(Body io.ReadCloser) {
 }
 
 var tunnelUrl string
+var appID string
 var webhookBase = &cobra.Command{
 	Use:   "webhook",
 	Short: "Manages various parts of a Nylas webhook",
@@ -64,6 +65,10 @@ var webhook = &cobra.Command{
 				os.Exit(1)
 			}
 			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Printf("Error reading challenge response: %v\n", err)
+				os.Exit(1)
+			}
 			if string(body) != challenge {
 				fmt.Printf("Returned value (%s) does not match challenge string (%s)", string(body), challenge)
 				os.Exit(1)
@@ -84,6 +89,11 @@ var webhook = &cobra.Command{
 		}
 		req.Header.Set("Accept", "text/event-stream")
 		req.Header.Set("Authorization", "Bearer "+key)
+
+		// Only support Application ID header in dev region
+		if region == "dev" && appID != "" {
+			req.Header.Set("X-Nylas-Application-Id", appID)
+		}
 
 		resp, err := c.Do(req)
 		if err != nil {
@@ -151,6 +161,7 @@ var webhook = &cobra.Command{
 
 func init() {
 	webhook.Flags().StringVar(&tunnelUrl, "forward", "", "The locally hosted URL (http://localhost:PORT) to forward webhook messages to")
+	webhook.Flags().StringVar(&appID, "app-id", "", "Nylas Application ID to send as X-Nylas-Application-Id header (only used with --region=dev)")
 	webhookBase.AddCommand(webhook)
 	root.AddCommand(webhookBase)
 }
