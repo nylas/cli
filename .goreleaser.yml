@@ -1,0 +1,122 @@
+version: 2
+
+project_name: nylas
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/nylas
+    binary: nylas
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/nylas/cli/internal/cli.Version={{.Version}}
+      - -X github.com/nylas/cli/internal/cli.Commit={{.Commit}}
+      - -X github.com/nylas/cli/internal/cli.BuildDate={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+      - zip
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+      - goos: linux
+        formats:
+          - tar.gz
+      - goos: darwin
+        formats:
+          - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE*
+      - docs/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+brews:
+  - repository:
+      owner: nylas
+      name: homebrew-tap
+      branch: main
+    directory: Formula
+    homepage: "https://github.com/nylas/cli"
+    description: "CLI for Nylas API - manage email, calendar, and contacts"
+    license: "MIT"
+    install: |
+      bin.install "nylas"
+
+      # Install shell completions
+      generate_completions_from_executable(bin/"nylas", "completion")
+    test: |
+      system "#{bin}/nylas", "--version"
+
+release:
+  github:
+    owner: nylas
+    name: cli
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Nylas CLI {{ .Version }}
+
+    ### Installation
+
+    **macOS/Linux (Homebrew):**
+    ```bash
+    brew tap nylas/tap && brew install nylas
+    ```
+
+    **macOS (DMG):**
+    - Apple Silicon: Download `Nylas-CLI-{{ .Version }}-apple-silicon.dmg`
+    - Intel: Download `Nylas-CLI-{{ .Version }}-intel.dmg`
+
+    Open the DMG and copy `nylas` to `/usr/local/bin/` or your preferred location.
+
+    **Manual Download:**
+    Download the appropriate archive for your platform below, extract it, and move the `nylas` binary to your PATH.
+
+    **Go Install:**
+    ```bash
+    go install github.com/nylas/cli/cmd/nylas@{{ .Tag }}
+    ```
+  footer: |
+    ---
+    **Full Changelog**: https://github.com/nylas/cli/compare/{{ .PreviousTag }}...{{ .Tag }}
+  name_template: "v{{ .Version }}"

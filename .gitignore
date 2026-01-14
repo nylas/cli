@@ -1,131 +1,193 @@
-###### Nylas Developing #####
-# Used to store sync snapshots. See redwood/admin/snapshot
-.snapshots
+# Planning/internal docs
+*plan.md
 
-# Used to store local data generated from dev runs like logs and message
-# parts
-.dev_data
+# Temporary refactoring/analysis documents
+REFACTORING_PROGRESS.md
+ENGINEERING_IMPROVEMENTS_SUMMARY.md
+COVERAGE_REPORT.md
+start.md
+*_PROGRESS.md
+*_SUMMARY.md
+*_REPORT.md
 
-# Used by nylas/services/sync/scripts/compare-account-status
-account_statuses.*
+# Temporary setup/installation docs (info should be in docs/development/)
+INSTALL_VHS.md
+VHS_SETUP_SUMMARY.md
+CODE_INDEX.md
 
+# Local development (not committed)
+/local/
+*design/
 
-###### Nylas Testing #####
-# Unit test / coverage reports
-.cache
-.coverage
-.hypothesis
-nosetests.xml
-pytestdebug.log
-.pytest_cache
-.test_data/
+# ===========================================
+# Claude Code - Local/Personal Files
+# ===========================================
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/*.local.*
+.claude/*/*.local.*
 
-###### Nylas Building #####
-# Ignorable Debian files when dpkg runs
-debian/cloud-core*
-debian/debhelper-build-stamp
-debian/.debhelper
-debian/files
-build/
+# Session-specific progress tracking (personal, not shared)
+claude-progress.txt
+# Build artifacts
+dist/
 
-# Build dirs for FaaS systems (e.g. AWS Lambda)
-fn_build/
+# Binaries
+bin/
+/nylas
+*.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
+# Test coverage
+*coverage*.out
+coverage.html
+*.coverprofile
+ci-full.txt
+ci-full-verification.txt
+*-verification.txt
+test-integration.txt
 
-###### Python #####
-# Ignore common virtualenv names
-venv
-.venv
-venv3
-.venv3
-
-# Created when installing python packages
-*.egg
-*.egg-info
-.Python
-bin/wheel
-pip-log.txt
-pip-selfcheck.json
-
-# Ignore Python binary files & metadata
-*.py[cod]
-__pycache__
-
-# Used for mypy linter
-.mypy_cache
-
-# pycharm
+# IDE
 .idea/
+.vscode/
 
-# autoflake
-.magicindex.json
-
-
-###### Javascript #####
-node_modules
-lerna-debug.log
-npm-debug.log
-yarn-error.log
-package-lock.json
-
-###### OS #####
-# Ignore Mac folder metadata
-.DS_Store
-
-# Vagrant
-.vagrant
-
-# Translations
-*.mo
-
-# vim temporary files
+# Playwright MCP artifacts
+.playwright*
 *.swp
 *.swo
-
-# emacs files
 *~
-*#
 
-# ctags
-tags
-TAGS
-.tags
-.tags1
+# OS
+.DS_Store
+Thumbs.db
 
-# terraform state directories
-.terraform/
-*.tfstate.backup
-.terraform
+# Go
+vendor/
 
-# terragrunt exclusions
-.terragrunt-cache/
-provider.tf
-backend.tf
+# Node.js
+node_modules/
+internal/cli/ui/static/js/package*.json
+internal/cli/ui/static/js/*.test.js
 
-# Ignore local vimrcs
-.vimrc
-.vemv/
+# ===========================================
+# SECURITY - Credential & Secret Protection
+# ===========================================
 
-# Ignore VS Code files
-.vscode
+# Environment files (may contain API keys)
+.env
+.env.*
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
 
-# For Ack ignores that aren't in .gitignore
-.ignore
+# Credential files
+credentials.json
+credentials.yaml
+credentials.yml
+*credentials*
+*credential*
+!*credential*.go
+!*credentials*.go
 
-###### Infrastructure ######
-# Ansible
-.boto
-vault-password-file.txt
-.vaults.txt
-.ansible-test
+# API keys and tokens
+*.key
+*.pem
+*.p12
+*.pfx
+api_key*
+apikey*
+*api_key*
+*apikey*
+*token*
+!*_test.go
+!internal/cli/auth/token.go
 
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
+# Secret files
+secrets.json
+secrets.yaml
+secrets.yml
+*secrets*
+*secret*
+!internal/ports/secrets.go
 
-# testing area
-area51
+# OAuth tokens
+oauth_token*
+access_token*
+refresh_token*
+*.token
 
-###### Docker ######
-!.docker/**
+# Config files that might contain secrets
+config.local.*
+config.private.*
+*.private.*
+local.yaml
+local.yml
+local.json
+
+# Nylas specific
+nylas_credentials*
+.nylas/
+nylas.env
+
+# Certificate files
+*.crt
+*.cer
+*.ca-bundle
+
+# SSH keys
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.ppk
+
+# GPG
+*.gpg
+*.asc
+secring.*
+
+# AWS
+.aws/
+aws_credentials
+
+# GCP
+service_account*.json
+gcp_credentials*
+
+# Azure
+.azure/
+
+# Backup files that might contain secrets
+*.bak
+*.backup
+*.old
+*.orig
+
+# Log files (may contain sensitive data)
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test artifacts (may expose test credentials)
+test_output/
+test_results/
+test-results/
+playwright-report/
+
+# ===========================================
+# End Security Section
+# ===========================================
+.mcp.json
+*phase*.md
+ci-output.txt
+ci-results.txt
