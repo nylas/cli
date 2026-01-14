@@ -1,7 +1,5 @@
 # Nylas CLI
 
-> **DISCLAIMER**: This is NOT the official Nylas CLI from Nylas, Inc. This is a community-built, open-source project created independently. For the official Nylas tools and documentation, please visit [nylas.com](https://www.nylas.com) and [developer.nylas.com](https://developer.nylas.com).
-
 A unified command-line tool for Nylas API authentication, email management, calendar, contacts, webhooks, and more.
 
 ## Features
