@@ -16,6 +16,7 @@ import (
 
 func TestCLI_DraftsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "drafts", "list", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -34,6 +35,7 @@ func TestCLI_DraftsList(t *testing.T) {
 
 func TestCLI_DraftsLifecycle(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	if os.Getenv("NYLAS_TEST_DELETE") != "true" {
 		t.Skip("NYLAS_TEST_DELETE not set to 'true'")

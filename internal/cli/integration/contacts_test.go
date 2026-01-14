@@ -16,6 +16,7 @@ import (
 
 func TestCLI_ContactsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "list", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -34,6 +35,7 @@ func TestCLI_ContactsList(t *testing.T) {
 
 func TestCLI_ContactsListWithID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "list", testGrantID, "--id")
 	skipIfProviderNotSupported(t, stderr)
@@ -101,6 +103,7 @@ func TestCLI_ContactsCreateHelp(t *testing.T) {
 
 func TestCLI_ContactsGroupsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "groups", "list", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -119,6 +122,7 @@ func TestCLI_ContactsGroupsList(t *testing.T) {
 
 func TestCLI_ContactsLifecycle(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	if os.Getenv("NYLAS_TEST_DELETE") != "true" {
 		t.Skip("NYLAS_TEST_DELETE not set to 'true'")
@@ -343,6 +347,7 @@ func TestCLI_ContactsGroupsDeleteHelp(t *testing.T) {
 
 func TestCLI_ContactsSearch_Email(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	if os.Getenv("NYLAS_TEST_DELETE") != "true" {
 		t.Skip("NYLAS_TEST_DELETE not set to 'true'")
@@ -427,6 +432,7 @@ func TestCLI_ContactsSyncHelp(t *testing.T) {
 
 func TestCLI_ContactsSync(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "sync", testGrantID)
 	skipIfProviderNotSupported(t, stderr)

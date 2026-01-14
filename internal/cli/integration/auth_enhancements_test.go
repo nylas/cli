@@ -67,7 +67,7 @@ func TestCLI_AuthProvidersListJSON(t *testing.T) {
 		t.Fatalf("auth providers --json failed: %v\nstderr: %s", err, stderr)
 	}
 
-	var connectors []map[string]interface{}
+	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &connectors); err != nil {
 		t.Fatalf("Failed to parse JSON output: %v\noutput: %s", err, stdout)
 	}
@@ -196,7 +196,7 @@ func TestCLI_AuthDetectJSON(t *testing.T) {
 		t.Fatalf("auth detect --json failed: %v\nstderr: %s", err, stderr)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("Failed to parse JSON output: %v\noutput: %s", err, stdout)
 	}
@@ -291,7 +291,7 @@ func TestCLI_AuthScopesJSON(t *testing.T) {
 		t.Fatalf("auth scopes --json failed: %v\nstderr: %s", err, stderr)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("Failed to parse JSON output: %v\noutput: %s", err, stdout)
 	}

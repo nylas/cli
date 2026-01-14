@@ -52,7 +52,7 @@ func (s *GrantService) ListGrants(ctx context.Context) ([]domain.GrantStatus, er
 				// Update local storage if provider changed
 				if g.Provider != grant.Provider {
 					g.Provider = grant.Provider
-					_ = s.grantStore.SaveGrant(g)
+					_ = s.grantStore.SaveGrant(g) // best-effort cache update, non-critical
 				}
 			}
 		} else if err == domain.ErrGrantNotFound {
@@ -105,7 +105,7 @@ func (s *GrantService) GetCurrentGrant(ctx context.Context) (*domain.GrantStatus
 			// Update local storage if provider changed
 			if info.Provider != grant.Provider {
 				info.Provider = grant.Provider
-				_ = s.grantStore.SaveGrant(*info)
+				_ = s.grantStore.SaveGrant(*info) // best-effort cache update, non-critical
 			}
 		}
 	} else if err == domain.ErrGrantNotFound {

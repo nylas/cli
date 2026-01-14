@@ -17,6 +17,7 @@ func TestCLI_EmailSend(t *testing.T) {
 		t.Skip("Skipping send test - set NYLAS_TEST_SEND_EMAIL=true to enable")
 	}
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	email := testEmail
 	if email == "" {
@@ -43,6 +44,7 @@ func TestCLI_EmailSend(t *testing.T) {
 
 func TestCLI_EmailHelp(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "--help")
 
@@ -66,6 +68,7 @@ func TestCLI_EmailHelp(t *testing.T) {
 
 func TestCLI_EmailRead_InvalidID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "read", "invalid-message-id", testGrantID)
 
@@ -78,6 +81,7 @@ func TestCLI_EmailRead_InvalidID(t *testing.T) {
 
 func TestCLI_EmailList_InvalidGrantID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "list", "invalid-grant-id", "--limit", "1")
 
@@ -94,6 +98,7 @@ func TestCLI_EmailList_InvalidGrantID(t *testing.T) {
 
 func TestCLI_EmailList_All(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "list", "all", "--limit", "5")
 
@@ -115,6 +120,7 @@ func TestCLI_EmailList_All(t *testing.T) {
 
 func TestCLI_EmailList_AllWithID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "list", "all", "--limit", "3", "--id")
 
@@ -136,6 +142,7 @@ func TestCLI_EmailList_AllWithID(t *testing.T) {
 
 func TestCLI_EmailList_AllHelp(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "list", "all", "--help")
 
@@ -160,6 +167,7 @@ func TestCLI_EmailList_AllHelp(t *testing.T) {
 
 func TestCLI_EmailSendHelp_Schedule(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "send", "--help")
 
@@ -201,6 +209,7 @@ func TestCLI_EmailSend_Scheduled(t *testing.T) {
 		t.Skip("Skipping send test - set NYLAS_TEST_SEND_EMAIL=true to enable")
 	}
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	email := testEmail
 	if email == "" {
@@ -258,6 +267,7 @@ func TestCLI_EmailSearchHelp_AdvancedFlags(t *testing.T) {
 
 func TestCLI_EmailSearch_AdvancedFilters(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	tests := []struct {
 		name string

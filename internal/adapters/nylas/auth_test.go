@@ -76,14 +76,14 @@ func TestHTTPClient_BuildAuthURL(t *testing.T) {
 func TestHTTPClient_ExchangeCode(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse interface{}
+		serverResponse any
 		serverStatus   int
 		wantErr        bool
 		wantGrant      *domain.Grant
 	}{
 		{
 			name: "successful exchange",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"grant_id":      "grant-123",
 				"access_token":  "access-token-abc",
 				"refresh_token": "refresh-token-xyz",
@@ -103,7 +103,7 @@ func TestHTTPClient_ExchangeCode(t *testing.T) {
 		},
 		{
 			name: "invalid code",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error":       "invalid_grant",
 				"description": "The authorization code has expired",
 			},
@@ -113,7 +113,7 @@ func TestHTTPClient_ExchangeCode(t *testing.T) {
 		},
 		{
 			name:           "server error",
-			serverResponse: map[string]interface{}{"error": "internal_error"},
+			serverResponse: map[string]any{"error": "internal_error"},
 			serverStatus:   http.StatusInternalServerError,
 			wantErr:        true,
 			wantGrant:      nil,
@@ -161,7 +161,7 @@ func TestHTTPClient_ExchangeCode_UsesAPIKeyAsSecret(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"grant_id": "grant-123",
 			"email":    "test@example.com",
 			"provider": "google",
@@ -184,15 +184,15 @@ func TestHTTPClient_ExchangeCode_UsesAPIKeyAsSecret(t *testing.T) {
 func TestHTTPClient_ListGrants(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse interface{}
+		serverResponse any
 		serverStatus   int
 		wantErr        bool
 		wantCount      int
 	}{
 		{
 			name: "list multiple grants",
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":           "grant-1",
 						"email":        "user1@example.com",
@@ -213,8 +213,8 @@ func TestHTTPClient_ListGrants(t *testing.T) {
 		},
 		{
 			name: "empty grants list",
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{},
+			serverResponse: map[string]any{
+				"data": []map[string]any{},
 			},
 			serverStatus: http.StatusOK,
 			wantErr:      false,
@@ -222,14 +222,14 @@ func TestHTTPClient_ListGrants(t *testing.T) {
 		},
 		{
 			name:           "unauthorized",
-			serverResponse: map[string]interface{}{"error": "unauthorized"},
+			serverResponse: map[string]any{"error": "unauthorized"},
 			serverStatus:   http.StatusUnauthorized,
 			wantErr:        true,
 			wantCount:      0,
 		},
 		{
 			name:           "server error",
-			serverResponse: map[string]interface{}{"error": "internal_error"},
+			serverResponse: map[string]any{"error": "internal_error"},
 			serverStatus:   http.StatusInternalServerError,
 			wantErr:        true,
 			wantCount:      0,
@@ -268,7 +268,7 @@ func TestHTTPClient_GetGrant(t *testing.T) {
 	tests := []struct {
 		name           string
 		grantID        string
-		serverResponse interface{}
+		serverResponse any
 		serverStatus   int
 		wantErr        error
 		wantGrant      *domain.Grant
@@ -276,8 +276,8 @@ func TestHTTPClient_GetGrant(t *testing.T) {
 		{
 			name:    "get existing grant",
 			grantID: "grant-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":           "grant-123",
 					"email":        "user@example.com",
 					"provider":     "google",
@@ -296,7 +296,7 @@ func TestHTTPClient_GetGrant(t *testing.T) {
 		{
 			name:           "grant not found",
 			grantID:        "nonexistent",
-			serverResponse: map[string]interface{}{"error": "not_found"},
+			serverResponse: map[string]any{"error": "not_found"},
 			serverStatus:   http.StatusNotFound,
 			wantErr:        domain.ErrGrantNotFound,
 			wantGrant:      nil,
@@ -304,7 +304,7 @@ func TestHTTPClient_GetGrant(t *testing.T) {
 		{
 			name:           "unauthorized",
 			grantID:        "grant-123",
-			serverResponse: map[string]interface{}{"error": "unauthorized"},
+			serverResponse: map[string]any{"error": "unauthorized"},
 			serverStatus:   http.StatusUnauthorized,
 			wantErr:        domain.ErrAPIError,
 			wantGrant:      nil,

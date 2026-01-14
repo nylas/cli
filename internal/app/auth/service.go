@@ -40,7 +40,7 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 	if err := s.server.Start(); err != nil {
 		return nil, err
 	}
-	defer func() { _ = s.server.Stop() }()
+	defer func() { _ = s.server.Stop() }() // best-effort cleanup, server may already be stopped
 
 	// Build auth URL and open browser
 	authURL := s.client.BuildAuthURL(provider, s.server.GetRedirectURI())
@@ -72,7 +72,7 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 
 	// Set as default if no default exists
 	if _, err := s.grantStore.GetDefaultGrant(); err == domain.ErrNoDefaultGrant {
-		_ = s.grantStore.SetDefaultGrant(grant.ID)
+		_ = s.grantStore.SetDefaultGrant(grant.ID) // non-critical: grant saved successfully, default is convenience
 	}
 
 	return grant, nil
@@ -129,10 +129,10 @@ func (s *Service) LogoutGrant(ctx context.Context, grantID string) error {
 func (s *Service) autoSwitchDefault() {
 	grants, err := s.grantStore.ListGrants()
 	if err != nil || len(grants) == 0 {
-		// No remaining grants - clear the default
-		_ = s.grantStore.ClearGrants()
+		// No remaining grants - clear the default (best-effort, non-critical)
+		_ = s.grantStore.ClearGrants() // best-effort cleanup
 		return
 	}
-	// Set the first remaining grant as default
-	_ = s.grantStore.SetDefaultGrant(grants[0].ID)
+	// Set the first remaining grant as default (non-critical convenience operation)
+	_ = s.grantStore.SetDefaultGrant(grants[0].ID) // best-effort, user can manually set default
 }

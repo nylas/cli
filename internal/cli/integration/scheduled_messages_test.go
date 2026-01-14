@@ -37,6 +37,7 @@ func TestCLI_EmailScheduledHelp(t *testing.T) {
 
 func TestCLI_EmailScheduledList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "scheduled", "list", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -80,6 +81,7 @@ func TestCLI_EmailScheduledListHelp(t *testing.T) {
 
 func TestCLI_EmailScheduledListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "scheduled", "list", testGrantID, "--json")
 	skipIfProviderNotSupported(t, stderr)
@@ -108,6 +110,7 @@ func TestCLI_EmailScheduledListJSON(t *testing.T) {
 
 func TestCLI_EmailScheduledListMultipleTimes(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Test that the list command can be called multiple times without issues
 	for i := 0; i < 2; i++ {
@@ -168,6 +171,7 @@ func TestCLI_EmailScheduledCancelHelp(t *testing.T) {
 
 func TestCLI_EmailScheduledCancelInvalidID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "scheduled", "cancel", "invalid-schedule-id", testGrantID, "--force")
 
@@ -187,6 +191,7 @@ func TestCLI_EmailScheduledLifecycle(t *testing.T) {
 		t.Skip("Skipping send test - set NYLAS_TEST_SEND_EMAIL=true to enable")
 	}
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	if os.Getenv("NYLAS_TEST_DELETE") != "true" {
 		t.Skip("NYLAS_TEST_DELETE not set to 'true'")
@@ -281,6 +286,7 @@ func TestCLI_EmailScheduledLifecycle(t *testing.T) {
 
 func TestCLI_EmailScheduledListInvalidGrantID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "scheduled", "list", "invalid-grant-id")
 

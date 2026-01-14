@@ -22,8 +22,8 @@ func TestHTTPClient_GetContactGroups(t *testing.T) {
 			assert.Equal(t, "GET", r.Method)
 			assert.Equal(t, "/v3/grants/grant-123/contacts/groups", r.URL.Path)
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{
 						"id":       "group-1",
 						"grant_id": "grant-123",
@@ -64,7 +64,7 @@ func TestHTTPClient_GetContactGroup(t *testing.T) {
 	tests := []struct {
 		name           string
 		groupID        string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -72,8 +72,8 @@ func TestHTTPClient_GetContactGroup(t *testing.T) {
 		{
 			name:    "returns group",
 			groupID: "group-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":       "group-123",
 					"grant_id": "grant-123",
 					"name":     "Friends",
@@ -87,7 +87,7 @@ func TestHTTPClient_GetContactGroup(t *testing.T) {
 		{
 			name:    "returns error for not found",
 			groupID: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "contact group not found"},
 			},
 			statusCode:  http.StatusNotFound,
@@ -136,12 +136,12 @@ func TestHTTPClient_CreateContactGroup(t *testing.T) {
 			assert.Equal(t, "POST", r.Method)
 			assert.Equal(t, "/v3/grants/grant-123/contacts/groups", r.URL.Path)
 
-			var body map[string]interface{}
+			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			assert.Equal(t, "Colleagues", body["name"])
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":       "new-group-123",
 					"grant_id": "grant-123",
 					"name":     "Colleagues",
@@ -173,12 +173,12 @@ func TestHTTPClient_UpdateContactGroup(t *testing.T) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/v3/grants/grant-123/contacts/groups/group-456", r.URL.Path)
 
-			var body map[string]interface{}
+			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			assert.Equal(t, "Updated Name", body["name"])
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":       "group-456",
 					"grant_id": "grant-123",
 					"name":     "Updated Name",
@@ -239,7 +239,7 @@ func TestHTTPClient_DeleteContactGroup(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}

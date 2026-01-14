@@ -53,6 +53,7 @@ func TestCLI_AdminApplicationsHelp(t *testing.T) {
 
 func TestCLI_AdminApplicationsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "applications", "list")
 	skipIfProviderNotSupported(t, stderr)
@@ -71,6 +72,7 @@ func TestCLI_AdminApplicationsList(t *testing.T) {
 
 func TestCLI_AdminApplicationsListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "applications", "list", "--json")
 	skipIfProviderNotSupported(t, stderr)
@@ -111,6 +113,7 @@ func TestCLI_AdminConnectorsHelp(t *testing.T) {
 
 func TestCLI_AdminConnectorsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "connectors", "list")
 	skipIfProviderNotSupported(t, stderr)
@@ -129,6 +132,7 @@ func TestCLI_AdminConnectorsList(t *testing.T) {
 
 func TestCLI_AdminConnectorsListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "connectors", "list", "--json")
 	skipIfProviderNotSupported(t, stderr)
@@ -169,6 +173,7 @@ func TestCLI_AdminCredentialsHelp(t *testing.T) {
 
 func TestCLI_AdminCredentialsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First, get a list of connectors to find a connector provider
 	connStdout, connStderr, connErr := runCLI("admin", "connectors", "list", "--json")
@@ -179,7 +184,7 @@ func TestCLI_AdminCredentialsList(t *testing.T) {
 	}
 
 	// Parse connectors JSON to get a connector provider
-	var connectors []map[string]interface{}
+	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(connStdout), &connectors); err != nil || len(connectors) == 0 {
 		t.Skip("No connectors found to test credentials list")
 	}
@@ -212,6 +217,7 @@ func TestCLI_AdminCredentialsList(t *testing.T) {
 
 func TestCLI_AdminCredentialsListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First, get a list of connectors to find a connector provider
 	connStdout, connStderr, connErr := runCLI("admin", "connectors", "list", "--json")
@@ -222,7 +228,7 @@ func TestCLI_AdminCredentialsListJSON(t *testing.T) {
 	}
 
 	// Parse connectors JSON to get a connector provider
-	var connectors []map[string]interface{}
+	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(connStdout), &connectors); err != nil || len(connectors) == 0 {
 		t.Skip("No connectors found to test credentials list")
 	}
@@ -278,6 +284,7 @@ func TestCLI_AdminGrantsHelp(t *testing.T) {
 
 func TestCLI_AdminGrantsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "grants", "list")
 	skipIfProviderNotSupported(t, stderr)
@@ -296,6 +303,7 @@ func TestCLI_AdminGrantsList(t *testing.T) {
 
 func TestCLI_AdminGrantsListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "grants", "list", "--json")
 	skipIfProviderNotSupported(t, stderr)
@@ -315,6 +323,7 @@ func TestCLI_AdminGrantsListJSON(t *testing.T) {
 
 func TestCLI_AdminGrantsStats(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "grants", "stats")
 	skipIfProviderNotSupported(t, stderr)
@@ -333,6 +342,7 @@ func TestCLI_AdminGrantsStats(t *testing.T) {
 
 func TestCLI_AdminGrantsStatsJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("admin", "grants", "stats", "--json")
 	skipIfProviderNotSupported(t, stderr)

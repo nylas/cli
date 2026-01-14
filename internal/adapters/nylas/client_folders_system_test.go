@@ -24,8 +24,8 @@ func TestGetFoldersSystemFolderTypes(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			// Google API returns system_folder as boolean
 			_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-				map[string]interface{}{
-					"data": []map[string]interface{}{
+				map[string]any{
+					"data": []map[string]any{
 						{
 							"id":            "folder-1",
 							"grant_id":      "grant-123",
@@ -67,8 +67,8 @@ func TestGetFoldersSystemFolderTypes(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			// Microsoft API returns system_folder as string
 			_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-				map[string]interface{}{
-					"data": []map[string]interface{}{
+				map[string]any{
+					"data": []map[string]any{
 						{
 							"id":            "folder-1",
 							"grant_id":      "grant-123",
@@ -108,8 +108,8 @@ func TestGetFoldersSystemFolderTypes(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-				map[string]interface{}{
-					"data": []map[string]interface{}{
+				map[string]any{
+					"data": []map[string]any{
 						{
 							"id":            "folder-1",
 							"grant_id":      "grant-123",
@@ -142,8 +142,8 @@ func TestGetFolderSystemFolderTypes(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-				map[string]interface{}{
-					"data": map[string]interface{}{
+				map[string]any{
+					"data": map[string]any{
 						"id":            "folder-123",
 						"grant_id":      "grant-456",
 						"name":          "INBOX",
@@ -174,8 +174,8 @@ func TestRateLimiting(t *testing.T) {
 			requestCount++
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"data": []interface{}{},
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []any{},
 			})
 		}))
 		defer server.Close()

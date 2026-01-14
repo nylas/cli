@@ -43,6 +43,7 @@ func TestCLI_EmailDelete(t *testing.T) {
 		t.Skip("NYLAS_TEST_SEND_EMAIL not set to 'true' - need to send test message first")
 	}
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First send a test message to delete
 	email := getTestEmail()
@@ -117,6 +118,7 @@ func TestCLI_EmailDelete(t *testing.T) {
 
 func TestCLI_EmailDelete_InvalidID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "delete", "invalid-message-id", testGrantID, "--force")
 
@@ -172,6 +174,7 @@ func TestCLI_EmailMetadataHelp(t *testing.T) {
 
 func TestCLI_EmailMetadataInfo(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "metadata", "info")
 
@@ -193,6 +196,7 @@ func TestCLI_EmailMetadataInfo(t *testing.T) {
 
 func TestCLI_EmailMetadataShow(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test metadata show
 	client := getTestClient()
@@ -228,6 +232,7 @@ func TestCLI_EmailMetadataShow(t *testing.T) {
 
 func TestCLI_EmailMetadataShow_JSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test metadata show with JSON
 	client := getTestClient()
@@ -264,6 +269,7 @@ func TestCLI_EmailMetadataShow_JSON(t *testing.T) {
 
 func TestCLI_EmailMetadataShow_InvalidID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "metadata", "show", "invalid-message-id", testGrantID)
 

@@ -17,6 +17,7 @@ import (
 
 func TestCLI_FoldersList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "folders", "list", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -40,6 +41,7 @@ func TestCLI_FoldersList(t *testing.T) {
 
 func TestCLI_FoldersListWithID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "folders", "list", testGrantID, "--id")
 	skipIfProviderNotSupported(t, stderr)
@@ -68,6 +70,7 @@ func TestCLI_FoldersListWithID(t *testing.T) {
 
 func TestCLI_FoldersCreateAndDelete(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	if os.Getenv("NYLAS_TEST_DELETE") != "true" {
 		t.Skip("NYLAS_TEST_DELETE not set to 'true'")

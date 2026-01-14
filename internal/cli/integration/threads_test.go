@@ -17,6 +17,7 @@ import (
 
 func TestCLI_ThreadsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "threads", "list", testGrantID, "--limit", "5")
 	skipIfProviderNotSupported(t, stderr)
@@ -35,6 +36,7 @@ func TestCLI_ThreadsList(t *testing.T) {
 
 func TestCLI_ThreadsList_WithFilters(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	tests := []struct {
 		name string
@@ -58,6 +60,7 @@ func TestCLI_ThreadsList_WithFilters(t *testing.T) {
 
 func TestCLI_ThreadsShow(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a thread ID
 	client := getTestClient()

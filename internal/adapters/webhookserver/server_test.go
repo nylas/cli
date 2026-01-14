@@ -77,13 +77,13 @@ func TestServer_HandleWebhook(t *testing.T) {
 	handler := http.HandlerFunc(server.handleWebhook)
 
 	t.Run("post_webhook_event", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"specversion": "1.0",
 			"type":        "message.created",
 			"source":      "nylas",
 			"id":          "event-123",
-			"data": map[string]interface{}{
-				"object": map[string]interface{}{
+			"data": map[string]any{
+				"object": map[string]any{
 					"grant_id": "grant-abc",
 					"subject":  "Test Subject",
 				},
@@ -99,7 +99,7 @@ func TestServer_HandleWebhook(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		err := json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 		assert.Equal(t, "received", response["status"])
@@ -139,7 +139,7 @@ func TestServer_HandleHealth(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, "healthy", response["status"])
@@ -159,7 +159,7 @@ func TestServer_OnEvent(t *testing.T) {
 	// Simulate handling a webhook
 	handler := http.HandlerFunc(server.handleWebhook)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"type": "message.created",
 		"id":   "test-event",
 	}

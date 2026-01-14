@@ -20,8 +20,8 @@ func TestHTTPClient_ListApplications(t *testing.T) {
 		assert.Equal(t, "/v3/applications", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":              "app-1",
 					"application_id":  "app-id-1",
@@ -59,8 +59,8 @@ func TestHTTPClient_GetApplication(t *testing.T) {
 		assert.Equal(t, "/v3/applications/app-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":              "app-123",
 				"application_id":  "app-id-123",
 				"organization_id": "org-456",
@@ -92,13 +92,13 @@ func TestHTTPClient_CreateApplication(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Application", body["name"])
 		assert.Equal(t, "us", body["region"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":     "app-new",
 				"name":   "New Application",
 				"region": "us",
@@ -131,12 +131,12 @@ func TestHTTPClient_UpdateApplication(t *testing.T) {
 		assert.Equal(t, "/v3/applications/app-456", r.URL.Path)
 		assert.Equal(t, "PATCH", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Application", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "app-456",
 				"name": "Updated Application",
 			},

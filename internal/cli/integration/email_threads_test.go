@@ -68,6 +68,7 @@ func TestCLI_ThreadsSearchHelp(t *testing.T) {
 
 func TestCLI_ThreadsSearch(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Thread search uses filters (no full-text query), so we search by subject
 	stdout, stderr, err := runCLI("email", "threads", "search", testGrantID, "--subject", "test", "--limit", "3")
@@ -86,6 +87,7 @@ func TestCLI_ThreadsSearch(t *testing.T) {
 
 func TestCLI_ThreadsSearch_WithFilters(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	tests := []struct {
 		name string

@@ -21,7 +21,7 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 	tests := []struct {
 		name       string
 		request    *domain.UpdateMessageRequest
-		wantFields map[string]interface{}
+		wantFields map[string]any
 	}{
 		{
 			name: "marks as read",
@@ -29,7 +29,7 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 				unread := false
 				return &domain.UpdateMessageRequest{Unread: &unread}
 			}(),
-			wantFields: map[string]interface{}{"unread": false},
+			wantFields: map[string]any{"unread": false},
 		},
 		{
 			name: "marks as starred",
@@ -37,14 +37,14 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 				starred := true
 				return &domain.UpdateMessageRequest{Starred: &starred}
 			}(),
-			wantFields: map[string]interface{}{"starred": true},
+			wantFields: map[string]any{"starred": true},
 		},
 		{
 			name: "moves to folders",
 			request: &domain.UpdateMessageRequest{
 				Folders: []string{"Archive", "Important"},
 			},
-			wantFields: map[string]interface{}{"folders": []string{"Archive", "Important"}},
+			wantFields: map[string]any{"folders": []string{"Archive", "Important"}},
 		},
 		{
 			name: "updates multiple fields",
@@ -57,7 +57,7 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 					Folders: []string{"INBOX"},
 				}
 			}(),
-			wantFields: map[string]interface{}{
+			wantFields: map[string]any{
 				"unread":  true,
 				"starred": true,
 				"folders": []string{"INBOX"},
@@ -72,15 +72,15 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/messages/msg-456", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for key := range tt.wantFields {
 					assert.Contains(t, body, key, "Missing field: %s", key)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":       "msg-456",
 						"grant_id": "grant-123",
 						"subject":  "Updated",
@@ -145,7 +145,7 @@ func TestHTTPClient_DeleteMessage(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}
@@ -172,13 +172,13 @@ func TestHTTPClient_GetMessages_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
 		statusCode  int
-		response    map[string]interface{}
+		response    map[string]any
 		errContains string
 	}{
 		{
 			name:       "handles 401 unauthorized",
 			statusCode: http.StatusUnauthorized,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Invalid API key"},
 			},
 			errContains: "Invalid API key",
@@ -186,7 +186,7 @@ func TestHTTPClient_GetMessages_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 403 forbidden",
 			statusCode: http.StatusForbidden,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Access denied"},
 			},
 			errContains: "Access denied",
@@ -194,7 +194,7 @@ func TestHTTPClient_GetMessages_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 429 rate limited",
 			statusCode: http.StatusTooManyRequests,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Rate limit exceeded"},
 			},
 			errContains: "Rate limit exceeded",
@@ -202,7 +202,7 @@ func TestHTTPClient_GetMessages_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 500 server error",
 			statusCode: http.StatusInternalServerError,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Internal server error"},
 			},
 			errContains: "Internal server error",
@@ -235,8 +235,8 @@ func TestHTTPClient_GetMessage_FullConversion(t *testing.T) {
 	timestamp := time.Now().Unix()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":        "msg-full",
 				"grant_id":  "grant-full",
 				"thread_id": "thread-full",
@@ -263,7 +263,7 @@ func TestHTTPClient_GetMessage_FullConversion(t *testing.T) {
 				"unread":  true,
 				"starred": false,
 				"folders": []string{"INBOX", "Important"},
-				"attachments": []map[string]interface{}{
+				"attachments": []map[string]any{
 					{
 						"id":           "attach-1",
 						"filename":     "document.pdf",

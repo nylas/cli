@@ -62,7 +62,7 @@ func TestHTTPClient_SendRSVP(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/events/event-456/send-rsvp", r.URL.Path)
 				assert.Equal(t, "cal-123", r.URL.Query().Get("calendar_id"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 				assert.Equal(t, tt.expectedStatus, body["status"])
 
@@ -100,11 +100,11 @@ func TestHTTPClient_GetFreeBusy(t *testing.T) {
 			assert.Equal(t, "POST", r.Method)
 			assert.Equal(t, "/v3/grants/grant-123/calendars/free-busy", r.URL.Path)
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{
 						"email": "user@example.com",
-						"time_slots": []map[string]interface{}{
+						"time_slots": []map[string]any{
 							{
 								"start_time": startTime,
 								"end_time":   startTime + 3600,
@@ -146,8 +146,8 @@ func TestHTTPClient_GetAvailability(t *testing.T) {
 			assert.Equal(t, "POST", r.Method)
 			assert.Equal(t, "/v3/calendars/availability", r.URL.Path)
 
-			response := map[string]interface{}{
-				"time_slots": []map[string]interface{}{
+			response := map[string]any{
+				"time_slots": []map[string]any{
 					{
 						"start_time": startTime + 7200,
 						"end_time":   startTime + 10800,

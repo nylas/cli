@@ -26,8 +26,8 @@ func TestListInboundInboxes(t *testing.T) {
 			assert.Equal(t, http.MethodGet, r.Method)
 			assert.Equal(t, "inbox", r.URL.Query().Get("provider"))
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{
 						"id":           "inbox-001",
 						"email":        "support@app.nylas.email",
@@ -69,8 +69,8 @@ func TestListInboundInboxes(t *testing.T) {
 	t.Run("filters_by_inbox_provider", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Return mix of inbox and non-inbox providers
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{
 						"id":           "inbox-001",
 						"email":        "support@app.nylas.email",
@@ -106,8 +106,8 @@ func TestListInboundInboxes(t *testing.T) {
 
 	t.Run("handles_empty_response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{},
+			response := map[string]any{
+				"data": []map[string]any{},
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -129,8 +129,8 @@ func TestListInboundInboxes(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Invalid API key",
 				},
 			})
@@ -157,8 +157,8 @@ func TestGetInboundInbox(t *testing.T) {
 			assert.Equal(t, "/v3/grants/inbox-001", r.URL.Path)
 			assert.Equal(t, http.MethodGet, r.Method)
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":           "inbox-001",
 					"email":        "support@app.nylas.email",
 					"grant_status": "valid",
@@ -187,8 +187,8 @@ func TestGetInboundInbox(t *testing.T) {
 
 	t.Run("validates_inbox_provider", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":           "inbox-001",
 					"email":        "user@gmail.com",
 					"grant_status": "valid",
@@ -216,8 +216,8 @@ func TestGetInboundInbox(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Grant not found",
 				},
 			})
@@ -244,14 +244,14 @@ func TestCreateInboundInbox(t *testing.T) {
 			assert.Equal(t, "/v3/grants", r.URL.Path)
 			assert.Equal(t, http.MethodPost, r.Method)
 
-			var body map[string]interface{}
+			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			assert.Equal(t, "inbox", body["provider"])
-			settings := body["settings"].(map[string]interface{})
+			settings := body["settings"].(map[string]any)
 			assert.Equal(t, "support", settings["email"])
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":           "new-inbox-001",
 					"email":        "support@app.nylas.email",
 					"grant_status": "valid",
@@ -283,8 +283,8 @@ func TestCreateInboundInbox(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Email already exists",
 				},
 			})
@@ -304,8 +304,8 @@ func TestCreateInboundInbox(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Invalid email prefix",
 				},
 			})
@@ -336,8 +336,8 @@ func TestDeleteInboundInbox(t *testing.T) {
 				assert.Equal(t, "/v3/grants/inbox-001", r.URL.Path)
 				assert.Equal(t, http.MethodGet, r.Method)
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":           "inbox-001",
 						"email":        "support@app.nylas.email",
 						"grant_status": "valid",
@@ -372,8 +372,8 @@ func TestDeleteInboundInbox(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Grant not found",
 				},
 			})

@@ -20,8 +20,8 @@ func TestHTTPClient_ListSchedulerConfigurations(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/configurations", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":   "config-1",
 					"name": "30 Minute Meeting",
@@ -59,12 +59,12 @@ func TestHTTPClient_GetSchedulerConfiguration(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/configurations/config-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "config-123",
 				"name": "Interview Meeting",
 				"slug": "interview",
-				"participants": []map[string]interface{}{
+				"participants": []map[string]any{
 					{
 						"email":        "interviewer@example.com",
 						"name":         "Interviewer",
@@ -99,12 +99,12 @@ func TestHTTPClient_CreateSchedulerConfiguration(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Meeting Type", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "config-new",
 				"name": "New Meeting Type",
 				"slug": "new-meeting",
@@ -137,12 +137,12 @@ func TestHTTPClient_UpdateSchedulerConfiguration(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/configurations/config-456", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Meeting", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "config-456",
 				"name": "Updated Meeting",
 				"slug": "updated",

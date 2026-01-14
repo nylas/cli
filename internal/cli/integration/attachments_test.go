@@ -37,6 +37,7 @@ func TestCLI_EmailAttachmentsHelp(t *testing.T) {
 
 func TestCLI_EmailAttachmentsList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test attachments
 	client := getTestClient()
@@ -71,6 +72,7 @@ func TestCLI_EmailAttachmentsList(t *testing.T) {
 
 func TestCLI_EmailAttachmentsListJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test attachments
 	client := getTestClient()
@@ -158,6 +160,7 @@ func TestCLI_EmailAttachmentsDownloadHelp(t *testing.T) {
 
 func TestCLI_EmailAttachmentsListInvalidMessageID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	_, stderr, err := runCLI("email", "attachments", "list", "invalid-message-id", testGrantID)
 
@@ -170,6 +173,7 @@ func TestCLI_EmailAttachmentsListInvalidMessageID(t *testing.T) {
 
 func TestCLI_EmailAttachmentsListAllFormats(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test attachments
 	client := getTestClient()
@@ -211,6 +215,7 @@ func TestCLI_EmailAttachmentsListAllFormats(t *testing.T) {
 
 func TestCLI_EmailAttachmentsDownloadInvalidAttachmentID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test attachments
 	client := getTestClient()

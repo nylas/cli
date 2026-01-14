@@ -26,8 +26,8 @@ func TestGetInboundMessages(t *testing.T) {
 			assert.Equal(t, "/v3/grants/inbox-001/messages", r.URL.Path)
 			assert.Equal(t, http.MethodGet, r.Method)
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{
 						"id":        "msg-001",
 						"grant_id":  "inbox-001",
@@ -81,8 +81,8 @@ func TestGetInboundMessages(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "5", r.URL.Query().Get("limit"))
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{},
+			response := map[string]any{
+				"data": []map[string]any{},
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -104,8 +104,8 @@ func TestGetInboundMessages(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "true", r.URL.Query().Get("unread"))
 
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{},
+			response := map[string]any{
+				"data": []map[string]any{},
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -126,8 +126,8 @@ func TestGetInboundMessages(t *testing.T) {
 
 	t.Run("handles_empty_response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{},
+			response := map[string]any{
+				"data": []map[string]any{},
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -149,8 +149,8 @@ func TestGetInboundMessages(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Grant not found",
 				},
 			})

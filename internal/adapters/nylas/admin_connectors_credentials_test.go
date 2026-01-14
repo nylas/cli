@@ -18,8 +18,8 @@ func TestHTTPClient_ListConnectors(t *testing.T) {
 		assert.Equal(t, "/v3/connectors", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":       "conn-1",
 					"name":     "Google Connector",
@@ -55,12 +55,12 @@ func TestHTTPClient_GetConnector(t *testing.T) {
 		assert.Equal(t, "/v3/connectors/conn-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "conn-123",
 				"name":     "IMAP Connector",
 				"provider": "imap",
-				"settings": map[string]interface{}{
+				"settings": map[string]any{
 					"imap_host": "imap.example.com",
 					"imap_port": 993,
 				},
@@ -89,13 +89,13 @@ func TestHTTPClient_CreateConnector(t *testing.T) {
 		assert.Equal(t, "/v3/connectors", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Connector", body["name"])
 		assert.Equal(t, "google", body["provider"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "conn-new",
 				"name":     "New Connector",
 				"provider": "google",
@@ -127,12 +127,12 @@ func TestHTTPClient_UpdateConnector(t *testing.T) {
 		assert.Equal(t, "/v3/connectors/conn-789", r.URL.Path)
 		assert.Equal(t, "PATCH", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Connector", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "conn-789",
 				"name": "Updated Connector",
 			},
@@ -183,8 +183,8 @@ func TestHTTPClient_ListCredentials(t *testing.T) {
 		assert.Equal(t, "/v3/connectors/conn-123/credentials", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":              "cred-1",
 					"name":            "OAuth Credential",
@@ -220,8 +220,8 @@ func TestHTTPClient_GetCredential(t *testing.T) {
 		assert.Equal(t, "/v3/credentials/cred-456", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":              "cred-456",
 				"name":            "Test Credential",
 				"credential_type": "oauth",
@@ -249,13 +249,13 @@ func TestHTTPClient_CreateCredential(t *testing.T) {
 		assert.Equal(t, "/v3/connectors/conn-123/credentials", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Credential", body["name"])
 		assert.Equal(t, "oauth", body["credential_type"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":              "cred-new",
 				"name":            "New Credential",
 				"credential_type": "oauth",
@@ -287,12 +287,12 @@ func TestHTTPClient_UpdateCredential(t *testing.T) {
 		assert.Equal(t, "/v3/credentials/cred-789", r.URL.Path)
 		assert.Equal(t, "PATCH", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Credential", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "cred-789",
 				"name": "Updated Credential",
 			},

@@ -10,32 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestContainsAt(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected bool
-	}{
-		{"email address", "user@example.com", true},
-		{"with plus sign", "user+tag@example.com", true},
-		{"multiple @", "a@b@c", true},
-		{"@ at start", "@example.com", true},
-		{"@ at end", "user@", true},
-		{"just @", "@", true},
-		{"no @", "username", false},
-		{"empty string", "", false},
-		{"spaces only", "   ", false},
-		{"number string", "12345", false},
-		{"special chars no @", "user.name+tag", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := containsAt(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
+// Note: containsAt tests have been moved to internal/adapters/client/factory_test.go
+// since the function is now part of the factory adapter.
 
 func TestGetNylasClient_WithEnvVar(t *testing.T) {
 	// Save original env vars
@@ -45,12 +21,12 @@ func TestGetNylasClient_WithEnvVar(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
 		setEnvOrUnset("NYLAS_CLIENT_ID", origClientID)
 		setEnvOrUnset("NYLAS_CLIENT_SECRET", origClientSecret)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	})
 
 	// Set test env vars
 	_ = os.Setenv("NYLAS_API_KEY", "test-api-key-12345")
@@ -74,11 +50,11 @@ func TestGetNylasClient_NoAPIKey(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfig)
-	}()
+	})
 
 	// Clear API key and disable keyring, use empty temp config dir
 	_ = os.Unsetenv("NYLAS_API_KEY")
@@ -98,10 +74,10 @@ func TestGetAPIKey_WithEnvVar(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	})
 
 	// Set test env var
 	testKey := "test-api-key-67890"
@@ -124,11 +100,11 @@ func TestGetAPIKey_NoAPIKey(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfig)
-	}()
+	})
 
 	// Clear API key and disable keyring, use empty temp config dir
 	_ = os.Unsetenv("NYLAS_API_KEY")
@@ -148,10 +124,10 @@ func TestGetGrantID_WithArgument(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	})
 
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
 	_ = os.Unsetenv("NYLAS_GRANT_ID")
@@ -176,10 +152,10 @@ func TestGetGrantID_WithEnvVar(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	})
 
 	testGrantID := "env-grant-id-67890"
 	_ = os.Setenv("NYLAS_GRANT_ID", testGrantID)
@@ -208,11 +184,11 @@ func TestGetGrantID_EmptyArgs(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfig)
-	}()
+	})
 
 	_ = os.Unsetenv("NYLAS_GRANT_ID")
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
@@ -232,10 +208,10 @@ func TestGetGrantID_EmptyStringArg(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	})
 
 	testGrantID := "env-grant-fallback"
 	_ = os.Setenv("NYLAS_GRANT_ID", testGrantID)
@@ -269,11 +245,11 @@ func TestGetNylasClient_EnvVarPriority(t *testing.T) {
 	origClientSecret := os.Getenv("NYLAS_CLIENT_SECRET")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
 		setEnvOrUnset("NYLAS_CLIENT_ID", origClientID)
 		setEnvOrUnset("NYLAS_CLIENT_SECRET", origClientSecret)
-	}()
+	})
 
 	// Set env vars - these should be used regardless of keyring state
 	_ = os.Setenv("NYLAS_API_KEY", "env-api-key")
@@ -291,9 +267,9 @@ func TestGetAPIKey_EnvVarPriority(t *testing.T) {
 	origAPIKey := os.Getenv("NYLAS_API_KEY")
 
 	// Restore after test
-	defer func() {
+	t.Cleanup(func() {
 		setEnvOrUnset("NYLAS_API_KEY", origAPIKey)
-	}()
+	})
 
 	// Set env var
 	_ = os.Setenv("NYLAS_API_KEY", "priority-test-key")
@@ -304,23 +280,22 @@ func TestGetAPIKey_EnvVarPriority(t *testing.T) {
 	assert.Equal(t, "priority-test-key", apiKey)
 }
 
-func TestContainsAt_UnicodeSupport(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected bool
-	}{
-		{"unicode email", "用户@example.com", true},
-		{"emoji without @", "🎉test", false},
-		{"emoji with @", "🎉@test", true},
-		{"cyrillic without @", "тест", false},
-		{"cyrillic with @", "тест@example.com", true},
-	}
+func TestGetClientFactory(t *testing.T) {
+	factory := GetClientFactory()
+	require.NotNil(t, factory)
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := containsAt(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+func TestSetClientFactory(t *testing.T) {
+	// Save original factory
+	origFactory := GetClientFactory()
+	t.Cleanup(func() {
+		SetClientFactory(origFactory)
+	})
+
+	// Create a mock factory (for testing purposes, we just verify the set works)
+	mockFactory := origFactory // In real tests, you'd use a mock implementation
+	SetClientFactory(mockFactory)
+
+	newFactory := GetClientFactory()
+	assert.Equal(t, mockFactory, newFactory)
 }

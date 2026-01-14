@@ -55,6 +55,7 @@ func TestCLI_InvalidCommand(t *testing.T) {
 
 func TestCLI_ConcurrentOperations(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Run multiple list operations concurrently
 	type result struct {
@@ -111,6 +112,7 @@ func TestCLI_ConcurrentOperations(t *testing.T) {
 
 func TestCLI_FullWorkflow(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// This test simulates a typical user workflow
 
@@ -166,6 +168,7 @@ func TestCLI_FullWorkflow(t *testing.T) {
 
 func TestCLI_NewFeaturesWorkflow(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Test all new features in sequence
 
@@ -220,6 +223,7 @@ func TestCLI_NewFeaturesWorkflow(t *testing.T) {
 
 func TestCLI_Doctor(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 	skipIfKeyringDisabled(t)
 
 	stdout, stderr, err := runCLI("doctor")
@@ -268,6 +272,7 @@ func TestCLI_Doctor(t *testing.T) {
 
 func TestCLI_Doctor_Verbose(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 	skipIfKeyringDisabled(t)
 
 	stdout, stderr, err := runCLI("doctor", "--verbose")

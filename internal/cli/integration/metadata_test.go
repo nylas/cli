@@ -13,6 +13,7 @@ import (
 
 func TestMetadataFiltering(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	client := getTestClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -102,6 +103,7 @@ func TestMetadataFiltering(t *testing.T) {
 
 func TestMetadataWithPagination(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	client := getTestClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

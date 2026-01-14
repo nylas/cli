@@ -21,7 +21,7 @@ func TestHTTPClient_GetMessages(t *testing.T) {
 		name           string
 		grantID        string
 		limit          int
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		wantCount      int
@@ -30,8 +30,8 @@ func TestHTTPClient_GetMessages(t *testing.T) {
 			name:    "returns messages successfully",
 			grantID: "grant-123",
 			limit:   10,
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":        "msg-1",
 						"grant_id":  "grant-123",
@@ -67,8 +67,8 @@ func TestHTTPClient_GetMessages(t *testing.T) {
 			name:    "returns empty list when no messages",
 			grantID: "grant-456",
 			limit:   10,
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantErr:    false,
@@ -212,8 +212,8 @@ func TestHTTPClient_GetMessagesWithParams(t *testing.T) {
 				}
 
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"data": []interface{}{},
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": []any{},
 				})
 			}))
 			defer server.Close()
@@ -231,8 +231,8 @@ func TestHTTPClient_GetMessagesWithParams(t *testing.T) {
 func TestHTTPClient_GetMessagesWithCursor(t *testing.T) {
 	t.Run("returns pagination info", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{"id": "msg-1", "subject": "First", "date": 1704067200},
 					{"id": "msg-2", "subject": "Second", "date": 1704153600},
 				},
@@ -258,8 +258,8 @@ func TestHTTPClient_GetMessagesWithCursor(t *testing.T) {
 
 	t.Run("handles last page without cursor", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{"id": "msg-1", "subject": "Last", "date": 1704067200},
 				},
 			}
@@ -286,7 +286,7 @@ func TestHTTPClient_GetMessage(t *testing.T) {
 		name           string
 		grantID        string
 		messageID      string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -295,8 +295,8 @@ func TestHTTPClient_GetMessage(t *testing.T) {
 			name:      "returns message successfully",
 			grantID:   "grant-123",
 			messageID: "msg-456",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":        "msg-456",
 					"grant_id":  "grant-123",
 					"thread_id": "thread-789",
@@ -312,7 +312,7 @@ func TestHTTPClient_GetMessage(t *testing.T) {
 					"unread":    true,
 					"starred":   true,
 					"folders":   []string{"INBOX"},
-					"attachments": []map[string]interface{}{
+					"attachments": []map[string]any{
 						{
 							"id":           "attach-1",
 							"filename":     "report.pdf",
@@ -332,7 +332,7 @@ func TestHTTPClient_GetMessage(t *testing.T) {
 			name:      "returns error for not found",
 			grantID:   "grant-123",
 			messageID: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "message not found"},
 			},
 			statusCode:  http.StatusNotFound,

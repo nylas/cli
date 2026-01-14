@@ -13,6 +13,7 @@ import (
 
 func TestCLI_ContactsSearch(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "search", testGrantID)
 	skipIfProviderNotSupported(t, stderr)
@@ -31,6 +32,7 @@ func TestCLI_ContactsSearch(t *testing.T) {
 
 func TestCLI_ContactsSearchWithCompany(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "search", testGrantID, "--company", "test", "--limit", "10")
 	skipIfProviderNotSupported(t, stderr)
@@ -49,6 +51,7 @@ func TestCLI_ContactsSearchWithCompany(t *testing.T) {
 
 func TestCLI_ContactsSearchHasEmail(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "search", testGrantID, "--has-email", "--limit", "10")
 	skipIfProviderNotSupported(t, stderr)
@@ -67,6 +70,7 @@ func TestCLI_ContactsSearchHasEmail(t *testing.T) {
 
 func TestCLI_ContactsSearchJSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("contacts", "search", testGrantID, "--limit", "5", "--json")
 	skipIfProviderNotSupported(t, stderr)

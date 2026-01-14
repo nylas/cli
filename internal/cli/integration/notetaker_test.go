@@ -14,6 +14,7 @@ import (
 
 func TestNotetaker_Integration(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	client := getTestClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -79,6 +80,7 @@ func TestNotetaker_Integration(t *testing.T) {
 
 func TestNotetaker_ValidationErrors(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	client := getTestClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

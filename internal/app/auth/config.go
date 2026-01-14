@@ -113,10 +113,10 @@ func (s *ConfigService) GetClientSecret() (string, error) {
 
 // ResetConfig clears all configuration and secrets.
 func (s *ConfigService) ResetConfig() error {
-	// Delete all secrets
-	_ = s.secrets.Delete(ports.KeyClientID)
-	_ = s.secrets.Delete(ports.KeyClientSecret)
-	_ = s.secrets.Delete(ports.KeyAPIKey)
+	// Delete all secrets - ignore errors as missing keys are expected during reset
+	_ = s.secrets.Delete(ports.KeyClientID)     // best-effort cleanup
+	_ = s.secrets.Delete(ports.KeyClientSecret) // best-effort cleanup
+	_ = s.secrets.Delete(ports.KeyAPIKey)       // best-effort cleanup
 
 	// Reset config to defaults
 	return s.config.Save(domain.DefaultConfig())

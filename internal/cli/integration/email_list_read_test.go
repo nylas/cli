@@ -15,6 +15,7 @@ import (
 
 func TestCLI_EmailList(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "list", testGrantID, "--limit", "5")
 
@@ -32,6 +33,7 @@ func TestCLI_EmailList(t *testing.T) {
 
 func TestCLI_EmailList_WithID(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	stdout, stderr, err := runCLI("email", "list", testGrantID, "--limit", "3", "--id")
 
@@ -49,6 +51,7 @@ func TestCLI_EmailList_WithID(t *testing.T) {
 
 func TestCLI_EmailList_Filters(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	tests := []struct {
 		name string
@@ -76,6 +79,7 @@ func TestCLI_EmailList_Filters(t *testing.T) {
 
 func TestCLI_EmailRead(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First get a message ID
 	client := getTestClient()
@@ -111,6 +115,7 @@ func TestCLI_EmailRead(t *testing.T) {
 
 func TestCLI_EmailShow(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Test the 'show' alias for 'read' command
 	client := getTestClient()
@@ -147,6 +152,7 @@ func TestCLI_EmailShow(t *testing.T) {
 
 func TestCLI_EmailRead_JSON(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First get a message ID
 	client := getTestClient()
@@ -193,6 +199,7 @@ func TestCLI_EmailRead_JSON(t *testing.T) {
 
 func TestCLI_EmailRead_Raw(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// First get a message ID
 	client := getTestClient()
@@ -234,6 +241,7 @@ func TestCLI_EmailRead_Raw(t *testing.T) {
 
 func TestCLI_EmailSearch(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Search for a common subject
 	stdout, stderr, err := runCLI("email", "search", "test", testGrantID, "--limit", "5")
@@ -252,6 +260,7 @@ func TestCLI_EmailSearch(t *testing.T) {
 
 func TestCLI_EmailSearch_WithFilters(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Search with date filter
 	stdout, stderr, err := runCLI("email", "search", "email", testGrantID,
@@ -271,6 +280,7 @@ func TestCLI_EmailSearch_WithFilters(t *testing.T) {
 
 func TestCLI_EmailMark(t *testing.T) {
 	skipIfMissingCreds(t)
+	acquireRateLimit(t)
 
 	// Get a message to test marking
 	client := getTestClient()

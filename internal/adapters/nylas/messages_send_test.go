@@ -133,7 +133,7 @@ func TestHTTPClient_SendMessage(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/messages/send", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				err := json.NewDecoder(r.Body).Decode(&body)
 				require.NoError(t, err)
 
@@ -141,8 +141,8 @@ func TestHTTPClient_SendMessage(t *testing.T) {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":       "sent-msg-123",
 						"grant_id": "grant-123",
 						"subject":  tt.request.Subject,
@@ -177,13 +177,13 @@ func TestHTTPClient_SendMessage_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
 		statusCode  int
-		response    map[string]interface{}
+		response    map[string]any
 		errContains string
 	}{
 		{
 			name:       "handles invalid recipient",
 			statusCode: http.StatusBadRequest,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Invalid recipient email address"},
 			},
 			errContains: "Invalid recipient",
@@ -191,7 +191,7 @@ func TestHTTPClient_SendMessage_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles quota exceeded",
 			statusCode: http.StatusTooManyRequests,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Daily send limit exceeded"},
 			},
 			errContains: "Daily send limit",
@@ -199,7 +199,7 @@ func TestHTTPClient_SendMessage_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles server error",
 			statusCode: http.StatusInternalServerError,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Internal server error"},
 			},
 			errContains: "Internal server error",
@@ -239,7 +239,7 @@ func TestHTTPClient_SmartCompose(t *testing.T) {
 	tests := []struct {
 		name           string
 		request        *domain.SmartComposeRequest
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -248,8 +248,8 @@ func TestHTTPClient_SmartCompose(t *testing.T) {
 			request: &domain.SmartComposeRequest{
 				Prompt: "Write a follow-up email about the meeting",
 			},
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"suggestion": "Hi,\n\nThank you for attending the meeting...",
 				},
 			},
@@ -261,7 +261,7 @@ func TestHTTPClient_SmartCompose(t *testing.T) {
 			request: &domain.SmartComposeRequest{
 				Prompt: "Test",
 			},
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "Smart compose not available"},
 			},
 			statusCode: http.StatusServiceUnavailable,
@@ -276,7 +276,7 @@ func TestHTTPClient_SmartCompose(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/messages/smart-compose", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 				assert.Contains(t, body, "prompt")
 
@@ -309,7 +309,7 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 		name           string
 		messageID      string
 		request        *domain.SmartComposeRequest
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -319,8 +319,8 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 			request: &domain.SmartComposeRequest{
 				Prompt: "Accept the meeting invitation politely",
 			},
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"suggestion": "Thank you for the invitation. I would be happy to attend...",
 				},
 			},
@@ -333,7 +333,7 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 			request: &domain.SmartComposeRequest{
 				Prompt: "Reply",
 			},
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "Message not found"},
 			},
 			statusCode: http.StatusNotFound,
@@ -375,24 +375,24 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 func TestConvertContactsToAPI(t *testing.T) {
 	// Test that contacts are properly converted through SendMessage
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		// Verify 'to' field format
-		to, ok := body["to"].([]interface{})
+		to, ok := body["to"].([]any)
 		require.True(t, ok)
 		require.Len(t, to, 2)
 
-		first := to[0].(map[string]interface{})
+		first := to[0].(map[string]any)
 		assert.Equal(t, "Alice", first["name"])
 		assert.Equal(t, "alice@example.com", first["email"])
 
-		second := to[1].(map[string]interface{})
+		second := to[1].(map[string]any)
 		assert.Equal(t, "Bob", second["name"])
 		assert.Equal(t, "bob@example.com", second["email"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "msg-123",
 				"date": 1704067200,
 			},

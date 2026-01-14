@@ -14,7 +14,7 @@ import (
 func TestHTTPClient_GetApplication_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{ // Test helper, encode error not actionable
+		_ = json.NewEncoder(w).Encode(map[string]any{ // Test helper, encode error not actionable
 			"error": map[string]string{
 				"message": "Application not found",
 			},
@@ -35,7 +35,7 @@ func TestHTTPClient_GetApplication_NotFound(t *testing.T) {
 func TestHTTPClient_GetConnector_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{ // Test helper, encode error not actionable
+		_ = json.NewEncoder(w).Encode(map[string]any{ // Test helper, encode error not actionable
 			"error": map[string]string{
 				"message": "Connector not found",
 			},
