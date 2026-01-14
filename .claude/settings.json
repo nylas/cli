@@ -1,0 +1,177 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write(internal/**)",
+      "Write(cmd/**)",
+      "Write(docs/**)",
+      "Write(.claude/**)",
+      "Write(.github/**)",
+      "Write(*.md)",
+      "Write(*.go)",
+      "Write(Makefile)",
+      "Write(.goreleaser.yml)",
+      "Write(go.mod)",
+      "Write(go.sum)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go run:*)",
+      "Bash(go mod:*)",
+      "Bash(go fmt:*)",
+      "Bash(go vet:*)",
+      "Bash(go generate:*)",
+      "Bash(go install:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(make:*)",
+      "Bash(make build:*)",
+      "Bash(make test:*)",
+      "Bash(make ci:*)",
+      "Bash(make ci-full:*)",
+      "Bash(make lint:*)",
+      "Bash(make security:*)",
+      "Bash(./bin/nylas:*)",
+      "Bash(~/go/bin/goreleaser:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(git show:*)",
+      "Bash(git pull:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm *.test:*)",
+      "Bash(rm ./bin/*:*)",
+      "Bash(rm -f ./bin/*:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(which:*)",
+      "Bash(grep:*)",
+      "Bash(pwd)",
+      "Bash(curl:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh api:*)",
+      "Bash(gh auth status)",
+      "Bash(gh workflow:*)",
+      "Bash(gh release:*)",
+      "WebSearch",
+      "WebFetch(domain:developer.nylas.com)",
+      "WebFetch(domain:cli.nylas.com)",
+      "Bash(rm -rf ~/.cache/go-build*)",
+      "Bash(rm -rf ~/go/pkg/mod*)",
+      "Bash(go clean:*)",
+      "Bash(tree:*)",
+      "Bash(echo:*)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:platform.claude.com)",
+      "WebFetch(domain:github.com/anthropics)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git push)",
+      "Bash(git push origin:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git reset --hard)",
+      "Bash(git clean -fd:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git clean -fd)",
+      "Bash(git clean -f)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf .)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -r /)",
+      "Bash(rm -r ~)",
+      "Bash(rm -r .)",
+      "Bash(truncate:*)",
+      "Bash(wget:*)",
+      "Bash(sudo rm -rf /)",
+      "Bash(sudo rm -rf ~)",
+      "Bash(sudo rm -rf .)",
+      "Bash(sudo rm -rf /*)",
+      "Bash(chmod 777:*)",
+      "Bash(eval:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(nc:*)",
+      "Bash(netcat:*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.env.local)",
+      "Read(.env.production)",
+      "Read(**/secrets/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.p12)",
+      "Read(**/credentials.json)",
+      "Read(**/credentials.yaml)",
+      "Read(**/credentials.yml)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/hosts.yml)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Write(**/secrets/**)",
+      "Write(**/*.pem)",
+      "Write(**/*.key)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(**/secrets/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q 'git commit'; then git diff --cached --name-only | grep -E '\\.(env|pem|key|p12)$' && echo '⛔ BLOCKED: Sensitive file in commit' && exit 2 || exit 0; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q 'git commit'; then git diff --cached | grep -iE '(api_key|password|secret|token|nyk_v0)' && echo '⛔ BLOCKED: Possible secret in commit' && exit 2 || exit 0; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/file-size-check.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q 'git commit'; then echo '🔒 Running post-commit security scan...' && make security; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/auto-format.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

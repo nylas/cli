@@ -1,0 +1,122 @@
+# Claude Code Context Exclusions
+# Exclude files from being loaded in Claude's context to reduce token usage
+
+# Local files (not auto-loaded)
+*.local.md
+local/
+CLAUDE-QUICKSTART.md
+
+# Go dependency files (auto-generated, large, not needed in context)
+go.sum
+
+# Documentation (load on-demand with Read tool)
+docs/
+
+# Example/sample files (load on-demand only)
+**/examples/**
+
+# Build artifacts and temporary files
+*.log
+*.tmp
+*.temp
+**/.DS_Store
+
+# Test coverage reports (large files)
+coverage.out
+coverage.html
+*.coverprofile
+
+# Binary files
+bin/
+**/*.exe
+**/*.test
+
+# Vendor dependencies (if present)
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Large generated files
+**/*_generated.go
+
+# Historical planning documents
+plan.md
+*.plan.md
+
+# Detailed test patterns (load on-demand when writing tests)
+.claude/shared/patterns/
+
+# Large agent files (loaded automatically by Task tool when spawning agents)
+# These don't need to be in main context - agents get their own prompts
+.claude/agents/documentation-writer.md
+.claude/agents/code-writer.md
+.claude/agents/security-auditor.md
+.claude/agents/frontend-agent.md
+
+# Skill command files (loaded by Task tool when invoked)
+.claude/commands/*.md
+.claude/commands/add-command/references/
+.claude/commands/generate-crud-command/templates/
+
+# Hook configuration (rarely needed, load when debugging hooks)
+.claude/HOOKS-CONFIG.md
+
+# Git-related files not needed for coding
+.github/workflows/
+.github/ISSUE_TEMPLATE/
+.goreleaser.yml
+Brewfile
+
+# Test fixtures and mock data (load when needed)
+**/testdata/**
+**/fixtures/**
+tests/PLAYWRIGHT_STATUS.md
+tests/README.md
+
+# License and legal files (rarely changed)
+LICENSE
+COPYING
+
+# Changelog (historical, not needed for current work)
+CHANGELOG.md
+HISTORY.md
+
+# Screenshots and media (load on-demand)
+**/*.png
+**/*.jpg
+**/*.gif
+**/*.mp4
+**/*.svg
+
+# Generated files and test output (load on-demand)
+ci-full.txt
+ci.txt
+ci-output.txt
+ci-results.txt
+test-integration.txt
+test-integration-verification.txt
+ci-full-verification.txt
+*.test.log
+
+# Package lock files (rarely needed, large)
+**/package-lock.json
+
+# Large integration test data
+tests/fixtures/large-*.json
+
+# Performance profiling data
+*.prof
+*.pprof
+
+# Temporary refactoring documents (archive after completion)
+REFACTORING_PROGRESS.md
+ENGINEERING_IMPROVEMENTS_SUMMARY.md
+COVERAGE_REPORT.md
+
+# Session file (transient, load on-demand)
+claude-progress.txt

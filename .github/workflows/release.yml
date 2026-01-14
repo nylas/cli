@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run tests
+        run: go test ./... -short
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create DMG files
+        run: ./scripts/create-dmg.sh ${{ steps.version.outputs.VERSION }}
+
+      - name: Upload DMG to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
