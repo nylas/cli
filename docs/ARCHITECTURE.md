@@ -133,6 +133,7 @@ docs/                         # Documentation
 
 2. **Ports** (`internal/ports/`) - Interface files
    - `nylas.go` - NylasClient interface (main API operations)
+   - `client_factory.go` - ClientFactory & TunnelProvider interfaces
    - `secrets.go` - SecretStore interface (credential storage)
    - `config.go` - Config interface
    - `utilities.go` - Utilities interface
@@ -143,13 +144,14 @@ docs/                         # Documentation
    | Adapter | Purpose |
    |---------|---------|
    | `nylas/` | Nylas API client (messages, calendars, contacts, events) |
+   | `client/` | ClientFactory for creating Nylas clients with credentials |
    | `keyring/` | Credential storage (system keyring, file-based) |
    | `mcp/` | MCP proxy server for AI assistants |
    | `config/` | Configuration validation |
    | `oauth/` | OAuth callback server |
    | `utilities/` | Services (contacts, email, scheduling, webhook) |
    | `browser/` | Browser automation |
-   | `tunnel/` | Cloudflare tunnel |
+   | `tunnel/` | Cloudflare tunnel (TunnelProvider implementation) |
    | `webhookserver/` | Webhook server |
 
 **Benefits:**

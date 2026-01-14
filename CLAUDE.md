@@ -72,7 +72,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 
 **Hexagonal layers:** CLI (`internal/cli/`) → Port (`internal/ports/`) → Adapter (`internal/adapters/`)
 
-**Core files:** `cmd/nylas/main.go`, `internal/ports/nylas.go`, `internal/adapters/nylas/client.go`
+**Core files:** `cmd/nylas/main.go`, `internal/ports/nylas.go`, `internal/ports/client_factory.go`, `internal/adapters/nylas/client.go`
 
 **Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP helpers in `internal/adapters/nylas/client_helpers.go`
 
@@ -84,6 +84,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 
 | Need | Check First |
 |------|-------------|
+| Client creation | `internal/adapters/client/factory.go` (ClientFactory) |
 | Error wrapping | `internal/cli/common/errors.go` |
 | Output formatting, tables, colors | `internal/cli/common/format.go`, `colors.go` |
 | Time parsing/formatting | `internal/cli/common/time.go`, `timeutil.go` |
@@ -91,6 +92,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 | Pagination | `internal/cli/common/pagination.go` |
 | HTTP requests | `internal/adapters/nylas/client_helpers.go` |
 | Query building | `internal/adapters/nylas/client_helpers.go` (`QueryBuilder`) |
+| Tunnel creation | `internal/adapters/tunnel/provider.go` (TunnelProvider) |
 
 **Rule:** Search existing helpers before writing new utility functions. Duplicate code = rejected PR.
 
