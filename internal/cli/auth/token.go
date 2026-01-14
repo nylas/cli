@@ -43,7 +43,8 @@ func newTokenCmd() *cobra.Command {
 				}
 				_, _ = common.Green.Println("✓ API key copied to clipboard")
 			} else {
-				fmt.Println(apiKey)
+				// Write directly to stdout - this is intentional user-requested output, not logging
+				_, _ = os.Stdout.WriteString(apiKey + "\n")
 			}
 
 			return nil
