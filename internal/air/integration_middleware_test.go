@@ -100,9 +100,12 @@ func TestIntegration_Middleware_CacheHeaders(t *testing.T) {
 		path          string
 		expectedCache string
 	}{
-		{"/static/css/main.css", "public, max-age=31536000, immutable"},
+		// CSS files use minimal caching for instant updates during local development
+		{"/static/css/main.css", "no-cache, must-revalidate"},
+		// API responses are never cached
 		{"/api/emails", "no-cache, no-store, must-revalidate"},
-		{"/", "public, max-age=300"},
+		// HTML pages use minimal caching for instant updates
+		{"/", "no-cache, must-revalidate"},
 	}
 
 	for _, tt := range tests {
