@@ -32,7 +32,7 @@ A unified command-line tool for Nylas API authentication, email management, cale
 
 **Homebrew (macOS/Linux):**
 ```bash
-brew install nylas/cli/nylas
+brew install nylas/nylas-cli/nylas
 ```
 
 **Go Install:**
