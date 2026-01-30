@@ -176,7 +176,7 @@ func TestHTTPClient_GetRecurringEventInstances(t *testing.T) {
 
 		// Check query params
 		assert.Equal(t, "cal-123", r.URL.Query().Get("calendar_id"))
-		assert.Equal(t, "event-master", r.URL.Query().Get("event_id"))
+		assert.Equal(t, "event-master", r.URL.Query().Get("master_event_id"))
 		assert.Equal(t, "true", r.URL.Query().Get("expand_recurring"))
 		assert.Equal(t, "50", r.URL.Query().Get("limit"))
 
@@ -241,7 +241,7 @@ func TestHTTPClient_GetRecurringEventInstances_WithParams(t *testing.T) {
 
 		// Check custom query params
 		assert.Equal(t, "cal-456", r.URL.Query().Get("calendar_id"))
-		assert.Equal(t, "event-custom", r.URL.Query().Get("event_id"))
+		assert.Equal(t, "event-custom", r.URL.Query().Get("master_event_id"))
 		assert.Equal(t, "true", r.URL.Query().Get("expand_recurring"))
 		assert.Equal(t, "100", r.URL.Query().Get("limit"))
 		assert.Equal(t, "1609459200", r.URL.Query().Get("start"))

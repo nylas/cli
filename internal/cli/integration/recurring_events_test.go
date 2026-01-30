@@ -30,7 +30,7 @@ func TestRecurringEventOperations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// Get a calendar to work with
+	// Get a writable calendar to work with
 	calendars, err := client.GetCalendars(ctx, grantID)
 	if err != nil {
 		t.Skipf("Could not get calendars: %v", err)
@@ -38,7 +38,18 @@ func TestRecurringEventOperations(t *testing.T) {
 	if len(calendars) == 0 {
 		t.Skip("No calendars available for testing")
 	}
-	calendarID := calendars[0].ID
+
+	// Find the primary calendar (the only one we can reliably modify)
+	var calendarID string
+	for _, cal := range calendars {
+		if cal.IsPrimary {
+			calendarID = cal.ID
+			break
+		}
+	}
+	if calendarID == "" {
+		t.Skip("No primary calendar available for testing")
+	}
 
 	// Create a recurring event
 	t.Run("CreateRecurringEvent", func(t *testing.T) {
@@ -163,7 +174,18 @@ func TestRecurringEventPatterns(t *testing.T) {
 	if len(calendars) == 0 {
 		t.Skip("No calendars available for testing")
 	}
-	calendarID := calendars[0].ID
+
+	// Find the primary calendar (the only one we can reliably modify)
+	var calendarID string
+	for _, cal := range calendars {
+		if cal.IsPrimary {
+			calendarID = cal.ID
+			break
+		}
+	}
+	if calendarID == "" {
+		t.Skip("No primary calendar available for testing")
+	}
 
 	now := time.Now()
 	startTime := now.Add(24 * time.Hour)
