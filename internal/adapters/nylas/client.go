@@ -15,6 +15,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/providers"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
+	"github.com/nylas/cli/internal/version"
 	"golang.org/x/time/rate"
 )
 
@@ -166,6 +167,9 @@ func (c *HTTPClient) ensureContext(ctx context.Context) (context.Context, contex
 // This method applies rate limiting before making the request and ensures
 // the context has a timeout to prevent hanging requests.
 func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
+	// Set User-Agent header for all requests
+	req.Header.Set("User-Agent", version.UserAgent())
+
 	var lastErr error
 	var lastResp *http.Response
 
@@ -319,6 +323,7 @@ func (c *HTTPClient) doJSONRequestInternal(
 	}
 
 	// Set headers
+	req.Header.Set("User-Agent", version.UserAgent())
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

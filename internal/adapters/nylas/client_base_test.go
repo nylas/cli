@@ -1,10 +1,15 @@
 package nylas_test
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -86,4 +91,33 @@ func TestHTTPClient_BuildAuthURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHTTPClient_UserAgent(t *testing.T) {
+	var receivedUserAgent string
+
+	// Create test server that captures the User-Agent header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedUserAgent = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"request_id": "test-123"}`))
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetBaseURL(server.URL)
+	client.SetCredentials("test-client", "test-secret", "test-api-key")
+
+	// Make a request that will trigger the User-Agent header
+	_, _ = client.ListGrants(context.Background())
+
+	// Verify User-Agent was set correctly
+	expectedUA := version.UserAgent()
+	assert.Equal(t, expectedUA, receivedUserAgent, "User-Agent header should match version.UserAgent()")
+
+	// Verify format: nylas-cli/VERSION (OS/ARCH)
+	assert.True(t, strings.HasPrefix(receivedUserAgent, "nylas-cli/"), "User-Agent should start with 'nylas-cli/'")
+	assert.Contains(t, receivedUserAgent, "(", "User-Agent should contain platform info")
+	assert.Contains(t, receivedUserAgent, ")", "User-Agent should contain platform info")
 }

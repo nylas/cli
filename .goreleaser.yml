@@ -20,9 +20,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/nylas/cli/internal/cli.Version={{.Version}}
-      - -X github.com/nylas/cli/internal/cli.Commit={{.Commit}}
-      - -X github.com/nylas/cli/internal/cli.BuildDate={{.Date}}
+      - -X github.com/nylas/cli/internal/version.Version={{.Version}}
+      - -X github.com/nylas/cli/internal/version.Commit={{.Commit}}
+      - -X github.com/nylas/cli/internal/version.BuildDate={{.Date}}
 
 archives:
   - formats:
