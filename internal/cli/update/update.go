@@ -62,7 +62,7 @@ func runUpdate(ctx context.Context, checkOnly, force, yes bool) error {
 	// Check if installed via Homebrew
 	if isHomebrewInstall() {
 		fmt.Println("\nNylas CLI was installed via Homebrew.")
-		fmt.Println("To update, run: brew upgrade nylas/cli/nylas")
+		fmt.Println("To update, run: brew upgrade nylas/nylas-cli/nylas")
 		return nil
 	}
 

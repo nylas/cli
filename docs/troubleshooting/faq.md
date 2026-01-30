@@ -25,7 +25,7 @@ Detailed answers to 50+ frequently asked questions.
 
 ```bash
 # Homebrew (recommended for macOS/Linux)
-brew install nylas/cli/nylas
+brew install nylas/nylas-cli/nylas
 
 # Go install
 go install github.com/nylas/cli/cmd/nylas@latest
@@ -739,7 +739,7 @@ See: [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ```bash
 # Homebrew
-brew upgrade nylas/cli/nylas
+brew upgrade nylas/nylas-cli/nylas
 
 # Go install
 go install github.com/nylas/cli/cmd/nylas@latest
