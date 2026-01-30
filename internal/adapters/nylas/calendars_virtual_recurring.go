@@ -80,7 +80,7 @@ func (c *HTTPClient) GetRecurringEventInstances(ctx context.Context, grantID, ca
 	baseURL := fmt.Sprintf("%s/v3/grants/%s/events", c.baseURL, grantID)
 	queryURL := NewQueryBuilder().
 		Add("calendar_id", calendarID).
-		Add("event_id", masterEventID).
+		Add("master_event_id", masterEventID).
 		AddBool("expand_recurring", true).
 		AddInt("limit", params.Limit).
 		AddInt64("start", params.Start).
