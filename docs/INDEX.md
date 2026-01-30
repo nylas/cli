@@ -72,6 +72,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **Timezone** → [commands/timezone.md](commands/timezone.md)
 - **TUI** → [commands/tui.md](commands/tui.md)
 - **Workflows (OTP)** → [commands/workflows.md](commands/workflows.md)
+- **Templates** → [commands/templates.md](commands/templates.md)
 - **Slack** → [COMMANDS.md#slack-integration](COMMANDS.md#slack-integration)
 
 ### AI & MCP
@@ -115,7 +116,7 @@ docs/
 ├── ARCHITECTURE.md        # System design
 ├── DEVELOPMENT.md         # Development setup
 │
-├── commands/              # Detailed command guides (12 files)
+├── commands/              # Detailed command guides (13 files)
 │   ├── ai.md              # AI features
 │   ├── mcp.md             # MCP integration
 │   ├── calendar.md        # Calendar events
@@ -127,6 +128,7 @@ docs/
 │   ├── admin.md           # API management
 │   ├── timezone.md        # Timezone utilities
 │   ├── tui.md             # Terminal UI
+│   ├── templates.md       # Email templates
 │   └── workflows.md       # OTP & automation
 │
 ├── ai/                    # AI configuration (8 files)
@@ -198,4 +200,4 @@ docs/
 
 ---
 
-**Last Updated:** January 3, 2025
+**Last Updated:** January 30, 2026
