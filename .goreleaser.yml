@@ -69,23 +69,24 @@ changelog:
     - title: Other
       order: 999
 
-brews:
-  - repository:
-      owner: nylas
-      name: homebrew-cli
-      branch: main
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/nylas/cli"
-    description: "CLI for Nylas API - manage email, calendar, and contacts"
-    license: "MIT"
-    install: |
-      bin.install "nylas"
-
-      # Install shell completions
-      generate_completions_from_executable(bin/"nylas", "completion")
-    test: |
-      system "#{bin}/nylas", "--version"
+# Homebrew tap disabled - update manually for now
+# brews:
+#   - repository:
+#       owner: nylas
+#       name: homebrew-nylas-cli
+#       branch: main
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     directory: Formula
+#     homepage: "https://github.com/nylas/cli"
+#     description: "CLI for Nylas API - manage email, calendar, and contacts"
+#     license: "MIT"
+#     install: |
+#       bin.install "nylas"
+#
+#       # Install shell completions
+#       generate_completions_from_executable(bin/"nylas", "completion")
+#     test: |
+#       system "#{bin}/nylas", "--version"
 
 release:
   github:
@@ -101,7 +102,7 @@ release:
 
     **macOS/Linux (Homebrew):**
     ```bash
-    brew install nylas/cli/nylas
+    brew install nylas/nylas-cli/nylas
     ```
 
     **macOS (DMG):**
