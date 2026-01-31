@@ -45,21 +45,23 @@ renderCalendarGrid() {
     for (let day = 1; day <= daysInMonth; day++) {
         const isToday = isCurrentMonth && day === todayDate;
         const dateStr = `${year}-${month + 1}-${day}`;
-        const hasEvents = this.events.some(e => {
+        // Count events for this day
+        const dayEvents = this.events.filter(e => {
             const eventDate = new Date(e.start_time * 1000);
             return eventDate.getFullYear() === year &&
                    eventDate.getMonth() === month &&
                    eventDate.getDate() === day;
         });
+        const eventCount = dayEvents.length;
 
         let classes = 'calendar-day';
         if (isToday) classes += ' today';
-        if (hasEvents) classes += ' has-event';
+        if (eventCount > 0) classes += ' has-event';
 
         html += `<div class="${classes}" data-date="${dateStr}">
             ${day}
-            ${isToday ? '<span class="today-dot"></span>' : ''}
-            ${hasEvents ? '<div class="event-dot"></div>' : ''}
+            ${isToday ? '<span class="today-indicator"></span>' : ''}
+            ${eventCount > 0 ? `<div class="event-count-badge">${eventCount}</div>` : ''}
         </div>`;
     }
 
@@ -274,6 +276,7 @@ renderEventCard(event) {
     const endTime = this.formatEventTime(event.end_time);
     const isFocusTime = event.title?.toLowerCase().includes('focus');
     const hasConferencing = event.conferencing && event.conferencing.url;
+    const relativeTime = this.getRelativeTime(event.start_time);
 
     const participantsHtml = event.participants && event.participants.length > 0
         ? `<div class="event-attendees">
@@ -287,21 +290,71 @@ renderEventCard(event) {
         : '';
 
     return `
-        <div class="event-card${isFocusTime ? ' focus-time' : ''}" data-event-id="${event.id}">
-            <div class="event-time">${event.is_all_day ? 'All Day' : `${startTime} - ${endTime}`}</div>
+        <div class="event-card${isFocusTime ? ' focus-time' : ''}${relativeTime.class ? ' ' + relativeTime.class : ''}" data-event-id="${event.id}">
+            <div class="event-time-row">
+                <div class="event-time">${event.is_all_day ? 'All Day' : `${startTime} - ${endTime}`}</div>
+                ${relativeTime.text ? `<div class="event-relative-time ${relativeTime.class}">${relativeTime.text}</div>` : ''}
+            </div>
             <div class="event-title">${isFocusTime ? '🧘 ' : ''}${this.escapeHtml(event.title || '(No Title)')}</div>
             ${event.description ? `<div class="event-desc">${this.escapeHtml(this.stripHtml(event.description).substring(0, 100))}</div>` : ''}
             ${event.location ? `<div class="event-location">📍 ${this.escapeHtml(event.location)}</div>` : ''}
             ${participantsHtml}
             ${hasConferencing ? `
-                <div class="event-meta">
-                    <a href="${event.conferencing.url}" target="_blank" class="event-tag">
-                        📹 ${event.conferencing.provider || 'Video Call'}
+                <div class="event-actions">
+                    <a href="${event.conferencing.url}" target="_blank" class="join-meeting-btn">
+                        📹 Join Meeting
                     </a>
                 </div>
             ` : ''}
         </div>
     `;
+},
+
+getRelativeTime(timestamp) {
+    const now = Date.now() / 1000;
+    const diff = timestamp - now;
+    const diffMins = Math.floor(diff / 60);
+    const diffHours = Math.floor(diff / 3600);
+
+    // Past events
+    if (diff < 0) {
+        return { text: '', class: '' };
+    }
+
+    // Starting now (within 5 minutes)
+    if (diffMins <= 5) {
+        return { text: 'Starting now', class: 'starting-now' };
+    }
+
+    // Starting soon (within 30 minutes)
+    if (diffMins <= 30) {
+        return { text: `in ${diffMins} min`, class: 'starting-soon' };
+    }
+
+    // Within the hour
+    if (diffMins < 60) {
+        return { text: `in ${diffMins} min`, class: 'upcoming' };
+    }
+
+    // Within a few hours
+    if (diffHours <= 3) {
+        return { text: `in ${diffHours} hr${diffHours > 1 ? 's' : ''}`, class: 'upcoming' };
+    }
+
+    // Later today or tomorrow
+    const eventDate = new Date(timestamp * 1000);
+    const today = new Date();
+    if (eventDate.toDateString() === today.toDateString()) {
+        return { text: 'Today', class: '' };
+    }
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (eventDate.toDateString() === tomorrow.toDateString()) {
+        return { text: 'Tomorrow', class: '' };
+    }
+
+    return { text: '', class: '' };
 },
 
 formatEventTime(timestamp) {

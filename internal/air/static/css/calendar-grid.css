@@ -178,23 +178,61 @@
             background: white;
         }
 
-        .today-dot {
+        /* Pulsing today indicator */
+        .today-indicator {
             position: absolute;
-            bottom: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 6px;
-            height: 6px;
-            background: var(--accent);
-            border-radius: 50%;
-        }
-
-        .event-dot {
+            top: 8px;
+            right: 8px;
             width: 8px;
             height: 8px;
             background: var(--accent);
             border-radius: 50%;
-            margin-top: 4px;
+            animation: todayPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes todayPulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+                box-shadow: 0 0 0 6px rgba(139, 92, 246, 0);
+            }
+        }
+
+        /* Event count badge */
+        .event-count-badge {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            background: var(--accent);
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .calendar-day.selected .event-count-badge {
+            background: white;
+            color: var(--accent);
+        }
+
+        /* Legacy support */
+        .today-dot {
+            display: none;
+        }
+
+        .event-dot {
+            display: none;
         }
 
         .calendar-events-panel {
@@ -262,10 +300,46 @@
             margin-bottom: 10px;
         }
 
+        .event-time-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
         .event-time {
             font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 6px;
+        }
+
+        .event-relative-time {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: var(--bg-surface);
+            color: var(--text-muted);
+        }
+
+        .event-relative-time.starting-now {
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+            color: white;
+            animation: urgentPulse 1s ease-in-out infinite;
+        }
+
+        .event-relative-time.starting-soon {
+            background: linear-gradient(135deg, #f59e0b 0%, #eab308 100%);
+            color: white;
+        }
+
+        .event-relative-time.upcoming {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent);
+        }
+
+        @keyframes urgentPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .event-title {
@@ -314,6 +388,31 @@
             border-radius: 6px;
             font-size: 12px;
             color: var(--text-muted);
+        }
+
+        /* Join Meeting button */
+        .join-meeting-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: white;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+        }
+
+        .join-meeting-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+        }
+
+        .join-meeting-btn:active {
+            transform: translateY(0);
         }
 
         .event-actions {
