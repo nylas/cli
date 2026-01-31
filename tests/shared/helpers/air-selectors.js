@@ -96,6 +96,13 @@ exports.calendar = {
   eventsPanel: '[data-testid="events-panel"]',
   eventsList: '#eventsList',
   conflictsPanel: '#conflictsPanel',
+  // Event card elements
+  eventCard: '.event-card',
+  eventEditBtn: '.event-edit-btn',
+  joinMeetingBtn: '.join-meeting-btn',
+  eventCountBadge: '.event-count-badge',
+  eventRelativeTime: '.event-relative-time',
+  todayIndicator: '.today-indicator',
 };
 
 // Contacts View
