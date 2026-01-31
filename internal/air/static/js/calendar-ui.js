@@ -95,8 +95,24 @@ onDayClick(dateStr, dayEl) {
     document.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
     dayEl.classList.add('selected');
 
-    // Update events panel header
+    // Check if clicked date is today
+    const today = new Date();
+    const isToday = clickedDate.getFullYear() === today.getFullYear() &&
+                    clickedDate.getMonth() === today.getMonth() &&
+                    clickedDate.getDate() === today.getDate();
+
+    // Update events panel header title and date
+    const headerEl = document.querySelector('.events-header h3');
     const dateEl = document.querySelector('.events-date');
+
+    if (headerEl) {
+        headerEl.textContent = isToday ? "Today's Schedule" : clickedDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+
     if (dateEl) {
         dateEl.textContent = clickedDate.toLocaleDateString('en-US', {
             weekday: 'short',

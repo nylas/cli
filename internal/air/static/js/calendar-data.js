@@ -21,7 +21,8 @@ async loadEvents() {
 
         const data = await AirAPI.getEvents({
             start: Math.floor(start.getTime() / 1000),
-            end: Math.floor(end.getTime() / 1000)
+            end: Math.floor(end.getTime() / 1000),
+            limit: 200  // Fetch more events to cover the full month
         });
 
         this.events = data.events || [];
