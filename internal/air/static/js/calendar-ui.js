@@ -291,6 +291,12 @@ renderEventCard(event) {
 
     return `
         <div class="event-card${isFocusTime ? ' focus-time' : ''}${relativeTime.class ? ' ' + relativeTime.class : ''}" data-event-id="${event.id}">
+            <button class="event-edit-btn" style="position: absolute; top: 8px; right: 8px;" onclick="event.stopPropagation(); CalendarManager.openEditModal('${event.id}')" title="Edit event">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
             <div class="event-time-row">
                 <div class="event-time">${event.is_all_day ? 'All Day' : `${startTime} - ${endTime}`}</div>
                 ${relativeTime.text ? `<div class="event-relative-time ${relativeTime.class}">${relativeTime.text}</div>` : ''}
@@ -301,7 +307,7 @@ renderEventCard(event) {
             ${participantsHtml}
             ${hasConferencing ? `
                 <div class="event-actions">
-                    <a href="${event.conferencing.url}" target="_blank" class="join-meeting-btn">
+                    <a href="${event.conferencing.url}" target="_blank" class="join-meeting-btn" onclick="event.stopPropagation()">
                         📹 Join Meeting
                     </a>
                 </div>
@@ -384,5 +390,13 @@ stripHtml(html) {
     // Clean up whitespace
     text = text.replace(/\s+/g, ' ').trim();
     return text;
+},
+
+openEditModal(eventId) {
+    // Find the event by ID
+    const event = this.events.find(e => e.id === eventId);
+    if (event && typeof EventModal !== 'undefined') {
+        EventModal.open(event);
+    }
 },
 });

@@ -271,11 +271,41 @@
             border: 1px solid var(--border);
             border-radius: 14px;
             transition: all 0.2s;
+            position: relative;
         }
 
         .event-card:hover {
             border-color: var(--border-light);
             transform: translateY(-2px);
+        }
+
+        /* Edit button - top right corner */
+        .event-card .event-edit-btn {
+            position: absolute !important;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+        }
+
+        .event-card:hover .event-edit-btn {
+            opacity: 1;
+        }
+
+        .event-edit-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-light);
         }
 
         .event-card.focus-time {
