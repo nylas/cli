@@ -10,13 +10,21 @@ import (
 )
 
 func TestHandleListGPGKeys_NoGPG(t *testing.T) {
-	// This test will skip if GPG is not installed
+	// This test verifies handleListGPGKeys handles various GPG states gracefully
 	ctx := context.Background()
 	err := handleListGPGKeys(ctx)
 
-	// Either succeeds or fails with "GPG not found" error
-	if err != nil && !strings.Contains(err.Error(), "GPG not found") {
-		t.Errorf("handleListGPGKeys() unexpected error = %v", err)
+	// Expected outcomes:
+	// 1. Success (GPG installed with keys)
+	// 2. "GPG not found" (GPG not installed)
+	// 3. "no GPG secret keys found" (GPG installed but no keys)
+	if err != nil {
+		errStr := err.Error()
+		if !strings.Contains(errStr, "GPG not found") &&
+			!strings.Contains(errStr, "no GPG secret keys") &&
+			!strings.Contains(errStr, "No GPG signing keys") {
+			t.Errorf("handleListGPGKeys() unexpected error = %v", err)
+		}
 	}
 }
 
