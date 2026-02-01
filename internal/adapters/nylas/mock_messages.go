@@ -84,6 +84,19 @@ func (m *MockClient) SendMessage(ctx context.Context, grantID string, req *domai
 	}, nil
 }
 
+// SendRawMessage sends a raw MIME message.
+func (m *MockClient) SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error) {
+	m.LastGrantID = grantID
+	if m.SendRawMessageFunc != nil {
+		return m.SendRawMessageFunc(ctx, grantID, rawMIME)
+	}
+	return &domain.Message{
+		ID:      "sent-raw-message-id",
+		GrantID: grantID,
+		RawMIME: string(rawMIME),
+	}, nil
+}
+
 // UpdateMessage updates message properties.
 func (m *MockClient) UpdateMessage(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error) {
 	m.UpdateMessageCalled = true

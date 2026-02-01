@@ -64,6 +64,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 - **CLI Framework**: Cobra
 - **API**: Nylas v3 ONLY (never use v1/v2)
 - **Timezone Support**: Offline utilities + calendar integration ✅
+- **Email Signing**: GPG/PGP email signing (RFC 3156 PGP/MIME) ✅
 - **Credential Storage**: System keyring (see below)
 - **Web UI**: Air - browser-based interface (localhost:7365)
 
@@ -123,10 +124,12 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 
 **Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`
 
-**New packages (2024):**
+**New packages (2024-2026):**
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting
 - `internal/adapters/output/` - Table, JSON, YAML, Quiet output adapters
 - `internal/httputil/` - HTTP response helpers (WriteJSON, LimitedBody, DecodeJSON)
+- `internal/adapters/gpg/` - GPG/PGP email signing service (2026)
+- `internal/adapters/mime/` - RFC 3156 PGP/MIME message builder (2026)
 
 **Full inventory:** `docs/ARCHITECTURE.md`
 

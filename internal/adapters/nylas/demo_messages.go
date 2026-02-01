@@ -166,6 +166,15 @@ func (d *DemoClient) SendMessage(ctx context.Context, grantID string, req *domai
 	return msg, nil
 }
 
+// SendRawMessage simulates sending a raw MIME message.
+func (d *DemoClient) SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error) {
+	return &domain.Message{
+		ID:      "sent-raw-demo-msg",
+		Date:    time.Now(),
+		RawMIME: string(rawMIME),
+	}, nil
+}
+
 // UpdateMessage simulates updating a message.
 func (d *DemoClient) UpdateMessage(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error) {
 	msg := &domain.Message{ID: messageID, Subject: "Updated Message"}

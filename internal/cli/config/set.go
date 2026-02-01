@@ -27,7 +27,13 @@ The configuration file will be created if it doesn't exist.`,
   nylas config set output.format json
 
   # Set output color mode
-  nylas config set output.color never`,
+  nylas config set output.color never
+
+  # Set GPG default signing key
+  nylas config set gpg.default_key 601FEE9B1D60185F
+
+  # Enable auto-sign for all emails
+  nylas config set gpg.auto_sign true`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configStore.Load()

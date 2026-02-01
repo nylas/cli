@@ -128,7 +128,7 @@ func TestSetFieldValue(t *testing.T) {
 }
 
 func TestSetConfigValue(t *testing.T) {
-	type ApiConfig struct {
+	type APIConfig struct {
 		Timeout string
 		BaseUrl string
 		Port    int
@@ -143,7 +143,7 @@ func TestSetConfigValue(t *testing.T) {
 	type TestConfig struct {
 		Region       string
 		DefaultGrant string
-		Api          *ApiConfig
+		API          *APIConfig
 		Output       OutputConfig
 	}
 
@@ -180,20 +180,20 @@ func TestSetConfigValue(t *testing.T) {
 			key:   "api.timeout",
 			value: "120s",
 			checkFunc: func(c *TestConfig) bool {
-				return c.Api != nil && c.Api.Timeout == "120s"
+				return c.API != nil && c.API.Timeout == "120s"
 			},
 		},
 		{
 			name: "set nested field in existing pointer",
 			cfg: &TestConfig{
-				Api: &ApiConfig{
+				API: &APIConfig{
 					BaseUrl: "existing",
 				},
 			},
 			key:   "api.timeout",
 			value: "90s",
 			checkFunc: func(c *TestConfig) bool {
-				return c.Api.Timeout == "90s" && c.Api.BaseUrl == "existing"
+				return c.API.Timeout == "90s" && c.API.BaseUrl == "existing"
 			},
 		},
 		{
@@ -202,7 +202,7 @@ func TestSetConfigValue(t *testing.T) {
 			key:   "api.port",
 			value: "8080",
 			checkFunc: func(c *TestConfig) bool {
-				return c.Api != nil && c.Api.Port == 8080
+				return c.API != nil && c.API.Port == 8080
 			},
 		},
 		{

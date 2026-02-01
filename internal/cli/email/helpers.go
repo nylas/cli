@@ -74,28 +74,16 @@ func printMessageRaw(msg domain.Message) {
 
 // printMessageMIMEWithProvider prints the raw RFC822/MIME format with provider-aware error messages.
 func printMessageMIMEWithProvider(msg domain.Message, provider domain.Provider) {
+	_ = provider // Provider info available for future use if needed
+
 	if msg.RawMIME == "" {
 		fmt.Println(strings.Repeat("─", 60))
 		_, _ = common.Yellow.Println("No raw MIME data available")
 		fmt.Println(strings.Repeat("─", 60))
-
-		// Show provider-specific message
-		switch provider {
-		case domain.ProviderMicrosoft:
-			fmt.Println("Microsoft/Outlook accounts do not support raw MIME retrieval.")
-			fmt.Println()
-			_, _ = common.Cyan.Println("Alternative: Use --headers to view email headers instead:")
-			fmt.Println("  nylas email read <message-id> --headers")
-		case "":
-			fmt.Println("This message does not have MIME data available.")
-			fmt.Println("The API may not support MIME retrieval for this provider.")
-			fmt.Println()
-			_, _ = common.Cyan.Println("Tip: Use --headers to view email headers (works with all providers):")
-			fmt.Println("  nylas email read <message-id> --headers")
-		default:
-			fmt.Println("This message does not have MIME data available.")
-			fmt.Println("The API may not support MIME retrieval for this message.")
-		}
+		fmt.Println("This message does not have MIME data available.")
+		fmt.Println()
+		_, _ = common.Cyan.Println("Tip: Use --headers to view email headers:")
+		fmt.Println("  nylas email read <message-id> --headers")
 		return
 	}
 

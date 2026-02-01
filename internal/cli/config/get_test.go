@@ -23,7 +23,7 @@ func TestSnakeToPascal(t *testing.T) {
 		{
 			name:  "snake_case three words",
 			input: "api_base_url",
-			want:  "ApiBaseUrl",
+			want:  "APIBaseUrl",
 		},
 		{
 			name:  "already camelCase",
@@ -59,7 +59,7 @@ func TestSnakeToPascal(t *testing.T) {
 
 func TestGetConfigValue(t *testing.T) {
 	// Test struct matching typical config structure
-	type ApiConfig struct {
+	type APIConfig struct {
 		Timeout string
 		BaseUrl string
 	}
@@ -72,7 +72,7 @@ func TestGetConfigValue(t *testing.T) {
 	type TestConfig struct {
 		Region       string
 		DefaultGrant string
-		Api          *ApiConfig
+		API          *APIConfig
 		Output       OutputConfig
 	}
 
@@ -103,7 +103,7 @@ func TestGetConfigValue(t *testing.T) {
 		{
 			name: "get nested field with pointer",
 			cfg: &TestConfig{
-				Api: &ApiConfig{
+				API: &APIConfig{
 					Timeout: "90s",
 				},
 			},
@@ -123,7 +123,7 @@ func TestGetConfigValue(t *testing.T) {
 		{
 			name: "get from nil pointer returns empty",
 			cfg: &TestConfig{
-				Api: nil,
+				API: nil,
 			},
 			key:  "api.timeout",
 			want: "",
@@ -149,7 +149,7 @@ func TestGetConfigValue(t *testing.T) {
 		{
 			name: "deeply nested field",
 			cfg: &TestConfig{
-				Api: &ApiConfig{
+				API: &APIConfig{
 					BaseUrl: "https://api.us.nylas.com",
 				},
 			},

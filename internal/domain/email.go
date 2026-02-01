@@ -92,6 +92,10 @@ type SendMessageRequest struct {
 	Attachments  []Attachment       `json:"attachments,omitempty"`
 	SendAt       int64              `json:"send_at,omitempty"` // Unix timestamp for scheduled sending
 	Metadata     map[string]string  `json:"metadata,omitempty"`
+
+	// GPG Signature options (not sent to API, used internally for signing)
+	Sign     bool   `json:"-"` // Whether to GPG sign this email
+	GPGKeyID string `json:"-"` // Optional: specific GPG key ID to use
 }
 
 // Validate checks that SendMessageRequest has at least one recipient.
