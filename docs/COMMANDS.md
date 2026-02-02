@@ -115,6 +115,8 @@ nylas email read <message-id>                                  # Read email
 nylas email read <message-id> --raw                            # Show raw body without HTML
 nylas email read <message-id> --mime                           # Show raw RFC822/MIME format
 nylas email send --to EMAIL --subject SUBJECT --body BODY      # Send email
+nylas email send --to EMAIL --subject SUBJECT --body BODY --sign  # Send GPG-signed email
+nylas email send --list-gpg-keys                               # List available GPG signing keys
 nylas email search --query "QUERY"                             # Search emails
 nylas email delete <message-id>                                # Delete email
 nylas email mark read <message-id>                             # Mark as read
@@ -136,7 +138,7 @@ nylas email ai analyze --provider claude  # Use specific AI provider
 nylas email smart-compose --prompt "..."  # AI-powered email generation
 ```
 
-**Details:** `docs/commands/email.md`, `docs/commands/ai.md`
+**Details:** `docs/commands/email.md`, `docs/commands/email-signing.md`, `docs/commands/ai.md`
 
 ---
 

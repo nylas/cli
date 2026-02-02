@@ -21,7 +21,9 @@ Examples of keys:
   api.timeout
   api.base_url
   output.format
-  output.color`,
+  output.color
+  gpg.default_key
+  gpg.auto_sign`,
 		Example: `  # Get API timeout
   nylas config get api.timeout
 
@@ -29,7 +31,13 @@ Examples of keys:
   nylas config get default_grant
 
   # Get output format
-  nylas config get output.format`,
+  nylas config get output.format
+
+  # Get GPG default key
+  nylas config get gpg.default_key
+
+  # Get GPG auto-sign setting
+  nylas config get gpg.auto_sign`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configStore.Load()
@@ -85,10 +93,23 @@ func getConfigValue(cfg any, key string) (string, error) {
 }
 
 func snakeToPascal(s string) string {
+	// Common acronyms that should be fully uppercase
+	acronyms := map[string]string{
+		"api": "API",
+		"ai":  "AI",
+		"gpg": "GPG",
+		"id":  "ID",
+	}
+
 	parts := strings.Split(s, "_")
 	for i, part := range parts {
 		if len(part) > 0 {
-			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+			// Check if it's a known acronym
+			if upper, ok := acronyms[strings.ToLower(part)]; ok {
+				parts[i] = upper
+			} else {
+				parts[i] = strings.ToUpper(part[:1]) + part[1:]
+			}
 		}
 	}
 	return strings.Join(parts, "")

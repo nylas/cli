@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -241,10 +242,26 @@ func convertMessage(m messageResponse) domain.Message {
 		headers = append(headers, domain.Header{Name: h.Name, Value: h.Value})
 	}
 
-	// Decode raw MIME if present (Base64url-encoded by API)
+	// Decode raw MIME if present
+	// Note: Nylas API may return different base64 variants:
+	// - Standard base64 with padding (production API)
+	// - Base64url without padding (some contexts)
+	// We try multiple decoders to handle all cases.
 	rawMIME := ""
 	if m.RawMIME != "" {
-		decoded, err := base64.RawURLEncoding.DecodeString(m.RawMIME)
+		var decoded []byte
+		var err error
+
+		// First, normalize URL-safe characters to standard base64
+		normalized := strings.ReplaceAll(m.RawMIME, "-", "+")
+		normalized = strings.ReplaceAll(normalized, "_", "/")
+
+		// Try standard encoding with padding first
+		decoded, err = base64.StdEncoding.DecodeString(normalized)
+		if err != nil {
+			// Try without padding (RawStdEncoding)
+			decoded, err = base64.RawStdEncoding.DecodeString(normalized)
+		}
 		if err == nil {
 			rawMIME = string(decoded)
 		}

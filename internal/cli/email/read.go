@@ -18,6 +18,7 @@ func newReadCmd() *cobra.Command {
 	var rawOutput bool
 	var mimeOutput bool
 	var headersOutput bool
+	var verifySignature bool
 
 	cmd := &cobra.Command{
 		Use:     "read <message-id> [grant-id]",
@@ -33,7 +34,8 @@ func newReadCmd() *cobra.Command {
 				// Determine which fields to request
 				var fields string
 				switch {
-				case mimeOutput:
+				case mimeOutput, verifySignature:
+					// Both --mime and --verify need raw MIME data
 					fields = "raw_mime"
 				case headersOutput:
 					fields = "include_headers"
@@ -59,6 +61,20 @@ func newReadCmd() *cobra.Command {
 						return struct{}{}, common.WrapMarshalError("JSON", err)
 					}
 					fmt.Println(string(data))
+					return struct{}{}, nil
+				}
+
+				// Handle --verify flag
+				if verifySignature {
+					// Fetch full message for display (raw_mime request returns minimal fields)
+					fullMsg, err := client.GetMessage(ctx, grantID, messageID)
+					if err == nil {
+						printMessage(*fullMsg, true)
+					}
+					// Verify signature using raw MIME
+					if err := verifyGPGSignature(ctx, msg); err != nil {
+						return struct{}{}, fmt.Errorf("GPG verification failed: %w", err)
+					}
 					return struct{}{}, nil
 				}
 
@@ -99,6 +115,7 @@ func newReadCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&rawOutput, "raw", false, "Show raw email body without HTML processing")
 	cmd.Flags().BoolVar(&mimeOutput, "mime", false, "Show raw RFC822/MIME message format")
 	cmd.Flags().BoolVar(&headersOutput, "headers", false, "Show email headers (works with all providers)")
+	cmd.Flags().BoolVar(&verifySignature, "verify", false, "Verify GPG/PGP signature of the message")
 
 	return cmd
 }

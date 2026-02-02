@@ -36,6 +36,12 @@ If the config file doesn't exist, sensible defaults are used automatically.`,
   # Set default grant ID
   nylas config set default_grant grant_abc123
 
+  # Set GPG default key
+  nylas config set gpg.default_key 601FEE9B1D60185F
+
+  # Enable auto-sign all emails
+  nylas config set gpg.auto_sign true
+
   # Initialize config with defaults
   nylas config init`,
 	}

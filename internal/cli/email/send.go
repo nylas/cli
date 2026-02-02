@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	configAdapter "github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -31,11 +32,19 @@ func newSendCmd() *cobra.Command {
 	var trackLabel string
 	var metadata []string
 	var jsonOutput bool
+	var sign bool
+	var gpgKeyID string
+	var listGPGKeys bool
 
 	cmd := &cobra.Command{
 		Use:   "send [grant-id]",
 		Short: "Send an email",
 		Long: `Compose and send an email message.
+
+Supports GPG/PGP email signing:
+- --sign: Sign email with your GPG key (uses default key from git config)
+- --gpg-key <key-id>: Sign with a specific GPG key
+- --list-gpg-keys: List available GPG signing keys
 
 Supports scheduled sending with the --schedule flag. You can specify:
 - Duration: "30m", "2h", "1d" (minutes, hours, days from now)
@@ -53,6 +62,15 @@ Supports custom metadata:
 		Example: `  # Send immediately
   nylas email send --to user@example.com --subject "Hello" --body "Hi there!"
 
+  # Send with GPG signature (uses default key from git config)
+  nylas email send --to user@example.com --subject "Secure" --body "Signed email" --sign
+
+  # Send with specific GPG key
+  nylas email send --to user@example.com --subject "Secure" --body "Signed" --sign --gpg-key 601FEE9B1D60185F
+
+  # List available GPG keys
+  nylas email send --list-gpg-keys
+
   # Send in 2 hours
   nylas email send --to user@example.com --subject "Reminder" --schedule 2h
 
@@ -69,6 +87,20 @@ Supports custom metadata:
   nylas email send --to user@example.com --subject "Invoice" --metadata campaign=q4 --metadata type=invoice`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Handle --list-gpg-keys early (no client needed)
+			if listGPGKeys {
+				return handleListGPGKeys(cmd.Context())
+			}
+
+			// Check auto-sign config if --sign flag not explicitly set
+			if !cmd.Flags().Changed("sign") {
+				configStore := configAdapter.NewDefaultFileStore()
+				cfg, err := configStore.Load()
+				if err == nil && cfg != nil && cfg.GPG != nil && cfg.GPG.AutoSign {
+					sign = true
+				}
+			}
+
 			// Interactive mode (runs before WithClient)
 			if interactive || (len(to) == 0 && subject == "" && body == "") {
 				reader := bufio.NewReader(os.Stdin)
@@ -201,6 +233,25 @@ Supports custom metadata:
 			if len(metadata) > 0 {
 				fmt.Printf("  %s %s\n", common.Cyan.Sprint("Metadata:"), strings.Join(metadata, ", "))
 			}
+			if sign {
+				var signingInfo string
+				if gpgKeyID != "" {
+					// Explicit key ID provided
+					signingInfo = fmt.Sprintf("key %s", gpgKeyID)
+				} else {
+					// Auto-detect from From address
+					fromEmail := ""
+					if len(toContacts) > 0 && len(req.From) > 0 {
+						fromEmail = req.From[0].Email
+					}
+					if fromEmail != "" {
+						signingInfo = fmt.Sprintf("as %s", fromEmail)
+					} else {
+						signingInfo = "default key from git config"
+					}
+				}
+				fmt.Printf("  %s %s\n", common.Green.Sprint("GPG Signed:"), signingInfo)
+			}
 
 			if !noConfirm {
 				if scheduledTime.IsZero() {
@@ -220,19 +271,36 @@ Supports custom metadata:
 
 			// Send
 			_, sendErr := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				// Show progress spinner while sending
-				var sendMsg string
-				if scheduledTime.IsZero() {
-					sendMsg = "Sending email..."
+				var msg *domain.Message
+				var err error
+
+				if sign {
+					// Get grant info to determine From email address
+					grant, grantErr := client.GetGrant(ctx, grantID)
+					if grantErr == nil && grant != nil && grant.Email != "" {
+						// Populate From field with grant's email address
+						req.From = []domain.EmailParticipant{
+							{Email: grant.Email},
+						}
+					}
+
+					// GPG signing flow
+					msg, err = sendSignedEmail(ctx, client, grantID, req, gpgKeyID, toContacts, subject, body)
 				} else {
-					sendMsg = "Scheduling email..."
+					// Standard flow
+					var sendMsg string
+					if scheduledTime.IsZero() {
+						sendMsg = "Sending email..."
+					} else {
+						sendMsg = "Scheduling email..."
+					}
+
+					spinner := common.NewSpinner(sendMsg)
+					spinner.Start()
+
+					msg, err = client.SendMessage(ctx, grantID, req)
+					spinner.Stop()
 				}
-
-				spinner := common.NewSpinner(sendMsg)
-				spinner.Start()
-
-				msg, err := client.SendMessage(ctx, grantID, req)
-				spinner.Stop()
 
 				if err != nil {
 					return struct{}{}, common.WrapSendError("email", err)
@@ -246,7 +314,11 @@ Supports custom metadata:
 					printSuccess("Email scheduled successfully! Message ID: %s", msg.ID)
 					fmt.Printf("Scheduled to send: %s\n", scheduledTime.Format(common.DisplayWeekdayFullWithTZ))
 				} else {
-					printSuccess("Email sent successfully! Message ID: %s", msg.ID)
+					if sign {
+						printSuccess("Signed email sent successfully! Message ID: %s", msg.ID)
+					} else {
+						printSuccess("Email sent successfully! Message ID: %s", msg.ID)
+					}
 				}
 				return struct{}{}, nil
 			})
@@ -268,6 +340,9 @@ Supports custom metadata:
 	cmd.Flags().StringVar(&trackLabel, "track-label", "", "Label for tracking (used to group tracked emails)")
 	cmd.Flags().StringSliceVar(&metadata, "metadata", nil, "Custom metadata as key=value (can be repeated)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+	cmd.Flags().BoolVar(&sign, "sign", false, "Sign email with GPG (uses default key from git config)")
+	cmd.Flags().StringVar(&gpgKeyID, "gpg-key", "", "Specific GPG key ID to use for signing")
+	cmd.Flags().BoolVar(&listGPGKeys, "list-gpg-keys", false, "List available GPG signing keys and exit")
 
 	return cmd
 }

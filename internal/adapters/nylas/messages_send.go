@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 
 	"github.com/nylas/cli/internal/domain"
@@ -67,6 +69,60 @@ func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domai
 		return nil, c.parseError(resp)
 	}
 
+	var result struct {
+		Data messageResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	msg := convertMessage(result.Data)
+	return &msg, nil
+}
+
+// SendRawMessage sends a raw RFC 822 MIME message via the Nylas API.
+// Uses multipart/form-data with type=mime query parameter per Nylas API v3 spec.
+func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error) {
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send?type=mime", c.baseURL, grantID)
+
+	// Create multipart form data
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	// Add MIME field
+	part, err := writer.CreateFormField("mime")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form field: %w", err)
+	}
+	if _, err := io.Copy(part, bytes.NewReader(rawMIME)); err != nil {
+		return nil, fmt.Errorf("failed to write MIME data: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", queryURL, &body)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+	c.setAuthHeader(httpReq)
+
+	// Send request
+	resp, err := c.doRequest(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+		return nil, c.parseError(resp)
+	}
+
+	// Parse response
 	var result struct {
 		Data messageResponse `json:"data"`
 	}

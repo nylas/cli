@@ -31,6 +31,9 @@ type MessageClient interface {
 	// SendMessage sends a new message.
 	SendMessage(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error)
 
+	// SendRawMessage sends a raw RFC 822 MIME message.
+	SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error)
+
 	// UpdateMessage updates an existing message.
 	UpdateMessage(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
 

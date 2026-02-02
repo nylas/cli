@@ -59,6 +59,9 @@ type Config struct {
 
 	// AI settings
 	AI *AIConfig `yaml:"ai,omitempty"`
+
+	// GPG settings
+	GPG *GPGConfig `yaml:"gpg,omitempty"`
 }
 
 // APIConfig represents API-specific configuration.
@@ -187,4 +190,10 @@ func DefaultWorkingHours() *DaySchedule {
 		Start:   "09:00",
 		End:     "17:00",
 	}
+}
+
+// GPGConfig represents GPG/PGP email signing configuration.
+type GPGConfig struct {
+	DefaultKey string `yaml:"default_key,omitempty"` // Default GPG key ID for signing
+	AutoSign   bool   `yaml:"auto_sign,omitempty"`   // Automatically sign all outgoing emails
 }
