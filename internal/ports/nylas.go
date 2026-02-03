@@ -19,6 +19,7 @@ type NylasClient interface {
 	InboundClient
 	SchedulerClient
 	AdminClient
+	TransactionalClient
 
 	// Configuration methods
 	SetRegion(region string)

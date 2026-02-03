@@ -74,3 +74,66 @@ func TestTruncate(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractDomain(t *testing.T) {
+	tests := []struct {
+		name  string
+		email string
+		want  string
+	}{
+		{
+			name:  "standard email",
+			email: "user@example.com",
+			want:  "example.com",
+		},
+		{
+			name:  "nylas inbox email",
+			email: "info@qasim.nylas.email",
+			want:  "qasim.nylas.email",
+		},
+		{
+			name:  "subdomain email",
+			email: "test@subdomain.domain.com",
+			want:  "subdomain.domain.com",
+		},
+		{
+			name:  "no @ symbol",
+			email: "invalidemail",
+			want:  "",
+		},
+		{
+			name:  "multiple @ symbols",
+			email: "user@domain@extra.com",
+			want:  "",
+		},
+		{
+			name:  "empty string",
+			email: "",
+			want:  "",
+		},
+		{
+			name:  "only @ symbol",
+			email: "@",
+			want:  "",
+		},
+		{
+			name:  "@ at start",
+			email: "@domain.com",
+			want:  "domain.com",
+		},
+		{
+			name:  "@ at end",
+			email: "user@",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractDomain(tt.email)
+			if got != tt.want {
+				t.Errorf("ExtractDomain(%q) = %q, want %q", tt.email, got, tt.want)
+			}
+		})
+	}
+}

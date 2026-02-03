@@ -274,9 +274,10 @@ Supports custom metadata:
 				var msg *domain.Message
 				var err error
 
+				// Get grant info to determine provider and email
+				grant, grantErr := client.GetGrant(ctx, grantID)
+
 				if sign {
-					// Get grant info to determine From email address
-					grant, grantErr := client.GetGrant(ctx, grantID)
 					if grantErr == nil && grant != nil && grant.Email != "" {
 						// Populate From field with grant's email address
 						req.From = []domain.EmailParticipant{
@@ -298,7 +299,24 @@ Supports custom metadata:
 					spinner := common.NewSpinner(sendMsg)
 					spinner.Start()
 
-					msg, err = client.SendMessage(ctx, grantID, req)
+					// Auto-detect inbox provider and use transactional endpoint
+					if grantErr == nil && grant != nil && grant.Provider == domain.ProviderInbox {
+						// Inbox provider - use domain-based transactional send
+						emailDomain := common.ExtractDomain(grant.Email)
+						if emailDomain == "" {
+							spinner.Stop()
+							return struct{}{}, common.NewUserError(
+								"could not extract domain from grant email",
+								"Ensure the grant has a valid email address",
+							)
+						}
+						// Set From field for transactional send (required)
+						req.From = []domain.EmailParticipant{{Email: grant.Email}}
+						msg, err = client.SendTransactionalMessage(ctx, emailDomain, req)
+					} else {
+						// Standard provider (Google/Microsoft/IMAP) - use grant-based send
+						msg, err = client.SendMessage(ctx, grantID, req)
+					}
 					spinner.Stop()
 				}
 
