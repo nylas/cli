@@ -53,7 +53,7 @@ nylas auth config
 
 2. **Verify credentials are correct:**
 ```bash
-# Check your API key on https://dashboardv3.nylas.com
+# Check your API key on https://dashboard-v3.nylas.com
 # Copy the correct API key
 # Copy the correct Grant ID
 
@@ -85,7 +85,7 @@ cat ~/.config/nylas/config.yaml
 **Solutions:**
 
 1. **Get your Grant ID from Nylas Dashboard:**
-   - Login to https://dashboardv3.nylas.com
+   - Login to https://dashboard-v3.nylas.com
    - Go to "Grants" section
    - Copy your Grant ID (format: `grant_xxxx`)
 
@@ -214,7 +214,7 @@ chmod 600 ~/.config/nylas/config.yaml
 
 ```bash
 # Step 1: Get your Nylas credentials
-# Go to: https://dashboardv3.nylas.com
+# Go to: https://dashboard-v3.nylas.com
 # Create an app or use existing app
 # Get: API Key, Grant ID
 
@@ -341,7 +341,7 @@ nylas email list grant_account2
 ### Invalid API key errors:
 
 1. **Verify API key is correct:**
-   - Login to https://dashboardv3.nylas.com
+   - Login to https://dashboard-v3.nylas.com
    - Go to Apps → Your App → API Keys
    - Copy the **correct** API key
    - Format should be: `nyk_xxx...`
