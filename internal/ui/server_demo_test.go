@@ -471,8 +471,8 @@ func TestCommandsJSContainsNoDashboardOldURL(t *testing.T) {
 		content := string(data)
 
 		// Verify old dashboard URL is not present
-		if strings.Contains(content, "dashboard.nylas.com") && !strings.Contains(content, "dashboardv3.nylas.com") {
-			t.Errorf("%s contains old dashboard URL (dashboard.nylas.com instead of dashboardv3.nylas.com)", path)
+		if strings.Contains(content, "dashboard.nylas.com") && !strings.Contains(content, "dashboard-v3.nylas.com") {
+			t.Errorf("%s contains old dashboard URL (dashboard.nylas.com instead of dashboard-v3.nylas.com)", path)
 		}
 	}
 }

@@ -53,7 +53,7 @@ Invalid API key
 nylas auth config
 
 # Verify API key in Nylas Dashboard
-# https://dashboardv3.nylas.com → Apps → Your App → API Keys
+# https://dashboard-v3.nylas.com → Apps → Your App → API Keys
 
 # Check configured key
 nylas auth status

@@ -39,7 +39,7 @@ go install github.com/nylas/cli/cmd/nylas@latest
 ### Q: What do I need to get started?
 
 **A: You need:**
-1. **Nylas account** - Sign up at https://dashboardv3.nylas.com
+1. **Nylas account** - Sign up at https://dashboard-v3.nylas.com
 2. **API Key** - Create app in dashboard, get API key
 3. **Grant ID** - Connect your email account, get grant ID
 
@@ -51,7 +51,7 @@ go install github.com/nylas/cli/cmd/nylas@latest
 
 **A: Step-by-step:**
 
-1. **Go to:** https://dashboardv3.nylas.com
+1. **Go to:** https://dashboard-v3.nylas.com
 2. **Create app** (or use existing)
 3. **Get API Key:**
    - Apps → Your App → API Keys
