@@ -13,6 +13,8 @@ func StripHTML(s string) string {
 	s = RemoveTagWithContent(s, "head")
 
 	// Replace block-level elements with newlines before stripping tags
+	// Note: table cell elements (table, td, th, tbody, thead, tfoot) are NOT included
+	// because they're typically used for layout; tr is included to separate rows
 	blockTags := []string{"br", "p", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"}
 	for _, tag := range blockTags {
 		// Handle <br>, <br/>, <br />
@@ -52,17 +54,25 @@ func StripHTML(s string) string {
 		text = strings.ReplaceAll(text, "  ", " ")
 	}
 
-	// Collapse multiple newlines
-	for strings.Contains(text, "\n\n\n") {
-		text = strings.ReplaceAll(text, "\n\n\n", "\n\n")
-	}
-
-	// Trim spaces from each line
+	// Trim spaces from each line first
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		lines[i] = strings.TrimSpace(line)
 	}
-	text = strings.Join(lines, "\n")
+
+	// Remove consecutive empty lines, keeping at most one blank line
+	var cleanedLines []string
+	prevEmpty := false
+	for _, line := range lines {
+		isEmpty := line == ""
+		if isEmpty && prevEmpty {
+			continue // Skip consecutive empty lines
+		}
+		cleanedLines = append(cleanedLines, line)
+		prevEmpty = isEmpty
+	}
+
+	text = strings.Join(cleanedLines, "\n")
 
 	// Remove leading/trailing empty lines
 	return strings.TrimSpace(text)
