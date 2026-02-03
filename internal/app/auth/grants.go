@@ -127,7 +127,7 @@ func (s *GrantService) SwitchGrant(grantID string) error {
 	if _, err := s.grantStore.GetGrant(grantID); err != nil {
 		return err
 	}
-	return s.grantStore.SetDefaultGrant(grantID)
+	return s.setDefaultGrant(grantID)
 }
 
 // SwitchGrantByEmail switches the default grant by email.
@@ -136,7 +136,26 @@ func (s *GrantService) SwitchGrantByEmail(email string) error {
 	if err != nil {
 		return err
 	}
-	return s.grantStore.SetDefaultGrant(info.ID)
+	return s.setDefaultGrant(info.ID)
+}
+
+// setDefaultGrant updates the default grant in both keyring and config file.
+func (s *GrantService) setDefaultGrant(grantID string) error {
+	// Update keyring
+	if err := s.grantStore.SetDefaultGrant(grantID); err != nil {
+		return err
+	}
+
+	// Update config file
+	cfg, err := s.config.Load()
+	if err != nil {
+		// Non-fatal: keyring is the authoritative source
+		return nil
+	}
+	cfg.DefaultGrant = grantID
+	_ = s.config.Save(cfg) // Ignore save errors, keyring is authoritative
+
+	return nil
 }
 
 // ValidateGrant checks if a grant is valid.
