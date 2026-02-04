@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -14,22 +15,31 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-// decryptGPGEmail decrypts a PGP/MIME encrypted message.
+// decryptGPGEmail decrypts a PGP-encrypted message.
+// Supports both PGP/MIME (RFC 3156) and inline PGP formats.
+// Some email providers (e.g., Microsoft/Outlook) transform PGP/MIME into inline PGP.
 func decryptGPGEmail(ctx context.Context, msg *domain.Message) (*gpg.DecryptResult, error) {
 	if msg.RawMIME == "" {
 		return nil, fmt.Errorf("no raw MIME data available for decryption")
 	}
 
-	// Check if this is an encrypted message
-	contentType := extractFullContentType(msg.RawMIME)
-	if !isEncryptedMessage(contentType) {
-		return nil, fmt.Errorf("message is not PGP/MIME encrypted (Content-Type: %s)", contentType)
-	}
+	var ciphertext []byte
+	var err error
 
-	// Parse the multipart message to extract encrypted content
-	ciphertext, err := parseEncryptedMIME(msg.RawMIME)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse PGP/MIME encrypted message: %w", err)
+	// Check if this is a PGP/MIME encrypted message
+	contentType := extractFullContentType(msg.RawMIME)
+	if isEncryptedMessage(contentType) {
+		// Parse the multipart message to extract encrypted content
+		ciphertext, err = parseEncryptedMIME(msg.RawMIME)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PGP/MIME encrypted message: %w", err)
+		}
+	} else {
+		// Try to find inline PGP content (some providers like Outlook transform PGP/MIME)
+		ciphertext = extractInlinePGP(msg.RawMIME)
+		if ciphertext == nil {
+			return nil, fmt.Errorf("message does not contain PGP encrypted content")
+		}
 	}
 
 	// Initialize GPG service
@@ -55,6 +65,101 @@ func decryptGPGEmail(ctx context.Context, msg *domain.Message) (*gpg.DecryptResu
 func isEncryptedMessage(contentType string) bool {
 	return strings.Contains(contentType, "multipart/encrypted") &&
 		strings.Contains(contentType, "application/pgp-encrypted")
+}
+
+// extractInlinePGP extracts inline PGP encrypted content from a message.
+// This handles emails where providers (e.g., Microsoft/Outlook) have transformed
+// PGP/MIME into a multipart/mixed with the PGP block as inline text.
+func extractInlinePGP(rawMIME string) []byte {
+	const pgpBegin = "-----BEGIN PGP MESSAGE-----"
+	const pgpEnd = "-----END PGP MESSAGE-----"
+
+	// First, try to find PGP content directly in the raw MIME
+	beginIdx := strings.Index(rawMIME, pgpBegin)
+	if beginIdx != -1 {
+		endIdx := strings.Index(rawMIME[beginIdx:], pgpEnd)
+		if endIdx != -1 {
+			// Include the end marker
+			pgpContent := rawMIME[beginIdx : beginIdx+endIdx+len(pgpEnd)]
+			return []byte(strings.TrimSpace(pgpContent))
+		}
+	}
+
+	// If not found directly, try parsing multipart and checking each part
+	contentType := extractFullContentType(rawMIME)
+	if !strings.Contains(contentType, "multipart/") {
+		return nil
+	}
+
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil
+	}
+
+	boundary := params["boundary"]
+	if boundary == "" {
+		return nil
+	}
+
+	headerEnd := findHeaderEnd(rawMIME)
+	if headerEnd == -1 {
+		return nil
+	}
+
+	bodySection := rawMIME[headerEnd:]
+	mr := multipart.NewReader(strings.NewReader(bodySection), boundary)
+
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil
+		}
+
+		partContent, err := io.ReadAll(part)
+		if err != nil {
+			continue
+		}
+
+		// Check if content needs base64 decoding
+		// Outlook transforms PGP/MIME into attachments with base64 encoding
+		transferEncoding := strings.ToLower(part.Header.Get("Content-Transfer-Encoding"))
+		partContentType := strings.ToLower(part.Header.Get("Content-Type"))
+
+		// Decode base64 if needed (common for application/octet-stream or pgp-encrypted attachments)
+		if transferEncoding == "base64" {
+			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(partContent)))
+			if err == nil {
+				partContent = decoded
+			}
+		}
+
+		content := string(partContent)
+
+		// Check for PGP content in this part
+		beginIdx := strings.Index(content, pgpBegin)
+		if beginIdx != -1 {
+			endIdx := strings.Index(content[beginIdx:], pgpEnd)
+			if endIdx != -1 {
+				pgpContent := content[beginIdx : beginIdx+endIdx+len(pgpEnd)]
+				return []byte(strings.TrimSpace(pgpContent))
+			}
+		}
+
+		// Also check for application/octet-stream or encrypted.asc which might contain PGP data
+		if strings.Contains(partContentType, "application/octet-stream") ||
+			strings.Contains(partContentType, "application/pgp-encrypted") {
+			// The whole part might be the PGP message (without explicit markers in some edge cases)
+			if strings.Contains(content, pgpBegin) {
+				// Already handled above
+				continue
+			}
+		}
+	}
+
+	return nil
 }
 
 // parseEncryptedMIME parses a PGP/MIME encrypted message and extracts the ciphertext.
