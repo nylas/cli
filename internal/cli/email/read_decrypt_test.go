@@ -538,3 +538,57 @@ Postamble text here.`
 		t.Error("extractInlinePGP() should contain all lines of encrypted data")
 	}
 }
+
+func TestExtractInlinePGP_Base64EncodedAttachment(t *testing.T) {
+	// Test Outlook-style email where PGP content is base64-encoded in an attachment
+	// This is the actual format Microsoft/Outlook uses for PGP/MIME emails
+	// The base64 decodes to: "-----BEGIN PGP MESSAGE-----\n\nhQEMAtest\n=xxxx\n-----END PGP MESSAGE-----\n"
+	base64PGP := "LS0tLS1CRUdJTiBQR1AgTUVTU0FHRS0tLS0tCgpoUUVNQXRlc3QKPXh4eHgKLS0tLS1FTkQgUEdQIE1FU1NBR0UtLS0tLQo="
+
+	rawMIME := `From: sender@outlook.com
+To: recipient@example.com
+Content-Type: multipart/mixed;
+	boundary="_003_OutlookBoundary_"
+MIME-Version: 1.0
+
+--_003_OutlookBoundary_
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+
+--_003_OutlookBoundary_
+Content-Type: application/pgp-encrypted; name="PGPMIME version identification"
+Content-Description: PGP/MIME version identification
+Content-Disposition: attachment; filename="PGPMIME version identification"
+Content-Transfer-Encoding: base64
+
+VmVyc2lvbjogMQ0K
+
+--_003_OutlookBoundary_
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message.asc
+Content-Disposition: attachment; filename="encrypted.asc"
+Content-Transfer-Encoding: base64
+
+` + base64PGP + `
+
+--_003_OutlookBoundary_--`
+
+	got := extractInlinePGP(rawMIME)
+	if got == nil {
+		t.Fatal("extractInlinePGP() returned nil for base64-encoded Outlook attachment")
+	}
+
+	gotStr := string(got)
+
+	// Should extract the decoded PGP message
+	if !strings.HasPrefix(gotStr, "-----BEGIN PGP MESSAGE-----") {
+		t.Errorf("extractInlinePGP() should start with PGP header, got: %q", gotStr)
+	}
+	if !strings.HasSuffix(gotStr, "-----END PGP MESSAGE-----") {
+		t.Errorf("extractInlinePGP() should end with PGP footer, got: %q", gotStr)
+	}
+	if !strings.Contains(gotStr, "hQEMAtest") {
+		t.Errorf("extractInlinePGP() should contain the encrypted data, got: %q", gotStr)
+	}
+}

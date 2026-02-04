@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -122,13 +123,38 @@ func extractInlinePGP(rawMIME string) []byte {
 			continue
 		}
 
+		// Check if content needs base64 decoding
+		// Outlook transforms PGP/MIME into attachments with base64 encoding
+		transferEncoding := strings.ToLower(part.Header.Get("Content-Transfer-Encoding"))
+		partContentType := strings.ToLower(part.Header.Get("Content-Type"))
+
+		// Decode base64 if needed (common for application/octet-stream or pgp-encrypted attachments)
+		if transferEncoding == "base64" {
+			decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(partContent)))
+			if err == nil {
+				partContent = decoded
+			}
+		}
+
 		content := string(partContent)
+
+		// Check for PGP content in this part
 		beginIdx := strings.Index(content, pgpBegin)
 		if beginIdx != -1 {
 			endIdx := strings.Index(content[beginIdx:], pgpEnd)
 			if endIdx != -1 {
 				pgpContent := content[beginIdx : beginIdx+endIdx+len(pgpEnd)]
 				return []byte(strings.TrimSpace(pgpContent))
+			}
+		}
+
+		// Also check for application/octet-stream or encrypted.asc which might contain PGP data
+		if strings.Contains(partContentType, "application/octet-stream") ||
+			strings.Contains(partContentType, "application/pgp-encrypted") {
+			// The whole part might be the PGP message (without explicit markers in some edge cases)
+			if strings.Contains(content, pgpBegin) {
+				// Already handled above
+				continue
 			}
 		}
 	}
