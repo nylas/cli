@@ -360,3 +360,181 @@ func TestIsEncryptedMessage_CaseInsensitive(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractInlinePGP(t *testing.T) {
+	tests := []struct {
+		name         string
+		rawMIME      string
+		wantContains string
+		wantNil      bool
+	}{
+		{
+			name: "inline PGP in plain text body",
+			rawMIME: `From: sender@example.com
+To: recipient@example.com
+Content-Type: text/plain
+
+-----BEGIN PGP MESSAGE-----
+
+hQEMAxxxxxxxxx
+=xxxx
+-----END PGP MESSAGE-----`,
+			wantContains: "-----BEGIN PGP MESSAGE-----",
+			wantNil:      false,
+		},
+		{
+			name: "inline PGP in multipart/mixed (Outlook style)",
+			rawMIME: `From: sender@example.com
+Content-Type: multipart/mixed; boundary="boundary123"
+
+--boundary123
+Content-Type: text/plain; charset="UTF-8"
+
+-----BEGIN PGP MESSAGE-----
+
+hQIMAwfdV3YDsnmWARAAs8jMMsaoLnlg
+=xxxx
+-----END PGP MESSAGE-----
+--boundary123--`,
+			wantContains: "-----BEGIN PGP MESSAGE-----",
+			wantNil:      false,
+		},
+		{
+			name: "inline PGP with surrounding text",
+			rawMIME: `Content-Type: text/plain
+
+Some text before
+
+-----BEGIN PGP MESSAGE-----
+encrypted_data_here
+-----END PGP MESSAGE-----
+
+Some text after`,
+			wantContains: "-----BEGIN PGP MESSAGE-----",
+			wantNil:      false,
+		},
+		{
+			name: "no PGP content",
+			rawMIME: `From: sender@example.com
+Content-Type: text/plain
+
+Just a regular email with no encryption.`,
+			wantNil: true,
+		},
+		{
+			name: "incomplete PGP block - missing end marker",
+			rawMIME: `Content-Type: text/plain
+
+-----BEGIN PGP MESSAGE-----
+encrypted_data_here
+No end marker`,
+			wantNil: true,
+		},
+		{
+			name: "PGP in second part of multipart",
+			rawMIME: `Content-Type: multipart/mixed; boundary="mixed"
+
+--mixed
+Content-Type: text/plain
+
+Regular text part
+--mixed
+Content-Type: text/plain
+
+-----BEGIN PGP MESSAGE-----
+encrypted_in_second_part
+-----END PGP MESSAGE-----
+--mixed--`,
+			wantContains: "-----BEGIN PGP MESSAGE-----",
+			wantNil:      false,
+		},
+		{
+			name:         "PGP with CRLF line endings",
+			rawMIME:      "Content-Type: text/plain\r\n\r\n-----BEGIN PGP MESSAGE-----\r\nencrypted\r\n-----END PGP MESSAGE-----",
+			wantContains: "-----BEGIN PGP MESSAGE-----",
+			wantNil:      false,
+		},
+		{
+			name:    "empty input",
+			rawMIME: "",
+			wantNil: true,
+		},
+		{
+			name: "multipart without PGP",
+			rawMIME: `Content-Type: multipart/mixed; boundary="b"
+
+--b
+Content-Type: text/plain
+
+No encryption here
+--b--`,
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractInlinePGP(tt.rawMIME)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("extractInlinePGP() = %q, want nil", string(got))
+				}
+				return
+			}
+			if got == nil {
+				t.Error("extractInlinePGP() = nil, want non-nil")
+				return
+			}
+			if !strings.Contains(string(got), tt.wantContains) {
+				t.Errorf("extractInlinePGP() = %q, want to contain %q", string(got), tt.wantContains)
+			}
+			// Verify we extract the complete PGP block
+			if !strings.HasPrefix(string(got), "-----BEGIN PGP MESSAGE-----") {
+				t.Errorf("extractInlinePGP() should start with PGP header, got: %q", string(got))
+			}
+			if !strings.HasSuffix(string(got), "-----END PGP MESSAGE-----") {
+				t.Errorf("extractInlinePGP() should end with PGP footer, got: %q", string(got))
+			}
+		})
+	}
+}
+
+func TestExtractInlinePGP_ExtractsCompletePGPBlock(t *testing.T) {
+	// Verify the extracted content is exactly the PGP block
+	rawMIME := `Content-Type: text/plain
+
+Preamble text here.
+
+-----BEGIN PGP MESSAGE-----
+
+hQEMAxxxxxxxxx
+line2
+line3
+=xxxx
+-----END PGP MESSAGE-----
+
+Postamble text here.`
+
+	got := extractInlinePGP(rawMIME)
+	if got == nil {
+		t.Fatal("extractInlinePGP() returned nil")
+	}
+
+	gotStr := string(got)
+
+	// Should not contain preamble or postamble
+	if strings.Contains(gotStr, "Preamble") {
+		t.Error("extractInlinePGP() should not include preamble text")
+	}
+	if strings.Contains(gotStr, "Postamble") {
+		t.Error("extractInlinePGP() should not include postamble text")
+	}
+
+	// Should contain the full PGP message
+	if !strings.Contains(gotStr, "hQEMAxxxxxxxxx") {
+		t.Error("extractInlinePGP() should contain the encrypted data")
+	}
+	if !strings.Contains(gotStr, "line2") {
+		t.Error("extractInlinePGP() should contain all lines of encrypted data")
+	}
+}

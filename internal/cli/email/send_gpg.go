@@ -120,21 +120,22 @@ func sendSecureEmail(ctx context.Context, client ports.NylasClient, grantID stri
 
 	mimeBuilder := mime.NewBuilder()
 	var rawMIME []byte
+	var buildErr error
 
 	// Step 3: Build and send based on mode
 	if doSign && doEncrypt {
 		// Sign+Encrypt: Maximum security
-		rawMIME = buildSignedEncryptedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, signerKeyID, recipientKeyIDs)
+		rawMIME, buildErr = buildSignedEncryptedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, signerKeyID, recipientKeyIDs)
 	} else if doEncrypt {
 		// Encrypt only
-		rawMIME = buildEncryptedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, recipientKeyIDs)
+		rawMIME, buildErr = buildEncryptedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, recipientKeyIDs)
 	} else if doSign {
 		// Sign only (original behavior)
-		rawMIME = buildSignedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, signerKeyID, signingIdentity)
+		rawMIME, buildErr = buildSignedMessage(ctx, gpgSvc, mimeBuilder, req, toContacts, subject, body, contentType, signerKeyID, signingIdentity)
 	}
 
-	if rawMIME == nil {
-		return nil, fmt.Errorf("failed to build secure message")
+	if buildErr != nil {
+		return nil, buildErr
 	}
 
 	// Step 4: Send raw MIME message
@@ -236,7 +237,7 @@ func resolveRecipientKeys(ctx context.Context, gpgSvc gpg.Service, explicitKeyID
 }
 
 // buildSignedMessage builds a signed-only PGP/MIME message.
-func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID, signingIdentity string) []byte {
+func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID, signingIdentity string) ([]byte, error) {
 	spinner := common.NewSpinner(fmt.Sprintf("Signing email with GPG identity: %s...", signingIdentity))
 	spinner.Start()
 	defer spinner.Stop()
@@ -244,7 +245,7 @@ func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mim
 	// Prepare the MIME content part to be signed
 	dataToSign, err := mimeBuilder.PrepareContentToSign(body, contentType, req.Attachments)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to prepare content for signing: %w", err)
 	}
 
 	// Extract sender email for the Signer's User ID subpacket
@@ -256,7 +257,7 @@ func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mim
 	// Sign the MIME content part
 	signResult, err := gpgSvc.SignData(ctx, signerKeyID, dataToSign, senderEmail)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("GPG signing failed with key %s: %w", signerKeyID, err)
 	}
 
 	// Build PGP/MIME signed message
@@ -277,14 +278,14 @@ func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mim
 
 	rawMIME, err := mimeBuilder.BuildSignedMessage(mimeReq)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to build MIME message: %w", err)
 	}
 
-	return rawMIME
+	return rawMIME, nil
 }
 
 // buildEncryptedMessage builds an encrypted-only PGP/MIME message.
-func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType string, recipientKeyIDs []string) []byte {
+func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType string, recipientKeyIDs []string) ([]byte, error) {
 	spinner := common.NewSpinner("Encrypting email...")
 	spinner.Start()
 	defer spinner.Stop()
@@ -292,13 +293,13 @@ func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder 
 	// Prepare the content to encrypt
 	dataToEncrypt, err := mimeBuilder.PrepareContentToEncrypt(body, contentType, req.Attachments)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to prepare content for encryption: %w", err)
 	}
 
 	// Encrypt the content
 	encryptResult, err := gpgSvc.EncryptData(ctx, recipientKeyIDs, dataToEncrypt)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("GPG encryption failed: %w", err)
 	}
 
 	// Build PGP/MIME encrypted message
@@ -314,15 +315,15 @@ func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder 
 
 	rawMIME, err := mimeBuilder.BuildEncryptedMessage(mimeReq)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to build encrypted MIME message: %w", err)
 	}
 
-	return rawMIME
+	return rawMIME, nil
 }
 
 // buildSignedEncryptedMessage builds a signed AND encrypted PGP/MIME message.
 // Order: Sign first, then encrypt (per OpenPGP best practice).
-func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID string, recipientKeyIDs []string) []byte {
+func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID string, recipientKeyIDs []string) ([]byte, error) {
 	spinner := common.NewSpinner("Signing and encrypting email...")
 	spinner.Start()
 	defer spinner.Stop()
@@ -330,7 +331,7 @@ func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBu
 	// Prepare the content
 	dataToProcess, err := mimeBuilder.PrepareContentToEncrypt(body, contentType, req.Attachments)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to prepare content: %w", err)
 	}
 
 	// Extract sender email for signing
@@ -342,7 +343,7 @@ func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBu
 	// Sign AND encrypt in one GPG operation
 	encryptResult, err := gpgSvc.SignAndEncryptData(ctx, signerKeyID, recipientKeyIDs, dataToProcess, senderEmail)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("GPG sign and encrypt failed with key %s: %w", signerKeyID, err)
 	}
 
 	// Build PGP/MIME encrypted message (signature is inside the encrypted payload)
@@ -358,10 +359,10 @@ func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBu
 
 	rawMIME, err := mimeBuilder.BuildEncryptedMessage(mimeReq)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to build encrypted MIME message: %w", err)
 	}
 
-	return rawMIME
+	return rawMIME, nil
 }
 
 // sendSignedEmail signs an email with GPG and sends it as raw MIME.
