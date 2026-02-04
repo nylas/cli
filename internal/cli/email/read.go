@@ -19,13 +19,18 @@ func newReadCmd() *cobra.Command {
 	var mimeOutput bool
 	var headersOutput bool
 	var verifySignature bool
+	var decryptMessage bool
 
 	cmd := &cobra.Command{
 		Use:     "read <message-id> [grant-id]",
 		Aliases: []string{"show"},
 		Short:   "Read a specific email",
-		Long:    "Read and display the full content of a specific email message.",
-		Args:    cobra.RangeArgs(1, 2),
+		Long: `Read and display the full content of a specific email message.
+
+Supports GPG/PGP encrypted and signed messages:
+- --decrypt: Decrypt PGP/MIME encrypted emails
+- --verify: Verify GPG/PGP signature of signed emails`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			messageID := args[0]
 			remainingArgs := args[1:]
@@ -34,8 +39,8 @@ func newReadCmd() *cobra.Command {
 				// Determine which fields to request
 				var fields string
 				switch {
-				case mimeOutput, verifySignature:
-					// Both --mime and --verify need raw MIME data
+				case mimeOutput, verifySignature, decryptMessage:
+					// --mime, --verify, and --decrypt need raw MIME data
 					fields = "raw_mime"
 				case headersOutput:
 					fields = "include_headers"
@@ -61,6 +66,24 @@ func newReadCmd() *cobra.Command {
 						return struct{}{}, common.WrapMarshalError("JSON", err)
 					}
 					fmt.Println(string(data))
+					return struct{}{}, nil
+				}
+
+				// Handle --decrypt flag
+				if decryptMessage {
+					// Fetch full message for header display
+					fullMsg, err := client.GetMessage(ctx, grantID, messageID)
+					if err == nil {
+						printMessageHeaders(*fullMsg)
+					}
+					// Decrypt the message
+					result, err := decryptGPGEmail(ctx, msg)
+					if err != nil {
+						return struct{}{}, fmt.Errorf("GPG decryption failed: %w", err)
+					}
+					// Display decryption result (signature info only if --verify also passed)
+					printDecryptResult(result, verifySignature)
+					printDecryptedContent(result.Plaintext)
 					return struct{}{}, nil
 				}
 
@@ -116,6 +139,7 @@ func newReadCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&mimeOutput, "mime", false, "Show raw RFC822/MIME message format")
 	cmd.Flags().BoolVar(&headersOutput, "headers", false, "Show email headers (works with all providers)")
 	cmd.Flags().BoolVar(&verifySignature, "verify", false, "Verify GPG/PGP signature of the message")
+	cmd.Flags().BoolVar(&decryptMessage, "decrypt", false, "Decrypt PGP/MIME encrypted message")
 
 	return cmd
 }

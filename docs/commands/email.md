@@ -118,6 +118,41 @@ Email preview:
 Scheduled to send: Mon Dec 16, 2024 4:30 PM PST
 ```
 
+### GPG Signing and Encryption
+
+Sign and/or encrypt emails using GPG/PGP:
+
+```bash
+# Sign email with your GPG key
+nylas email send --to "to@example.com" --subject "Signed" --body "..." --sign
+
+# Encrypt email with recipient's public key
+nylas email send --to "to@example.com" --subject "Encrypted" --body "..." --encrypt
+
+# Sign AND encrypt (recommended for maximum security)
+nylas email send --to "to@example.com" --subject "Secure" --body "..." --sign --encrypt
+
+# List available GPG keys
+nylas email send --list-gpg-keys
+```
+
+**Reading encrypted/signed emails:**
+
+```bash
+# Decrypt an encrypted email
+nylas email read <message-id> --decrypt
+
+# Verify a signed email
+nylas email read <message-id> --verify
+
+# Decrypt and verify (for sign+encrypt emails)
+nylas email read <message-id> --decrypt --verify
+```
+
+**See also:**
+- [GPG Email Signing](email-signing.md) - Detailed signing documentation
+- [GPG Email Encryption](encryption.md) - Detailed encryption documentation
+
 ### Search Emails
 
 ```bash

@@ -302,15 +302,9 @@ gpg --send-keys YOUR_KEY_ID --keyserver keys.openpgp.org
 
 ### Current Limitations
 
-- **Signing only**: Emails are not encrypted (content is readable)
+- **Signing only**: This document covers signing. For encryption, see [GPG Email Encryption](encryption.md)
 - **No S/MIME**: Only PGP/MIME format is supported
 - **Manual verification**: Some email clients don't auto-verify signatures
-
-### Future Enhancements
-
-Planned features (not yet implemented):
-- Email encryption with recipient's public key
-- S/MIME certificate support
 
 ---
 
@@ -393,13 +387,14 @@ nylas email send \
 
 ---
 
-## Related Commands
+## Related Documentation
 
+- [GPG Email Encryption](encryption.md) - Encrypt emails for confidentiality
+- [GPG Explained](explain-gpg.md) - Understanding GPG concepts
 - `nylas email send --help` - See all email sending options
 - `gpg --list-keys` - List all GPG keys
 - `gpg --gen-key` - Generate new GPG key
-- `git config user.signingkey` - Set default signing key
 
 ---
 
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-04

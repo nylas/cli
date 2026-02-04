@@ -31,3 +31,19 @@ type VerifyResult struct {
 	TrustLevel  string    // Trust level (ultimate, full, marginal, unknown, undefined)
 	Fingerprint string    // Full fingerprint of signing key
 }
+
+// EncryptResult contains the result of an encryption operation.
+type EncryptResult struct {
+	Ciphertext    []byte   // Encrypted data (ASCII armored)
+	RecipientKeys []string // Key IDs used for encryption
+}
+
+// DecryptResult contains the result of a decryption operation.
+type DecryptResult struct {
+	Plaintext    []byte // Decrypted data
+	WasSigned    bool   // True if the message was also signed
+	SignatureOK  bool   // True if signature verified successfully (only valid if WasSigned)
+	SignerKeyID  string // Key ID that signed the message (if signed)
+	SignerUID    string // UID of signer (e.g., "Name <email>")
+	DecryptKeyID string // Key ID used for decryption
+}

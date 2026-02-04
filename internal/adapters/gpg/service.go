@@ -46,7 +46,7 @@ func isValidGPGKeyID(keyID string) bool {
 	return false
 }
 
-// Service provides GPG signing and verification operations.
+// Service provides GPG signing, verification, and encryption operations.
 type Service interface {
 	// CheckGPGAvailable verifies GPG is installed and accessible.
 	CheckGPGAvailable(ctx context.Context) error
@@ -68,6 +68,23 @@ type Service interface {
 	// VerifyDetachedSignature verifies a detached signature against data.
 	// Returns verification result including signer info and trust level.
 	VerifyDetachedSignature(ctx context.Context, data []byte, signature []byte) (*VerifyResult, error)
+
+	// ListPublicKeys lists all public keys in the keyring.
+	ListPublicKeys(ctx context.Context) ([]KeyInfo, error)
+
+	// FindPublicKeyByEmail finds a public key by email, auto-fetching from key servers if not found locally.
+	FindPublicKeyByEmail(ctx context.Context, email string) (*KeyInfo, error)
+
+	// EncryptData encrypts data for one or more recipients using their public keys.
+	EncryptData(ctx context.Context, recipientKeyIDs []string, data []byte) (*EncryptResult, error)
+
+	// SignAndEncryptData signs data with the sender's private key and encrypts for recipients.
+	// This provides maximum security: only recipients can decrypt, and they can verify the sender.
+	SignAndEncryptData(ctx context.Context, signerKeyID string, recipientKeyIDs []string, data []byte, senderEmail string) (*EncryptResult, error)
+
+	// DecryptData decrypts PGP encrypted data using the user's private key.
+	// Returns the decrypted plaintext along with optional signature verification info.
+	DecryptData(ctx context.Context, ciphertext []byte) (*DecryptResult, error)
 }
 
 // service implements Service using the system GPG command.
@@ -443,9 +460,27 @@ func parseVerifyOutput(statusOutput, stderrOutput string) *VerifyResult {
 	return result
 }
 
-// parseSecretKeys parses GPG --with-colons output format.
+// parseSecretKeys parses GPG --with-colons output format for secret keys.
 // Format: https://github.com/CSNW/gnupg/blob/master/doc/DETAILS
 func parseSecretKeys(output string) ([]KeyInfo, error) {
+	keys, err := parseKeys(output, "sec")
+	if err != nil {
+		return nil, err
+	}
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no GPG secret keys found. Generate one with: gpg --gen-key")
+	}
+	return keys, nil
+}
+
+// parsePublicKeys parses GPG --with-colons output format for public keys.
+func parsePublicKeys(output string) ([]KeyInfo, error) {
+	return parseKeys(output, "pub")
+}
+
+// parseKeys parses GPG --with-colons output format.
+// recordPrefix is "sec" for secret keys or "pub" for public keys.
+func parseKeys(output string, recordPrefix string) ([]KeyInfo, error) {
 	var keys []KeyInfo
 	var currentKey *KeyInfo
 
@@ -459,7 +494,7 @@ func parseSecretKeys(output string) ([]KeyInfo, error) {
 		recordType := fields[0]
 
 		switch recordType {
-		case "sec": // Secret key
+		case recordPrefix: // Primary key (sec or pub)
 			if currentKey != nil {
 				keys = append(keys, *currentKey)
 			}
@@ -497,10 +532,6 @@ func parseSecretKeys(output string) ([]KeyInfo, error) {
 	// Append last key
 	if currentKey != nil {
 		keys = append(keys, *currentKey)
-	}
-
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("no GPG secret keys found. Generate one with: gpg --gen-key")
 	}
 
 	return keys, nil

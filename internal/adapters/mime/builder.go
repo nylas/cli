@@ -23,6 +23,25 @@ type Builder interface {
 	// Returns the exact bytes that should be signed with GPG.
 	// This includes the part headers and encoded body with CRLF line endings.
 	PrepareContentToSign(body, contentType string, attachments []domain.Attachment) ([]byte, error)
+
+	// BuildEncryptedMessage builds a PGP/MIME encrypted message (RFC 3156 Section 4).
+	BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, error)
+
+	// PrepareContentToEncrypt prepares the MIME content that will be encrypted.
+	PrepareContentToEncrypt(body, contentType string, attachments []domain.Attachment) ([]byte, error)
+}
+
+// messageRequest is an interface for shared email header fields.
+// Both SignedMessageRequest and EncryptedMessageRequest implement this.
+type messageRequest interface {
+	getFrom() []domain.EmailParticipant
+	getTo() []domain.EmailParticipant
+	getCc() []domain.EmailParticipant
+	getReplyTo() []domain.EmailParticipant
+	getSubject() string
+	getHeaders() map[string]string
+	getMessageID() string
+	getDate() time.Time
 }
 
 // SignedMessageRequest contains all data needed to build a signed email.
@@ -52,6 +71,16 @@ type SignedMessageRequest struct {
 	MessageID   string
 	Date        time.Time
 }
+
+// Implement messageRequest interface for SignedMessageRequest.
+func (r *SignedMessageRequest) getFrom() []domain.EmailParticipant    { return r.From }
+func (r *SignedMessageRequest) getTo() []domain.EmailParticipant      { return r.To }
+func (r *SignedMessageRequest) getCc() []domain.EmailParticipant      { return r.Cc }
+func (r *SignedMessageRequest) getReplyTo() []domain.EmailParticipant { return r.ReplyTo }
+func (r *SignedMessageRequest) getSubject() string                    { return r.Subject }
+func (r *SignedMessageRequest) getHeaders() map[string]string         { return r.Headers }
+func (r *SignedMessageRequest) getMessageID() string                  { return r.MessageID }
+func (r *SignedMessageRequest) getDate() time.Time                    { return r.Date }
 
 // builder implements Builder.
 type builder struct{}
@@ -109,53 +138,57 @@ func (b *builder) BuildSignedMessage(req *SignedMessageRequest) ([]byte, error) 
 	return buf.Bytes(), nil
 }
 
-// writeHeaders writes RFC 822 headers.
-func (b *builder) writeHeaders(buf *bytes.Buffer, req *SignedMessageRequest) error {
+// writeCommonHeaders writes RFC 822 headers common to all message types.
+func writeCommonHeaders(buf *bytes.Buffer, req messageRequest) {
 	// MIME-Version (required)
 	buf.WriteString("MIME-Version: 1.0\r\n")
 
 	// From
-	if len(req.From) > 0 {
-		buf.WriteString("From: " + formatAddresses(req.From) + "\r\n")
+	if len(req.getFrom()) > 0 {
+		buf.WriteString("From: " + formatAddresses(req.getFrom()) + "\r\n")
 	}
 
 	// To
-	buf.WriteString("To: " + formatAddresses(req.To) + "\r\n")
+	buf.WriteString("To: " + formatAddresses(req.getTo()) + "\r\n")
 
 	// Cc
-	if len(req.Cc) > 0 {
-		buf.WriteString("Cc: " + formatAddresses(req.Cc) + "\r\n")
+	if len(req.getCc()) > 0 {
+		buf.WriteString("Cc: " + formatAddresses(req.getCc()) + "\r\n")
 	}
 
 	// Bcc (Note: typically not included in headers for security)
 	// Omitting Bcc as per RFC 5322 best practices
 
 	// Reply-To
-	if len(req.ReplyTo) > 0 {
-		buf.WriteString("Reply-To: " + formatAddresses(req.ReplyTo) + "\r\n")
+	if len(req.getReplyTo()) > 0 {
+		buf.WriteString("Reply-To: " + formatAddresses(req.getReplyTo()) + "\r\n")
 	}
 
 	// Subject (encode if contains non-ASCII)
-	subject := encodeHeader(req.Subject)
+	subject := encodeHeader(req.getSubject())
 	buf.WriteString("Subject: " + subject + "\r\n")
 
 	// Date
-	date := req.Date
+	date := req.getDate()
 	if date.IsZero() {
 		date = time.Now()
 	}
 	buf.WriteString("Date: " + date.Format(time.RFC1123Z) + "\r\n")
 
 	// Message-ID
-	if req.MessageID != "" {
-		buf.WriteString("Message-ID: <" + req.MessageID + ">\r\n")
+	if req.getMessageID() != "" {
+		buf.WriteString("Message-ID: <" + req.getMessageID() + ">\r\n")
 	}
 
 	// Custom headers
-	for key, value := range req.Headers {
+	for key, value := range req.getHeaders() {
 		buf.WriteString(key + ": " + value + "\r\n")
 	}
+}
 
+// writeHeaders writes RFC 822 headers for signed messages.
+func (b *builder) writeHeaders(buf *bytes.Buffer, req *SignedMessageRequest) error {
+	writeCommonHeaders(buf, req)
 	return nil
 }
 
@@ -260,13 +293,21 @@ func (b *builder) writeAttachmentPart(buf *bytes.Buffer, att *domain.Attachment)
 	return nil
 }
 
-// validateSignedRequest validates the signed message request.
-func validateSignedRequest(req *SignedMessageRequest) error {
-	if len(req.To) == 0 {
+// validateBaseRequest validates the common fields of a message request.
+func validateBaseRequest(req messageRequest) error {
+	if len(req.getTo()) == 0 {
 		return fmt.Errorf("recipient (To) is required")
 	}
-	if req.Subject == "" {
+	if req.getSubject() == "" {
 		return fmt.Errorf("subject is required")
+	}
+	return nil
+}
+
+// validateSignedRequest validates the signed message request.
+func validateSignedRequest(req *SignedMessageRequest) error {
+	if err := validateBaseRequest(req); err != nil {
+		return err
 	}
 	if req.Body == "" {
 		return fmt.Errorf("body is required")

@@ -114,8 +114,13 @@ nylas email list [grant-id]                                    # List emails
 nylas email read <message-id>                                  # Read email
 nylas email read <message-id> --raw                            # Show raw body without HTML
 nylas email read <message-id> --mime                           # Show raw RFC822/MIME format
+nylas email read <message-id> --decrypt                        # Decrypt PGP/MIME encrypted email
+nylas email read <message-id> --verify                         # Verify GPG signature
+nylas email read <message-id> --decrypt --verify               # Decrypt and verify signature
 nylas email send --to EMAIL --subject SUBJECT --body BODY      # Send email
-nylas email send --to EMAIL --subject SUBJECT --body BODY --sign  # Send GPG-signed email
+nylas email send ... --sign                                    # Send GPG-signed email
+nylas email send ... --encrypt                                 # Send GPG-encrypted email
+nylas email send ... --sign --encrypt                          # Sign AND encrypt (recommended)
 nylas email send --list-gpg-keys                               # List available GPG signing keys
 nylas email search --query "QUERY"                             # Search emails
 nylas email delete <message-id>                                # Delete email
@@ -129,6 +134,15 @@ nylas email metadata show <message-id>                         # Show message me
 
 **Filters:** `--unread`, `--starred`, `--from`, `--to`, `--subject`, `--has-attachment`, `--metadata`
 
+**GPG/PGP security:**
+```bash
+nylas email send --to EMAIL --subject S --body B --sign        # Sign with your GPG key
+nylas email send --to EMAIL --subject S --body B --encrypt     # Encrypt with recipient's key
+nylas email send --to EMAIL --subject S --body B --sign --encrypt  # Both (recommended)
+nylas email read <message-id> --decrypt                        # Decrypt encrypted email
+nylas email read <message-id> --decrypt --verify               # Decrypt + verify signature
+```
+
 **AI features:**
 ```bash
 nylas email ai analyze                    # AI-powered inbox summary
@@ -138,7 +152,7 @@ nylas email ai analyze --provider claude  # Use specific AI provider
 nylas email smart-compose --prompt "..."  # AI-powered email generation
 ```
 
-**Details:** `docs/commands/email.md`, `docs/commands/email-signing.md`, `docs/commands/ai.md`
+**Details:** `docs/commands/email.md`, `docs/commands/email-signing.md`, `docs/commands/encryption.md`, `docs/commands/ai.md`
 
 ---
 
@@ -711,6 +725,8 @@ All commands follow consistent pattern:
 
 **For detailed documentation on any feature, see:**
 - Email: `docs/commands/email.md`
+- Email Signing: `docs/commands/email-signing.md`
+- Email Encryption: `docs/commands/encryption.md`
 - Calendar: `docs/commands/calendar.md`
 - Contacts: `docs/commands/contacts.md`
 - Webhooks: `docs/commands/webhooks.md`

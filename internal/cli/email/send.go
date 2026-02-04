@@ -35,6 +35,8 @@ func newSendCmd() *cobra.Command {
 	var sign bool
 	var gpgKeyID string
 	var listGPGKeys bool
+	var encrypt bool
+	var recipientKey string
 
 	cmd := &cobra.Command{
 		Use:   "send [grant-id]",
@@ -45,6 +47,11 @@ Supports GPG/PGP email signing:
 - --sign: Sign email with your GPG key (uses default key from git config)
 - --gpg-key <key-id>: Sign with a specific GPG key
 - --list-gpg-keys: List available GPG signing keys
+
+Supports GPG/PGP email encryption:
+- --encrypt: Encrypt email with recipient's GPG public key (auto-fetched if needed)
+- --recipient-key <key-id>: Use specific GPG key for encryption
+- --sign --encrypt: Sign AND encrypt for maximum security
 
 Supports scheduled sending with the --schedule flag. You can specify:
 - Duration: "30m", "2h", "1d" (minutes, hours, days from now)
@@ -67,6 +74,15 @@ Supports custom metadata:
 
   # Send with specific GPG key
   nylas email send --to user@example.com --subject "Secure" --body "Signed" --sign --gpg-key 601FEE9B1D60185F
+
+  # Encrypt email (auto-fetches recipient's public key)
+  nylas email send --to bob@example.com --subject "Confidential" --body "Secret message" --encrypt
+
+  # Encrypt with specific recipient key
+  nylas email send --to bob@example.com --subject "Confidential" --body "Secret" --encrypt --recipient-key ABCD1234
+
+  # Sign AND encrypt (maximum security)
+  nylas email send --to bob@example.com --subject "Top Secret" --body "Secret message" --sign --encrypt
 
   # List available GPG keys
   nylas email send --list-gpg-keys
@@ -252,6 +268,15 @@ Supports custom metadata:
 				}
 				fmt.Printf("  %s %s\n", common.Green.Sprint("GPG Signed:"), signingInfo)
 			}
+			if encrypt {
+				var encryptInfo string
+				if recipientKey != "" {
+					encryptInfo = fmt.Sprintf("with key %s", recipientKey)
+				} else {
+					encryptInfo = fmt.Sprintf("for %s (auto-fetch)", strings.Join(to, ", "))
+				}
+				fmt.Printf("  %s %s\n", common.Blue.Sprint("GPG Encrypted:"), encryptInfo)
+			}
 
 			if !noConfirm {
 				if scheduledTime.IsZero() {
@@ -277,7 +302,7 @@ Supports custom metadata:
 				// Get grant info to determine provider and email
 				grant, grantErr := client.GetGrant(ctx, grantID)
 
-				if sign {
+				if sign || encrypt {
 					if grantErr == nil && grant != nil && grant.Email != "" {
 						// Populate From field with grant's email address
 						req.From = []domain.EmailParticipant{
@@ -285,8 +310,8 @@ Supports custom metadata:
 						}
 					}
 
-					// GPG signing flow
-					msg, err = sendSignedEmail(ctx, client, grantID, req, gpgKeyID, toContacts, subject, body)
+					// GPG signing and/or encryption flow
+					msg, err = sendSecureEmail(ctx, client, grantID, req, gpgKeyID, recipientKey, toContacts, subject, body, sign, encrypt)
 				} else {
 					// Standard flow
 					var sendMsg string
@@ -332,7 +357,11 @@ Supports custom metadata:
 					printSuccess("Email scheduled successfully! Message ID: %s", msg.ID)
 					fmt.Printf("Scheduled to send: %s\n", scheduledTime.Format(common.DisplayWeekdayFullWithTZ))
 				} else {
-					if sign {
+					if sign && encrypt {
+						printSuccess("Signed and encrypted email sent successfully! Message ID: %s", msg.ID)
+					} else if encrypt {
+						printSuccess("Encrypted email sent successfully! Message ID: %s", msg.ID)
+					} else if sign {
 						printSuccess("Signed email sent successfully! Message ID: %s", msg.ID)
 					} else {
 						printSuccess("Email sent successfully! Message ID: %s", msg.ID)
@@ -361,6 +390,8 @@ Supports custom metadata:
 	cmd.Flags().BoolVar(&sign, "sign", false, "Sign email with GPG (uses default key from git config)")
 	cmd.Flags().StringVar(&gpgKeyID, "gpg-key", "", "Specific GPG key ID to use for signing")
 	cmd.Flags().BoolVar(&listGPGKeys, "list-gpg-keys", false, "List available GPG signing keys and exit")
+	cmd.Flags().BoolVar(&encrypt, "encrypt", false, "Encrypt email with recipient's GPG public key")
+	cmd.Flags().StringVar(&recipientKey, "recipient-key", "", "Specific GPG key ID for encryption (auto-detected from recipient email if not specified)")
 
 	return cmd
 }
