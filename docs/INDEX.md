@@ -63,6 +63,9 @@ Quick navigation guide to find the right documentation for your needs.
 ### Command Guides
 
 - **Email** → [commands/email.md](commands/email.md)
+- **Email signing (GPG)** → [commands/email-signing.md](commands/email-signing.md)
+- **Email encryption** → [commands/encryption.md](commands/encryption.md)
+- **GPG explained** → [commands/explain-gpg.md](commands/explain-gpg.md)
 - **Calendar** → [commands/calendar.md](commands/calendar.md)
 - **Contacts** → [commands/contacts.md](commands/contacts.md)
 - **Webhooks** → [commands/webhooks.md](commands/webhooks.md)
@@ -116,11 +119,14 @@ docs/
 ├── ARCHITECTURE.md        # System design
 ├── DEVELOPMENT.md         # Development setup
 │
-├── commands/              # Detailed command guides (13 files)
+├── commands/              # Detailed command guides (16 files)
 │   ├── ai.md              # AI features
 │   ├── mcp.md             # MCP integration
 │   ├── calendar.md        # Calendar events
 │   ├── email.md           # Email operations
+│   ├── email-signing.md   # GPG/PGP email signing
+│   ├── encryption.md      # Email encryption
+│   ├── explain-gpg.md     # GPG explained
 │   ├── contacts.md        # Contact management
 │   ├── webhooks.md        # Webhook setup
 │   ├── inbound.md         # Inbound email
@@ -200,4 +206,4 @@ docs/
 
 ---
 
-**Last Updated:** January 30, 2026
+**Last Updated:** February 4, 2026
