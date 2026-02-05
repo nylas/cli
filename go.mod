@@ -6,6 +6,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/fatih/color v1.18.0
 	github.com/gdamore/tcell/v2 v2.13.4
+	github.com/google/uuid v1.6.0
 	github.com/ncruces/go-sqlite3 v0.30.4
 	github.com/rivo/tview v0.42.0
 	github.com/slack-go/slack v0.17.3

@@ -337,6 +337,11 @@ func (c *HTTPClient) doJSONRequestInternal(
 		return nil, err
 	}
 
+	// Track request for audit logging
+	if ports.AuditRequestHook != nil {
+		ports.AuditRequestHook(getRequestID(resp), resp.StatusCode)
+	}
+
 	// Validate status code
 	statusOK := false
 	for _, status := range acceptedStatuses {

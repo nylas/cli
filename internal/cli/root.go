@@ -80,6 +80,9 @@ func init() {
 	rootCmd.PersistentFlags().String("config", "", "Custom config file path")
 
 	rootCmd.AddCommand(newVersionCmd())
+
+	// Initialize audit logging hooks
+	initAuditHooks(rootCmd)
 }
 
 // GetRootCmd returns the root command for adding subcommands.

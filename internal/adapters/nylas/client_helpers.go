@@ -4,12 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/ports"
 )
+
+// trackAuditRequest extracts request_id from body and calls audit hook.
+func trackAuditRequest(body []byte, statusCode int) {
+	if ports.AuditRequestHook == nil {
+		return
+	}
+	var meta struct {
+		RequestID string `json:"request_id"`
+	}
+	_ = json.Unmarshal(body, &meta)
+	ports.AuditRequestHook(meta.RequestID, statusCode)
+}
+
+// trackAuditError calls audit hook for error responses.
+func trackAuditError(statusCode int) {
+	if ports.AuditRequestHook != nil {
+		ports.AuditRequestHook("", statusCode)
+	}
+}
 
 // ListResponse is a generic paginated response.
 type ListResponse[T any] struct {
@@ -43,10 +64,18 @@ func (c *HTTPClient) doGet(ctx context.Context, url string, result any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		trackAuditError(resp.StatusCode)
 		return c.parseError(resp)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	trackAuditRequest(body, resp.StatusCode)
+
+	if err := json.Unmarshal(body, result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -78,13 +107,22 @@ func (c *HTTPClient) doGetWithNotFound(ctx context.Context, url string, result a
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
+		trackAuditError(resp.StatusCode)
 		return notFoundErr
 	}
 	if resp.StatusCode != http.StatusOK {
+		trackAuditError(resp.StatusCode)
 		return c.parseError(resp)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	trackAuditRequest(body, resp.StatusCode)
+
+	if err := json.Unmarshal(body, result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -113,7 +151,13 @@ func (c *HTTPClient) doDelete(ctx context.Context, url string) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		trackAuditError(resp.StatusCode)
 		return c.parseError(resp)
+	}
+
+	// Track successful delete (no request_id in DELETE responses)
+	if ports.AuditRequestHook != nil {
+		ports.AuditRequestHook("", resp.StatusCode)
 	}
 
 	return nil

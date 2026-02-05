@@ -18,6 +18,9 @@ var (
 	cachedClient ports.NylasClient
 	clientOnce   sync.Once
 	clientErr    error
+
+	// AuditGrantHook is called when a grant ID is resolved (set by cli package).
+	AuditGrantHook func(grantID string)
 )
 
 // GetNylasClient creates a Nylas API client with credentials from environment variables or keyring.
@@ -233,6 +236,11 @@ func WithClient[T any](args []string, fn func(ctx context.Context, client ports.
 	grantID, err := GetGrantID(args)
 	if err != nil {
 		return zero, err
+	}
+
+	// Notify audit system of grant usage
+	if AuditGrantHook != nil {
+		AuditGrantHook(grantID)
 	}
 
 	// Create context with timeout

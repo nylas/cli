@@ -693,6 +693,51 @@ nylas admin grants stats                              # Grant statistics
 
 ---
 
+## Audit Logging
+
+Track CLI command execution for compliance, debugging, and AI agent monitoring.
+
+```bash
+# Setup
+nylas audit init                              # Interactive setup
+nylas audit init --enable                     # Quick setup with defaults
+nylas audit logs enable                       # Enable logging
+nylas audit logs disable                      # Disable logging
+nylas audit logs status                       # Check status
+
+# View logs
+nylas audit logs show                         # Show last 20 entries
+nylas audit logs show --limit 50              # More entries
+nylas audit logs show --command email         # Filter by command
+nylas audit logs show --invoker alice         # Filter by username
+nylas audit logs show --source claude-code    # Filter by source (AI agents, etc.)
+nylas audit logs show --status error          # Filter by status
+nylas audit logs show --request-id req_abc123 # Find by Nylas request ID
+
+# Statistics and export
+nylas audit logs summary                      # Summary for last 7 days
+nylas audit logs summary --days 30            # Summary for 30 days
+nylas audit export --output audit.json        # Export to JSON
+nylas audit export --output audit.csv         # Export to CSV
+
+# Configuration
+nylas audit config show                       # Show configuration
+nylas audit config set retention_days 30      # Set retention
+nylas audit logs clear                        # Clear all logs
+```
+
+**Invoker detection:** Automatically tracks who ran commands:
+- `terminal` - Interactive terminal session
+- `claude-code` - Anthropic's Claude Code
+- `github-copilot` - GitHub Copilot CLI
+- `ssh` - Remote SSH session
+- `script` - Non-interactive automation
+- Custom via `NYLAS_INVOKER_SOURCE` env var
+
+**Details:** `docs/commands/audit.md`
+
+---
+
 ## Utility Commands
 
 ```bash
@@ -735,6 +780,7 @@ All commands follow consistent pattern:
 - Admin: `docs/commands/admin.md`
 - Workflows: `docs/commands/workflows.md` (OTP, automation)
 - Timezone: `docs/commands/timezone.md`
+- Audit: `docs/commands/audit.md`
 - AI: `docs/commands/ai.md`
 - MCP: `docs/commands/mcp.md`
 - TUI: `docs/commands/tui.md`

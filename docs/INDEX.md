@@ -73,6 +73,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **Scheduler** → [commands/scheduler.md](commands/scheduler.md)
 - **Admin** → [commands/admin.md](commands/admin.md)
 - **Timezone** → [commands/timezone.md](commands/timezone.md)
+- **Audit** → [commands/audit.md](commands/audit.md)
 - **TUI** → [commands/tui.md](commands/tui.md)
 - **Workflows (OTP)** → [commands/workflows.md](commands/workflows.md)
 - **Templates** → [commands/templates.md](commands/templates.md)
@@ -119,7 +120,7 @@ docs/
 ├── ARCHITECTURE.md        # System design
 ├── DEVELOPMENT.md         # Development setup
 │
-├── commands/              # Detailed command guides (16 files)
+├── commands/              # Detailed command guides (17 files)
 │   ├── ai.md              # AI features
 │   ├── mcp.md             # MCP integration
 │   ├── calendar.md        # Calendar events
@@ -133,6 +134,7 @@ docs/
 │   ├── scheduler.md       # Booking pages
 │   ├── admin.md           # API management
 │   ├── timezone.md        # Timezone utilities
+│   ├── audit.md           # Audit logging & invoker tracking
 │   ├── tui.md             # Terminal UI
 │   ├── templates.md       # Email templates
 │   └── workflows.md       # OTP & automation
@@ -206,4 +208,4 @@ docs/
 
 ---
 
-**Last Updated:** February 4, 2026
+**Last Updated:** February 5, 2026

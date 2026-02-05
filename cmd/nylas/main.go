@@ -9,6 +9,7 @@ import (
 	"github.com/nylas/cli/internal/cli"
 	"github.com/nylas/cli/internal/cli/admin"
 	"github.com/nylas/cli/internal/cli/ai"
+	"github.com/nylas/cli/internal/cli/audit"
 	"github.com/nylas/cli/internal/cli/auth"
 	"github.com/nylas/cli/internal/cli/calendar"
 	"github.com/nylas/cli/internal/cli/config"
@@ -34,6 +35,7 @@ func main() {
 	// Enable command typo suggestions (e.g., "Did you mean 'email'?")
 	rootCmd.SuggestionsMinimumDistance = 2
 	rootCmd.AddCommand(ai.NewAICmd())
+	rootCmd.AddCommand(audit.NewAuditCmd())
 	rootCmd.AddCommand(auth.NewAuthCmd())
 	rootCmd.AddCommand(config.NewConfigCmd())
 	rootCmd.AddCommand(otp.NewOTPCmd())
@@ -55,6 +57,7 @@ func main() {
 	rootCmd.AddCommand(update.NewUpdateCmd())
 
 	if err := cli.Execute(); err != nil {
+		cli.LogAuditError(err)
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
