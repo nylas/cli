@@ -30,7 +30,7 @@ type Agent struct {
 // DetectAgents scans the system for installed AI agents.
 // It checks for claude, codex, and ollama in $PATH.
 func DetectAgents() []Agent {
-	var agents []Agent
+	agents := []Agent{}
 
 	checks := []struct {
 		name        AgentType
