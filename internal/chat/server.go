@@ -19,17 +19,18 @@ var templateFiles embed.FS
 
 // Server is the chat web UI HTTP server.
 type Server struct {
-	addr     string
-	agent    *Agent
-	agents   []Agent
-	agentMu  sync.RWMutex // protects agent switching
-	nylas    ports.NylasClient
-	grantID  string
-	memory   *MemoryStore
-	executor *ToolExecutor
-	context  *ContextBuilder
-	session  *ActiveSession
-	tmpl     *template.Template
+	addr      string
+	agent     *Agent
+	agents    []Agent
+	agentMu   sync.RWMutex // protects agent switching
+	nylas     ports.NylasClient
+	grantID   string
+	memory    *MemoryStore
+	executor  *ToolExecutor
+	context   *ContextBuilder
+	session   *ActiveSession
+	approvals *ApprovalStore
+	tmpl      *template.Template
 }
 
 // ActiveAgent returns the current agent (thread-safe).
@@ -60,16 +61,17 @@ func NewServer(addr string, agent *Agent, agents []Agent, nylas ports.NylasClien
 	tmpl, _ := template.New("").ParseFS(templateFiles, "templates/*.gohtml")
 
 	return &Server{
-		addr:     addr,
-		agent:    agent,
-		agents:   agents,
-		nylas:    nylas,
-		grantID:  grantID,
-		memory:   memory,
-		executor: executor,
-		context:  ctx,
-		session:  NewActiveSession(),
-		tmpl:     tmpl,
+		addr:      addr,
+		agent:     agent,
+		agents:    agents,
+		nylas:     nylas,
+		grantID:   grantID,
+		memory:    memory,
+		executor:  executor,
+		context:   ctx,
+		session:   NewActiveSession(),
+		approvals: NewApprovalStore(),
+		tmpl:      tmpl,
 	}
 }
 
@@ -79,6 +81,9 @@ func (s *Server) Start() error {
 
 	// API routes
 	mux.HandleFunc("/api/chat", s.handleChat)
+	mux.HandleFunc("/api/chat/approve", s.handleApprove)
+	mux.HandleFunc("/api/chat/reject", s.handleReject)
+	mux.HandleFunc("/api/command", s.handleCommand)
 	mux.HandleFunc("/api/conversations", s.handleConversations)
 	mux.HandleFunc("/api/conversations/", s.handleConversationByID)
 	mux.HandleFunc("/api/config", s.handleConfig)
@@ -103,7 +108,7 @@ func (s *Server) Start() error {
 		Addr:              s.addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      120 * time.Second, // long for SSE streaming
+		WriteTimeout:      360 * time.Second, // long for SSE streaming + approval gating
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}

@@ -73,4 +73,36 @@ const ChatAPI = {
         if (!resp.ok) throw new Error(await resp.text());
         return resp.json();
     },
+
+    async executeCommand(name, args, conversationId) {
+        const body = { name, args };
+        if (conversationId) body.conversation_id = conversationId;
+        const resp = await fetch('/api/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        return resp.json();
+    },
+
+    async approveAction(approvalId) {
+        const resp = await fetch('/api/chat/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approval_id: approvalId }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        return resp.json();
+    },
+
+    async rejectAction(approvalId, reason) {
+        const resp = await fetch('/api/chat/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approval_id: approvalId, reason: reason || '' }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        return resp.json();
+    },
 };

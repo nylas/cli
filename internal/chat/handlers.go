@@ -105,20 +105,38 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	for i := range maxToolIterations {
 		_ = i
 
-		response, err := agent.Run(ctx, prompt)
-		if err != nil {
-			sendSSE(w, flusher, "error", map[string]string{"error": err.Error()})
-			return
+		// Use streaming when supported
+		var response string
+		if agent.SupportsStreaming() {
+			var streamErr error
+			response, streamErr = agent.RunStreaming(ctx, prompt, func(token string) {
+				sendSSE(w, flusher, "token", map[string]string{"text": token})
+			})
+			if streamErr != nil {
+				sendSSE(w, flusher, "error", map[string]string{"error": streamErr.Error()})
+				return
+			}
+		} else {
+			var runErr error
+			response, runErr = agent.Run(ctx, prompt)
+			if runErr != nil {
+				sendSSE(w, flusher, "error", map[string]string{"error": runErr.Error()})
+				return
+			}
 		}
 
 		// Parse tool calls from response
 		toolCalls, textResponse := ParseToolCalls(response)
 
 		if len(toolCalls) == 0 {
-			// No tool calls - this is the final response
+			// No tool calls — streamed content is the final response
+			sendSSE(w, flusher, "stream_end", nil)
 			finalResponse = textResponse
 			break
 		}
+
+		// Tool calls found — tell frontend to discard streamed tokens
+		sendSSE(w, flusher, "stream_discard", nil)
 
 		// Execute tool calls and collect results
 		for _, call := range toolCalls {
@@ -126,6 +144,49 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				"name": call.Name,
 				"args": call.Args,
 			})
+
+			// Check if this tool requires approval
+			if IsGated(call.Name) {
+				preview := BuildPreview(call)
+				pa := s.approvals.Create(call, preview)
+
+				sendSSE(w, flusher, "approval_required", map[string]any{
+					"approval_id": pa.ID,
+					"tool":        call.Name,
+					"preview":     preview,
+				})
+
+				// Block until user approves/rejects or timeout
+				decision, _ := pa.Wait()
+
+				sendSSE(w, flusher, "approval_resolved", map[string]any{
+					"approval_id": pa.ID,
+					"approved":    decision.Approved,
+					"reason":      decision.Reason,
+				})
+
+				if !decision.Approved {
+					// Inject rejection as tool result
+					result := ToolResult{
+						Name:  call.Name,
+						Error: "Action rejected by user: " + decision.Reason,
+					}
+					sendSSE(w, flusher, "tool_result", map[string]any{
+						"name":  result.Name,
+						"error": result.Error,
+					})
+
+					resultJSON, _ := json.Marshal(result)
+					_ = s.memory.AddMessage(conv.ID, Message{
+						Role:    "tool_result",
+						Name:    result.Name,
+						Content: string(resultJSON),
+					})
+
+					prompt += "\n" + FormatToolResult(result)
+					continue
+				}
+			}
 
 			result := s.executor.Execute(ctx, call)
 

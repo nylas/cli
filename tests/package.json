@@ -8,6 +8,7 @@
     "test:all": "playwright test",
     "test:air": "playwright test --project=air-chromium",
     "test:ui": "playwright test --project=ui-chromium",
+    "test:chat": "playwright test --project=chat-chromium",
     "test:air:ui": "playwright test --project=air-chromium --ui",
     "test:ui:ui": "playwright test --project=ui-chromium --ui",
     "test:air:headed": "playwright test --project=air-chromium --headed",
