@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/nylas/cli/internal/air"
+	"github.com/nylas/cli/internal/chat"
 	"github.com/nylas/cli/internal/cli"
 	"github.com/nylas/cli/internal/cli/admin"
 	"github.com/nylas/cli/internal/cli/ai"
@@ -54,6 +55,7 @@ func main() {
 	rootCmd.AddCommand(cli.NewTUICmd())
 	rootCmd.AddCommand(ui.NewUICmd())
 	rootCmd.AddCommand(air.NewAirCmd())
+	rootCmd.AddCommand(chat.NewChatCmd())
 	rootCmd.AddCommand(update.NewUpdateCmd())
 
 	if err := cli.Execute(); err != nil {

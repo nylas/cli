@@ -65,6 +65,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 - **API**: Nylas v3 ONLY (never use v1/v2)
 - **Timezone Support**: Offline utilities + calendar integration ✅
 - **Email Signing**: GPG/PGP email signing (RFC 3156 PGP/MIME) ✅
+- **AI Chat**: Web-based chat interface using locally installed AI agents ✅
 - **Credential Storage**: System keyring (see below)
 - **Web UI**: Air - browser-based interface (localhost:7365)
 
@@ -122,7 +123,7 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 
 **Core files:** `cmd/nylas/main.go`, `internal/ports/nylas.go`, `internal/adapters/nylas/client.go`
 
-**Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`
+**Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`, Chat at `internal/chat/`
 
 **New packages (2024-2026):**
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting
@@ -130,6 +131,7 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 - `internal/httputil/` - HTTP response helpers (WriteJSON, LimitedBody, DecodeJSON)
 - `internal/adapters/gpg/` - GPG/PGP email signing service (2026)
 - `internal/adapters/mime/` - RFC 3156 PGP/MIME message builder (2026)
+- `internal/chat/` - AI chat interface with local agent support (2026)
 
 **Full inventory:** `docs/ARCHITECTURE.md`
 
@@ -195,6 +197,7 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 | `make ci` | Quick quality checks (no integration) |
 | `make build` | Build binary |
 | `nylas air` | Start Air web UI (localhost:7365) |
+| `nylas chat` | Start AI chat interface (localhost:7367) |
 
 **Available targets:** Run `make help` or `make` to see all available commands
 

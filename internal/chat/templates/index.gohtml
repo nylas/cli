@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nylas Chat</title>
+    <link rel="stylesheet" href="/css/chat.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Nylas Chat</h2>
+                <button class="btn-new" id="btn-new-chat" title="New conversation">+</button>
+            </div>
+            <div class="conversation-list" id="conversation-list">
+                <!-- Populated by sidebar.js -->
+            </div>
+            <div class="sidebar-footer">
+                <label class="agent-label" for="agent-select">Agent</label>
+                <select class="agent-select" id="agent-select" title="Select AI agent">
+                    <!-- Populated by sidebar.js -->
+                </select>
+            </div>
+        </aside>
+
+        <main class="chat-main">
+            <div class="chat-header" id="chat-header">
+                <button class="btn-toggle-sidebar" id="btn-toggle-sidebar">☰</button>
+                <h3 id="chat-title">New conversation</h3>
+            </div>
+
+            <div class="messages" id="messages">
+                <div class="welcome" id="welcome">
+                    <h2>Welcome to Nylas Chat</h2>
+                    <p>Ask me about your emails, calendar events, or contacts.</p>
+                    <div class="suggestions">
+                        <button class="suggestion" data-msg="Show my recent unread emails">📧 Unread emails</button>
+                        <button class="suggestion" data-msg="What meetings do I have today?">📅 Today's meetings</button>
+                        <button class="suggestion" data-msg="Search for emails from my manager">🔍 Search emails</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <form id="chat-form" autocomplete="off">
+                    <div class="input-wrapper">
+                        <textarea id="chat-input" placeholder="Ask about your emails, calendar, or contacts..." rows="1" autofocus></textarea>
+                        <button type="submit" class="btn-send" id="btn-send" title="Send message">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/markdown.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/chat.js"></script>
+</body>
+</html>

@@ -430,6 +430,64 @@ make test-air-integration        # Run Air integration tests only
 
 ---
 
+## Chat (`nylas chat`) - AI Chat Interface
+
+Launch **Nylas Chat** - a web-based AI chat interface that can access your email, calendar, and contacts:
+
+```bash
+nylas chat                       # Start with auto-detected agent (default port 7367)
+nylas chat --agent claude        # Use specific agent (claude, codex, ollama)
+nylas chat --agent ollama --model llama2  # Use Ollama with specific model
+nylas chat --port 8080           # Custom port
+nylas chat --no-browser          # Don't auto-open browser
+```
+
+**Features:**
+- **Local AI agents:** Uses Claude, Codex, or Ollama installed on your system
+- **Email & Calendar access:** AI can read emails, check calendar, manage contacts
+- **Conversation history:** Persistent chat sessions stored locally
+- **Agent switching:** Change agents without restarting
+- **Web interface:** Clean, modern chat UI
+
+**Supported Agents:**
+| Agent | Description | Auto-detected |
+|-------|-------------|---------------|
+| Claude | Anthropic's Claude (via `claude` CLI) | ✅ |
+| Codex | OpenAI Codex | ✅ |
+| Ollama | Local LLM runner (customizable models) | ✅ |
+
+**Agent Detection:**
+The CLI automatically detects installed agents on your system. Use `--agent` to override the default selection.
+
+**Conversation Storage:**
+- Location: `~/.config/nylas/chat/conversations/`
+- Format: JSON files per conversation
+- Persistent across sessions
+
+**Security:**
+- Runs on localhost only (not accessible externally)
+- All data stored locally on your machine
+- Agent communication happens through local processes
+
+**URL:** `http://localhost:7367` (default)
+
+**Examples:**
+```bash
+# Quick start with best available agent
+nylas chat
+
+# Force use of Claude
+nylas chat --agent claude
+
+# Use Ollama with Mistral model
+nylas chat --agent ollama --model mistral
+
+# Run on different port
+nylas chat --port 9000 --no-browser
+```
+
+---
+
 ## MCP (Model Context Protocol)
 
 Enable AI assistants (Claude Desktop, Cursor, Windsurf, VS Code) to interact with your email and calendar.
