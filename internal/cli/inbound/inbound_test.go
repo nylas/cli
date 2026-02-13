@@ -131,7 +131,7 @@ func TestCreateCommand(t *testing.T) {
 	cmd := newCreateCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "create <email-prefix>", cmd.Use)
+		assert.Equal(t, "create <email>", cmd.Use)
 	})
 
 	t.Run("has_short_description", func(t *testing.T) {
@@ -146,8 +146,7 @@ func TestCreateCommand(t *testing.T) {
 	})
 
 	t.Run("requires_one_argument", func(t *testing.T) {
-		// Test that the command requires exactly one argument by checking the help text
-		assert.Contains(t, cmd.Use, "<email-prefix>")
+		assert.Contains(t, cmd.Use, "<email>")
 	})
 
 	t.Run("has_long_description_with_examples", func(t *testing.T) {
@@ -465,7 +464,7 @@ func TestInboundCreateHelp(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, stdout, "create")
 	assert.Contains(t, stdout, "--json")
-	assert.Contains(t, stdout, "email-prefix")
+	assert.Contains(t, stdout, "email")
 }
 
 func TestInboundDeleteHelp(t *testing.T) {

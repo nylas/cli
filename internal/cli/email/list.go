@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -50,8 +51,15 @@ Use --max to limit total messages when using --all.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if we should use structured output (JSON/YAML/quiet)
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return runListStructured(cmd, args, limit, unread, starred, from, folder, allFolders, all, maxItems, metadataPair)
+			}
+
+			// Auto-paginate when limit exceeds API maximum
+			if limit > common.MaxAPILimit && !all {
+				all = true
+				maxItems = limit
+				limit = common.MaxAPILimit
 			}
 
 			// Traditional formatted output
@@ -107,9 +115,9 @@ Use --max to limit total messages when using --all.`,
 
 				if all {
 					// Use pagination to fetch all messages
-					pageSize := 50 // Optimal page size for API
-					if limit > 0 && limit < pageSize {
-						pageSize = limit
+					pageSize := min(limit, common.MaxAPILimit)
+					if pageSize <= 0 {
+						pageSize = common.MaxAPILimit
 					}
 					params.Limit = pageSize
 
@@ -157,7 +165,7 @@ Use --max to limit total messages when using --all.`,
 		},
 	}
 
-	cmd.Flags().IntVarP(&limit, "limit", "l", 10, "Number of messages to fetch (per page with --all)")
+	cmd.Flags().IntVarP(&limit, "limit", "l", 10, "Number of messages to fetch (auto-paginates if >200)")
 	cmd.Flags().BoolVarP(&unread, "unread", "u", false, "Only show unread messages")
 	cmd.Flags().BoolVarP(&starred, "starred", "s", false, "Only show starred messages")
 	cmd.Flags().StringVarP(&from, "from", "f", "", "Filter by sender email")
@@ -198,7 +206,7 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 	// Find matching aliases for the search name
 	var searchAliases []string
 	for key, aliases := range nameAliases {
-		if key == searchName || contains(aliases, searchName) {
+		if key == searchName || slices.Contains(aliases, searchName) {
 			searchAliases = aliases
 			break
 		}
@@ -221,19 +229,16 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 	return "", nil
 }
 
-// contains checks if a slice contains a string.
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
 // runListStructured handles structured output (JSON/YAML/quiet) for the list command.
 func runListStructured(cmd *cobra.Command, args []string, limit int, unread, starred bool,
 	from, folder string, allFolders, all bool, maxItems int, metadataPair string) error {
+
+	// Auto-paginate when limit exceeds API maximum
+	if limit > common.MaxAPILimit && !all {
+		all = true
+		maxItems = limit
+		limit = common.MaxAPILimit
+	}
 
 	_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 		params := &domain.MessageQueryParams{
@@ -280,9 +285,9 @@ func runListStructured(cmd *cobra.Command, args []string, limit int, unread, sta
 		var err error
 
 		if all {
-			pageSize := 50
-			if limit > 0 && limit < pageSize {
-				pageSize = limit
+			pageSize := min(limit, common.MaxAPILimit)
+			if pageSize <= 0 {
+				pageSize = common.MaxAPILimit
 			}
 			params.Limit = pageSize
 

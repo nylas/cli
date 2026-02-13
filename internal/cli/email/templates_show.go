@@ -41,7 +41,7 @@ Shows the template's name, subject, body, variables, and usage statistics.`,
 			}
 
 			// JSON output
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return common.PrintJSON(tpl)
 			}
 

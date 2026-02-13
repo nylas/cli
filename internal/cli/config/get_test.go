@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -167,7 +168,7 @@ func TestGetConfigValue(t *testing.T) {
 					t.Errorf("getConfigValue() expected error containing %q, got nil", tt.errMsg)
 					return
 				}
-				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("getConfigValue() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
 				return
@@ -193,19 +194,4 @@ func TestGetConfigValue_WithNonStruct(t *testing.T) {
 	if err == nil {
 		t.Error("getConfigValue() with non-struct should return error, got nil")
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(substr) > 0 && len(s) >= len(substr) && s[:len(substr)] == substr ||
-		len(s) > len(substr) && containsHelper(s, substr)
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

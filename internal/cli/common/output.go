@@ -79,6 +79,16 @@ func IsJSON(cmd *cobra.Command) bool {
 	return format == "json"
 }
 
+// IsStructuredOutput returns true if non-table output is requested (JSON, YAML, or quiet).
+func IsStructuredOutput(cmd *cobra.Command) bool {
+	if IsJSON(cmd) {
+		return true
+	}
+	format, _ := cmd.Flags().GetString("format")
+	quiet, _ := cmd.Flags().GetBool("quiet")
+	return format == "yaml" || format == "quiet" || quiet
+}
+
 // IsWide returns true if wide output mode is enabled
 func IsWide(cmd *cobra.Command) bool {
 	wide, _ := cmd.Flags().GetBool("wide")

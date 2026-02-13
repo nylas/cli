@@ -106,9 +106,7 @@ func newAuthStatusCmd() *cobra.Command {
 			}
 
 			// Handle structured output (JSON/YAML/quiet)
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(auth)
 			}

@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+// MaxAPILimit is the maximum number of items the Nylas API returns per request.
+const MaxAPILimit = 200
+
 // PageResult represents a paginated API response.
 type PageResult[T any] struct {
 	Data       []T    // The items in this page

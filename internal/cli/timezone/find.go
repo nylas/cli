@@ -144,7 +144,7 @@ func runFindMeeting(zonesStr, durationStr, startHour, endHour,
 
 	// Output
 	if jsonOut {
-		return printJSON(result)
+		return common.PrintJSON(result)
 	}
 
 	// Human-readable output

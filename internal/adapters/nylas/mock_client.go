@@ -88,6 +88,9 @@ type MockClient struct {
 	CreateEventFunc  func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error)
 	UpdateEventFunc  func(ctx context.Context, grantID, calendarID, eventID string, req *domain.UpdateEventRequest) (*domain.Event, error)
 	DeleteEventFunc  func(ctx context.Context, grantID, calendarID, eventID string) error
+
+	// Contact functions
+	GetContactsFunc func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error)
 }
 
 // NewMockClient creates a new MockClient.

@@ -69,12 +69,9 @@ Examples:
   # Exclude archived channels
   nylas slack channels list --exclude-archived`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			// Parse created-after duration if provided
@@ -163,9 +160,7 @@ Examples:
 			}
 
 			// Handle structured output (JSON/YAML/quiet)
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(allChannels)
 			}
@@ -223,15 +218,7 @@ func printChannels(channels []domain.SlackChannel, showID bool) {
 		fmt.Println()
 
 		if ch.Purpose != "" {
-			_, _ = dim.Printf("  %s\n", truncateString(ch.Purpose, 60))
+			_, _ = dim.Printf("  %s\n", common.Truncate(ch.Purpose, 60))
 		}
 	}
-}
-
-// truncateString shortens a string to maxLen, adding "..." if truncated.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }

@@ -3,16 +3,10 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
-	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/domain"
-	"github.com/nylas/cli/internal/ports"
 )
 
 func newProvidersCmd() *cobra.Command {
@@ -40,7 +34,7 @@ This command shows connectors configured for your Nylas application.`,
 			ctx, cancel := common.CreateContext()
 			defer cancel()
 
-			client, err := getProvidersClient()
+			client, err := common.GetNylasClient()
 			if err != nil {
 				return err
 			}
@@ -83,41 +77,4 @@ This command shows connectors configured for your Nylas application.`,
 	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
-}
-
-func getProvidersClient() (ports.NylasClient, error) {
-	configStore := config.NewDefaultFileStore()
-	cfg, err := configStore.Load()
-	if err != nil {
-		cfg = &domain.Config{Region: "us"}
-	}
-
-	// Check environment variables first (highest priority)
-	apiKey := os.Getenv("NYLAS_API_KEY")
-	clientID := os.Getenv("NYLAS_CLIENT_ID")
-	clientSecret := os.Getenv("NYLAS_CLIENT_SECRET")
-
-	// If API key not in env, try keyring/file store
-	if apiKey == "" {
-		secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-		if err == nil {
-			apiKey, _ = secretStore.Get(ports.KeyAPIKey)
-			if clientID == "" {
-				clientID, _ = secretStore.Get(ports.KeyClientID)
-			}
-			if clientSecret == "" {
-				clientSecret, _ = secretStore.Get(ports.KeyClientSecret)
-			}
-		}
-	}
-
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key not configured. Set NYLAS_API_KEY environment variable or run 'nylas auth config'")
-	}
-
-	c := nylas.NewHTTPClient()
-	c.SetRegion(cfg.Region)
-	c.SetCredentials(clientID, clientSecret, apiKey)
-
-	return c, nil
 }

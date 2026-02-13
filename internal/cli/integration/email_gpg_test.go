@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nylas/cli/internal/cli/common"
 )
 
 // =============================================================================
@@ -224,7 +226,7 @@ func TestCLI_EmailRead_RawMIME(t *testing.T) {
 		t.Errorf("Expected MIME headers in output, got: %s", mimeStdout)
 	}
 
-	t.Logf("Raw MIME output (first 500 chars):\n%s", truncate(mimeStdout, 500))
+	t.Logf("Raw MIME output (first 500 chars):\n%s", common.Truncate(mimeStdout, 500))
 
 	// Cleanup
 	acquireRateLimit(t)
@@ -275,17 +277,17 @@ func TestCLI_EmailRead_SignedMIME(t *testing.T) {
 
 	// Should be multipart/signed
 	if !strings.Contains(mimeStdout, "multipart/signed") {
-		t.Errorf("Expected 'multipart/signed' in MIME output, got: %s", truncate(mimeStdout, 500))
+		t.Errorf("Expected 'multipart/signed' in MIME output, got: %s", common.Truncate(mimeStdout, 500))
 	}
 
 	// Should contain PGP signature
 	if !strings.Contains(mimeStdout, "application/pgp-signature") {
-		t.Errorf("Expected 'application/pgp-signature' in MIME output, got: %s", truncate(mimeStdout, 500))
+		t.Errorf("Expected 'application/pgp-signature' in MIME output, got: %s", common.Truncate(mimeStdout, 500))
 	}
 
 	// Should contain BEGIN PGP SIGNATURE
 	if !strings.Contains(mimeStdout, "BEGIN PGP SIGNATURE") {
-		t.Errorf("Expected 'BEGIN PGP SIGNATURE' in MIME output, got: %s", truncate(mimeStdout, 500))
+		t.Errorf("Expected 'BEGIN PGP SIGNATURE' in MIME output, got: %s", common.Truncate(mimeStdout, 500))
 	}
 
 	t.Logf("Signed MIME structure verified")
@@ -354,10 +356,3 @@ func extractMessageID(output string) string {
 	return ""
 }
 
-// truncate truncates a string to maxLen characters
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}

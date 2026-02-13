@@ -54,6 +54,13 @@ Examples:
 				}
 			}
 
+			// Auto-paginate when limit exceeds API maximum
+			maxItems := 0
+			if limit > common.MaxAPILimit {
+				maxItems = limit
+				limit = common.MaxAPILimit
+			}
+
 			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				// If no calendar specified, try to get the primary calendar
 				calID, err := GetDefaultCalendarID(ctx, client, grantID, calendarID, false)
@@ -77,13 +84,42 @@ Examples:
 					params.ShowCancelled = true
 				}
 
-				events, err := client.GetEvents(ctx, grantID, calID, params)
-				if err != nil {
-					return struct{}{}, common.WrapListError("events", err)
+				var events []domain.Event
+				if maxItems > 0 {
+					// Paginated fetch for large limits
+					pageSize := min(limit, common.MaxAPILimit)
+					params.Limit = pageSize
+
+					fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Event], error) {
+						params.PageToken = cursor
+						resp, err := client.GetEventsWithCursor(ctx, grantID, calID, params)
+						if err != nil {
+							return common.PageResult[domain.Event]{}, err
+						}
+						return common.PageResult[domain.Event]{
+							Data:       resp.Data,
+							NextCursor: resp.Pagination.NextCursor,
+						}, nil
+					}
+
+					config := common.DefaultPaginationConfig()
+					config.PageSize = pageSize
+					config.MaxItems = maxItems
+
+					events, err = common.FetchAllPages(ctx, config, fetcher)
+					if err != nil {
+						return struct{}{}, common.WrapListError("events", err)
+					}
+				} else {
+					// Standard single-page fetch
+					events, err = client.GetEvents(ctx, grantID, calID, params)
+					if err != nil {
+						return struct{}{}, common.WrapListError("events", err)
+					}
 				}
 
 				// JSON output (including empty array)
-				if common.IsJSON(cmd) {
+				if common.IsStructuredOutput(cmd) {
 					out := common.GetOutputWriter(cmd)
 					return struct{}{}, out.Write(events)
 				}
@@ -179,7 +215,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVarP(&calendarID, "calendar", "c", "", "Calendar ID (defaults to primary)")
-	cmd.Flags().IntVarP(&limit, "limit", "n", 10, "Maximum number of events to show")
+	cmd.Flags().IntVarP(&limit, "limit", "n", 10, "Maximum number of events to show (auto-paginates if >200)")
 	cmd.Flags().IntVarP(&days, "days", "d", 7, "Show events for the next N days (0 for no limit)")
 	cmd.Flags().BoolVar(&showAll, "show-cancelled", false, "Include cancelled events")
 	cmd.Flags().StringVar(&targetTZ, "timezone", "", "Display times in this timezone (e.g., America/Los_Angeles). Defaults to local timezone.")

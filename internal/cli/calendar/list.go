@@ -27,14 +27,14 @@ func newListCmd() *cobra.Command {
 			}
 
 			if len(calendars) == 0 {
-				if !common.IsQuiet() && !common.IsJSON(cmd) {
+				if !common.IsStructuredOutput(cmd) {
 					common.PrintEmptyState("calendars")
 				}
 				return nil
 			}
 
-			// Check if using structured output (JSON/YAML)
-			if common.IsJSON(cmd) {
+			// Check if using structured output (JSON/YAML/quiet)
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(calendars)
 			}

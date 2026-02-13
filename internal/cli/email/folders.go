@@ -41,7 +41,7 @@ func newFoldersListCmd() *cobra.Command {
 				}
 
 				// JSON output (including empty array)
-				if common.IsJSON(cmd) {
+				if common.IsStructuredOutput(cmd) {
 					out := common.GetOutputWriter(cmd)
 					return struct{}{}, out.Write(folders)
 				}
@@ -73,17 +73,17 @@ func newFoldersListCmd() *cobra.Command {
 						name = name[:25] + "..."
 					}
 
-					unreadStr := fmt.Sprintf("%d", f.UnreadCount)
+					unreadPadded := fmt.Sprintf("%8d", f.UnreadCount)
 					if f.UnreadCount > 0 {
-						unreadStr = common.Cyan.Sprintf("%d", f.UnreadCount)
+						unreadPadded = common.Cyan.Sprint(unreadPadded)
 					}
 
 					if showID {
-						fmt.Printf("%-36s %-30s %-12s %8d %8s\n",
-							common.Dim.Sprint(f.ID), name, folderType, f.TotalCount, unreadStr)
+						fmt.Printf("%-36s %-30s %-12s %8d %s\n",
+							common.Dim.Sprint(f.ID), name, folderType, f.TotalCount, unreadPadded)
 					} else {
-						fmt.Printf("%-30s %-12s %8d %8s\n",
-							name, folderType, f.TotalCount, unreadStr)
+						fmt.Printf("%-30s %-12s %8d %s\n",
+							name, folderType, f.TotalCount, unreadPadded)
 					}
 				}
 

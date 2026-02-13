@@ -72,7 +72,7 @@ func runList(filter string, jsonOut bool) error {
 
 	// Output
 	if jsonOut {
-		return printJSON(map[string]any{
+		return common.PrintJSON(map[string]any{
 			"zones": zones,
 			"count": len(zones),
 		})

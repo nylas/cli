@@ -1,9 +1,7 @@
 package timezone
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -22,13 +20,6 @@ func formatTime(t time.Time, showZone bool) string {
 		return fmt.Sprintf("%s (%s)", t.Format("2006-01-02 15:04:05"), t.Format("MST"))
 	}
 	return t.Format("2006-01-02 15:04:05")
-}
-
-// printJSON prints data as formatted JSON.
-func printJSON(data any) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(data)
 }
 
 // parseTimeZones parses a comma-separated list of time zones.

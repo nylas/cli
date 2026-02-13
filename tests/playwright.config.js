@@ -4,9 +4,10 @@ const { defineConfig, devices } = require('@playwright/test');
 /**
  * Playwright configuration for Nylas E2E tests.
  *
- * Supports two test targets:
+ * Supports three test targets:
  * - Air: Modern web email client (http://localhost:7365)
  * - UI: Web-based CLI admin interface (http://localhost:7363)
+ * - Chat: AI chat interface (http://localhost:7367)
  *
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -15,6 +16,7 @@ const { defineConfig, devices } = require('@playwright/test');
 const isCI = !!process.env.CI;
 const airPort = parseInt(process.env.AIR_PORT || '7365', 10);
 const uiPort = parseInt(process.env.UI_PORT || '7363', 10);
+const chatPort = parseInt(process.env.CHAT_PORT || '7367', 10);
 
 module.exports = defineConfig({
   // Run tests in parallel within files
@@ -84,6 +86,24 @@ module.exports = defineConfig({
         navigationTimeout: 30000,
       },
     },
+
+    // =========================================================================
+    // Nylas Chat (AI Chat Interface)
+    // =========================================================================
+    {
+      name: 'chat-chromium',
+      testDir: './chat/e2e',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${chatPort}`,
+        viewport: { width: 1280, height: 720 },
+        trace: 'on-first-retry',
+        screenshot: 'only-on-failure',
+        video: 'on-first-retry',
+        actionTimeout: 10000,
+        navigationTimeout: 30000,
+      },
+    },
   ],
 
   // Web server configurations
@@ -102,6 +122,13 @@ module.exports = defineConfig({
     {
       command: 'cd .. && go run cmd/nylas/main.go ui --no-browser --port ' + uiPort,
       port: uiPort,
+      timeout: 60000,
+      reuseExistingServer: !isCI,
+    },
+    // Nylas Chat server (port 7367)
+    {
+      command: 'cd .. && go run cmd/nylas/main.go chat --no-browser --port ' + chatPort,
+      port: chatPort,
       timeout: 60000,
       reuseExistingServer: !isCI,
     },

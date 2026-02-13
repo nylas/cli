@@ -38,12 +38,9 @@ Examples:
   # Send without confirmation
   nylas slack send --channel general --text "Quick update" --yes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()
@@ -126,12 +123,9 @@ Examples:
   # Reply and also post to channel
   nylas slack reply --channel general --thread 1234567890.123456 --text "Update" --broadcast`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()

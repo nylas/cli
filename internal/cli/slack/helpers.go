@@ -11,6 +11,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	slackadapter "github.com/nylas/cli/internal/adapters/slack"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
@@ -69,6 +70,29 @@ func getSlackClient(token string) (ports.SlackClient, error) {
 	config.UserToken = token
 	config.Debug = os.Getenv("SLACK_DEBUG") == "true"
 	return slackadapter.NewClient(config)
+}
+
+// withSlackClient creates a Slack client and context, then runs fn.
+func withSlackClient(fn func(ctx context.Context, client ports.SlackClient) error) error {
+	client, err := getSlackClientOrError()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+	return fn(ctx, client)
+}
+
+// getSlackClientOrError wraps getSlackClientFromKeyring with a user-friendly error.
+func getSlackClientOrError() (ports.SlackClient, error) {
+	client, err := getSlackClientFromKeyring()
+	if err != nil {
+		return nil, common.NewUserError(
+			"not authenticated with Slack",
+			"Run: nylas slack auth set --token YOUR_TOKEN",
+		)
+	}
+	return client, nil
 }
 
 // createContext creates a context with default timeout.

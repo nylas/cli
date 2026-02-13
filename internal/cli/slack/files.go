@@ -77,12 +77,9 @@ Examples:
   # List files uploaded by a specific user
   nylas slack files list --user U1234567890`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()
@@ -124,9 +121,7 @@ Examples:
 			}
 
 			// Handle structured output (JSON/YAML/quiet)
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(resp.Files)
 			}
@@ -193,12 +188,9 @@ func newFilesShowCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fileID := args[0]
 
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()
@@ -210,9 +202,7 @@ func newFilesShowCmd() *cobra.Command {
 			}
 
 			// Handle structured output (JSON/YAML/quiet)
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(file)
 			}
@@ -278,12 +268,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fileID := args[0]
 
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()

@@ -2,8 +2,6 @@
 *plan.md
 
 # Temporary refactoring/analysis documents
-REFACTORING_PROGRESS.md
-ENGINEERING_IMPROVEMENTS_SUMMARY.md
 COVERAGE_REPORT.md
 start.md
 *_PROGRESS.md
@@ -26,6 +24,7 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/*.local.*
 .claude/*/*.local.*
+*.session
 
 # Session-specific progress tracking (personal, not shared)
 claude-progress.txt

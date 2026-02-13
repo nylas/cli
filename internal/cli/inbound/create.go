@@ -15,21 +15,22 @@ func newCreateCmd() *cobra.Command {
 	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "create <email-prefix>",
+		Use:   "create <email>",
 		Short: "Create a new inbound inbox",
 		Long: `Create a new inbound inbox with a managed email address.
 
-The email prefix you provide will be combined with your application's
-Nylas domain to create the full email address (e.g., support@yourapp.nylas.email).
+You can provide either a full email address or just the local part (prefix).
+Wildcards (*) are supported for catch-all patterns.
 
 Examples:
-  # Create a support inbox
-  nylas inbound create support
-  # Creates: support@yourapp.nylas.email
+  # Create with full email address
+  nylas inbound create support@yourapp.nylas.email
 
-  # Create a leads inbox
-  nylas inbound create leads
-  # Creates: leads@yourapp.nylas.email
+  # Create with just the prefix (domain added by API)
+  nylas inbound create support
+
+  # Create a wildcard catch-all inbox
+  nylas inbound create "e2e-*@yourapp.nylas.email"
 
   # Create and output as JSON
   nylas inbound create tickets --json`,
@@ -44,25 +45,26 @@ Examples:
 	return cmd
 }
 
-func runCreate(emailPrefix string, jsonOutput bool) error {
-	// Validate email prefix
-	emailPrefix = strings.TrimSpace(emailPrefix)
-	if emailPrefix == "" {
-		printError("Email prefix cannot be empty")
-		return common.NewInputError("email prefix cannot be empty")
+func runCreate(email string, jsonOutput bool) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		printError("Email address cannot be empty")
+		return common.NewInputError("email address cannot be empty")
 	}
 
-	// Basic validation - no @ symbol, no spaces
-	if strings.Contains(emailPrefix, "@") || strings.Contains(emailPrefix, " ") {
-		printError("Email prefix should not contain '@' or spaces. Just provide the local part (e.g., 'support')")
-		return common.NewInputError("invalid email prefix - should not contain '@' or spaces")
+	if strings.Contains(email, " ") {
+		printError("Email address should not contain spaces")
+		return common.NewInputError("invalid email address - should not contain spaces")
 	}
 
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		inbox, err := client.CreateInboundInbox(ctx, emailPrefix)
+		inbox, err := client.CreateInboundInbox(ctx, email)
 		if err != nil {
 			return struct{}{}, common.WrapCreateError("inbound inbox", err)
 		}
+
+		// Save the new grant to local store so it appears in `nylas auth list`
+		saveGrantLocally(inbox.ID, inbox.Email)
 
 		if jsonOutput {
 			data, _ := json.MarshalIndent(inbox, "", "  ")

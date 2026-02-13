@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -109,7 +110,7 @@ func TestSetFieldValue(t *testing.T) {
 					t.Errorf("setFieldValue() expected error containing %q, got nil", tt.errMsg)
 					return
 				}
-				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("setFieldValue() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
 				return
@@ -250,7 +251,7 @@ func TestSetConfigValue(t *testing.T) {
 					t.Errorf("setConfigValue() expected error containing %q, got nil", tt.errMsg)
 					return
 				}
-				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("setConfigValue() error = %q, want error containing %q", err.Error(), tt.errMsg)
 				}
 				return

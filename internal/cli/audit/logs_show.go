@@ -169,9 +169,9 @@ func showEntryTable(cmd *cobra.Command, entries []domain.AuditEntry) error {
 			Duration:       FormatDuration(e.Duration),
 			RequestID:      e.RequestID,
 			HTTPStatus:     e.HTTPStatus,
-			GrantDisplay:   truncate(orDash(e.GrantID), 12),
-			InvokerDisplay: truncate(orDash(e.Invoker), 12),
-			SourceDisplay:  truncate(orDash(e.InvokerSource), 12),
+			GrantDisplay:   common.Truncate(orDash(e.GrantID), 12),
+			InvokerDisplay: common.Truncate(orDash(e.Invoker), 12),
+			SourceDisplay:  common.Truncate(orDash(e.InvokerSource), 12),
 		}
 	}
 
@@ -244,13 +244,6 @@ func parseDate(s string) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("unrecognized date format: %s", s)
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-3] + "..."
 }
 
 // orDash returns "-" if s is empty, otherwise returns s.

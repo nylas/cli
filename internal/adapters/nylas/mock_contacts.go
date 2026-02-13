@@ -7,6 +7,9 @@ import (
 )
 
 func (m *MockClient) GetContacts(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error) {
+	if m.GetContactsFunc != nil {
+		return m.GetContactsFunc(ctx, grantID, params)
+	}
 	return []domain.Contact{
 		{
 			ID:        "contact-1",

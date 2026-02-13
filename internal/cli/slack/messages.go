@@ -66,12 +66,9 @@ Examples:
   # Expand all threads inline (show thread replies under parent messages)
   nylas slack messages list --channel general --expand-threads`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			// Use longer timeout when fetching all messages
@@ -144,9 +141,7 @@ Examples:
 			}
 
 			// Handle structured output (JSON/YAML/quiet) - before enrichment for performance
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(allMessages)
 			}

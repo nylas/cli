@@ -89,6 +89,9 @@ Examples:
 				return common.WrapDeleteError("inbox", err)
 			}
 
+			// Remove from local grant store
+			removeGrantLocally(inboxID)
+
 			printSuccess("Inbox %s deleted successfully!", inbox.Email)
 
 			return nil

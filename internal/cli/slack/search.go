@@ -43,12 +43,9 @@ Examples:
 				return common.NewUserError("search query is required", "Use --query")
 			}
 
-			client, err := getSlackClientFromKeyring()
+			client, err := getSlackClientOrError()
 			if err != nil {
-				return common.NewUserError(
-					"not authenticated with Slack",
-					"Run: nylas slack auth set --token YOUR_TOKEN",
-				)
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()
@@ -65,9 +62,7 @@ Examples:
 			}
 
 			// Handle structured output (JSON/YAML/quiet)
-			format, _ := cmd.Flags().GetString("format")
-			quiet, _ := cmd.Flags().GetBool("quiet")
-			if common.IsJSON(cmd) || format == "yaml" || quiet {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(messages)
 			}

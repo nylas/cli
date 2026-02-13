@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/adapters/config"
@@ -182,7 +183,7 @@ func TestGPGConfig_FileFormat(t *testing.T) {
 	}
 
 	for _, line := range expectedLines {
-		if !contains(content, line) {
+		if !strings.Contains(content, line) {
 			t.Errorf("config file missing expected line: %s\nGot:\n%s", line, content)
 		}
 	}
