@@ -69,7 +69,7 @@ func runDST(zone string, year int, jsonOut bool) error {
 
 	// Output
 	if jsonOut {
-		return printJSON(map[string]any{
+		return common.PrintJSON(map[string]any{
 			"zone":        zone,
 			"year":        year,
 			"transitions": transitions,

@@ -32,7 +32,7 @@ func newListCmd() *cobra.Command {
 			}
 
 			// Check if we should use structured output
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				out := common.GetOutputWriter(cmd)
 				return out.Write(grants)
 			}

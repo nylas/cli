@@ -111,7 +111,7 @@ Use --interactive for a guided creation experience.`,
 			}
 
 			// JSON output
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return common.PrintJSON(created)
 			}
 

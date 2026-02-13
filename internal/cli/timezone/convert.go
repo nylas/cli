@@ -93,7 +93,7 @@ func runConvert(fromZone, toZone, timeStr string, jsonOut bool) error {
 
 	// Output
 	if jsonOut {
-		return printJSON(map[string]any{
+		return common.PrintJSON(map[string]any{
 			"from": map[string]any{
 				"zone":   fromZone,
 				"time":   inputTime.Format(time.RFC3339),

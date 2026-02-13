@@ -33,7 +33,7 @@ func newListCmd() *cobra.Command {
 			}
 
 			// Check if we should use structured output (JSON/YAML/quiet)
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 					params := &domain.ContactQueryParams{
 						Limit:  limit,

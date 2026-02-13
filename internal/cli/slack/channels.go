@@ -218,15 +218,7 @@ func printChannels(channels []domain.SlackChannel, showID bool) {
 		fmt.Println()
 
 		if ch.Purpose != "" {
-			_, _ = dim.Printf("  %s\n", truncateString(ch.Purpose, 60))
+			_, _ = dim.Printf("  %s\n", common.Truncate(ch.Purpose, 60))
 		}
 	}
-}
-
-// truncateString shortens a string to maxLen, adding "..." if truncated.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }

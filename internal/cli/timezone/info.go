@@ -96,7 +96,7 @@ func runInfo(zone, timeStr string, jsonOut bool) error {
 
 	// Output
 	if jsonOut {
-		return printJSON(map[string]any{
+		return common.PrintJSON(map[string]any{
 			"zone":           info.Name,
 			"abbreviation":   info.Abbreviation,
 			"offset":         formatOffset(info.Offset),

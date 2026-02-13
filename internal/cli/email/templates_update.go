@@ -81,7 +81,7 @@ re-extracted from the updated subject and body.`,
 			}
 
 			// JSON output
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return common.PrintJSON(updated)
 			}
 

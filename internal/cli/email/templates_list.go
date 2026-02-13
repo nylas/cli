@@ -36,7 +36,7 @@ Use --json or --yaml for machine-readable output.`,
 			}
 
 			// JSON output
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return common.PrintJSON(templates)
 			}
 

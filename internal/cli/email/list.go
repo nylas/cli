@@ -51,7 +51,7 @@ Use --max to limit total messages when using --all.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if we should use structured output (JSON/YAML/quiet)
-			if common.IsJSON(cmd) {
+			if common.IsStructuredOutput(cmd) {
 				return runListStructured(cmd, args, limit, unread, starred, from, folder, allFolders, all, maxItems, metadataPair)
 			}
 

@@ -59,7 +59,7 @@ func newThreadsListCmd() *cobra.Command {
 				}
 
 				// JSON output (including empty array)
-				if common.IsJSON(cmd) {
+				if common.IsStructuredOutput(cmd) {
 					out := common.GetOutputWriter(cmd)
 					return struct{}{}, out.Write(threads)
 				}
