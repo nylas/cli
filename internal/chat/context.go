@@ -15,17 +15,19 @@ const (
 
 // ContextBuilder constructs prompts with conversation context and manages compaction.
 type ContextBuilder struct {
-	agent   *Agent
-	memory  *MemoryStore
-	grantID string
+	agent    *Agent
+	memory   *MemoryStore
+	grantID  string
+	hasSlack bool
 }
 
 // NewContextBuilder creates a new ContextBuilder.
-func NewContextBuilder(agent *Agent, memory *MemoryStore, grantID string) *ContextBuilder {
+func NewContextBuilder(agent *Agent, memory *MemoryStore, grantID string, hasSlack bool) *ContextBuilder {
 	return &ContextBuilder{
-		agent:   agent,
-		memory:  memory,
-		grantID: grantID,
+		agent:    agent,
+		memory:   memory,
+		grantID:  grantID,
+		hasSlack: hasSlack,
 	}
 }
 
@@ -38,7 +40,7 @@ func (c *ContextBuilder) BuildPrompt(conv *Conversation, newMessage string) stri
 	var sb strings.Builder
 
 	// System prompt
-	sb.WriteString(BuildSystemPrompt(c.grantID, c.agent.Type))
+	sb.WriteString(BuildSystemPrompt(c.grantID, c.agent.Type, c.hasSlack))
 	sb.WriteString("\n---\n\n")
 
 	// Include conversation summary if available

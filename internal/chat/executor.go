@@ -12,12 +12,18 @@ import (
 // ToolExecutor dispatches tool calls to the Nylas API.
 type ToolExecutor struct {
 	client  ports.NylasClient
+	slack   ports.SlackClient
 	grantID string
 }
 
 // NewToolExecutor creates a new ToolExecutor.
-func NewToolExecutor(client ports.NylasClient, grantID string) *ToolExecutor {
-	return &ToolExecutor{client: client, grantID: grantID}
+func NewToolExecutor(client ports.NylasClient, grantID string, slack ports.SlackClient) *ToolExecutor {
+	return &ToolExecutor{client: client, grantID: grantID, slack: slack}
+}
+
+// HasSlack returns true if Slack integration is available.
+func (e *ToolExecutor) HasSlack() bool {
+	return e.slack != nil
 }
 
 // Execute runs a tool call and returns the result.
@@ -39,6 +45,19 @@ func (e *ToolExecutor) Execute(ctx context.Context, call ToolCall) ToolResult {
 		return e.listContacts(ctx, call.Args)
 	case "list_folders":
 		return e.listFolders(ctx)
+	// Slack tools
+	case "list_slack_channels":
+		return e.listSlackChannels(ctx, call.Args)
+	case "read_slack_messages":
+		return e.readSlackMessages(ctx, call.Args)
+	case "read_slack_thread":
+		return e.readSlackThread(ctx, call.Args)
+	case "search_slack":
+		return e.searchSlack(ctx, call.Args)
+	case "send_slack_message":
+		return e.sendSlackMessage(ctx, call.Args)
+	case "list_slack_users":
+		return e.listSlackUsers(ctx, call.Args)
 	default:
 		return ToolResult{Name: call.Name, Error: fmt.Sprintf("unknown tool: %s", call.Name)}
 	}
@@ -160,8 +179,8 @@ func (e *ToolExecutor) searchEmails(ctx context.Context, args map[string]any) To
 	}
 
 	params := &domain.MessageQueryParams{
-		Limit:       10,
-		SearchQuery: query,
+		Limit:   10,
+		Subject: query,
 	}
 
 	if v, ok := args["limit"]; ok {

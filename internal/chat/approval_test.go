@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -201,6 +202,31 @@ func TestPendingApproval_WaitConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
+func TestIsGated_SlackMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		toolName string
+		want     bool
+	}{
+		{"send_slack_message is gated", "send_slack_message", true},
+		{"list_slack_channels is not gated", "list_slack_channels", false},
+		{"read_slack_messages is not gated", "read_slack_messages", false},
+		{"search_slack is not gated", "search_slack", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := IsGated(tt.toolName)
+			if got != tt.want {
+				t.Errorf("IsGated(%q) = %v, want %v", tt.toolName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildPreview(t *testing.T) {
 	t.Parallel()
 
@@ -290,5 +316,52 @@ func TestBuildPreview(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildPreview_SlackMessage(t *testing.T) {
+	t.Parallel()
+
+	preview := BuildPreview(ToolCall{
+		Name: "send_slack_message",
+		Args: map[string]any{
+			"channel":   "#engineering",
+			"text":      "Hello team!",
+			"thread_ts": "1234567890.123456",
+		},
+	})
+
+	if preview["channel"] != "#engineering" {
+		t.Errorf("channel = %v, want %q", preview["channel"], "#engineering")
+	}
+	if preview["text"] != "Hello team!" {
+		t.Errorf("text = %v, want %q", preview["text"], "Hello team!")
+	}
+	if preview["thread_ts"] != "1234567890.123456" {
+		t.Errorf("thread_ts = %v, want %q", preview["thread_ts"], "1234567890.123456")
+	}
+}
+
+func TestBuildPreview_SlackMessage_LongText(t *testing.T) {
+	t.Parallel()
+
+	longText := strings.Repeat("a", 300)
+	preview := BuildPreview(ToolCall{
+		Name: "send_slack_message",
+		Args: map[string]any{
+			"channel": "#general",
+			"text":    longText,
+		},
+	})
+
+	text, ok := preview["text"].(string)
+	if !ok {
+		t.Fatal("text is not a string")
+	}
+	if len(text) > 203 { // 200 + "..."
+		t.Errorf("text length = %d, want <= 203", len(text))
+	}
+	if !strings.HasSuffix(text, "...") {
+		t.Error("text should end with '...'")
 	}
 }

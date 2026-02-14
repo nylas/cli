@@ -39,9 +39,63 @@ const toolCallPrefix = "TOOL_CALL:"
 // toolResultPrefix is the marker for returning results.
 const toolResultPrefix = "TOOL_RESULT:"
 
-// AvailableTools returns the tools exposed to AI agents.
-func AvailableTools() []Tool {
+// slackTools returns Slack-specific tools.
+func slackTools() []Tool {
 	return []Tool{
+		{
+			Name:        "list_slack_channels",
+			Description: "List Slack channels the user is a member of",
+			Parameters: []ToolParameter{
+				{Name: "limit", Type: "number", Description: "Max channels to return (default 20)", Required: false},
+			},
+		},
+		{
+			Name:        "read_slack_messages",
+			Description: "Read messages from a Slack channel with thread replies expanded inline",
+			Parameters: []ToolParameter{
+				{Name: "channel", Type: "string", Description: "Channel name (e.g. #general) or channel ID", Required: true},
+				{Name: "limit", Type: "number", Description: "Max messages to return (default 500)", Required: false},
+			},
+		},
+		{
+			Name:        "read_slack_thread",
+			Description: "Read replies in a Slack message thread",
+			Parameters: []ToolParameter{
+				{Name: "channel", Type: "string", Description: "Channel name or ID where the thread is", Required: true},
+				{Name: "thread_ts", Type: "string", Description: "Thread timestamp of the parent message", Required: true},
+				{Name: "limit", Type: "number", Description: "Max replies to return (default 20)", Required: false},
+			},
+		},
+		{
+			Name:        "search_slack",
+			Description: "Search Slack messages by query (supports from:@user, in:#channel syntax)",
+			Parameters: []ToolParameter{
+				{Name: "query", Type: "string", Description: "Search query string", Required: true},
+				{Name: "limit", Type: "number", Description: "Max results to return (default 10)", Required: false},
+			},
+		},
+		{
+			Name:        "send_slack_message",
+			Description: "Send a message to a Slack channel or reply to a thread",
+			Parameters: []ToolParameter{
+				{Name: "channel", Type: "string", Description: "Channel name or ID to post in", Required: true},
+				{Name: "text", Type: "string", Description: "Message text (supports Slack markup)", Required: true},
+				{Name: "thread_ts", Type: "string", Description: "Thread timestamp to reply to (optional)", Required: false},
+			},
+		},
+		{
+			Name:        "list_slack_users",
+			Description: "List members of the Slack workspace",
+			Parameters: []ToolParameter{
+				{Name: "limit", Type: "number", Description: "Max users to return (default 20)", Required: false},
+			},
+		},
+	}
+}
+
+// AvailableTools returns the tools exposed to AI agents.
+func AvailableTools(hasSlack bool) []Tool {
+	tools := []Tool{
 		{
 			Name:        "list_emails",
 			Description: "List recent emails from the user's inbox",
@@ -109,6 +163,12 @@ func AvailableTools() []Tool {
 			Parameters:  []ToolParameter{},
 		},
 	}
+
+	if hasSlack {
+		tools = append(tools, slackTools()...)
+	}
+
+	return tools
 }
 
 // ParseToolCalls extracts TOOL_CALL: lines from agent output.

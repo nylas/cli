@@ -4,17 +4,26 @@ import "strings"
 
 // BuildSystemPrompt constructs the system prompt for the AI agent.
 // It includes identity, available tools, and the text-based tool protocol.
-func BuildSystemPrompt(grantID string, agentType AgentType) string {
+func BuildSystemPrompt(grantID string, agentType AgentType, hasSlack bool) string {
 	var sb strings.Builder
 
-	sb.WriteString("You are a helpful email and calendar assistant powered by the Nylas API.\n")
-	sb.WriteString("You help users manage their emails, calendar events, and contacts.\n\n")
+	if hasSlack {
+		sb.WriteString("You are a helpful email, calendar, and Slack assistant powered by the Nylas API.\n")
+		sb.WriteString("You help users manage their emails, calendar events, contacts, and Slack messages.\n\n")
+	} else {
+		sb.WriteString("You are a helpful email and calendar assistant powered by the Nylas API.\n")
+		sb.WriteString("You help users manage their emails, calendar events, and contacts.\n\n")
+	}
 
 	sb.WriteString("Grant ID: " + grantID + "\n\n")
 
 	// Tool protocol instructions
 	sb.WriteString("## Tool Usage\n\n")
-	sb.WriteString("When you need to access the user's email, calendar, or contacts, use the tools below.\n")
+	if hasSlack {
+		sb.WriteString("When you need to access the user's email, calendar, contacts, or Slack, use the tools below.\n")
+	} else {
+		sb.WriteString("When you need to access the user's email, calendar, or contacts, use the tools below.\n")
+	}
 	sb.WriteString("To call a tool, output EXACTLY this format on its own line:\n\n")
 	sb.WriteString("TOOL_CALL: {\"name\": \"tool_name\", \"args\": {\"param\": \"value\"}}\n\n")
 	sb.WriteString("IMPORTANT RULES:\n")
@@ -26,7 +35,7 @@ func BuildSystemPrompt(grantID string, agentType AgentType) string {
 	sb.WriteString("3. Only make one TOOL_CALL per response. Wait for the result before proceeding.\n\n")
 
 	// Tool definitions
-	sb.WriteString(FormatToolsForPrompt(AvailableTools()))
+	sb.WriteString(FormatToolsForPrompt(AvailableTools(hasSlack)))
 	sb.WriteString("\n")
 
 	// Context instructions
@@ -39,6 +48,9 @@ func BuildSystemPrompt(grantID string, agentType AgentType) string {
 	sb.WriteString("- Use markdown formatting for readability\n")
 	sb.WriteString("- Present email lists as numbered items with sender, subject, and date\n")
 	sb.WriteString("- Present calendar events with time, title, and attendees\n")
+	if hasSlack {
+		sb.WriteString("- Present Slack messages with username, timestamp, and content\n")
+	}
 	sb.WriteString("- Keep responses concise but informative\n")
 	sb.WriteString("- If an error occurs, explain it clearly and suggest alternatives\n")
 
