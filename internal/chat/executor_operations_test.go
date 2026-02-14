@@ -16,7 +16,7 @@ import (
 
 func TestSendEmail_Success(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.SendMessageFunc = func(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
 		assert.Equal(t, "test@example.com", req.To[0].Email)
@@ -63,7 +63,7 @@ func TestSendEmail_MissingParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			result := executor.Execute(context.Background(), ToolCall{
 				Name: "send_email",
@@ -77,7 +77,7 @@ func TestSendEmail_MissingParams(t *testing.T) {
 
 func TestSendEmail_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.SendMessageFunc = func(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
 		return nil, errors.New("send failed")
@@ -125,7 +125,7 @@ func TestListEvents_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			client.GetEventsFunc = func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) ([]domain.Event, error) {
 				assert.Equal(t, tt.wantCalID, calendarID)
@@ -158,7 +158,7 @@ func TestListEvents_Success(t *testing.T) {
 
 func TestListEvents_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.GetEventsFunc = func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) ([]domain.Event, error) {
 		return nil, errors.New("calendar not found")
@@ -174,7 +174,7 @@ func TestListEvents_Error(t *testing.T) {
 
 func TestCreateEvent_Success(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.CreateEventFunc = func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error) {
 		assert.Equal(t, "primary", calendarID)
@@ -209,7 +209,7 @@ func TestCreateEvent_Success(t *testing.T) {
 
 func TestCreateEvent_CustomCalendar(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.CreateEventFunc = func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error) {
 		assert.Equal(t, "work-calendar", calendarID)
@@ -243,7 +243,7 @@ func TestCreateEvent_MissingParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			result := executor.Execute(context.Background(), ToolCall{
 				Name: "create_event",
@@ -270,7 +270,7 @@ func TestCreateEvent_InvalidTimeFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			result := executor.Execute(context.Background(), ToolCall{
 				Name: "create_event",
@@ -288,7 +288,7 @@ func TestCreateEvent_InvalidTimeFormat(t *testing.T) {
 
 func TestCreateEvent_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.CreateEventFunc = func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error) {
 		return nil, errors.New("calendar permission denied")
@@ -356,7 +356,7 @@ func TestListContacts_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			client.GetContactsFunc = func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error) {
 				assert.Equal(t, tt.wantLimit, params.Limit)
@@ -424,7 +424,7 @@ func TestListContacts_NameFormatting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant")
+			executor := NewToolExecutor(client, "test-grant", nil)
 
 			client.GetContactsFunc = func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error) {
 				return []domain.Contact{tt.contact}, nil
@@ -450,7 +450,7 @@ func TestListContacts_NameFormatting(t *testing.T) {
 
 func TestListContacts_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.GetContactsFunc = func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error) {
 		return nil, errors.New("contacts not available")
@@ -466,7 +466,7 @@ func TestListContacts_Error(t *testing.T) {
 
 func TestListFolders_Success(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.GetFoldersFunc = func(ctx context.Context, grantID string) ([]domain.Folder, error) {
 		return []domain.Folder{
@@ -497,7 +497,7 @@ func TestListFolders_Success(t *testing.T) {
 
 func TestListFolders_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant")
+	executor := NewToolExecutor(client, "test-grant", nil)
 
 	client.GetFoldersFunc = func(ctx context.Context, grantID string) ([]domain.Folder, error) {
 		return nil, errors.New("folders not accessible")

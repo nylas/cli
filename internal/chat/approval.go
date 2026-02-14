@@ -11,8 +11,9 @@ const approvalTimeout = 5 * time.Minute
 
 // gatedTools lists tools that require user approval before execution.
 var gatedTools = map[string]bool{
-	"send_email":   true,
-	"create_event": true,
+	"send_email":         true,
+	"create_event":       true,
+	"send_slack_message": true,
 }
 
 // IsGated returns true if the tool requires user approval.
@@ -132,6 +133,19 @@ func BuildPreview(call ToolCall) map[string]any {
 		}
 		if desc, ok := call.Args["description"].(string); ok {
 			preview["description"] = desc
+		}
+	case "send_slack_message":
+		if ch, ok := call.Args["channel"].(string); ok {
+			preview["channel"] = ch
+		}
+		if text, ok := call.Args["text"].(string); ok {
+			if len(text) > 200 {
+				text = text[:200] + "..."
+			}
+			preview["text"] = text
+		}
+		if threadTS, ok := call.Args["thread_ts"].(string); ok && threadTS != "" {
+			preview["thread_ts"] = threadTS
 		}
 	}
 

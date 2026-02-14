@@ -201,7 +201,7 @@ func TestFormatToolResult(t *testing.T) {
 }
 
 func TestAvailableTools(t *testing.T) {
-	tools := AvailableTools()
+	tools := AvailableTools(false)
 
 	t.Run("returns correct tool count", func(t *testing.T) {
 		// Expecting: list_emails, read_email, search_emails, send_email,
