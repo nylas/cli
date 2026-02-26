@@ -575,7 +575,7 @@ func registeredTools() []MCPTool {
 			Name:        "current_time",
 			Description: "Get the current date and time, optionally in a specific timezone.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"timezone": prop("string", `IANA timezone name (e.g. "America/New_York"). Defaults to UTC.`),
+				"timezone": prop("string", `IANA timezone name (e.g. "America/New_York"). Defaults to local system timezone.`),
 			}, nil),
 		},
 		{
@@ -583,7 +583,7 @@ func registeredTools() []MCPTool {
 			Description: "Convert a Unix timestamp to a human-readable date and time string.",
 			InputSchema: objectSchema(map[string]JSONSchema{
 				"epoch":    prop("number", "Unix epoch timestamp to convert"),
-				"timezone": prop("string", `IANA timezone name for output (e.g. "America/New_York"). Defaults to UTC.`),
+				"timezone": prop("string", `IANA timezone name for output (e.g. "America/New_York"). Defaults to local system timezone.`),
 			}, []string{"epoch"}),
 		},
 		{

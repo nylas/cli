@@ -232,9 +232,13 @@ func (s *Server) executeCurrentTime(args map[string]any) *ToolResponse {
 
 // executeEpochToDatetime converts a Unix timestamp to a human-readable datetime.
 func (s *Server) executeEpochToDatetime(args map[string]any) *ToolResponse {
-	epoch := getInt64(args, "epoch", 0)
-	if epoch == 0 {
+	epochVal, ok := args["epoch"]
+	if !ok {
 		return toolError("epoch is required")
+	}
+	epoch, ok := toInt64(epochVal)
+	if !ok {
+		return toolError("epoch must be a number")
 	}
 
 	loc, err := resolveLocation(getString(args, "timezone", ""))
@@ -289,4 +293,17 @@ func resolveLocation(tz string) (*time.Location, error) {
 		return time.Local, nil
 	}
 	return time.LoadLocation(tz)
+}
+
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	default:
+		return 0, false
+	}
 }

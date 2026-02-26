@@ -52,7 +52,7 @@ func FormatMissingEnvVars(missing []string, vars []RequiredEnvVar) string {
 		if desc == "" {
 			desc = "No description available"
 		}
-		sb.WriteString(fmt.Sprintf("  %s - %s\n", name, desc))
+		_, _ = fmt.Fprintf(&sb, "  %s - %s\n", name, desc)
 	}
 
 	return sb.String()

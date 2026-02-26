@@ -75,7 +75,7 @@ func (b *builder) BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, e
 	// Write Content-Type for multipart/encrypted (RFC 3156 Section 4)
 	buf.WriteString("Content-Type: multipart/encrypted;\r\n")
 	buf.WriteString("\tprotocol=\"application/pgp-encrypted\";\r\n")
-	buf.WriteString(fmt.Sprintf("\tboundary=\"%s\"\r\n", encryptedBoundary))
+	_, _ = fmt.Fprintf(&buf, "\tboundary=\"%s\"\r\n", encryptedBoundary)
 	buf.WriteString("\r\n")
 
 	// Part 1: Version identification (required by RFC 3156)

@@ -336,4 +336,3 @@ func (s *Server) executeCancelScheduledMessage(ctx context.Context, args map[str
 		"status":      "cancelled",
 	})
 }
-

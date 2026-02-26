@@ -32,8 +32,8 @@ func TestDispatch_Methods(t *testing.T) {
 	tests := []struct {
 		name           string
 		req            *Request
-		wantNil        bool   // true if we expect a nil response (notifications)
-		wantErrorCode  *int   // if non-nil, expect an error response with this code
+		wantNil        bool // true if we expect a nil response (notifications)
+		wantErrorCode  *int // if non-nil, expect an error response with this code
 		wantResultKeys []string
 	}{
 		{
@@ -62,8 +62,8 @@ func TestDispatch_Methods(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name: "unknown method returns error -32601",
-			req:  &Request{Method: "unknown/method", ID: float64(99)},
+			name:          "unknown method returns error -32601",
+			req:           &Request{Method: "unknown/method", ID: float64(99)},
 			wantErrorCode: func() *int { c := codeMethodNotFound; return &c }(),
 		},
 	}

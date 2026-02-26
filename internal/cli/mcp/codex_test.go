@@ -6,8 +6,6 @@ import (
 )
 
 func TestGetCodexNylasConfig(t *testing.T) {
-	t.Parallel()
-
 	orig := runCommand
 	t.Cleanup(func() { runCommand = orig })
 
@@ -38,8 +36,6 @@ func TestGetCodexNylasConfig(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			runCommand = func(_ string, _ ...string) ([]byte, error) {
 				return tt.out, tt.err
 			}
@@ -56,14 +52,10 @@ func TestGetCodexNylasConfig(t *testing.T) {
 }
 
 func TestInstallForCodex(t *testing.T) {
-	t.Parallel()
-
 	orig := runCommand
 	t.Cleanup(func() { runCommand = orig })
 
 	t.Run("calls remove then add", func(t *testing.T) {
-		t.Parallel()
-
 		var calls [][]string
 		runCommand = func(name string, args ...string) ([]byte, error) {
 			call := append([]string{name}, args...)
@@ -81,8 +73,6 @@ func TestInstallForCodex(t *testing.T) {
 	})
 
 	t.Run("returns command output on add failure", func(t *testing.T) {
-		t.Parallel()
-
 		callNum := 0
 		runCommand = func(_ string, _ ...string) ([]byte, error) {
 			callNum++
@@ -99,14 +89,10 @@ func TestInstallForCodex(t *testing.T) {
 }
 
 func TestUninstallFromCodex(t *testing.T) {
-	t.Parallel()
-
 	orig := runCommand
 	t.Cleanup(func() { runCommand = orig })
 
 	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
 		runCommand = func(_ string, _ ...string) ([]byte, error) {
 			return nil, nil
 		}
@@ -117,8 +103,6 @@ func TestUninstallFromCodex(t *testing.T) {
 	})
 
 	t.Run("failure includes command output", func(t *testing.T) {
-		t.Parallel()
-
 		runCommand = func(_ string, _ ...string) ([]byte, error) {
 			return []byte("remove failed"), errors.New("exit 1")
 		}

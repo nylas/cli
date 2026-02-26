@@ -56,9 +56,11 @@ func TestExecuteListMessages(t *testing.T) {
 			wantCount: 2,
 		},
 		{
-			name:      "error propagates as toolError",
-			args:      map[string]any{},
-			mockFn:    func(_ context.Context, _ string, _ *domain.MessageQueryParams) ([]domain.Message, error) { return nil, errors.New("api down") },
+			name: "error propagates as toolError",
+			args: map[string]any{},
+			mockFn: func(_ context.Context, _ string, _ *domain.MessageQueryParams) ([]domain.Message, error) {
+				return nil, errors.New("api down")
+			},
 			wantError: true,
 		},
 		{

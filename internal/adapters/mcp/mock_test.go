@@ -448,5 +448,5 @@ func (m *mockNylasClient) SendTransactionalMessage(ctx context.Context, domainNa
 // Configuration methods
 // ============================================================================
 
-func (m *mockNylasClient) SetRegion(region string)                                   {}
-func (m *mockNylasClient) SetCredentials(clientID, clientSecret, apiKey string)      {}
+func (m *mockNylasClient) SetRegion(region string)                              {}
+func (m *mockNylasClient) SetCredentials(clientID, clientSecret, apiKey string) {}
