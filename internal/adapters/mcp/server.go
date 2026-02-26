@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/nylas/cli/internal/ports"
@@ -48,7 +50,7 @@ func (s *Server) Run(ctx context.Context) error {
 		default:
 		}
 
-		line, err := reader.ReadBytes('\n')
+		payload, err := readRequestPayload(reader)
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -56,16 +58,12 @@ func (s *Server) Run(ctx context.Context) error {
 			return fmt.Errorf("reading stdin: %w", err)
 		}
 
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
-			continue
-		}
-
 		var req Request
-		if err := json.Unmarshal(line, &req); err != nil {
+		if err := json.Unmarshal(payload, &req); err != nil {
 			resp := errorResponse(nil, codeParseError, "parse error: "+err.Error())
-			_, _ = writer.Write(append(resp, '\n'))
-			_ = writer.Flush()
+			if err := writeResponsePayload(writer, resp); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -74,11 +72,105 @@ func (s *Server) Run(ctx context.Context) error {
 			continue // Notification — no response needed
 		}
 
-		if _, err := writer.Write(append(resp, '\n')); err != nil {
-			return fmt.Errorf("writing response: %w", err)
+		if err := writeResponsePayload(writer, resp); err != nil {
+			return err
 		}
-		_ = writer.Flush()
 	}
+}
+
+// readRequestPayload reads a single MCP request payload from stdin.
+// Supports standard MCP stdio framing (Content-Length) and newline-delimited
+// JSON as a compatibility fallback.
+func readRequestPayload(reader *bufio.Reader) ([]byte, error) {
+	for {
+		peek, err := reader.Peek(1)
+		if err != nil {
+			return nil, err
+		}
+		if peek[0] == '\n' || peek[0] == '\r' {
+			if _, err := reader.ReadByte(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		break
+	}
+
+	peek, err := reader.Peek(1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Backward-compatible newline-delimited JSON mode.
+	if peek[0] == '{' || peek[0] == '[' {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				line = bytes.TrimSpace(line)
+				if len(line) == 0 {
+					return nil, io.EOF
+				}
+				return line, nil
+			}
+			return nil, err
+		}
+
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			return readRequestPayload(reader)
+		}
+		return line, nil
+	}
+
+	contentLength := 0
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return nil, fmt.Errorf("invalid header line %q", line)
+		}
+
+		if strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
+			n, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || n < 0 {
+				return nil, fmt.Errorf("invalid Content-Length %q", strings.TrimSpace(value))
+			}
+			contentLength = n
+		}
+	}
+
+	if contentLength <= 0 {
+		return nil, fmt.Errorf("missing or invalid Content-Length header")
+	}
+
+	payload := make([]byte, contentLength)
+	if _, err := io.ReadFull(reader, payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func writeResponsePayload(writer *bufio.Writer, payload []byte) error {
+	if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(payload)); err != nil {
+		return fmt.Errorf("writing response headers: %w", err)
+	}
+	if _, err := writer.Write(payload); err != nil {
+		return fmt.Errorf("writing response body: %w", err)
+	}
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("flushing response: %w", err)
+	}
+	return nil
 }
 
 // dispatch routes a JSON-RPC request to the appropriate handler.

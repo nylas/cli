@@ -15,7 +15,10 @@ var runCommand = func(name string, args ...string) ([]byte, error) {
 }
 
 type codexServerConfig struct {
-	Command string `json:"command"`
+	Name      string `json:"name"`
+	Transport struct {
+		Command string `json:"command"`
+	} `json:"transport"`
 }
 
 func getCodexNylasConfig() (bool, string) {
@@ -26,10 +29,13 @@ func getCodexNylasConfig() (bool, string) {
 
 	var cfg codexServerConfig
 	if err := json.Unmarshal(out, &cfg); err != nil {
-		return true, ""
+		return false, ""
+	}
+	if cfg.Name != nylasMCPServerName || cfg.Transport.Command == "" {
+		return false, ""
 	}
 
-	return true, cfg.Command
+	return true, cfg.Transport.Command
 }
 
 func installForCodex(binaryPath string) error {

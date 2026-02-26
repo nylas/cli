@@ -18,14 +18,14 @@ func TestGetCodexNylasConfig(t *testing.T) {
 	}{
 		{
 			name:       "returns command when codex config exists",
-			out:        []byte(`{"command":"/usr/local/bin/nylas","args":["mcp","serve"]}`),
+			out:        []byte(`{"name":"nylas","transport":{"type":"stdio","command":"/usr/local/bin/nylas","args":["mcp","serve"]}}`),
 			wantOK:     true,
 			wantBinary: "/usr/local/bin/nylas",
 		},
 		{
-			name:   "returns configured even when output is non-json",
+			name:   "returns not configured when output is non-json",
 			out:    []byte("configured"),
-			wantOK: true,
+			wantOK: false,
 		},
 		{
 			name: "returns not configured on command error",

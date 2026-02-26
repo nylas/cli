@@ -23,7 +23,7 @@ func newServeCmd() *cobra.Command {
 The server communicates via STDIO (standard input/output) and requires
 Nylas credentials to be configured via 'nylas auth login'.
 
-Available tools (37 total):
+Available tools (47 total):
 
   Email:        list/get/send/update/delete messages, smart compose
   Drafts:       list/get/create/update/send drafts

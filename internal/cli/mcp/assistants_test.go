@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -112,6 +114,34 @@ func TestExpandPath(t *testing.T) {
 	path = expandPath("/usr/local/bin")
 	if path != "/usr/local/bin" {
 		t.Errorf("expected /usr/local/bin, got %s", path)
+	}
+}
+
+func TestAssistant_GetConfigPath_CodexHomeOverride(t *testing.T) {
+	t.Parallel()
+
+	a := GetAssistantByID(assistantIDCodex)
+	if a == nil {
+		t.Fatal("codex assistant not found")
+	}
+
+	original := os.Getenv("CODEX_HOME")
+	t.Cleanup(func() {
+		if original == "" {
+			_ = os.Unsetenv("CODEX_HOME")
+			return
+		}
+		_ = os.Setenv("CODEX_HOME", original)
+	})
+
+	want := filepath.Join("/tmp/codex-home", "config.toml")
+	if err := os.Setenv("CODEX_HOME", "/tmp/codex-home"); err != nil {
+		t.Fatalf("set CODEX_HOME: %v", err)
+	}
+
+	got := a.GetConfigPath()
+	if got != want {
+		t.Errorf("GetConfigPath() = %q, want %q", got, want)
 	}
 }
 

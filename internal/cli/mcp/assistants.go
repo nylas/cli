@@ -110,6 +110,12 @@ var Assistants = []Assistant{
 
 // GetConfigPath returns the config path for the current OS.
 func (a Assistant) GetConfigPath() string {
+	if a.ID == assistantIDCodex {
+		if codexHome := os.Getenv("CODEX_HOME"); codexHome != "" {
+			return filepath.Join(codexHome, "config.toml")
+		}
+	}
+
 	path, ok := a.ConfigPaths[runtime.GOOS]
 	if !ok {
 		return ""

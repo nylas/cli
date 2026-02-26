@@ -180,7 +180,7 @@ func TestHandleInitialize_TimezoneGuidance(t *testing.T) {
 	}
 }
 
-// TestHandleToolsList_ToolCount verifies exactly 37 tools are returned with required fields.
+// TestHandleToolsList_ToolCount verifies all tools are returned with required fields.
 func TestHandleToolsList_ToolCount(t *testing.T) {
 	t.Parallel()
 

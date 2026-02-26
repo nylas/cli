@@ -48,7 +48,7 @@ func objectSchema(props map[string]JSONSchema, required []string) JSONSchema {
 	return JSONSchema{Type: "object", Properties: props, Required: required}
 }
 
-// registeredTools returns all 37 MCP tool definitions.
+// registeredTools returns all MCP tool definitions.
 func registeredTools() []MCPTool {
 	return []MCPTool{
 		// ---- Email tools ----
