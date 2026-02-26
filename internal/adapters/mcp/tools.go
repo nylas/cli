@@ -9,12 +9,13 @@ type MCPTool struct {
 
 // JSONSchema represents a JSON Schema object.
 type JSONSchema struct {
-	Type       string                `json:"type"`
-	Properties map[string]JSONSchema `json:"properties,omitempty"`
-	Required   []string              `json:"required,omitempty"`
-	Items      *JSONSchema           `json:"items,omitempty"`
-	Enum       []string              `json:"enum,omitempty"`
-	Desc       string                `json:"description,omitempty"`
+	Type                 string                `json:"type"`
+	Properties           map[string]JSONSchema `json:"properties,omitempty"`
+	Required             []string              `json:"required,omitempty"`
+	Items                *JSONSchema           `json:"items,omitempty"`
+	Enum                 []string              `json:"enum,omitempty"`
+	Desc                 string                `json:"description,omitempty"`
+	AdditionalProperties *bool                 `json:"additionalProperties,omitempty"`
 }
 
 // prop creates a simple typed property with a description.
@@ -43,9 +44,10 @@ func participantArraySchema(desc string) JSONSchema {
 	}
 }
 
-// objectSchema returns a schema with properties and required fields.
+// objectSchema returns a schema with properties, required fields, and additionalProperties: false.
 func objectSchema(props map[string]JSONSchema, required []string) JSONSchema {
-	return JSONSchema{Type: "object", Properties: props, Required: required}
+	noExtra := false
+	return JSONSchema{Type: "object", Properties: props, Required: required, AdditionalProperties: &noExtra}
 }
 
 // registeredTools returns all MCP tool definitions.

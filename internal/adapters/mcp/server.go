@@ -76,6 +76,15 @@ func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error 
 			continue
 		}
 
+		// Validate JSON-RPC 2.0 required fields.
+		if req.JSONRPC != "2.0" || req.Method == "" {
+			resp := errorResponse(req.ID, codeInvalidRequest, "invalid request: missing jsonrpc version or method")
+			if err := writePayload(writer, resp, usedContentLength); err != nil {
+				return err
+			}
+			continue
+		}
+
 		resp := s.dispatch(ctx, &req)
 		if resp == nil {
 			continue // Notification — no response needed
