@@ -7,6 +7,11 @@ import (
 	"runtime"
 )
 
+const (
+	assistantIDVSCode = "vscode"
+	assistantIDCodex  = "codex"
+)
+
 // Assistant represents an AI assistant that supports MCP.
 type Assistant struct {
 	Name        string            // Display name
@@ -87,6 +92,20 @@ var Assistants = []Assistant{
 			"windows": "",
 		},
 	},
+	{
+		Name: "Codex",
+		ID:   assistantIDCodex,
+		ConfigPaths: map[string]string{
+			"darwin":  "~/.codex/config.toml",
+			"linux":   "~/.codex/config.toml",
+			"windows": "%USERPROFILE%\\.codex\\config.toml",
+		},
+		AppPaths: map[string]string{
+			"darwin":  "",
+			"linux":   "",
+			"windows": "",
+		},
+	},
 }
 
 // GetConfigPath returns the config path for the current OS.
@@ -100,7 +119,7 @@ func (a Assistant) GetConfigPath() string {
 
 // IsProjectConfig returns true if the config is project-specific (not global).
 func (a Assistant) IsProjectConfig() bool {
-	return a.ID == "vscode"
+	return a.ID == assistantIDVSCode
 }
 
 // IsInstalled checks if the AI assistant application is installed.
@@ -116,6 +135,11 @@ func (a Assistant) IsInstalled() bool {
 
 // IsConfigured checks if Nylas MCP is already configured for this assistant.
 func (a Assistant) IsConfigured() bool {
+	if a.ID == assistantIDCodex {
+		configured, _ := getCodexNylasConfig()
+		return configured
+	}
+
 	configPath := a.GetConfigPath()
 	if configPath == "" {
 		return false

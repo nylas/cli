@@ -8,12 +8,12 @@ Enable AI assistants to interact with your Nylas email and calendar.
 
 ## Overview
 
-The Nylas CLI includes an MCP proxy server that enables AI assistants like Claude Desktop, Cursor, and Windsurf to access your email and calendar. The proxy:
+The Nylas CLI includes a native MCP server that enables AI assistants like Claude Desktop, Cursor, Windsurf, and Codex to access your email and calendar. The server:
 
-1. Forwards requests to the official Nylas MCP server (region-specific)
-2. Injects your authenticated credentials automatically
+1. Calls the Nylas API v3 directly using your local authenticated credentials
+2. Injects your default authenticated grant automatically
 3. Detects your system timezone for consistent time display
-4. Handles local grant lookups without requiring email input
+4. Exposes native MCP tools for email, calendar, contacts, and utility functions
 
 ---
 
@@ -41,6 +41,7 @@ Configure MCP for AI assistants:
 nylas mcp install                          # Interactive mode
 nylas mcp install --assistant claude-code  # Specific assistant
 nylas mcp install --assistant cursor       # Cursor IDE
+nylas mcp install --assistant codex        # Codex CLI
 nylas mcp install --all                    # All detected assistants
 nylas mcp install --binary /path/to/nylas  # Custom binary path
 ```
@@ -81,6 +82,7 @@ nylas mcp serve
 | Cursor | `cursor` | `~/.cursor/mcp.json` | |
 | Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | |
 | VS Code | `vscode` | `.vscode/mcp.json` | Project-level config |
+| Codex | `codex` | `~/.codex/config.toml` | Uses `codex mcp add/remove` |
 
 ---
 
@@ -112,7 +114,6 @@ nylas mcp serve
 
 | Tool | Description |
 |------|-------------|
-| `get_grant` | Get grant information (email optional) |
 | `current_time` | Get current time with timezone |
 | `epoch_to_datetime` | Convert Unix timestamp to datetime |
 | `datetime_to_epoch` | Convert datetime to Unix timestamp |
@@ -123,7 +124,7 @@ nylas mcp serve
 
 ### Automatic Timezone Detection
 
-The MCP proxy detects your system timezone and injects it into server instructions. This ensures AI assistants display all timestamps consistently in your local timezone.
+The MCP server detects your system timezone and injects it into server instructions. This ensures AI assistants display all timestamps consistently in your local timezone.
 
 **Before:** Mixed timezones (emails in UTC, calendar in Pacific)
 **After:** All times in your local timezone (e.g., EST)
@@ -134,30 +135,7 @@ When installing for Claude Code, the CLI automatically adds `mcp__nylas__*` to `
 
 ### Default Grant Injection
 
-The proxy automatically injects your authenticated grant ID into tool calls, so AI assistants don't need to ask for your email address.
-
-### Local Grant Lookup
-
-The `get_grant` tool can be called without an email parameter. The proxy returns your default authenticated grant from local storage.
-
----
-
-## Regional Endpoints
-
-The Nylas MCP server operates in two regions. The CLI automatically selects the correct endpoint based on your configured region:
-
-| Region | Endpoint |
-|--------|----------|
-| `us` (default) | `https://mcp.us.nylas.com` |
-| `eu` | `https://mcp.eu.nylas.com` |
-
-Configure your region in `~/.config/nylas/config.yaml`:
-
-```yaml
-region: eu  # or "us" (default)
-```
-
-The MCP proxy reads this setting and routes requests to the appropriate regional endpoint.
+The MCP server automatically injects your authenticated default grant ID into tool calls, so AI assistants don't need to ask for your email address.
 
 ---
 
@@ -222,25 +200,23 @@ AI Assistant (Claude/Cursor/etc.)
         | STDIO (JSON-RPC)
         v
 +-------------------------------+
-|     Nylas CLI MCP Proxy       |
+|    Nylas CLI Native MCP       |
 |  (nylas mcp serve)            |
 |                               |
-|  - Reads region from config   |
-|  - Injects credentials        |
+|  - Calls Nylas API v3 directly|
+|  - Injects credentials/grant  |
 |  - Detects timezone           |
-|  - Handles local get_grant    |
-|  - Modifies tool schemas      |
+|  - Serves MCP tools locally   |
 +-------------------------------+
         |
-        | HTTPS (region-based)
+| HTTPS
         v
 +-------------------------------+
-|   Nylas MCP Server            |
-|   mcp.us.nylas.com (US)       |
-|   mcp.eu.nylas.com (EU)       |
+|   Nylas API v3                |
+| api.us.nylas.com / api.eu.nylas.com |
 +-------------------------------+
         |
-        | Nylas API v3
+        | Provider APIs
         v
 +-------------------------------+
 |   Email/Calendar Providers    |

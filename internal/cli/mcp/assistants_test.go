@@ -18,6 +18,7 @@ func TestGetAssistantByID(t *testing.T) {
 		{"cursor", "Cursor", false},
 		{"windsurf", "Windsurf", false},
 		{"vscode", "VS Code", false},
+		{"codex", "Codex", false},
 		{"unknown", "", true},
 		{"", "", true},
 	}
@@ -82,6 +83,7 @@ func TestAssistant_IsProjectConfig(t *testing.T) {
 		{"cursor", false},
 		{"windsurf", false},
 		{"vscode", true},
+		{"codex", false},
 	}
 
 	for _, tt := range tests {

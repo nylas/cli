@@ -32,7 +32,7 @@ the AI assistant's configuration file.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&assistantID, "assistant", "a", "", "Target assistant (claude-desktop, claude-code, cursor, windsurf, vscode)")
+	cmd.Flags().StringVarP(&assistantID, "assistant", "a", "", "Target assistant (claude-desktop, claude-code, cursor, windsurf, vscode, codex)")
 	cmd.Flags().BoolVar(&uninstallAll, "all", false, "Uninstall from all configured assistants")
 
 	return cmd
@@ -46,7 +46,7 @@ func runUninstall(assistantID string, uninstallAll bool) error {
 	} else if assistantID != "" {
 		a := GetAssistantByID(assistantID)
 		if a == nil {
-			return fmt.Errorf("unknown assistant: %s\n\nSupported: claude-desktop, claude-code, cursor, windsurf, vscode", assistantID)
+			return fmt.Errorf("unknown assistant: %s\n\nSupported: claude-desktop, claude-code, cursor, windsurf, vscode, codex", assistantID)
 		}
 		assistants = []Assistant{*a}
 	} else {
@@ -70,7 +70,7 @@ func runUninstall(assistantID string, uninstallAll bool) error {
 		}
 
 		// Check if nylas is in the config
-		hasNylas, _ := checkNylasInConfig(configPath)
+		hasNylas, _ := checkNylasInConfig(a, configPath)
 		if !hasNylas {
 			if !uninstallAll {
 				_, _ = common.Yellow.Printf("  ! %s: nylas not found in config\n", a.Name)
@@ -97,6 +97,10 @@ func runUninstall(assistantID string, uninstallAll bool) error {
 }
 
 func uninstallFromAssistant(a Assistant) error {
+	if a.ID == assistantIDCodex {
+		return uninstallFromCodex()
+	}
+
 	configPath := a.GetConfigPath()
 
 	// Read existing config

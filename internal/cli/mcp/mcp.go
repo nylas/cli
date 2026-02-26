@@ -10,7 +10,7 @@ func NewMCPCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "MCP (Model Context Protocol) server for AI integration",
-		Long: `Start an MCP server to enable AI assistants like Claude to interact with
+		Long: `Start an MCP server to enable AI assistants like Claude and Codex to interact with
 your Nylas email, calendar, and contacts.
 
 This runs a native MCP server that calls the Nylas API directly using

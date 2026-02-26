@@ -490,12 +490,13 @@ nylas chat --port 9000 --no-browser
 
 ## MCP (Model Context Protocol)
 
-Enable AI assistants (Claude Desktop, Cursor, Windsurf, VS Code) to interact with your email and calendar.
+Enable AI assistants (Claude Desktop, Cursor, Windsurf, VS Code, Codex) to interact with your email and calendar.
 
 ```bash
 nylas mcp install                          # Interactive assistant selection
 nylas mcp install --assistant claude-code  # Install for Claude Code
 nylas mcp install --assistant cursor       # Install for Cursor
+nylas mcp install --assistant codex        # Install for Codex CLI
 nylas mcp install --all                    # Install for all detected assistants
 nylas mcp status                           # Check installation status
 nylas mcp uninstall --assistant cursor     # Remove configuration
@@ -510,6 +511,7 @@ nylas mcp serve                            # Start MCP server (used by assistant
 | Cursor | `~/.cursor/mcp.json` |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
 | VS Code | `.vscode/mcp.json` (project-level) |
+| Codex | `~/.codex/config.toml` |
 
 **Features:**
 - Auto-detects system timezone for consistent time display

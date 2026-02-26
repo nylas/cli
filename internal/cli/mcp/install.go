@@ -35,7 +35,8 @@ Supported assistants:
   - claude-code     Claude Code (~/.claude.json)
   - cursor          Cursor IDE
   - windsurf        Windsurf IDE
-  - vscode          VS Code (project-level .vscode/mcp.json)`,
+  - vscode          VS Code (project-level .vscode/mcp.json)
+  - codex           Codex CLI (~/.codex/config.toml)`,
 		Example: `  # Interactive mode - prompts for assistant selection
   nylas mcp install
 
@@ -52,7 +53,7 @@ Supported assistants:
 		},
 	}
 
-	cmd.Flags().StringVarP(&assistantID, "assistant", "a", "", "Target assistant (claude-desktop, cursor, windsurf, vscode, claude-code)")
+	cmd.Flags().StringVarP(&assistantID, "assistant", "a", "", "Target assistant (claude-desktop, claude-code, cursor, windsurf, vscode, codex)")
 	cmd.Flags().StringVarP(&binaryPath, "binary", "b", "", "Path to nylas binary (default: auto-detect)")
 	cmd.Flags().BoolVar(&installAll, "all", false, "Install for all detected assistants")
 
@@ -83,7 +84,7 @@ func runInstall(assistantID, binaryPath string, installAll bool) error {
 		// Install for specific assistant
 		a := GetAssistantByID(assistantID)
 		if a == nil {
-			return fmt.Errorf("unknown assistant: %s\n\nSupported: claude-desktop, claude-code, cursor, windsurf, vscode", assistantID)
+			return fmt.Errorf("unknown assistant: %s\n\nSupported: claude-desktop, claude-code, cursor, windsurf, vscode, codex", assistantID)
 		}
 		assistants = []Assistant{*a}
 	} else {
@@ -178,6 +179,10 @@ func selectAssistant() (*Assistant, error) {
 }
 
 func installForAssistant(a Assistant, binaryPath string) error {
+	if a.ID == assistantIDCodex {
+		return installForCodex(binaryPath)
+	}
+
 	configPath := a.GetConfigPath()
 
 	// Ensure parent directory exists

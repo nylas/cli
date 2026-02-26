@@ -51,7 +51,7 @@ func runStatus() error {
 		}
 
 		// Check if nylas is in the config
-		hasNylas, binaryPath := checkNylasInConfig(configPath)
+		hasNylas, binaryPath := checkNylasInConfig(a, configPath)
 		if !hasNylas {
 			_, _ = common.Yellow.Printf("  ○ %-16s  ", a.Name)
 			fmt.Printf("config exists, nylas not added  %s\n", configPath)
@@ -78,7 +78,11 @@ func runStatus() error {
 }
 
 // checkNylasInConfig checks if nylas is configured in the MCP config file.
-func checkNylasInConfig(configPath string) (bool, string) {
+func checkNylasInConfig(a Assistant, configPath string) (bool, string) {
+	if a.ID == assistantIDCodex {
+		return getCodexNylasConfig()
+	}
+
 	// #nosec G304 -- configPath from Assistant.GetConfigPath() returns validated AI assistant config paths
 	data, err := os.ReadFile(configPath)
 	if err != nil {
