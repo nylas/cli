@@ -321,6 +321,36 @@ func (s *Server) executeDeleteEvent(ctx context.Context, args map[string]any) *T
 	})
 }
 
+// executeSendRSVP sends an RSVP response to a calendar event invitation.
+func (s *Server) executeSendRSVP(ctx context.Context, args map[string]any) *ToolResponse {
+	grantID := s.resolveGrantID(args)
+	eventID := getString(args, "event_id", "")
+	if eventID == "" {
+		return toolError("event_id is required")
+	}
+	status := getString(args, "status", "")
+	if status == "" {
+		return toolError("status is required (yes, no, or maybe)")
+	}
+	calendarID := getString(args, "calendar_id", "primary")
+	comment := getString(args, "comment", "")
+
+	req := &domain.SendRSVPRequest{
+		Status:  status,
+		Comment: comment,
+	}
+
+	if err := s.client.SendRSVP(ctx, grantID, calendarID, eventID, req); err != nil {
+		return toolError(err.Error())
+	}
+
+	return toolSuccess(map[string]any{
+		"status":   "rsvp_sent",
+		"event_id": eventID,
+		"rsvp":     status,
+	})
+}
+
 // executeGetFreeBusy returns free/busy information for the given emails.
 func (s *Server) executeGetFreeBusy(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)

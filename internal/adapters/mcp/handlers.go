@@ -139,6 +139,8 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeUpdateEvent(ctx, args)
 	case "delete_event":
 		result = s.executeDeleteEvent(ctx, args)
+	case "send_rsvp":
+		result = s.executeSendRSVP(ctx, args)
 
 	// Availability tools
 	case "get_free_busy":

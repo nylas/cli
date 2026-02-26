@@ -407,6 +407,19 @@ func registeredTools() []MCPTool {
 			}, []string{"participants", "start_time", "end_time", "duration_minutes"}),
 		},
 
+		// ---- RSVP tools ----
+		{
+			Name:        "send_rsvp",
+			Description: "Send an RSVP response (accept, decline, maybe) to a calendar event invitation.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":    prop("string", grantDesc),
+				"calendar_id": prop("string", `Calendar ID containing the event (default "primary")`),
+				"event_id":    prop("string", "ID of the event to RSVP to"),
+				"status":      prop("string", `RSVP status: "yes" (accept), "no" (decline), or "maybe" (tentative)`),
+				"comment":     prop("string", "Optional comment to include with the RSVP"),
+			}, []string{"event_id", "status"}),
+		},
+
 		// ---- Contact tools ----
 		{
 			Name:        "list_contacts",

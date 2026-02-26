@@ -199,7 +199,7 @@ func TestHandleToolsList_ToolCount(t *testing.T) {
 		t.Fatal("tools field missing or wrong type")
 	}
 
-	const wantCount = 37
+	const wantCount = 38
 	if len(toolsRaw) != wantCount {
 		t.Errorf("tool count = %d, want %d", len(toolsRaw), wantCount)
 	}
