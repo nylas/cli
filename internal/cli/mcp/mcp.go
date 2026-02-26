@@ -13,8 +13,9 @@ func NewMCPCmd() *cobra.Command {
 		Long: `Start an MCP server to enable AI assistants like Claude to interact with
 your Nylas email, calendar, and contacts.
 
-This command proxies requests to the official Nylas MCP server, providing
-seamless access to all Nylas tools through your locally configured credentials.
+This runs a native MCP server that calls the Nylas API directly using
+your locally configured credentials. 37 tools across email, calendar,
+contacts, and utilities.
 
 Example configuration for Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json):
 
