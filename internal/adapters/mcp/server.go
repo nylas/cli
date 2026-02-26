@@ -40,8 +40,14 @@ func (s *Server) SetGrantStore(store ports.GrantStore) {
 
 // Run starts the MCP server, reading JSON-RPC from stdin and writing responses to stdout.
 func (s *Server) Run(ctx context.Context) error {
-	reader := bufio.NewReader(os.Stdin)
-	writer := bufio.NewWriter(os.Stdout)
+	return s.RunWithIO(ctx, os.Stdin, os.Stdout)
+}
+
+// RunWithIO starts the MCP server using the provided reader and writer.
+// This is useful for testing without requiring os.Stdin/os.Stdout.
+func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error {
+	reader := bufio.NewReader(r)
+	writer := bufio.NewWriter(w)
 
 	for {
 		select {
@@ -50,7 +56,7 @@ func (s *Server) Run(ctx context.Context) error {
 		default:
 		}
 
-		payload, err := readRequestPayload(reader)
+		payload, usedContentLength, err := readRequestPayload(reader)
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -61,7 +67,7 @@ func (s *Server) Run(ctx context.Context) error {
 		var req Request
 		if err := json.Unmarshal(payload, &req); err != nil {
 			resp := errorResponse(nil, codeParseError, "parse error: "+err.Error())
-			if err := writeResponsePayload(writer, resp); err != nil {
+			if err := writePayload(writer, resp, usedContentLength); err != nil {
 				return err
 			}
 			continue
@@ -72,7 +78,7 @@ func (s *Server) Run(ctx context.Context) error {
 			continue // Notification — no response needed
 		}
 
-		if err := writeResponsePayload(writer, resp); err != nil {
+		if err := writePayload(writer, resp, usedContentLength); err != nil {
 			return err
 		}
 	}
@@ -80,16 +86,17 @@ func (s *Server) Run(ctx context.Context) error {
 
 // readRequestPayload reads a single MCP request payload from stdin.
 // Supports standard MCP stdio framing (Content-Length) and newline-delimited
-// JSON as a compatibility fallback.
-func readRequestPayload(reader *bufio.Reader) ([]byte, error) {
+// JSON (used by the official MCP Go SDK and others).
+// Returns the payload, whether Content-Length framing was used, and any error.
+func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 	for {
 		peek, err := reader.Peek(1)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if peek[0] == '\n' || peek[0] == '\r' {
 			if _, err := reader.ReadByte(); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			continue
 		}
@@ -98,35 +105,36 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, error) {
 
 	peek, err := reader.Peek(1)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	// Backward-compatible newline-delimited JSON mode.
+	// Newline-delimited JSON mode (official MCP Go SDK, Codex, etc.).
 	if peek[0] == '{' || peek[0] == '[' {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
 				line = bytes.TrimSpace(line)
 				if len(line) == 0 {
-					return nil, io.EOF
+					return nil, false, io.EOF
 				}
-				return line, nil
+				return line, false, nil
 			}
-			return nil, err
+			return nil, false, err
 		}
 
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			return readRequestPayload(reader)
 		}
-		return line, nil
+		return line, false, nil
 	}
 
+	// Content-Length framing (TypeScript MCP SDK, Claude Code, etc.).
 	contentLength := 0
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 
 		line = strings.TrimRight(line, "\r\n")
@@ -136,28 +144,36 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, error) {
 
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
-			return nil, fmt.Errorf("invalid header line %q", line)
+			return nil, true, fmt.Errorf("invalid header line %q", line)
 		}
 
 		if strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
 			n, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil || n < 0 {
-				return nil, fmt.Errorf("invalid Content-Length %q", strings.TrimSpace(value))
+				return nil, true, fmt.Errorf("invalid Content-Length %q", strings.TrimSpace(value))
 			}
 			contentLength = n
 		}
 	}
 
 	if contentLength <= 0 {
-		return nil, fmt.Errorf("missing or invalid Content-Length header")
+		return nil, true, fmt.Errorf("missing or invalid Content-Length header")
 	}
 
 	payload := make([]byte, contentLength)
 	if _, err := io.ReadFull(reader, payload); err != nil {
-		return nil, err
+		return nil, true, err
 	}
 
-	return payload, nil
+	return payload, true, nil
+}
+
+// writePayload writes a response using the framing that matches the request.
+func writePayload(writer *bufio.Writer, payload []byte, contentLengthMode bool) error {
+	if contentLengthMode {
+		return writeResponsePayload(writer, payload)
+	}
+	return writeNewlinePayload(writer, payload)
 }
 
 func writeResponsePayload(writer *bufio.Writer, payload []byte) error {
@@ -166,6 +182,20 @@ func writeResponsePayload(writer *bufio.Writer, payload []byte) error {
 	}
 	if _, err := writer.Write(payload); err != nil {
 		return fmt.Errorf("writing response body: %w", err)
+	}
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("flushing response: %w", err)
+	}
+	return nil
+}
+
+// writeNewlinePayload writes a newline-delimited JSON response (official MCP Go SDK format).
+func writeNewlinePayload(writer *bufio.Writer, payload []byte) error {
+	if _, err := writer.Write(payload); err != nil {
+		return fmt.Errorf("writing response body: %w", err)
+	}
+	if err := writer.WriteByte('\n'); err != nil {
+		return fmt.Errorf("writing response newline: %w", err)
 	}
 	if err := writer.Flush(); err != nil {
 		return fmt.Errorf("flushing response: %w", err)
