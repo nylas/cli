@@ -382,3 +382,21 @@ func (s *Server) executeSendDraft(ctx context.Context, args map[string]any) *Too
 		"status":    "sent",
 	})
 }
+
+// executeDeleteDraft deletes an email draft.
+func (s *Server) executeDeleteDraft(ctx context.Context, args map[string]any) *ToolResponse {
+	grantID := s.resolveGrantID(args)
+	draftID := getString(args, "draft_id", "")
+	if draftID == "" {
+		return toolError("draft_id is required")
+	}
+
+	if err := s.client.DeleteDraft(ctx, grantID, draftID); err != nil {
+		return toolError(err.Error())
+	}
+
+	return toolSuccess(map[string]any{
+		"status":   "deleted",
+		"draft_id": draftID,
+	})
+}

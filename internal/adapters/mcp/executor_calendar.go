@@ -79,6 +79,58 @@ func (s *Server) executeCreateCalendar(ctx context.Context, args map[string]any)
 	})
 }
 
+// executeUpdateCalendar updates a calendar's metadata.
+func (s *Server) executeUpdateCalendar(ctx context.Context, args map[string]any) *ToolResponse {
+	grantID := s.resolveGrantID(args)
+	calendarID := getString(args, "calendar_id", "")
+	if calendarID == "" {
+		return toolError("calendar_id is required")
+	}
+
+	req := &domain.UpdateCalendarRequest{}
+	if v := getString(args, "name", ""); v != "" {
+		req.Name = &v
+	}
+	if v := getString(args, "description", ""); v != "" {
+		req.Description = &v
+	}
+	if v := getString(args, "location", ""); v != "" {
+		req.Location = &v
+	}
+	if v := getString(args, "timezone", ""); v != "" {
+		req.Timezone = &v
+	}
+
+	cal, err := s.client.UpdateCalendar(ctx, grantID, calendarID, req)
+	if err != nil {
+		return toolError(err.Error())
+	}
+
+	return toolSuccess(map[string]any{
+		"id":     cal.ID,
+		"name":   cal.Name,
+		"status": "updated",
+	})
+}
+
+// executeDeleteCalendar deletes a calendar.
+func (s *Server) executeDeleteCalendar(ctx context.Context, args map[string]any) *ToolResponse {
+	grantID := s.resolveGrantID(args)
+	calendarID := getString(args, "calendar_id", "")
+	if calendarID == "" {
+		return toolError("calendar_id is required")
+	}
+
+	if err := s.client.DeleteCalendar(ctx, grantID, calendarID); err != nil {
+		return toolError(err.Error())
+	}
+
+	return toolSuccess(map[string]any{
+		"status":      "deleted",
+		"calendar_id": calendarID,
+	})
+}
+
 // executeListEvents returns events for a calendar.
 func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)

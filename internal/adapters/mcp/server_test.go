@@ -199,7 +199,7 @@ func TestHandleToolsList_ToolCount(t *testing.T) {
 		t.Fatal("tools field missing or wrong type")
 	}
 
-	const wantCount = 38
+	const wantCount = 47
 	if len(toolsRaw) != wantCount {
 		t.Errorf("tool count = %d, want %d", len(toolsRaw), wantCount)
 	}
@@ -241,7 +241,6 @@ func TestRegisteredTools_RequiredFields(t *testing.T) {
 	t.Parallel()
 
 	for _, tool := range registeredTools() {
-		tool := tool
 		t.Run(tool.Name, func(t *testing.T) {
 			t.Parallel()
 

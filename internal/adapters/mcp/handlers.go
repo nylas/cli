@@ -93,12 +93,18 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeUpdateDraft(ctx, args)
 	case "send_draft":
 		result = s.executeSendDraft(ctx, args)
+	case "delete_draft":
+		result = s.executeDeleteDraft(ctx, args)
 
 	// Thread tools
 	case "list_threads":
 		result = s.executeListThreads(ctx, args)
 	case "get_thread":
 		result = s.executeGetThread(ctx, args)
+	case "update_thread":
+		result = s.executeUpdateThread(ctx, args)
+	case "delete_thread":
+		result = s.executeDeleteThread(ctx, args)
 
 	// Folder tools
 	case "list_folders":
@@ -107,6 +113,10 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeGetFolder(ctx, args)
 	case "create_folder":
 		result = s.executeCreateFolder(ctx, args)
+	case "update_folder":
+		result = s.executeUpdateFolder(ctx, args)
+	case "delete_folder":
+		result = s.executeDeleteFolder(ctx, args)
 
 	// Attachment tools
 	case "list_attachments":
@@ -127,6 +137,10 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeGetCalendar(ctx, args)
 	case "create_calendar":
 		result = s.executeCreateCalendar(ctx, args)
+	case "update_calendar":
+		result = s.executeUpdateCalendar(ctx, args)
+	case "delete_calendar":
+		result = s.executeDeleteCalendar(ctx, args)
 
 	// Event tools
 	case "list_events":
@@ -155,6 +169,10 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeGetContact(ctx, args)
 	case "create_contact":
 		result = s.executeCreateContact(ctx, args)
+	case "update_contact":
+		result = s.executeUpdateContact(ctx, args)
+	case "delete_contact":
+		result = s.executeDeleteContact(ctx, args)
 
 	// Utility tools (no API call)
 	case "current_time":

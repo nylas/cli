@@ -190,3 +190,4 @@ playwright-report/
 *phase*.md
 ci-output.txt
 ci-results.txt
+.worktrees/

@@ -177,6 +177,14 @@ func registeredTools() []MCPTool {
 				"draft_id": prop("string", "ID of the draft to send"),
 			}, []string{"draft_id"}),
 		},
+		{
+			Name:        "delete_draft",
+			Description: "Delete an email draft.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id": prop("string", grantDesc),
+				"draft_id": prop("string", "ID of the draft to delete"),
+			}, []string{"draft_id"}),
+		},
 
 		// ---- Thread tools ----
 		{
@@ -197,6 +205,26 @@ func registeredTools() []MCPTool {
 			InputSchema: objectSchema(map[string]JSONSchema{
 				"grant_id":  prop("string", grantDesc),
 				"thread_id": prop("string", "ID of the thread to retrieve"),
+			}, []string{"thread_id"}),
+		},
+
+		{
+			Name:        "update_thread",
+			Description: "Update a thread: mark as read/unread, star/unstar, or move to folders.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":  prop("string", grantDesc),
+				"thread_id": prop("string", "ID of the thread to update"),
+				"unread":    prop("boolean", "Set the unread status of the thread"),
+				"starred":   prop("boolean", "Set the starred status of the thread"),
+				"folders":   {Type: "array", Desc: "List of folder IDs to assign the thread to", Items: &JSONSchema{Type: "string"}},
+			}, []string{"thread_id"}),
+		},
+		{
+			Name:        "delete_thread",
+			Description: "Delete an email thread and all its messages.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":  prop("string", grantDesc),
+				"thread_id": prop("string", "ID of the thread to delete"),
 			}, []string{"thread_id"}),
 		},
 
@@ -226,6 +254,27 @@ func registeredTools() []MCPTool {
 				"background_color": prop("string", "Background color (hex, e.g. #FF0000)"),
 				"text_color":       prop("string", "Text color (hex, e.g. #FFFFFF)"),
 			}, []string{"name"}),
+		},
+
+		{
+			Name:        "update_folder",
+			Description: "Update an email folder (rename, move, change color).",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":         prop("string", grantDesc),
+				"folder_id":        prop("string", "ID of the folder to update"),
+				"name":             prop("string", "New display name for the folder"),
+				"parent_id":        prop("string", "New parent folder ID"),
+				"background_color": prop("string", "Background color (hex, e.g. #FF0000)"),
+				"text_color":       prop("string", "Text color (hex, e.g. #FFFFFF)"),
+			}, []string{"folder_id"}),
+		},
+		{
+			Name:        "delete_folder",
+			Description: "Delete an email folder.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":  prop("string", grantDesc),
+				"folder_id": prop("string", "ID of the folder to delete"),
+			}, []string{"folder_id"}),
 		},
 
 		// ---- Attachment tools ----
@@ -290,6 +339,27 @@ func registeredTools() []MCPTool {
 				"location":    prop("string", "Physical or virtual location for the calendar"),
 				"timezone":    prop("string", "IANA timezone (e.g. America/New_York)"),
 			}, []string{"name"}),
+		},
+
+		{
+			Name:        "update_calendar",
+			Description: "Update a calendar's name, description, timezone, or color.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":    prop("string", grantDesc),
+				"calendar_id": prop("string", "ID of the calendar to update"),
+				"name":        prop("string", "New display name"),
+				"description": prop("string", "New description"),
+				"location":    prop("string", "New location"),
+				"timezone":    prop("string", "New IANA timezone"),
+			}, []string{"calendar_id"}),
+		},
+		{
+			Name:        "delete_calendar",
+			Description: "Delete a calendar.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":    prop("string", grantDesc),
+				"calendar_id": prop("string", "ID of the calendar to delete"),
+			}, []string{"calendar_id"}),
 		},
 
 		// ---- Event tools ----
@@ -475,6 +545,29 @@ func registeredTools() []MCPTool {
 				},
 				"notes": prop("string", "Free-form notes about the contact"),
 			}, nil),
+		},
+
+		{
+			Name:        "update_contact",
+			Description: "Update a contact's information.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":     prop("string", grantDesc),
+				"contact_id":   prop("string", "ID of the contact to update"),
+				"given_name":   prop("string", "Updated first name"),
+				"surname":      prop("string", "Updated last name"),
+				"nickname":     prop("string", "Updated nickname"),
+				"company_name": prop("string", "Updated company name"),
+				"job_title":    prop("string", "Updated job title"),
+				"notes":        prop("string", "Updated notes"),
+			}, []string{"contact_id"}),
+		},
+		{
+			Name:        "delete_contact",
+			Description: "Delete a contact.",
+			InputSchema: objectSchema(map[string]JSONSchema{
+				"grant_id":   prop("string", grantDesc),
+				"contact_id": prop("string", "ID of the contact to delete"),
+			}, []string{"contact_id"}),
 		},
 
 		// ---- Utility tools (no API call) ----
