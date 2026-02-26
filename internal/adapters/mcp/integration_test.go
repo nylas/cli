@@ -25,9 +25,9 @@ import (
 // Content-Length framing or newline-delimited JSON.
 type mcpClient struct {
 	t        *testing.T
-	stdin    *io.PipeWriter   // we write requests here → server reads
-	stdoutBR *bufio.Reader    // buffered reader for peeking at response framing
-	stdoutPR *io.PipeReader   // underlying pipe reader (for cleanup)
+	stdin    *io.PipeWriter // we write requests here → server reads
+	stdoutBR *bufio.Reader  // buffered reader for peeking at response framing
+	stdoutPR *io.PipeReader // underlying pipe reader (for cleanup)
 }
 
 // newMCPTestClient starts server.RunWithIO in a goroutine and returns a client

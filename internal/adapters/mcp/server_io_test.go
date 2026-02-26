@@ -54,6 +54,42 @@ func TestReadRequestPayload_MissingContentLength(t *testing.T) {
 	}
 }
 
+func TestReadRequestPayload_ContentLengthExceedsMax(t *testing.T) {
+	t.Parallel()
+
+	// Claim a Content-Length larger than maxContentLength (10 MB).
+	input := fmt.Sprintf("Content-Length: %d\r\n\r\n{}", maxContentLength+1)
+	reader := bufio.NewReader(bytes.NewBufferString(input))
+
+	_, _, err := readRequestPayload(reader)
+	if err == nil {
+		t.Fatal("expected error for oversized Content-Length, got nil")
+	}
+	if got := err.Error(); !bytes.Contains([]byte(got), []byte("exceeds maximum")) {
+		t.Errorf("error = %q, want it to mention 'exceeds maximum'", got)
+	}
+}
+
+func TestReadRequestPayload_EmptyLineRetry(t *testing.T) {
+	t.Parallel()
+
+	// Send an empty line followed by a valid JSON line — tests the non-recursive retry path.
+	jsonBody := `{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}`
+	input := "\n\n" + jsonBody + "\n"
+	reader := bufio.NewReader(bytes.NewBufferString(input))
+
+	got, isCL, err := readRequestPayload(reader)
+	if err != nil {
+		t.Fatalf("readRequestPayload() error = %v", err)
+	}
+	if isCL {
+		t.Error("expected newline mode, got Content-Length mode")
+	}
+	if string(got) != jsonBody {
+		t.Errorf("payload = %q, want %q", string(got), jsonBody)
+	}
+}
+
 func TestWriteResponsePayload(t *testing.T) {
 	t.Parallel()
 

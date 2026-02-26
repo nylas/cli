@@ -15,6 +15,9 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
+// maxContentLength caps the maximum payload size for Content-Length framing (10 MB).
+const maxContentLength = 10 * 1024 * 1024
+
 // Server is a native MCP server that calls the Nylas API directly via NylasClient.
 type Server struct {
 	client       ports.NylasClient
@@ -90,6 +93,7 @@ func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error 
 // Returns the payload, whether Content-Length framing was used, and any error.
 func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 	for {
+		// Skip leading whitespace (CR, LF).
 		peek, err := reader.Peek(1)
 		if err != nil {
 			return nil, false, err
@@ -100,33 +104,30 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 			}
 			continue
 		}
-		break
-	}
 
-	peek, err := reader.Peek(1)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Newline-delimited JSON mode (official MCP Go SDK, Codex, etc.).
-	if peek[0] == '{' || peek[0] == '[' {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				line = bytes.TrimSpace(line)
-				if len(line) == 0 {
-					return nil, false, io.EOF
+		// Newline-delimited JSON mode (official MCP Go SDK, Codex, etc.).
+		if peek[0] == '{' || peek[0] == '[' {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				if err == io.EOF {
+					line = bytes.TrimSpace(line)
+					if len(line) == 0 {
+						return nil, false, io.EOF
+					}
+					return line, false, nil
 				}
-				return line, false, nil
+				return nil, false, err
 			}
-			return nil, false, err
+
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue // Empty line — retry (SEC-004: no recursion).
+			}
+			return line, false, nil
 		}
 
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
-			return readRequestPayload(reader)
-		}
-		return line, false, nil
+		// Content-Length framing — break out to handle below.
+		break
 	}
 
 	// Content-Length framing (TypeScript MCP SDK, Claude Code, etc.).
@@ -158,6 +159,10 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 
 	if contentLength <= 0 {
 		return nil, true, fmt.Errorf("missing or invalid Content-Length header")
+	}
+
+	if contentLength > maxContentLength {
+		return nil, true, fmt.Errorf("Content-Length %d exceeds maximum %d", contentLength, maxContentLength)
 	}
 
 	payload := make([]byte, contentLength)
