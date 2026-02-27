@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -47,9 +48,15 @@ func TestExecuteEpochToDatetime(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			text := resp.Content[0].Text
-			if tt.wantText != "" && !strings.Contains(text, tt.wantText) {
-				t.Errorf("response text = %q, want to contain %q", text, tt.wantText)
+			var out map[string]any
+			if err := json.Unmarshal([]byte(resp.Content[0].Text), &out); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+			if tt.wantText != "" && !strings.Contains(resp.Content[0].Text, tt.wantText) {
+				t.Errorf("response text = %q, want to contain %q", resp.Content[0].Text, tt.wantText)
+			}
+			if _, ok := out["datetime"]; !ok {
+				t.Errorf("datetime field missing: %v", out)
 			}
 		})
 	}
@@ -89,10 +96,12 @@ func TestExecuteDatetimeToEpoch(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			text := resp.Content[0].Text
-			// The plain text response starts with the unix timestamp value
-			if len(text) == 0 {
-				t.Error("response text is empty, expected unix timestamp")
+			var out map[string]any
+			if err := json.Unmarshal([]byte(resp.Content[0].Text), &out); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+			if _, ok := out["unix_timestamp"]; !ok {
+				t.Errorf("unix_timestamp missing: %v", out)
 			}
 		})
 	}

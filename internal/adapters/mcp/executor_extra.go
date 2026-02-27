@@ -21,9 +21,6 @@ func (s *Server) executeListThreads(ctx context.Context, args map[string]any) *T
 		To:      getString(args, "to", ""),
 		Unread:  getBool(args, "unread"),
 	}
-	if pageToken := getString(args, "page_token", ""); pageToken != "" {
-		params.PageToken = pageToken
-	}
 
 	threads, err := s.client.GetThreads(ctx, grantID, params)
 	if err != nil {

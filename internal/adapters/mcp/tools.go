@@ -2,11 +2,12 @@ package mcp
 
 // MCPTool represents an MCP tool definition.
 type MCPTool struct {
-	Name        string           `json:"name"`
-	Title       string           `json:"title,omitempty"`
-	Description string           `json:"description"`
-	InputSchema JSONSchema       `json:"inputSchema"`
-	Annotations *ToolAnnotations `json:"annotations,omitempty"`
+	Name         string           `json:"name"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description"`
+	InputSchema  JSONSchema       `json:"inputSchema"`
+	OutputSchema *JSONSchema      `json:"outputSchema,omitempty"`
+	Annotations  *ToolAnnotations `json:"annotations,omitempty"`
 }
 
 // ToolAnnotations describes the behavior hints for an MCP tool (MCP spec 2025-06-18).
@@ -19,7 +20,7 @@ type ToolAnnotations struct {
 
 // JSONSchema represents a JSON Schema object.
 type JSONSchema struct {
-	Type                 string                `json:"type"`
+	Type                 string                `json:"type,omitempty"`
 	Properties           map[string]JSONSchema `json:"properties,omitempty"`
 	Required             []string              `json:"required,omitempty"`
 	Items                *JSONSchema           `json:"items,omitempty"`
@@ -56,6 +57,12 @@ func participantArraySchema(desc string) JSONSchema {
 
 // objectSchema returns a schema with properties, required fields, and additionalProperties: false.
 func objectSchema(props map[string]JSONSchema, required []string) JSONSchema {
+	if props == nil {
+		props = map[string]JSONSchema{}
+	}
+	if _, ok := props["grant_id"]; !ok {
+		props["grant_id"] = prop("string", "Optional grant ID override")
+	}
 	noExtra := false
 	return JSONSchema{Type: "object", Properties: props, Required: required, AdditionalProperties: &noExtra}
 }

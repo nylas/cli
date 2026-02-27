@@ -45,12 +45,10 @@ func (k *SystemKeyring) Delete(key string) error {
 // IsAvailable checks if the system keychain is available.
 func (k *SystemKeyring) IsAvailable() bool {
 	testKey := "__nylas_keyring_test__"
-	err := keyring.Set(serviceName, testKey, "test")
-	if err != nil {
-		return false
-	}
-	_ = keyring.Delete(serviceName, testKey)
-	return true
+	_, err := keyring.Get(serviceName, testKey)
+	// A read probe avoids creating keychain items/prompts.
+	// If the key does not exist, keyring backend is still considered available.
+	return err == nil || err == keyring.ErrNotFound
 }
 
 // Name returns the name of the secret store backend.

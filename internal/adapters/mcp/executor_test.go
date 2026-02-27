@@ -96,8 +96,9 @@ func TestExecuteListMessages(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var items []map[string]any
-			unmarshalText(t, resp, &items)
+			var out map[string]any
+			unmarshalText(t, resp, &out)
+			items, _ := out["data"].([]any)
 			if len(items) != tt.wantCount {
 				t.Errorf("item count = %d, want %d", len(items), tt.wantCount)
 			}
@@ -333,8 +334,9 @@ func TestExecuteListEvents(t *testing.T) {
 	if resp.IsError {
 		t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 	}
-	var items []map[string]any
-	unmarshalText(t, resp, &items)
+	var out map[string]any
+	unmarshalText(t, resp, &out)
+	items, _ := out["data"].([]any)
 	if len(items) != 1 {
 		t.Errorf("event count = %d, want 1", len(items))
 	}
@@ -421,14 +423,16 @@ func TestExecuteCurrentTime(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			text := resp.Content[0].Text
-			if !strings.Contains(text, "unix:") {
-				t.Errorf("response text = %q, want to contain 'unix:'", text)
+			var out map[string]any
+			unmarshalText(t, resp, &out)
+			if _, ok := out["unix_timestamp"]; !ok {
+				t.Errorf("response missing unix_timestamp: %v", out)
 			}
-			if tt.checkTZ != "" {
-				if !strings.Contains(text, tt.checkTZ) {
-					t.Errorf("response text = %q, want to contain timezone %q", text, tt.checkTZ)
-				}
+			if tt.checkTZ != "" && out["timezone"] != tt.checkTZ {
+				t.Errorf("timezone = %v, want %q", out["timezone"], tt.checkTZ)
+			}
+			if _, ok := out["datetime"]; !ok {
+				t.Errorf("response missing datetime: %v", out)
 			}
 		})
 	}

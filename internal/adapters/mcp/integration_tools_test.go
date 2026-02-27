@@ -191,17 +191,23 @@ func TestIntegration_ToolCall_ListMessages(t *testing.T) {
 
 	text := toolCall(t, c, 1, "list_messages", map[string]any{})
 
-	var items []map[string]any
-	unmarshalToolText(t, text, &items)
+	var out map[string]any
+	unmarshalToolText(t, text, &out)
+	data, ok := out["data"].([]any)
+	if !ok {
+		t.Fatalf("data field missing or wrong type: %T", out["data"])
+	}
 
-	if len(items) != 2 {
-		t.Fatalf("message count = %d, want 2", len(items))
+	if len(data) != 2 {
+		t.Fatalf("message count = %d, want 2", len(data))
 	}
-	if items[0]["id"] != "msg-a" {
-		t.Errorf("items[0].id = %v, want msg-a", items[0]["id"])
+	item0, _ := data[0].(map[string]any)
+	item1, _ := data[1].(map[string]any)
+	if item0["id"] != "msg-a" {
+		t.Errorf("items[0].id = %v, want msg-a", item0["id"])
 	}
-	if items[1]["id"] != "msg-b" {
-		t.Errorf("items[1].id = %v, want msg-b", items[1]["id"])
+	if item1["id"] != "msg-b" {
+		t.Errorf("items[1].id = %v, want msg-b", item1["id"])
 	}
 }
 
@@ -332,14 +338,19 @@ func TestIntegration_ToolCall_ListEvents(t *testing.T) {
 
 	text := toolCall(t, c, 1, "list_events", map[string]any{})
 
-	var items []map[string]any
-	unmarshalToolText(t, text, &items)
-
-	if len(items) != 1 {
-		t.Fatalf("event count = %d, want 1", len(items))
+	var out map[string]any
+	unmarshalToolText(t, text, &out)
+	data, ok := out["data"].([]any)
+	if !ok {
+		t.Fatalf("data field missing or wrong type: %T", out["data"])
 	}
-	if items[0]["id"] != "ev-1" {
-		t.Errorf("items[0].id = %v, want ev-1", items[0]["id"])
+
+	if len(data) != 1 {
+		t.Fatalf("event count = %d, want 1", len(data))
+	}
+	item0, _ := data[0].(map[string]any)
+	if item0["id"] != "ev-1" {
+		t.Errorf("items[0].id = %v, want ev-1", item0["id"])
 	}
 	// Default calendar_id is "primary"
 	if capturedCalendarID != "primary" {

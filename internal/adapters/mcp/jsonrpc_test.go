@@ -2,7 +2,10 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 func TestSuccessResponse(t *testing.T) {
@@ -254,6 +257,33 @@ func TestGetString(t *testing.T) {
 			got := getString(tt.args, tt.key, tt.defaultVal)
 			if got != tt.want {
 				t.Errorf("getString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "invalid input", err: domain.ErrInvalidInput, want: "invalid input"},
+		{name: "auth failed", err: domain.ErrInvalidGrant, want: "authentication failed"},
+		{name: "not found", err: domain.ErrMessageNotFound, want: "resource not found"},
+		{name: "rate limited from message", err: errors.New("HTTP 429 rate limit"), want: "rate limit exceeded"},
+		{name: "timeout from message", err: errors.New("context deadline exceeded"), want: "request timed out"},
+		{name: "fallback", err: errors.New("boom"), want: "request failed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := sanitizeError(tt.err)
+			if got != tt.want {
+				t.Errorf("sanitizeError() = %q, want %q", got, tt.want)
 			}
 		})
 	}

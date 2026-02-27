@@ -135,7 +135,7 @@ func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *To
 	calendarID := getString(args, "calendar_id", "primary")
 
 	params := &domain.EventQueryParams{
-		Limit: clampLimit(args, "limit", 10),
+		Limit: clampLimit(args, "limit", 200),
 	}
 	if v := getString(args, "title", ""); v != "" {
 		params.Title = v
@@ -174,13 +174,10 @@ func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *To
 		})
 	}
 
-	if resp.Pagination.NextCursor != "" {
-		return toolSuccess(map[string]any{
-			"data":        result,
-			"next_cursor": resp.Pagination.NextCursor,
-		})
-	}
-	return toolSuccess(result)
+	return toolSuccess(map[string]any{
+		"data":        result,
+		"next_cursor": resp.Pagination.NextCursor,
+	})
 }
 
 // executeGetEvent returns a single event by ID.

@@ -6,14 +6,17 @@ import (
 	"time"
 )
 
+const toolCallTimeout = 90 * time.Second
+
 // Supported protocol versions (newest first).
 var supportedVersions = []string{
+	"2025-06-18",
 	"2025-03-26",
 	"2024-11-05",
 }
 
 // latestVersion is the most recent protocol version this server supports.
-const latestVersion = "2025-03-26"
+const latestVersion = "2025-06-18"
 
 // Server info constants.
 const (
@@ -57,7 +60,7 @@ When displaying ANY timestamps to users (from emails, events, availability, etc.
 2. Display ALL times in %s, never in UTC
 3. Format times clearly (e.g., "2:00 PM %s")
 
-grant_id: All tools accept an optional grant_id parameter (not shown in schemas). Omit it to use the default grant.`, tzName, localZone, tzName, localZone, localZone)
+grant_id: All tools accept an optional grant_id parameter. Omit it to use the default grant.`, tzName, localZone, tzName, localZone, localZone)
 
 	result := map[string]any{
 		"protocolVersion": negotiated,
@@ -99,7 +102,7 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 	}
 
 	// Apply per-call timeout to prevent hanging on slow API responses.
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, toolCallTimeout)
 	defer cancel()
 
 	var result *ToolResponse

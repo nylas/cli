@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -237,7 +236,12 @@ func (s *Server) executeCurrentTime(args map[string]any) *ToolResponse {
 	}
 
 	now := time.Now().In(loc)
-	return toolSuccessText(fmt.Sprintf("%s (%s, unix: %d)", now.Format(time.RFC3339), loc.String(), now.Unix()))
+	return toolSuccess(map[string]any{
+		"datetime":       now.Format(time.RFC3339),
+		"timezone":       loc.String(),
+		"unix_timestamp": now.Unix(),
+		"epoch":          now.Unix(),
+	})
 }
 
 // executeEpochToDatetime converts a Unix timestamp to a human-readable datetime.
@@ -257,8 +261,13 @@ func (s *Server) executeEpochToDatetime(args map[string]any) *ToolResponse {
 	}
 
 	t := time.Unix(epoch, 0).In(loc)
-	return toolSuccessText(fmt.Sprintf("%s (%s, unix: %d)",
-		t.Format("Monday, January 2, 2006 3:04 PM MST"), t.Format(time.RFC3339), epoch))
+	return toolSuccess(map[string]any{
+		"datetime":       t.Format(time.RFC3339),
+		"formatted":      t.Format("Monday, January 2, 2006 3:04 PM MST"),
+		"timezone":       loc.String(),
+		"unix_timestamp": epoch,
+		"epoch":          epoch,
+	})
 }
 
 // executeDatetimeToEpoch converts a datetime string to a Unix timestamp.
@@ -285,7 +294,12 @@ func (s *Server) executeDatetimeToEpoch(args map[string]any) *ToolResponse {
 		return toolError("could not parse datetime: " + dt)
 	}
 
-	return toolSuccessText(fmt.Sprintf("%d (%s, %s)", t.Unix(), t.Format(time.RFC3339), loc.String()))
+	return toolSuccess(map[string]any{
+		"unix_timestamp": t.Unix(),
+		"epoch":          t.Unix(),
+		"datetime":       t.Format(time.RFC3339),
+		"timezone":       loc.String(),
+	})
 }
 
 // resolveLocation returns the *time.Location for an IANA timezone string.

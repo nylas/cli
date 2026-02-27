@@ -121,7 +121,7 @@ func formatParticipants(participants []domain.EmailParticipant) []string {
 func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)
 	params := &domain.MessageQueryParams{
-		Limit:          clampLimit(args, "limit", 10),
+		Limit:          clampLimit(args, "limit", 200),
 		Subject:        getString(args, "subject", ""),
 		From:           getString(args, "from", ""),
 		To:             getString(args, "to", ""),
@@ -162,13 +162,10 @@ func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *
 		})
 	}
 
-	if resp.Pagination.NextCursor != "" {
-		return toolSuccess(map[string]any{
-			"data":        result,
-			"next_cursor": resp.Pagination.NextCursor,
-		})
-	}
-	return toolSuccess(result)
+	return toolSuccess(map[string]any{
+		"data":        result,
+		"next_cursor": resp.Pagination.NextCursor,
+	})
 }
 
 // executeGetMessage retrieves a specific email message.

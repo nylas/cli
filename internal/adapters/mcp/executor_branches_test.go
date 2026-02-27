@@ -167,8 +167,9 @@ func TestExecuteListEvents_AllFilters(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var items []map[string]any
-			unmarshalText(t, resp, &items)
+			var out map[string]any
+			unmarshalText(t, resp, &out)
+			items, _ := out["data"].([]any)
 			if len(items) != tt.wantCount {
 				t.Errorf("item count = %d, want %d", len(items), tt.wantCount)
 			}

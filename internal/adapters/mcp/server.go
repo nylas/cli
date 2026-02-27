@@ -19,11 +19,14 @@ import (
 // maxContentLength caps the maximum payload size for Content-Length framing (10 MB).
 const maxContentLength = 10 * 1024 * 1024
 
+var errRecoverableRead = errors.New("recoverable request read error")
+
 // Server is a native MCP server that calls the Nylas API directly via NylasClient.
 type Server struct {
 	client       ports.NylasClient
 	grantStore   ports.GrantStore
 	defaultGrant string
+	inFlight     map[string]context.CancelFunc
 	mu           sync.RWMutex
 }
 
@@ -32,6 +35,7 @@ func NewServer(client ports.NylasClient, grantID string) *Server {
 	return &Server{
 		client:       client,
 		defaultGrant: grantID,
+		inFlight:     make(map[string]context.CancelFunc),
 	}
 }
 
@@ -52,8 +56,23 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error {
 	reader := bufio.NewReader(r)
 	writer := bufio.NewWriter(w)
+	var writeMu sync.Mutex
+	var workers sync.WaitGroup
+	writeErrCh := make(chan error, 1)
+
+	writeResponse := func(payload []byte, contentLengthMode bool) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		return writePayload(writer, payload, contentLengthMode)
+	}
 
 	for {
+		select {
+		case err := <-writeErrCh:
+			return err
+		default:
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -63,38 +82,113 @@ func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error 
 		payload, usedContentLength, err := readRequestPayload(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				workers.Wait()
+				select {
+				case writeErr := <-writeErrCh:
+					return writeErr
+				default:
+				}
 				return nil
 			}
-			return fmt.Errorf("reading stdin: %w", err)
+			if !errors.Is(err, errRecoverableRead) {
+				return fmt.Errorf("reading stdin: %w", err)
+			}
+			resp := errorResponse(nil, codeParseError, "parse error: "+err.Error())
+			if err := writeResponse(resp, usedContentLength); err != nil {
+				return err
+			}
+			continue
+		}
+
+		trimmed := bytes.TrimSpace(payload)
+		if len(trimmed) > 0 && trimmed[0] == '[' {
+			resp, err := s.handleBatch(ctx, trimmed)
+			if err != nil {
+				resp = errorResponse(nil, codeParseError, "parse error: "+err.Error())
+			}
+			if resp != nil {
+				if err := writeResponse(resp, usedContentLength); err != nil {
+					return err
+				}
+			}
+			continue
 		}
 
 		var req Request
-		if err := json.Unmarshal(payload, &req); err != nil {
+		if err := json.Unmarshal(trimmed, &req); err != nil {
 			resp := errorResponse(nil, codeParseError, "parse error: "+err.Error())
-			if err := writePayload(writer, resp, usedContentLength); err != nil {
+			if err := writeResponse(resp, usedContentLength); err != nil {
 				return err
 			}
 			continue
 		}
 
-		// Validate JSON-RPC 2.0 required fields.
-		if req.JSONRPC != "2.0" || req.Method == "" {
-			resp := errorResponse(req.ID, codeInvalidRequest, "invalid request: missing jsonrpc version or method")
-			if err := writePayload(writer, resp, usedContentLength); err != nil {
+		if err := validateRequest(&req); err != nil {
+			resp := errorResponse(nil, codeInvalidRequest, "invalid request: "+err.Error())
+			if err := writeResponse(resp, usedContentLength); err != nil {
 				return err
 			}
 			continue
 		}
 
+		reqCopy := req
+		workers.Add(1)
+		go func(contentLengthMode bool) {
+			defer workers.Done()
+			resp := s.dispatch(ctx, &reqCopy)
+			if resp == nil {
+				return
+			}
+			if err := writeResponse(resp, contentLengthMode); err != nil {
+				select {
+				case writeErrCh <- err:
+				default:
+				}
+			}
+		}(usedContentLength)
+	}
+}
+
+func handleBatchItemError(out *[]json.RawMessage, code int, msg string) {
+	*out = append(*out, json.RawMessage(errorResponse(nil, code, msg)))
+}
+
+func (s *Server) handleBatch(ctx context.Context, payload []byte) ([]byte, error) {
+	var raws []json.RawMessage
+	if err := json.Unmarshal(payload, &raws); err != nil {
+		return nil, err
+	}
+	if len(raws) == 0 {
+		return errorResponse(nil, codeInvalidRequest, "invalid request: empty batch"), nil
+	}
+
+	responses := make([]json.RawMessage, 0, len(raws))
+	for _, raw := range raws {
+		var req Request
+		if err := json.Unmarshal(raw, &req); err != nil {
+			handleBatchItemError(&responses, codeInvalidRequest, "invalid request: malformed batch item")
+			continue
+		}
+		if err := validateRequest(&req); err != nil {
+			handleBatchItemError(&responses, codeInvalidRequest, "invalid request: "+err.Error())
+			continue
+		}
 		resp := s.dispatch(ctx, &req)
 		if resp == nil {
-			continue // Notification — no response needed
+			continue
 		}
-
-		if err := writePayload(writer, resp, usedContentLength); err != nil {
-			return err
-		}
+		responses = append(responses, json.RawMessage(resp))
 	}
+
+	if len(responses) == 0 {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(responses)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // readRequestPayload reads a single MCP request payload from stdin.
@@ -103,12 +197,12 @@ func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error 
 // Returns the payload, whether Content-Length framing was used, and any error.
 func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 	for {
-		// Skip leading whitespace (CR, LF).
+		// Skip leading ASCII whitespace.
 		peek, err := reader.Peek(1)
 		if err != nil {
 			return nil, false, err
 		}
-		if peek[0] == '\n' || peek[0] == '\r' {
+		if peek[0] == '\n' || peek[0] == '\r' || peek[0] == ' ' || peek[0] == '\t' {
 			if _, err := reader.ReadByte(); err != nil {
 				return nil, false, err
 			}
@@ -126,7 +220,7 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 					}
 					// SEC-001: enforce size limit on newline-delimited payloads.
 					if len(line) > maxContentLength {
-						return nil, false, fmt.Errorf("payload size %d exceeds maximum %d", len(line), maxContentLength)
+						return nil, false, fmt.Errorf("%w: payload size %d exceeds maximum %d", errRecoverableRead, len(line), maxContentLength)
 					}
 					return line, false, nil
 				}
@@ -135,7 +229,7 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 
 			// SEC-001: enforce size limit on newline-delimited payloads.
 			if len(line) > maxContentLength {
-				return nil, false, fmt.Errorf("payload size %d exceeds maximum %d", len(line), maxContentLength)
+				return nil, false, fmt.Errorf("%w: payload size %d exceeds maximum %d", errRecoverableRead, len(line), maxContentLength)
 			}
 
 			line = bytes.TrimSpace(line)
@@ -164,24 +258,24 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
-			return nil, true, fmt.Errorf("invalid header line %q", line)
+			return nil, true, fmt.Errorf("%w: invalid header line %q", errRecoverableRead, line)
 		}
 
 		if strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
 			n, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil || n < 0 {
-				return nil, true, fmt.Errorf("invalid Content-Length %q", strings.TrimSpace(value))
+				return nil, true, fmt.Errorf("%w: invalid Content-Length %q", errRecoverableRead, strings.TrimSpace(value))
 			}
 			contentLength = n
 		}
 	}
 
 	if contentLength <= 0 {
-		return nil, true, fmt.Errorf("missing or invalid Content-Length header")
+		return nil, true, fmt.Errorf("%w: missing or invalid Content-Length header", errRecoverableRead)
 	}
 
 	if contentLength > maxContentLength {
-		return nil, true, fmt.Errorf("Content-Length %d exceeds maximum %d", contentLength, maxContentLength)
+		return nil, true, fmt.Errorf("%w: Content-Length %d exceeds maximum %d", errRecoverableRead, contentLength, maxContentLength)
 	}
 
 	payload := make([]byte, contentLength)
@@ -227,6 +321,78 @@ func writeNewlinePayload(writer *bufio.Writer, payload []byte) error {
 	return nil
 }
 
+func isValidID(id any) bool {
+	switch id.(type) {
+	case nil, float64, string:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateRequest(req *Request) error {
+	if req.JSONRPC != "2.0" {
+		return errors.New("missing jsonrpc version")
+	}
+	if req.Method == "" {
+		return errors.New("missing method")
+	}
+	if !isValidID(req.ID) {
+		return errors.New("invalid id type")
+	}
+	return nil
+}
+
+func idKey(id any) (string, bool) {
+	if id == nil {
+		return "", false
+	}
+	b, err := json.Marshal(id)
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
+}
+
+func (s *Server) registerInFlight(id any, cancel context.CancelFunc) {
+	key, ok := idKey(id)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	if s.inFlight == nil {
+		s.inFlight = make(map[string]context.CancelFunc)
+	}
+	s.inFlight[key] = cancel
+	s.mu.Unlock()
+}
+
+func (s *Server) unregisterInFlight(id any) {
+	key, ok := idKey(id)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	delete(s.inFlight, key)
+	s.mu.Unlock()
+}
+
+func (s *Server) cancelInFlight(id any) {
+	key, ok := idKey(id)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	cancel, ok := s.inFlight[key]
+	if ok {
+		delete(s.inFlight, key)
+	}
+	s.mu.Unlock()
+	if ok {
+		cancel()
+	}
+}
+
 // dispatch routes a JSON-RPC request to the appropriate handler.
 func (s *Server) dispatch(ctx context.Context, req *Request) []byte {
 	switch req.Method {
@@ -235,11 +401,22 @@ func (s *Server) dispatch(ctx context.Context, req *Request) []byte {
 	case "notifications/initialized":
 		return nil // Notification — no response
 	case "notifications/cancelled":
+		var params struct {
+			RequestID any `json:"requestId"`
+		}
+		if len(req.Params) > 0 {
+			_ = json.Unmarshal(req.Params, &params)
+		}
+		s.cancelInFlight(params.RequestID)
 		return nil
 	case "tools/list":
 		return s.handleToolsList(req)
 	case "tools/call":
-		return s.handleToolCall(ctx, req)
+		callCtx, cancel := context.WithCancel(ctx)
+		s.registerInFlight(req.ID, cancel)
+		defer s.unregisterInFlight(req.ID)
+		defer cancel()
+		return s.handleToolCall(callCtx, req)
 	case "ping":
 		return successResponse(req.ID, map[string]any{})
 	default:
@@ -252,7 +429,25 @@ func (s *Server) resolveGrantID(args map[string]any) string {
 	if id := getString(args, "grant_id", ""); id != "" {
 		return id
 	}
+
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.defaultGrant
+	defaultGrant := s.defaultGrant
+	store := s.grantStore
+	s.mu.RUnlock()
+	if defaultGrant != "" {
+		return defaultGrant
+	}
+
+	if store != nil {
+		if grantID, err := store.GetDefaultGrant(); err == nil && grantID != "" {
+			s.mu.Lock()
+			if s.defaultGrant == "" {
+				s.defaultGrant = grantID
+			}
+			s.mu.Unlock()
+			return grantID
+		}
+	}
+
+	return ""
 }

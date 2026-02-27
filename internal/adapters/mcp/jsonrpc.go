@@ -3,9 +3,13 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 // fallbackErrorResponse is a pre-built error response for when JSON marshaling fails.
@@ -78,8 +82,9 @@ type RPCError struct {
 
 // ToolResponse represents an MCP tool call result.
 type ToolResponse struct {
-	Content []ContentBlock `json:"content"`
-	IsError bool           `json:"isError,omitempty"`
+	Content           []ContentBlock `json:"content"`
+	StructuredContent any            `json:"structuredContent,omitempty"`
+	IsError           bool           `json:"isError,omitempty"`
 }
 
 // ContentBlock represents a content block in an MCP tool response.
@@ -117,7 +122,8 @@ func toolSuccess(data any) *ToolResponse {
 		return toolError("failed to marshal result: " + err.Error())
 	}
 	return &ToolResponse{
-		Content: []ContentBlock{{Type: "text", Text: string(text)}},
+		Content:           []ContentBlock{{Type: "text", Text: string(text)}},
+		StructuredContent: data,
 	}
 }
 
@@ -132,11 +138,49 @@ func toolSuccessText(text string) *ToolResponse {
 var reURL = regexp.MustCompile(`https?://\S+`)
 
 // sanitizeError wraps API errors to prevent leaking internal details.
-// Strips all URLs (http/https) that may contain grant IDs or tokens.
+// Maps errors to stable categories and strips URLs from residual messages.
 func sanitizeError(err error) string {
-	msg := err.Error()
-	msg = reURL.ReplaceAllString(msg, "[API]")
-	return msg
+	if err == nil {
+		return "request failed"
+	}
+
+	switch {
+	case errors.Is(err, domain.ErrInvalidInput):
+		return "invalid input"
+	case errors.Is(err, domain.ErrInvalidGrant),
+		errors.Is(err, domain.ErrGrantNotFound),
+		errors.Is(err, domain.ErrNoDefaultGrant),
+		errors.Is(err, domain.ErrTokenExpired),
+		errors.Is(err, domain.ErrAuthFailed):
+		return "authentication failed"
+	case errors.Is(err, domain.ErrNetworkError):
+		return "network error"
+	case errors.Is(err, domain.ErrAPIError):
+		return "nylas API error"
+	case errors.Is(err, domain.ErrMessageNotFound),
+		errors.Is(err, domain.ErrThreadNotFound),
+		errors.Is(err, domain.ErrDraftNotFound),
+		errors.Is(err, domain.ErrFolderNotFound),
+		errors.Is(err, domain.ErrAttachmentNotFound),
+		errors.Is(err, domain.ErrContactNotFound),
+		errors.Is(err, domain.ErrCalendarNotFound),
+		errors.Is(err, domain.ErrEventNotFound):
+		return "resource not found"
+	}
+
+	msg := strings.ToLower(err.Error())
+	msg = reURL.ReplaceAllString(msg, "[api]")
+	switch {
+	case strings.Contains(msg, "rate limit"), strings.Contains(msg, "429"):
+		return "rate limit exceeded"
+	case strings.Contains(msg, "timeout"), strings.Contains(msg, "deadline exceeded"):
+		return "request timed out"
+	case strings.Contains(msg, "unauthorized"), strings.Contains(msg, "forbidden"), strings.Contains(msg, "401"), strings.Contains(msg, "403"):
+		return "authentication failed"
+	case strings.Contains(msg, "not found"), strings.Contains(msg, "404"):
+		return "resource not found"
+	}
+	return "request failed"
 }
 
 // toolError builds an error MCP tool response.

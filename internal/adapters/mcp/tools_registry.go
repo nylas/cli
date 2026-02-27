@@ -17,7 +17,7 @@ func registeredTools() []MCPTool {
 				"received_before": prop("number", "Before this time"+epochDesc),
 				"received_after":  prop("number", "After this time"+epochDesc),
 				"query":           prop("string", "Full-text search query"),
-				"limit":           prop("number", "Max results (default 10)"),
+				"limit":           prop("number", "Max results (default 200, max 200 per call)"),
 				"has_attachment":  prop("boolean", "Has attachments"),
 				"page_token":      prop("string", "Pagination cursor from previous response"),
 			}, nil),
@@ -77,8 +77,7 @@ func registeredTools() []MCPTool {
 			Name:        "list_drafts",
 			Description: "List email drafts.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"limit":      prop("number", "Max results (default 10)"),
-				"page_token": prop("string", "Pagination cursor from previous response"),
+				"limit": prop("number", "Max results (default 10)"),
 			}, nil),
 		},
 		{
@@ -132,12 +131,11 @@ func registeredTools() []MCPTool {
 			Name:        "list_threads",
 			Description: "List email threads.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"subject":    prop("string", "Filter by subject"),
-				"from":       prop("string", "Sender email"),
-				"to":         prop("string", "Recipient email"),
-				"unread":     prop("boolean", "Filter unread"),
-				"limit":      prop("number", "Max results (default 10)"),
-				"page_token": prop("string", "Pagination cursor from previous response"),
+				"subject": prop("string", "Filter by subject"),
+				"from":    prop("string", "Sender email"),
+				"to":      prop("string", "Recipient email"),
+				"unread":  prop("boolean", "Filter unread"),
+				"limit":   prop("number", "Max results (default 10)"),
 			}, nil),
 		},
 		{
@@ -292,7 +290,7 @@ func registeredTools() []MCPTool {
 				"title":            prop("string", "Filter by title"),
 				"start":            prop("number", "Start at or after"+epochDesc),
 				"end":              prop("number", "Start at or before"+epochDesc),
-				"limit":            prop("number", "Max results (default 10)"),
+				"limit":            prop("number", "Max results (default 200, max 200 per call)"),
 				"expand_recurring": prop("boolean", "Expand recurring events"),
 				"show_cancelled":   prop("boolean", "Include cancelled"),
 				"page_token":       prop("string", "Pagination cursor from previous response"),
@@ -544,5 +542,9 @@ func registeredTools() []MCPTool {
 	}
 
 	annotateTools(tools)
+	for i := range tools {
+		// Output schema left intentionally broad; responses are mirrored in structuredContent.
+		tools[i].OutputSchema = &JSONSchema{}
+	}
 	return tools
 }

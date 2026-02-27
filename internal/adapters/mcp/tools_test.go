@@ -93,14 +93,17 @@ func TestObjectSchema(t *testing.T) {
 	if schema.Type != "object" {
 		t.Errorf("Type = %q, want %q", schema.Type, "object")
 	}
-	if len(schema.Properties) != 2 {
-		t.Errorf("Properties count = %d, want 2", len(schema.Properties))
+	if len(schema.Properties) != 3 {
+		t.Errorf("Properties count = %d, want 3", len(schema.Properties))
 	}
 	if _, ok := schema.Properties["name"]; !ok {
 		t.Error("Properties missing 'name'")
 	}
 	if _, ok := schema.Properties["email"]; !ok {
 		t.Error("Properties missing 'email'")
+	}
+	if _, ok := schema.Properties["grant_id"]; !ok {
+		t.Error("Properties missing 'grant_id'")
 	}
 	if len(schema.Required) != 1 || schema.Required[0] != "email" {
 		t.Errorf("Required = %v, want [email]", schema.Required)
@@ -122,8 +125,11 @@ func TestObjectSchema_EmptyFields(t *testing.T) {
 	if schema.Type != "object" {
 		t.Errorf("Type = %q, want %q", schema.Type, "object")
 	}
-	if schema.Properties != nil {
-		t.Errorf("Properties = %v, want nil", schema.Properties)
+	if len(schema.Properties) != 1 {
+		t.Errorf("Properties count = %d, want 1", len(schema.Properties))
+	}
+	if _, ok := schema.Properties["grant_id"]; !ok {
+		t.Errorf("Properties missing grant_id: %v", schema.Properties)
 	}
 	if schema.Required != nil {
 		t.Errorf("Required = %v, want nil", schema.Required)
@@ -159,5 +165,19 @@ func TestParticipantArraySchema(t *testing.T) {
 	}
 	if itemProps["email"].Type != "string" {
 		t.Errorf("Items.Properties[email].Type = %q, want string", itemProps["email"].Type)
+	}
+}
+
+func TestRegisteredTools_OutputSchemaPresent(t *testing.T) {
+	t.Parallel()
+
+	tools := registeredTools()
+	if len(tools) == 0 {
+		t.Fatal("registeredTools returned no tools")
+	}
+	for _, tool := range tools {
+		if tool.OutputSchema == nil {
+			t.Fatalf("tool %q missing outputSchema", tool.Name)
+		}
 	}
 }

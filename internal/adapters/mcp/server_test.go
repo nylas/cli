@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -116,6 +117,28 @@ func TestDispatch_Methods(t *testing.T) {
 	}
 }
 
+func TestDispatch_CancelledNotification_CancelsInFlight(t *testing.T) {
+	t.Parallel()
+
+	s := newTestServer("")
+	var called atomic.Bool
+	s.registerInFlight(float64(123), func() {
+		called.Store(true)
+	})
+
+	params, _ := json.Marshal(map[string]any{"requestId": float64(123)})
+	resp := s.dispatch(context.Background(), &Request{
+		Method: "notifications/cancelled",
+		Params: params,
+	})
+	if resp != nil {
+		t.Fatalf("dispatch(cancelled) = %s, want nil", resp)
+	}
+	if !called.Load() {
+		t.Fatal("expected in-flight cancel func to be called")
+	}
+}
+
 // TestHandleInitialize_Fields verifies the initialize response structure and content.
 func TestHandleInitialize_Fields(t *testing.T) {
 	t.Parallel()
@@ -175,6 +198,11 @@ func TestHandleInitialize_VersionNegotiation(t *testing.T) {
 			name:        "client requests 2025-03-26",
 			clientVer:   "2025-03-26",
 			wantVersion: "2025-03-26",
+		},
+		{
+			name:        "client requests 2025-06-18",
+			clientVer:   "2025-06-18",
+			wantVersion: "2025-06-18",
 		},
 		{
 			name:        "client requests unknown version",

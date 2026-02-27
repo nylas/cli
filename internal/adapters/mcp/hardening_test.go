@@ -109,6 +109,61 @@ func TestRunWithIO_InvalidRequest_NoMethod(t *testing.T) {
 }
 
 // ============================================================================
+// TestRunWithIO_InvalidRequest_InvalidIDType
+// ============================================================================
+
+func TestRunWithIO_InvalidRequest_InvalidIDType(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(&mockNylasClient{}, "")
+	ctx := context.Background()
+
+	// JSON-RPC id must be string, number, or null. Object id should be rejected.
+	input := `{"jsonrpc":"2.0","id":{"bad":1},"method":"ping","params":{}}` + "\n"
+	var out bytes.Buffer
+	err := s.RunWithIO(ctx, strings.NewReader(input), &out)
+	if err != nil {
+		t.Fatalf("RunWithIO() = %v, want nil", err)
+	}
+
+	outStr := out.String()
+	if !strings.Contains(outStr, fmt.Sprintf("%d", codeInvalidRequest)) {
+		t.Errorf("output missing invalid request code %d; got: %s", codeInvalidRequest, outStr)
+	}
+}
+
+// ============================================================================
+// TestRunWithIO_BatchRequests
+// ============================================================================
+
+func TestRunWithIO_BatchRequests(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer(&mockNylasClient{}, "")
+	ctx := context.Background()
+
+	// Batch with two requests should return a JSON array of two responses.
+	input := `[` +
+		`{"jsonrpc":"2.0","id":1,"method":"ping","params":{}},` +
+		`{"jsonrpc":"2.0","id":2,"method":"ping","params":{}}` +
+		`]` + "\n"
+	var out bytes.Buffer
+	err := s.RunWithIO(ctx, strings.NewReader(input), &out)
+	if err != nil {
+		t.Fatalf("RunWithIO() = %v, want nil", err)
+	}
+
+	line := strings.TrimSpace(out.String())
+	var resp []map[string]any
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("batch response unmarshal: %v (raw=%s)", err, line)
+	}
+	if len(resp) != 2 {
+		t.Fatalf("batch response count = %d, want 2", len(resp))
+	}
+}
+
+// ============================================================================
 // TestRunWithIO_InvalidRequest_ContentLength
 // ============================================================================
 

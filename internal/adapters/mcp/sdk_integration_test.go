@@ -263,18 +263,24 @@ func TestSDK_ToolCall_ListMessages(t *testing.T) {
 	}
 
 	text := result.Content[0].(*mcp.TextContent).Text
-	var messages []map[string]any
-	if err := json.Unmarshal([]byte(text), &messages); err != nil {
+	var out map[string]any
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(messages) != 2 {
-		t.Fatalf("message count = %d, want 2", len(messages))
+	data, ok := out["data"].([]any)
+	if !ok {
+		t.Fatalf("data field missing or wrong type: %T", out["data"])
 	}
-	if messages[0]["id"] != "msg-1" {
-		t.Errorf("messages[0].id = %v, want msg-1", messages[0]["id"])
+	if len(data) != 2 {
+		t.Fatalf("message count = %d, want 2", len(data))
 	}
-	if messages[1]["subject"] != "Meeting" {
-		t.Errorf("messages[1].subject = %v, want Meeting", messages[1]["subject"])
+	item0, _ := data[0].(map[string]any)
+	item1, _ := data[1].(map[string]any)
+	if item0["id"] != "msg-1" {
+		t.Errorf("messages[0].id = %v, want msg-1", item0["id"])
+	}
+	if item1["subject"] != "Meeting" {
+		t.Errorf("messages[1].subject = %v, want Meeting", item1["subject"])
 	}
 }
 
@@ -346,15 +352,20 @@ func TestSDK_ToolCall_ListEvents(t *testing.T) {
 	}
 
 	text := result.Content[0].(*mcp.TextContent).Text
-	var events []map[string]any
-	if err := json.Unmarshal([]byte(text), &events); err != nil {
+	var out map[string]any
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(events) != 1 {
-		t.Fatalf("event count = %d, want 1", len(events))
+	data, ok := out["data"].([]any)
+	if !ok {
+		t.Fatalf("data field missing or wrong type: %T", out["data"])
 	}
-	if events[0]["title"] != "Standup" {
-		t.Errorf("events[0].title = %v, want Standup", events[0]["title"])
+	if len(data) != 1 {
+		t.Fatalf("event count = %d, want 1", len(data))
+	}
+	item0, _ := data[0].(map[string]any)
+	if item0["title"] != "Standup" {
+		t.Errorf("events[0].title = %v, want Standup", item0["title"])
 	}
 }
 

@@ -51,23 +51,33 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	grantID, err := common.GetGrantID(nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not resolve grant ID: %v\n", err)
-	}
-
-	server := mcpserver.NewServer(client, grantID)
-
 	// Set up grant store for local grant lookups
 	var secretStore ports.SecretStore
 	secretStore, err = keyring.NewSecretStore(config.DefaultConfigDir())
 	if err != nil {
 		secretStore, err = keyring.NewEncryptedFileStore(config.DefaultConfigDir())
 	}
+	var grantStore ports.GrantStore
 	if err == nil && secretStore != nil {
-		grantStore := keyring.NewGrantStore(secretStore)
-		server.SetGrantStore(grantStore)
+		grantStore = keyring.NewGrantStore(secretStore)
 	}
+
+	grantID, err := common.GetGrantID(nil)
+	if err != nil && grantStore != nil {
+		if fallbackGrantID, grantErr := grantStore.GetDefaultGrant(); grantErr == nil {
+			grantID = fallbackGrantID
+			err = nil
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("could not resolve default grant ID for MCP server: %w", err)
+	}
+	if grantID == "" {
+		return fmt.Errorf("could not resolve default grant ID for MCP server")
+	}
+
+	server := mcpserver.NewServer(client, grantID)
+	server.SetGrantStore(grantStore)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
