@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -243,13 +244,12 @@ func TestExecuteDeleteFolder(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if result["status"] != "deleted" {
-				t.Errorf("status = %v, want deleted", result["status"])
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "Deleted") {
+				t.Errorf("response text = %q, want to contain 'Deleted'", text)
 			}
-			if result["folder_id"] != "f1" {
-				t.Errorf("folder_id = %v, want f1", result["folder_id"])
+			if !strings.Contains(text, "f1") {
+				t.Errorf("response text = %q, want to contain 'f1'", text)
 			}
 		})
 	}
@@ -497,13 +497,12 @@ func TestExecuteCancelScheduledMessage(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if result["status"] != "cancelled" {
-				t.Errorf("status = %v, want cancelled", result["status"])
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "Cancelled") {
+				t.Errorf("response text = %q, want to contain 'Cancelled'", text)
 			}
-			if result["schedule_id"] != "sched1" {
-				t.Errorf("schedule_id = %v, want sched1", result["schedule_id"])
+			if !strings.Contains(text, "sched1") {
+				t.Errorf("response text = %q, want to contain 'sched1'", text)
 			}
 		})
 	}

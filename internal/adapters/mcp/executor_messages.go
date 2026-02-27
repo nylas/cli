@@ -2,11 +2,52 @@ package mcp
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
 )
+
+// maxBodyLen caps email body length to reduce token usage.
+const maxBodyLen = 10000
+
+// reHTMLTag matches HTML tags for stripping.
+var reHTMLTag = regexp.MustCompile(`<[^>]*>`)
+
+// stripHTML removes HTML tags and normalizes whitespace to produce plain text.
+func stripHTML(s string) string {
+	// Replace common block elements with newlines for readability.
+	s = strings.NewReplacer(
+		"<br>", "\n", "<br/>", "\n", "<br />", "\n",
+		"<BR>", "\n", "<BR/>", "\n", "<BR />", "\n",
+		"</p>", "\n", "</P>", "\n",
+		"</div>", "\n", "</DIV>", "\n",
+		"</tr>", "\n", "</TR>", "\n",
+		"</li>", "\n", "</LI>", "\n",
+	).Replace(s)
+
+	// Strip all remaining HTML tags.
+	s = reHTMLTag.ReplaceAllString(s, "")
+
+	// Decode common HTML entities.
+	s = strings.NewReplacer(
+		"&amp;", "&",
+		"&lt;", "<",
+		"&gt;", ">",
+		"&quot;", `"`,
+		"&#39;", "'",
+		"&apos;", "'",
+		"&nbsp;", " ",
+	).Replace(s)
+
+	// Collapse runs of blank lines to at most two newlines.
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(s)
+}
 
 // maxSnippetLen caps snippet length to reduce token usage in list responses.
 const maxSnippetLen = 120
@@ -93,14 +134,17 @@ func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *
 	if folderID := getString(args, "folder_id", ""); folderID != "" {
 		params.In = []string{folderID}
 	}
-
-	messages, err := s.client.GetMessagesWithParams(ctx, grantID, params)
-	if err != nil {
-		return toolError(err.Error())
+	if pageToken := getString(args, "page_token", ""); pageToken != "" {
+		params.PageToken = pageToken
 	}
 
-	result := make([]map[string]any, 0, len(messages))
-	for _, msg := range messages {
+	resp, err := s.client.GetMessagesWithCursor(ctx, grantID, params)
+	if err != nil {
+		return toolError(sanitizeError(err))
+	}
+
+	result := make([]map[string]any, 0, len(resp.Data))
+	for _, msg := range resp.Data {
 		from := ""
 		if len(msg.From) > 0 {
 			from = msg.From[0].String()
@@ -116,6 +160,13 @@ func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *
 			"thread_id": msg.ThreadID,
 		})
 	}
+
+	if resp.Pagination.NextCursor != "" {
+		return toolSuccess(map[string]any{
+			"data":        result,
+			"next_cursor": resp.Pagination.NextCursor,
+		})
+	}
 	return toolSuccess(result)
 }
 
@@ -129,12 +180,12 @@ func (s *Server) executeGetMessage(ctx context.Context, args map[string]any) *To
 
 	msg, err := s.client.GetMessage(ctx, grantID, messageID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	body := msg.Body
-	if len(body) > 10000 {
-		body = body[:10000]
+	body := stripHTML(msg.Body)
+	if len(body) > maxBodyLen {
+		body = body[:maxBodyLen]
 	}
 
 	from := ""
@@ -187,7 +238,7 @@ func (s *Server) executeSendMessage(ctx context.Context, args map[string]any) *T
 
 	msg, err := s.client.SendMessage(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -213,7 +264,7 @@ func (s *Server) executeUpdateMessage(ctx context.Context, args map[string]any) 
 
 	msg, err := s.client.UpdateMessage(ctx, grantID, messageID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -233,13 +284,10 @@ func (s *Server) executeDeleteMessage(ctx context.Context, args map[string]any) 
 	}
 
 	if err := s.client.DeleteMessage(ctx, grantID, messageID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":     "deleted",
-		"message_id": messageID,
-	})
+	return toolSuccessText("Deleted message " + messageID)
 }
 
 // executeSmartCompose generates an AI-powered email draft.
@@ -253,7 +301,7 @@ func (s *Server) executeSmartCompose(ctx context.Context, args map[string]any) *
 	req := &domain.SmartComposeRequest{Prompt: prompt}
 	suggestion, err := s.client.SmartCompose(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -276,7 +324,7 @@ func (s *Server) executeSmartComposeReply(ctx context.Context, args map[string]a
 	req := &domain.SmartComposeRequest{Prompt: prompt}
 	suggestion, err := s.client.SmartComposeReply(ctx, grantID, messageID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -291,7 +339,7 @@ func (s *Server) executeListDrafts(ctx context.Context, args map[string]any) *To
 
 	drafts, err := s.client.GetDrafts(ctx, grantID, limit)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(drafts))
@@ -316,7 +364,7 @@ func (s *Server) executeGetDraft(ctx context.Context, args map[string]any) *Tool
 
 	draft, err := s.client.GetDraft(ctx, grantID, draftID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	from := ""
@@ -351,7 +399,7 @@ func (s *Server) executeCreateDraft(ctx context.Context, args map[string]any) *T
 
 	draft, err := s.client.CreateDraft(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -380,7 +428,7 @@ func (s *Server) executeUpdateDraft(ctx context.Context, args map[string]any) *T
 
 	draft, err := s.client.UpdateDraft(ctx, grantID, draftID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -400,7 +448,7 @@ func (s *Server) executeSendDraft(ctx context.Context, args map[string]any) *Too
 
 	msg, err := s.client.SendDraft(ctx, grantID, draftID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -419,11 +467,8 @@ func (s *Server) executeDeleteDraft(ctx context.Context, args map[string]any) *T
 	}
 
 	if err := s.client.DeleteDraft(ctx, grantID, draftID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":   "deleted",
-		"draft_id": draftID,
-	})
+	return toolSuccessText("Deleted draft " + draftID)
 }

@@ -421,14 +421,13 @@ func TestExecuteCurrentTime(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if _, ok := result["datetime"]; !ok {
-				t.Error("datetime field missing")
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "unix:") {
+				t.Errorf("response text = %q, want to contain 'unix:'", text)
 			}
 			if tt.checkTZ != "" {
-				if result["timezone"] != tt.checkTZ {
-					t.Errorf("timezone = %v, want %v", result["timezone"], tt.checkTZ)
+				if !strings.Contains(text, tt.checkTZ) {
+					t.Errorf("response text = %q, want to contain timezone %q", text, tt.checkTZ)
 				}
 			}
 		})

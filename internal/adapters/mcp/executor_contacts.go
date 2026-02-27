@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -21,14 +22,17 @@ func (s *Server) executeListContacts(ctx context.Context, args map[string]any) *
 		Source:      getString(args, "source", ""),
 		Group:       getString(args, "group", ""),
 	}
-
-	contacts, err := s.client.GetContacts(ctx, grantID, params)
-	if err != nil {
-		return toolError(err.Error())
+	if pageToken := getString(args, "page_token", ""); pageToken != "" {
+		params.PageToken = pageToken
 	}
 
-	result := make([]map[string]any, 0, len(contacts))
-	for _, c := range contacts {
+	resp, err := s.client.GetContactsWithCursor(ctx, grantID, params)
+	if err != nil {
+		return toolError(sanitizeError(err))
+	}
+
+	result := make([]map[string]any, 0, len(resp.Data))
+	for _, c := range resp.Data {
 		result = append(result, map[string]any{
 			"id":           c.ID,
 			"given_name":   c.GivenName,
@@ -38,6 +42,13 @@ func (s *Server) executeListContacts(ctx context.Context, args map[string]any) *
 			"phone":        c.PrimaryPhone(),
 			"company_name": c.CompanyName,
 			"job_title":    c.JobTitle,
+		})
+	}
+
+	if resp.Pagination.NextCursor != "" {
+		return toolSuccess(map[string]any{
+			"data":        result,
+			"next_cursor": resp.Pagination.NextCursor,
 		})
 	}
 	return toolSuccess(result)
@@ -53,7 +64,7 @@ func (s *Server) executeGetContact(ctx context.Context, args map[string]any) *To
 
 	contact, err := s.client.GetContact(ctx, grantID, contactID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -91,7 +102,7 @@ func (s *Server) executeCreateContact(ctx context.Context, args map[string]any) 
 
 	contact, err := s.client.CreateContact(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -131,7 +142,7 @@ func (s *Server) executeUpdateContact(ctx context.Context, args map[string]any) 
 
 	contact, err := s.client.UpdateContact(ctx, grantID, contactID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -150,13 +161,10 @@ func (s *Server) executeDeleteContact(ctx context.Context, args map[string]any) 
 	}
 
 	if err := s.client.DeleteContact(ctx, grantID, contactID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":     "deleted",
-		"contact_id": contactID,
-	})
+	return toolSuccessText("Deleted contact " + contactID)
 }
 
 // parseContactEmails extracts contact emails from tool arguments.
@@ -223,11 +231,7 @@ func (s *Server) executeCurrentTime(args map[string]any) *ToolResponse {
 	}
 
 	now := time.Now().In(loc)
-	return toolSuccess(map[string]any{
-		"datetime":       now.Format(time.RFC3339),
-		"timezone":       loc.String(),
-		"unix_timestamp": now.Unix(),
-	})
+	return toolSuccessText(fmt.Sprintf("%s (%s, unix: %d)", now.Format(time.RFC3339), loc.String(), now.Unix()))
 }
 
 // executeEpochToDatetime converts a Unix timestamp to a human-readable datetime.
@@ -247,12 +251,8 @@ func (s *Server) executeEpochToDatetime(args map[string]any) *ToolResponse {
 	}
 
 	t := time.Unix(epoch, 0).In(loc)
-	return toolSuccess(map[string]any{
-		"datetime":       t.Format(time.RFC3339),
-		"timezone":       loc.String(),
-		"unix_timestamp": epoch,
-		"human_readable": t.Format("Monday, January 2, 2006 3:04 PM MST"),
-	})
+	return toolSuccessText(fmt.Sprintf("%s (%s, unix: %d)",
+		t.Format("Monday, January 2, 2006 3:04 PM MST"), t.Format(time.RFC3339), epoch))
 }
 
 // executeDatetimeToEpoch converts a datetime string to a Unix timestamp.
@@ -279,11 +279,7 @@ func (s *Server) executeDatetimeToEpoch(args map[string]any) *ToolResponse {
 		return toolError("could not parse datetime: " + dt)
 	}
 
-	return toolSuccess(map[string]any{
-		"unix_timestamp": t.Unix(),
-		"datetime":       t.Format(time.RFC3339),
-		"timezone":       loc.String(),
-	})
+	return toolSuccessText(fmt.Sprintf("%d (%s, %s)", t.Unix(), t.Format(time.RFC3339), loc.String()))
 }
 
 // resolveLocation returns the *time.Location for an IANA timezone string.

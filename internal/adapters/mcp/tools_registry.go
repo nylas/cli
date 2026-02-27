@@ -8,7 +8,6 @@ func registeredTools() []MCPTool {
 			Name:        "list_messages",
 			Description: "Search and retrieve emails.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":        prop("string", grantDesc),
 				"subject":         prop("string", "Filter by subject"),
 				"from":            prop("string", "Sender email"),
 				"to":              prop("string", "Recipient email"),
@@ -20,13 +19,13 @@ func registeredTools() []MCPTool {
 				"query":           prop("string", "Full-text search query"),
 				"limit":           prop("number", "Max results (default 10)"),
 				"has_attachment":  prop("boolean", "Has attachments"),
+				"page_token":      prop("string", "Pagination cursor from previous response"),
 			}, nil),
 		},
 		{
 			Name:        "get_message",
 			Description: "Get full email message with body (truncated at 10k chars).",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"message_id": prop("string", "Message ID"),
 			}, []string{"message_id"}),
 		},
@@ -34,7 +33,6 @@ func registeredTools() []MCPTool {
 			Name:        "send_message",
 			Description: "Send an email.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":            prop("string", grantDesc),
 				"to":                  participantArraySchema("Recipients"),
 				"cc":                  participantArraySchema("CC recipients"),
 				"bcc":                 participantArraySchema("BCC recipients"),
@@ -47,7 +45,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_message",
 			Description: "Mark read/unread, star/unstar, or move to folder.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"message_id": prop("string", "Message ID"),
 				"unread":     prop("boolean", "Set unread status"),
 				"starred":    prop("boolean", "Set starred status"),
@@ -58,7 +55,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_message",
 			Description: "Permanently delete an email.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"message_id": prop("string", "Message ID"),
 			}, []string{"message_id"}),
 		},
@@ -66,15 +62,13 @@ func registeredTools() []MCPTool {
 			Name:        "smart_compose",
 			Description: "AI-generate an email draft from a prompt.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-				"prompt":   prop("string", "What to compose (max 1000 tokens)"),
+				"prompt": prop("string", "What to compose (max 1000 tokens)"),
 			}, []string{"prompt"}),
 		},
 		{
 			Name:        "smart_compose_reply",
 			Description: "AI-generate a reply to a message.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"message_id": prop("string", "Message to reply to"),
 				"prompt":     prop("string", "Reply instructions"),
 			}, []string{"message_id", "prompt"}),
@@ -83,15 +77,14 @@ func registeredTools() []MCPTool {
 			Name:        "list_drafts",
 			Description: "List email drafts.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-				"limit":    prop("number", "Max results (default 10)"),
+				"limit":      prop("number", "Max results (default 10)"),
+				"page_token": prop("string", "Pagination cursor from previous response"),
 			}, nil),
 		},
 		{
 			Name:        "get_draft",
 			Description: "Get a draft by ID.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
 				"draft_id": prop("string", "Draft ID"),
 			}, []string{"draft_id"}),
 		},
@@ -99,7 +92,6 @@ func registeredTools() []MCPTool {
 			Name:        "create_draft",
 			Description: "Create an email draft.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":            prop("string", grantDesc),
 				"subject":             prop("string", "Subject"),
 				"body":                prop("string", "Body"),
 				"to":                  participantArraySchema("Recipients"),
@@ -112,7 +104,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_draft",
 			Description: "Update an email draft.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
 				"draft_id": prop("string", "Draft ID"),
 				"subject":  prop("string", "Subject"),
 				"body":     prop("string", "Body"),
@@ -125,7 +116,6 @@ func registeredTools() []MCPTool {
 			Name:        "send_draft",
 			Description: "Send a draft.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
 				"draft_id": prop("string", "Draft ID"),
 			}, []string{"draft_id"}),
 		},
@@ -133,7 +123,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_draft",
 			Description: "Delete a draft.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
 				"draft_id": prop("string", "Draft ID"),
 			}, []string{"draft_id"}),
 		},
@@ -143,19 +132,18 @@ func registeredTools() []MCPTool {
 			Name:        "list_threads",
 			Description: "List email threads.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-				"subject":  prop("string", "Filter by subject"),
-				"from":     prop("string", "Sender email"),
-				"to":       prop("string", "Recipient email"),
-				"unread":   prop("boolean", "Filter unread"),
-				"limit":    prop("number", "Max results (default 10)"),
+				"subject":    prop("string", "Filter by subject"),
+				"from":       prop("string", "Sender email"),
+				"to":         prop("string", "Recipient email"),
+				"unread":     prop("boolean", "Filter unread"),
+				"limit":      prop("number", "Max results (default 10)"),
+				"page_token": prop("string", "Pagination cursor from previous response"),
 			}, nil),
 		},
 		{
 			Name:        "get_thread",
 			Description: "Get a thread with its message IDs.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":  prop("string", grantDesc),
 				"thread_id": prop("string", "Thread ID"),
 			}, []string{"thread_id"}),
 		},
@@ -164,7 +152,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_thread",
 			Description: "Mark thread read/unread, star/unstar, or move to folders.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":  prop("string", grantDesc),
 				"thread_id": prop("string", "Thread ID"),
 				"unread":    prop("boolean", "Set unread status"),
 				"starred":   prop("boolean", "Set starred status"),
@@ -175,7 +162,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_thread",
 			Description: "Delete a thread and all its messages.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":  prop("string", grantDesc),
 				"thread_id": prop("string", "Thread ID"),
 			}, []string{"thread_id"}),
 		},
@@ -184,15 +170,12 @@ func registeredTools() []MCPTool {
 		{
 			Name:        "list_folders",
 			Description: "List email folders.",
-			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-			}, nil),
+			InputSchema: objectSchema(map[string]JSONSchema{}, nil),
 		},
 		{
 			Name:        "get_folder",
 			Description: "Get a folder by ID.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":  prop("string", grantDesc),
 				"folder_id": prop("string", "Folder ID"),
 			}, []string{"folder_id"}),
 		},
@@ -200,7 +183,6 @@ func registeredTools() []MCPTool {
 			Name:        "create_folder",
 			Description: "Create an email folder.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":         prop("string", grantDesc),
 				"name":             prop("string", "Folder name"),
 				"parent_id":        prop("string", "Parent folder ID"),
 				"background_color": prop("string", "Background hex color"),
@@ -212,7 +194,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_folder",
 			Description: "Update a folder (rename, move, recolor).",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":         prop("string", grantDesc),
 				"folder_id":        prop("string", "Folder ID"),
 				"name":             prop("string", "New name"),
 				"parent_id":        prop("string", "New parent folder ID"),
@@ -224,7 +205,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_folder",
 			Description: "Delete an email folder.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":  prop("string", grantDesc),
 				"folder_id": prop("string", "Folder ID"),
 			}, []string{"folder_id"}),
 		},
@@ -234,7 +214,6 @@ func registeredTools() []MCPTool {
 			Name:        "list_attachments",
 			Description: "List attachments for a message.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"message_id": prop("string", "Message ID"),
 			}, []string{"message_id"}),
 		},
@@ -242,7 +221,6 @@ func registeredTools() []MCPTool {
 			Name:        "get_attachment",
 			Description: "Get attachment metadata (no binary).",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":      prop("string", grantDesc),
 				"message_id":    prop("string", "Message ID"),
 				"attachment_id": prop("string", "Attachment ID"),
 			}, []string{"message_id", "attachment_id"}),
@@ -252,15 +230,12 @@ func registeredTools() []MCPTool {
 		{
 			Name:        "list_scheduled_messages",
 			Description: "List scheduled (send-later) messages.",
-			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-			}, nil),
+			InputSchema: objectSchema(map[string]JSONSchema{}, nil),
 		},
 		{
 			Name:        "cancel_scheduled_message",
 			Description: "Cancel a scheduled message.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"schedule_id": prop("string", "Schedule ID"),
 			}, []string{"schedule_id"}),
 		},
@@ -269,15 +244,12 @@ func registeredTools() []MCPTool {
 		{
 			Name:        "list_calendars",
 			Description: "List calendars.",
-			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id": prop("string", grantDesc),
-			}, nil),
+			InputSchema: objectSchema(map[string]JSONSchema{}, nil),
 		},
 		{
 			Name:        "get_calendar",
 			Description: "Get a calendar by ID.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", "Calendar ID"),
 			}, []string{"calendar_id"}),
 		},
@@ -285,7 +257,6 @@ func registeredTools() []MCPTool {
 			Name:        "create_calendar",
 			Description: "Create a calendar.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"name":        prop("string", "Calendar name"),
 				"description": prop("string", "Description"),
 				"location":    prop("string", "Location"),
@@ -297,7 +268,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_calendar",
 			Description: "Update a calendar.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", "Calendar ID"),
 				"name":        prop("string", "Name"),
 				"description": prop("string", "Description"),
@@ -309,7 +279,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_calendar",
 			Description: "Delete a calendar.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", "Calendar ID"),
 			}, []string{"calendar_id"}),
 		},
@@ -319,7 +288,6 @@ func registeredTools() []MCPTool {
 			Name:        "list_events",
 			Description: "List events in a time range.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":         prop("string", grantDesc),
 				"calendar_id":      prop("string", `Calendar ID (default "primary")`),
 				"title":            prop("string", "Filter by title"),
 				"start":            prop("number", "Start at or after"+epochDesc),
@@ -327,13 +295,13 @@ func registeredTools() []MCPTool {
 				"limit":            prop("number", "Max results (default 10)"),
 				"expand_recurring": prop("boolean", "Expand recurring events"),
 				"show_cancelled":   prop("boolean", "Include cancelled"),
+				"page_token":       prop("string", "Pagination cursor from previous response"),
 			}, nil),
 		},
 		{
 			Name:        "get_event",
 			Description: "Get an event by ID.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", `Calendar ID (default "primary")`),
 				"event_id":    prop("string", "Event ID"),
 			}, []string{"event_id"}),
@@ -342,7 +310,6 @@ func registeredTools() []MCPTool {
 			Name:        "create_event",
 			Description: "Create a calendar event.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":         prop("string", grantDesc),
 				"calendar_id":      prop("string", `Calendar ID (default "primary")`),
 				"title":            prop("string", "Title"),
 				"description":      prop("string", "Description"),
@@ -372,7 +339,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_event",
 			Description: "Update a calendar event.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":     prop("string", grantDesc),
 				"calendar_id":  prop("string", `Calendar ID (default "primary")`),
 				"event_id":     prop("string", "Event ID"),
 				"title":        prop("string", "Title"),
@@ -389,7 +355,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_event",
 			Description: "Delete an event.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", `Calendar ID (default "primary")`),
 				"event_id":    prop("string", "Event ID"),
 			}, []string{"event_id"}),
@@ -400,7 +365,6 @@ func registeredTools() []MCPTool {
 			Name:        "get_free_busy",
 			Description: "Check free/busy status for emails in a time range.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"emails":     {Type: "array", Desc: "Emails to check", Items: &JSONSchema{Type: "string"}},
 				"start_time": prop("number", "Range start"+epochDesc),
 				"end_time":   prop("number", "Range end"+epochDesc),
@@ -434,7 +398,6 @@ func registeredTools() []MCPTool {
 			Name:        "send_rsvp",
 			Description: `RSVP to an event (yes/no/maybe).`,
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":    prop("string", grantDesc),
 				"calendar_id": prop("string", `Calendar ID (default "primary")`),
 				"event_id":    prop("string", "Event ID"),
 				"status":      prop("string", `"yes", "no", or "maybe"`),
@@ -447,19 +410,18 @@ func registeredTools() []MCPTool {
 			Name:        "list_contacts",
 			Description: "List or search contacts.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":     prop("string", grantDesc),
 				"email":        prop("string", "Filter by email"),
 				"phone_number": prop("string", "Filter by phone"),
 				"source":       {Type: "string", Desc: "Source filter", Enum: []string{"address_book", "inbox", "domain"}},
 				"limit":        prop("number", "Max results (default 10)"),
 				"group":        prop("string", "Group name"),
+				"page_token":   prop("string", "Pagination cursor from previous response"),
 			}, nil),
 		},
 		{
 			Name:        "get_contact",
 			Description: "Get a contact by ID.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"contact_id": prop("string", "Contact ID"),
 			}, []string{"contact_id"}),
 		},
@@ -467,7 +429,6 @@ func registeredTools() []MCPTool {
 			Name:        "create_contact",
 			Description: "Create a contact.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":     prop("string", grantDesc),
 				"given_name":   prop("string", "First name"),
 				"surname":      prop("string", "Last name"),
 				"nickname":     prop("string", "Nickname"),
@@ -503,7 +464,6 @@ func registeredTools() []MCPTool {
 			Name:        "update_contact",
 			Description: "Update a contact.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":     prop("string", grantDesc),
 				"contact_id":   prop("string", "Contact ID"),
 				"given_name":   prop("string", "First name"),
 				"surname":      prop("string", "Last name"),
@@ -517,7 +477,6 @@ func registeredTools() []MCPTool {
 			Name:        "delete_contact",
 			Description: "Delete a contact.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"grant_id":   prop("string", grantDesc),
 				"contact_id": prop("string", "Contact ID"),
 			}, []string{"contact_id"}),
 		},

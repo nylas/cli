@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -19,20 +20,12 @@ func TestExecuteEpochToDatetime(t *testing.T) {
 		name      string
 		args      map[string]any
 		wantError bool
-		checkFn   func(t *testing.T, result map[string]any)
+		wantText  string
 	}{
 		{
-			name: "happy path with timezone",
-			args: map[string]any{"epoch": float64(1700000000), "timezone": "UTC"},
-			checkFn: func(t *testing.T, result map[string]any) {
-				t.Helper()
-				if result["unix_timestamp"] != float64(1700000000) {
-					t.Errorf("unix_timestamp = %v, want 1700000000", result["unix_timestamp"])
-				}
-				if _, ok := result["datetime"]; !ok {
-					t.Error("datetime field missing")
-				}
-			},
+			name:     "happy path with timezone",
+			args:     map[string]any{"epoch": float64(1700000000), "timezone": "UTC"},
+			wantText: "1700000000",
 		},
 		{
 			name:      "missing epoch returns error",
@@ -54,10 +47,9 @@ func TestExecuteEpochToDatetime(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if tt.checkFn != nil {
-				tt.checkFn(t, result)
+			text := resp.Content[0].Text
+			if tt.wantText != "" && !strings.Contains(text, tt.wantText) {
+				t.Errorf("response text = %q, want to contain %q", text, tt.wantText)
 			}
 		})
 	}
@@ -97,10 +89,10 @@ func TestExecuteDatetimeToEpoch(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if _, ok := result["unix_timestamp"]; !ok {
-				t.Error("unix_timestamp field missing")
+			text := resp.Content[0].Text
+			// The plain text response starts with the unix timestamp value
+			if len(text) == 0 {
+				t.Error("response text is empty, expected unix timestamp")
 			}
 		})
 	}

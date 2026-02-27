@@ -21,10 +21,13 @@ func (s *Server) executeListThreads(ctx context.Context, args map[string]any) *T
 		To:      getString(args, "to", ""),
 		Unread:  getBool(args, "unread"),
 	}
+	if pageToken := getString(args, "page_token", ""); pageToken != "" {
+		params.PageToken = pageToken
+	}
 
 	threads, err := s.client.GetThreads(ctx, grantID, params)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(threads))
@@ -53,7 +56,7 @@ func (s *Server) executeGetThread(ctx context.Context, args map[string]any) *Too
 
 	t, err := s.client.GetThread(ctx, grantID, threadID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -88,7 +91,7 @@ func (s *Server) executeUpdateThread(ctx context.Context, args map[string]any) *
 
 	t, err := s.client.UpdateThread(ctx, grantID, threadID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -106,13 +109,10 @@ func (s *Server) executeDeleteThread(ctx context.Context, args map[string]any) *
 	}
 
 	if err := s.client.DeleteThread(ctx, grantID, threadID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":    "deleted",
-		"thread_id": threadID,
-	})
+	return toolSuccessText("Deleted thread " + threadID)
 }
 
 // ============================================================================
@@ -125,7 +125,7 @@ func (s *Server) executeListFolders(ctx context.Context, args map[string]any) *T
 
 	folders, err := s.client.GetFolders(ctx, grantID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(folders))
@@ -151,7 +151,7 @@ func (s *Server) executeGetFolder(ctx context.Context, args map[string]any) *Too
 
 	f, err := s.client.GetFolder(ctx, grantID, folderID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -183,7 +183,7 @@ func (s *Server) executeCreateFolder(ctx context.Context, args map[string]any) *
 
 	folder, err := s.client.CreateFolder(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -210,7 +210,7 @@ func (s *Server) executeUpdateFolder(ctx context.Context, args map[string]any) *
 
 	folder, err := s.client.UpdateFolder(ctx, grantID, folderID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -229,13 +229,10 @@ func (s *Server) executeDeleteFolder(ctx context.Context, args map[string]any) *
 	}
 
 	if err := s.client.DeleteFolder(ctx, grantID, folderID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":    "deleted",
-		"folder_id": folderID,
-	})
+	return toolSuccessText("Deleted folder " + folderID)
 }
 
 // ============================================================================
@@ -252,7 +249,7 @@ func (s *Server) executeListAttachments(ctx context.Context, args map[string]any
 
 	attachments, err := s.client.ListAttachments(ctx, grantID, messageID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(attachments))
@@ -282,7 +279,7 @@ func (s *Server) executeGetAttachment(ctx context.Context, args map[string]any) 
 
 	att, err := s.client.GetAttachment(ctx, grantID, messageID, attachmentID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -305,7 +302,7 @@ func (s *Server) executeListScheduledMessages(ctx context.Context, args map[stri
 
 	msgs, err := s.client.ListScheduledMessages(ctx, grantID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(msgs))
@@ -328,11 +325,8 @@ func (s *Server) executeCancelScheduledMessage(ctx context.Context, args map[str
 	}
 
 	if err := s.client.CancelScheduledMessage(ctx, grantID, scheduleID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"schedule_id": scheduleID,
-		"status":      "cancelled",
-	})
+	return toolSuccessText("Cancelled scheduled message " + scheduleID)
 }

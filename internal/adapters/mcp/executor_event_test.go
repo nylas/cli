@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -115,13 +116,12 @@ func TestExecuteDeleteEvent(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if result["status"] != "deleted" {
-				t.Errorf("status = %v, want deleted", result["status"])
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "Deleted") {
+				t.Errorf("response text = %q, want to contain 'Deleted'", text)
 			}
-			if result["event_id"] != "ev1" {
-				t.Errorf("event_id = %v, want ev1", result["event_id"])
+			if !strings.Contains(text, "ev1") {
+				t.Errorf("response text = %q, want to contain 'ev1'", text)
 			}
 		})
 	}
