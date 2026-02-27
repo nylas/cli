@@ -196,10 +196,11 @@ func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID strin
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 	c.setAuthHeader(httpReq)
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -273,10 +274,11 @@ func (c *HTTPClient) CreateDraftWithAttachmentFromReader(ctx context.Context, gr
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 	c.setAuthHeader(httpReq)
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	// Wait for writer goroutine to finish
@@ -316,10 +318,11 @@ func (c *HTTPClient) SendDraft(ctx context.Context, grantID, draftID string) (*d
 	c.setAuthHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {

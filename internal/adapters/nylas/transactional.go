@@ -57,10 +57,11 @@ func (c *HTTPClient) SendTransactionalMessage(ctx context.Context, domainName st
 	httpReq.Header.Set("Content-Type", "application/json")
 	c.setAuthHeader(httpReq)
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {

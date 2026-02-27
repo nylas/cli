@@ -59,10 +59,11 @@ func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domai
 	httpReq.Header.Set("Content-Type", "application/json")
 	c.setAuthHeader(httpReq)
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
@@ -111,10 +112,11 @@ func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME
 	c.setAuthHeader(httpReq)
 
 	// Send request
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	// Check status code
@@ -144,10 +146,11 @@ func (c *HTTPClient) ListScheduledMessages(ctx context.Context, grantID string) 
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -194,10 +197,11 @@ func (c *HTTPClient) GetScheduledMessage(ctx context.Context, grantID, scheduleI
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -238,10 +242,11 @@ func (c *HTTPClient) CancelScheduledMessage(ctx context.Context, grantID, schedu
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusAccepted {
@@ -273,10 +278,11 @@ func (c *HTTPClient) SmartCompose(ctx context.Context, grantID string, req *doma
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -315,10 +321,11 @@ func (c *HTTPClient) SmartComposeReply(ctx context.Context, grantID, messageID s
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	resp, err := c.doRequest(ctx, httpReq)
+	resp, cancel, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {

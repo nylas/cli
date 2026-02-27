@@ -100,10 +100,11 @@ func (c *HTTPClient) RevokeGrant(ctx context.Context, grantID string) error {
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
