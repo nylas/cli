@@ -28,16 +28,16 @@ func (errWriter) Write(_ []byte) (int, error) { return 0, errors.New("write fail
 
 type mockGrantStore struct{}
 
-func (mockGrantStore) SaveGrant(_ domain.GrantInfo) error              { return nil }
-func (mockGrantStore) GetGrant(_ string) (*domain.GrantInfo, error)    { return nil, nil }
+func (mockGrantStore) SaveGrant(_ domain.GrantInfo) error           { return nil }
+func (mockGrantStore) GetGrant(_ string) (*domain.GrantInfo, error) { return nil, nil }
 func (mockGrantStore) GetGrantByEmail(_ string) (*domain.GrantInfo, error) {
 	return nil, nil
 }
-func (mockGrantStore) ListGrants() ([]domain.GrantInfo, error)  { return nil, nil }
-func (mockGrantStore) DeleteGrant(_ string) error               { return nil }
-func (mockGrantStore) SetDefaultGrant(_ string) error           { return nil }
-func (mockGrantStore) GetDefaultGrant() (string, error)         { return "", nil }
-func (mockGrantStore) ClearGrants() error                       { return nil }
+func (mockGrantStore) ListGrants() ([]domain.GrantInfo, error) { return nil, nil }
+func (mockGrantStore) DeleteGrant(_ string) error              { return nil }
+func (mockGrantStore) SetDefaultGrant(_ string) error          { return nil }
+func (mockGrantStore) GetDefaultGrant() (string, error)        { return "", nil }
+func (mockGrantStore) ClearGrants() error                      { return nil }
 
 // Ensure mockGrantStore satisfies ports.GrantStore at compile time.
 var _ ports.GrantStore = mockGrantStore{}
@@ -493,4 +493,3 @@ func TestDispatch_ToolsCall(t *testing.T) {
 		t.Errorf("error.code = %d, want %d", gotCode, codeInvalidParams)
 	}
 }
-

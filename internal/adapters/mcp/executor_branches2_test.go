@@ -415,4 +415,3 @@ func TestHandleToolCall_NilArguments(t *testing.T) {
 		t.Errorf("unexpected tool error with nil arguments: %s", text)
 	}
 }
-

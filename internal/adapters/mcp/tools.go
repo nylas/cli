@@ -11,10 +11,10 @@ type MCPTool struct {
 
 // ToolAnnotations describes the behavior hints for an MCP tool (MCP spec 2025-06-18).
 type ToolAnnotations struct {
-	ReadOnlyHint     *bool `json:"readOnlyHint,omitempty"`
-	DestructiveHint  *bool `json:"destructiveHint,omitempty"`
-	IdempotentHint   *bool `json:"idempotentHint,omitempty"`
-	OpenWorldHint    *bool `json:"openWorldHint,omitempty"`
+	ReadOnlyHint    *bool `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool `json:"openWorldHint,omitempty"`
 }
 
 // JSONSchema represents a JSON Schema object.
