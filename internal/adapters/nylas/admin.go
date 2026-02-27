@@ -22,10 +22,11 @@ func (c *HTTPClient) ListApplications(ctx context.Context) ([]domain.Application
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {

@@ -6,15 +6,38 @@ import (
 	"time"
 )
 
-// Protocol version and server info.
+// Supported protocol versions (newest first).
+var supportedVersions = []string{
+	"2025-03-26",
+	"2024-11-05",
+}
+
+// latestVersion is the most recent protocol version this server supports.
+const latestVersion = "2025-03-26"
+
+// Server info constants.
 const (
-	protocolVersion = "2024-11-05"
-	serverName      = "nylas-mcp"
-	serverVersion   = "1.0.0"
+	serverName    = "nylas-mcp"
+	serverVersion = "1.0.0"
 )
+
+// negotiateVersion returns the newest version both client and server support.
+// If the client's requested version is in our supported list, return it.
+// Otherwise, return the latest version we support.
+func negotiateVersion(requested string) string {
+	for _, v := range supportedVersions {
+		if v == requested {
+			return v
+		}
+	}
+	return latestVersion
+}
 
 // handleInitialize responds to the MCP initialize request with server capabilities.
 func (s *Server) handleInitialize(req *Request) []byte {
+	params := parseInitializeParams(req.Params)
+	negotiated := negotiateVersion(params.ProtocolVersion)
+
 	// Detect user's timezone for guidance
 	localZone, _ := time.Now().Zone()
 	tzName := time.Local.String()
@@ -28,11 +51,11 @@ IMPORTANT - Timezone Consistency:
 The user's local timezone is: %s (%s)
 When displaying ANY timestamps to users (from emails, events, availability, etc.):
 1. Always use epoch_to_datetime tool with timezone "%s" to convert Unix timestamps
-2. Display ALL times in %s, never in UTC or the event's original timezone
+2. Display ALL times in %s, never in UTC
 3. Format times clearly (e.g., "2:00 PM %s")`, tzName, localZone, tzName, localZone, localZone)
 
 	result := map[string]any{
-		"protocolVersion": protocolVersion,
+		"protocolVersion": negotiated,
 		"capabilities": map[string]any{
 			"tools": map[string]any{},
 		},
@@ -57,8 +80,9 @@ func (s *Server) handleToolsList(req *Request) []byte {
 
 // handleToolCall dispatches a tool call to the appropriate executor.
 func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
-	name := req.Params.Name
-	args := req.Params.Arguments
+	params := parseToolCallParams(req.Params)
+	name := params.Name
+	args := params.Arguments
 	if args == nil {
 		args = make(map[string]any)
 	}
@@ -183,7 +207,7 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
 		result = s.executeDatetimeToEpoch(args)
 
 	default:
-		result = toolError(fmt.Sprintf("unknown tool: %s", name))
+		return errorResponse(req.ID, codeInvalidParams, fmt.Sprintf("unknown tool: %s", name))
 	}
 
 	return successResponse(req.ID, result)

@@ -157,17 +157,15 @@ func parseToolResult(t *testing.T, resp jsonRPCResponse) toolResult {
 
 // makeReq builds a minimal tools/call Request with the given tool name and args.
 func makeReq(name string, args map[string]any) *Request {
+	params := ToolCallParams{
+		Name:      name,
+		Arguments: args,
+	}
+	raw, _ := json.Marshal(params)
 	return &Request{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
-			Cursor    string         `json:"cursor,omitempty"`
-		}{
-			Name:      name,
-			Arguments: args,
-		},
+		Params:  raw,
 	}
 }
 
@@ -310,24 +308,15 @@ func TestHandleToolCall_UnknownTool(t *testing.T) {
 	req := makeReq("no_such_tool", map[string]any{})
 	raw := s.handleToolCall(ctx, req)
 
-	// The dispatch always wraps in successResponse, so JSON-RPC level has no error.
+	// Unknown tool now returns a JSON-RPC error with code -32602.
 	rpc := parseRPCResponse(t, raw)
-	if rpc.Error != nil {
-		t.Fatalf("expected result (not JSON-RPC error) for unknown tool, got error: %s", rpc.Error.Message)
+	if rpc.Error == nil {
+		t.Fatal("expected JSON-RPC error for unknown tool, got result")
 	}
-	if rpc.Result == nil {
-		t.Fatal("result field is missing")
+	if rpc.Error.Code != codeInvalidParams {
+		t.Errorf("error.code = %d, want %d", rpc.Error.Code, codeInvalidParams)
 	}
-
-	// The tool result itself should have isError=true with "unknown tool" message.
-	tr := parseToolResult(t, rpc)
-	if !tr.IsError {
-		t.Error("expected isError=true for unknown tool, got isError=false")
-	}
-	if len(tr.Content) == 0 {
-		t.Fatal("expected at least one content block in error response")
-	}
-	if !strings.Contains(tr.Content[0].Text, "unknown tool") {
-		t.Errorf("expected error text to contain 'unknown tool', got: %s", tr.Content[0].Text)
+	if !strings.Contains(rpc.Error.Message, "unknown tool") {
+		t.Errorf("expected error message to contain 'unknown tool', got: %s", rpc.Error.Message)
 	}
 }

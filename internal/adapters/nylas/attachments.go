@@ -52,10 +52,11 @@ func (c *HTTPClient) DownloadAttachment(ctx context.Context, grantID, messageID,
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+	defer cancel()
 
 	if resp.StatusCode == http.StatusNotFound {
 		_ = resp.Body.Close()

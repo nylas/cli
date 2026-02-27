@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,16 +28,16 @@ func (errWriter) Write(_ []byte) (int, error) { return 0, errors.New("write fail
 
 type mockGrantStore struct{}
 
-func (mockGrantStore) SaveGrant(_ domain.GrantInfo) error              { return nil }
-func (mockGrantStore) GetGrant(_ string) (*domain.GrantInfo, error)    { return nil, nil }
+func (mockGrantStore) SaveGrant(_ domain.GrantInfo) error           { return nil }
+func (mockGrantStore) GetGrant(_ string) (*domain.GrantInfo, error) { return nil, nil }
 func (mockGrantStore) GetGrantByEmail(_ string) (*domain.GrantInfo, error) {
 	return nil, nil
 }
-func (mockGrantStore) ListGrants() ([]domain.GrantInfo, error)  { return nil, nil }
-func (mockGrantStore) DeleteGrant(_ string) error               { return nil }
-func (mockGrantStore) SetDefaultGrant(_ string) error           { return nil }
-func (mockGrantStore) GetDefaultGrant() (string, error)         { return "", nil }
-func (mockGrantStore) ClearGrants() error                       { return nil }
+func (mockGrantStore) ListGrants() ([]domain.GrantInfo, error) { return nil, nil }
+func (mockGrantStore) DeleteGrant(_ string) error              { return nil }
+func (mockGrantStore) SetDefaultGrant(_ string) error          { return nil }
+func (mockGrantStore) GetDefaultGrant() (string, error)        { return "", nil }
+func (mockGrantStore) ClearGrants() error                      { return nil }
 
 // Ensure mockGrantStore satisfies ports.GrantStore at compile time.
 var _ ports.GrantStore = mockGrantStore{}
@@ -462,13 +463,16 @@ func TestDispatch_ToolsCall(t *testing.T) {
 	s := newMockServer(&mockNylasClient{})
 	ctx := context.Background()
 
+	params, _ := json.Marshal(ToolCallParams{
+		Name:      "ping",
+		Arguments: map[string]any{},
+	})
 	req := &Request{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
 		ID:      float64(10),
+		Params:  params,
 	}
-	req.Params.Name = "ping" // unknown tool — returns tool-level error
-	req.Params.Arguments = map[string]any{}
 
 	resp := s.dispatch(ctx, req)
 	if resp == nil {
@@ -479,9 +483,13 @@ func TestDispatch_ToolsCall(t *testing.T) {
 	if got["jsonrpc"] != "2.0" {
 		t.Errorf("jsonrpc = %v, want 2.0", got["jsonrpc"])
 	}
-	// tools/call always returns a result (tool errors are inside result.isError).
-	if _, hasResult := got["result"]; !hasResult {
-		t.Error("dispatch(tools/call) response missing result field")
+	// Unknown tool now returns a JSON-RPC error with code -32602.
+	errObj, ok := got["error"].(map[string]any)
+	if !ok {
+		t.Fatal("dispatch(tools/call) response missing error field for unknown tool")
+	}
+	gotCode := int(errObj["code"].(float64))
+	if gotCode != codeInvalidParams {
+		t.Errorf("error.code = %d, want %d", gotCode, codeInvalidParams)
 	}
 }
-

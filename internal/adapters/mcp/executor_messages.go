@@ -2,10 +2,38 @@ package mcp
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
 )
+
+// maxSnippetLen caps snippet length to reduce token usage in list responses.
+const maxSnippetLen = 120
+
+// cleanSnippet removes invisible padding characters and trims to a reasonable length.
+func cleanSnippet(s string) string {
+	// Remove zero-width non-joiners, zero-width spaces, and other invisible chars.
+	s = strings.NewReplacer(
+		"\u200c", "", // zero-width non-joiner (‌)
+		"\u200b", "", // zero-width space
+		"\u034f", "", // combining grapheme joiner (͏)
+		"\r\n", " ",
+		"\r", " ",
+		"\n", " ",
+	).Replace(s)
+
+	// Collapse multiple spaces.
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	s = strings.TrimSpace(s)
+
+	if len(s) > maxSnippetLen {
+		s = s[:maxSnippetLen] + "..."
+	}
+	return s
+}
 
 // parseParticipants extracts email participants from tool arguments.
 // Accepts an array of objects with "email" and optional "name" fields.
@@ -84,9 +112,8 @@ func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *
 			"date":      msg.Date.Format(time.RFC3339),
 			"unread":    msg.Unread,
 			"starred":   msg.Starred,
-			"snippet":   msg.Snippet,
+			"snippet":   cleanSnippet(msg.Snippet),
 			"thread_id": msg.ThreadID,
-			"folders":   msg.Folders,
 		})
 	}
 	return toolSuccess(result)

@@ -166,7 +166,11 @@ func (c *HTTPClient) ensureContext(ctx context.Context) (context.Context, contex
 // doRequest executes an HTTP request with rate limiting and timeout.
 // This method applies rate limiting before making the request and ensures
 // the context has a timeout to prevent hanging requests.
-func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
+//
+// IMPORTANT: On success the caller MUST call the returned cancel function after
+// reading the response body. The timeout context is kept alive so that
+// io.ReadAll(resp.Body) does not fail with "context canceled".
+func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Response, context.CancelFunc, error) {
 	// Set User-Agent header for all requests
 	req.Header.Set("User-Agent", version.UserAgent())
 
@@ -176,7 +180,7 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		// Apply rate limiting - wait for permission to proceed
 		if err := c.rateLimiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("rate limiter: %w", err)
+			return nil, noop, fmt.Errorf("rate limiter: %w", err)
 		}
 
 		// Ensure context has timeout
@@ -193,17 +197,18 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 
 		// Execute request
 		resp, err := c.httpClient.Do(reqToUse)
-		cancel() // Cancel timeout context
 
 		if err != nil {
+			cancel() // Safe to cancel — no body to read on error.
+
 			// Don't retry if the parent context is done
 			if ctx.Err() != nil {
-				return nil, ctx.Err()
+				return nil, noop, ctx.Err()
 			}
 
 			// Don't retry context timeout/cancellation errors - they'll just timeout again
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-				return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
+				return nil, noop, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 			}
 
 			lastErr = fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
@@ -215,35 +220,40 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 				case <-time.After(delay):
 					continue
 				case <-ctx.Done():
-					return nil, ctx.Err()
+					return nil, noop, ctx.Err()
 				}
 			}
-			return nil, lastErr
+			return nil, noop, lastErr
 		}
 
 		// Check if we should retry based on status code
 		if c.shouldRetryStatus(resp.StatusCode) && attempt < c.maxRetries {
 			lastResp = resp
 			_ = resp.Body.Close() // Close body before retry; error doesn't affect retry logic
+			cancel()              // Cancel timeout context for this attempt.
 
 			delay := c.calculateBackoff(attempt, resp)
 			select {
 			case <-time.After(delay):
 				continue
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, noop, ctx.Err()
 			}
 		}
 
-		return resp, nil
+		// Return cancel so caller can defer it after reading the body.
+		return resp, cancel, nil
 	}
 
 	// All retries exhausted
 	if lastResp != nil {
-		return lastResp, nil
+		return lastResp, noop, nil
 	}
-	return nil, lastErr
+	return nil, noop, lastErr
 }
+
+// noop is a no-op cancel function for error return paths.
+func noop() {}
 
 // shouldRetryStatus determines if a status code is retryable
 func (c *HTTPClient) shouldRetryStatus(statusCode int) bool {
@@ -332,7 +342,7 @@ func (c *HTTPClient) doJSONRequestInternal(
 	}
 
 	// Execute request with rate limiting
-	resp, err := c.doRequest(ctx, req)
+	resp, cancel, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -352,10 +362,16 @@ func (c *HTTPClient) doJSONRequestInternal(
 	}
 
 	if !statusOK {
+		cancel()
 		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
+	// On success, the caller reads resp.Body via decodeJSONResponse.
+	// We must NOT cancel here — the context must stay alive until the
+	// body is fully read. The cancel function is intentionally dropped;
+	// the timeout will fire naturally, and resp.Body.Close() (called by
+	// decodeJSONResponse) releases the underlying connection.
 	return resp, nil
 }
 

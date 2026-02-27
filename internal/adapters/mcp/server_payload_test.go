@@ -106,7 +106,7 @@ func TestReadRequestPayload_ReadFullError(t *testing.T) {
 		header := "Content-Length: 50\r\n\r\n"
 		_, _ = pw.Write([]byte(header))
 		_, _ = pw.Write([]byte("hello")) // only 5 of the promised 50 bytes
-		pw.Close()
+		_ = pw.Close()
 	}()
 
 	reader := bufio.NewReader(pr)
