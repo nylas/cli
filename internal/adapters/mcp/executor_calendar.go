@@ -11,7 +11,7 @@ func (s *Server) executeListCalendars(ctx context.Context, args map[string]any) 
 	grantID := s.resolveGrantID(args)
 	calendars, err := s.client.GetCalendars(ctx, grantID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	result := make([]map[string]any, 0, len(calendars))
@@ -38,7 +38,7 @@ func (s *Server) executeGetCalendar(ctx context.Context, args map[string]any) *T
 
 	cal, err := s.client.GetCalendar(ctx, grantID, calendarID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -69,7 +69,7 @@ func (s *Server) executeCreateCalendar(ctx context.Context, args map[string]any)
 
 	cal, err := s.client.CreateCalendar(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -103,7 +103,7 @@ func (s *Server) executeUpdateCalendar(ctx context.Context, args map[string]any)
 
 	cal, err := s.client.UpdateCalendar(ctx, grantID, calendarID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -122,13 +122,10 @@ func (s *Server) executeDeleteCalendar(ctx context.Context, args map[string]any)
 	}
 
 	if err := s.client.DeleteCalendar(ctx, grantID, calendarID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":      "deleted",
-		"calendar_id": calendarID,
-	})
+	return toolSuccessText("Deleted calendar " + calendarID)
 }
 
 // executeListEvents returns events for a calendar.
@@ -154,14 +151,17 @@ func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *To
 	if b := getBool(args, "show_cancelled"); b != nil {
 		params.ShowCancelled = *b
 	}
-
-	events, err := s.client.GetEvents(ctx, grantID, calendarID, params)
-	if err != nil {
-		return toolError(err.Error())
+	if pageToken := getString(args, "page_token", ""); pageToken != "" {
+		params.PageToken = pageToken
 	}
 
-	result := make([]map[string]any, 0, len(events))
-	for _, ev := range events {
+	resp, err := s.client.GetEventsWithCursor(ctx, grantID, calendarID, params)
+	if err != nil {
+		return toolError(sanitizeError(err))
+	}
+
+	result := make([]map[string]any, 0, len(resp.Data))
+	for _, ev := range resp.Data {
 		result = append(result, map[string]any{
 			"id":                 ev.ID,
 			"title":              ev.Title,
@@ -170,6 +170,13 @@ func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *To
 			"location":           ev.Location,
 			"busy":               ev.Busy,
 			"participants_count": len(ev.Participants),
+		})
+	}
+
+	if resp.Pagination.NextCursor != "" {
+		return toolSuccess(map[string]any{
+			"data":        result,
+			"next_cursor": resp.Pagination.NextCursor,
 		})
 	}
 	return toolSuccess(result)
@@ -186,7 +193,7 @@ func (s *Server) executeGetEvent(ctx context.Context, args map[string]any) *Tool
 
 	event, err := s.client.GetEvent(ctx, grantID, calendarID, eventID)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	participants := make([]map[string]any, 0, len(event.Participants))
@@ -286,7 +293,7 @@ func (s *Server) executeCreateEvent(ctx context.Context, args map[string]any) *T
 
 	event, err := s.client.CreateEvent(ctx, grantID, calendarID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -344,7 +351,7 @@ func (s *Server) executeUpdateEvent(ctx context.Context, args map[string]any) *T
 
 	event, err := s.client.UpdateEvent(ctx, grantID, calendarID, eventID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -364,13 +371,10 @@ func (s *Server) executeDeleteEvent(ctx context.Context, args map[string]any) *T
 	calendarID := getString(args, "calendar_id", "primary")
 
 	if err := s.client.DeleteEvent(ctx, grantID, calendarID, eventID); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
-	return toolSuccess(map[string]any{
-		"status":   "deleted",
-		"event_id": eventID,
-	})
+	return toolSuccessText("Deleted event " + eventID)
 }
 
 // executeSendRSVP sends an RSVP response to a calendar event invitation.
@@ -393,7 +397,7 @@ func (s *Server) executeSendRSVP(ctx context.Context, args map[string]any) *Tool
 	}
 
 	if err := s.client.SendRSVP(ctx, grantID, calendarID, eventID, req); err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(map[string]any{
@@ -430,7 +434,7 @@ func (s *Server) executeGetFreeBusy(ctx context.Context, args map[string]any) *T
 
 	resp, err := s.client.GetFreeBusy(ctx, grantID, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(resp.Data)
@@ -464,7 +468,7 @@ func (s *Server) executeGetAvailability(ctx context.Context, args map[string]any
 
 	resp, err := s.client.GetAvailability(ctx, req)
 	if err != nil {
-		return toolError(err.Error())
+		return toolError(sanitizeError(err))
 	}
 
 	return toolSuccess(resp.Data)

@@ -2,9 +2,21 @@
 
 Auto-detect code changes and update relevant documentation files.
 
-**See also:** `.claude/rules/documentation-maintenance.md` for documentation rules.
-
 Context: $ARGUMENTS
+
+## Documentation Mapping
+
+**If you changed code, update docs:**
+
+| Change | Update |
+|--------|--------|
+| New CLI command | docs/COMMANDS.md, CLAUDE.md |
+| New test structure | docs/DEVELOPMENT.md |
+| Architecture change | docs/ARCHITECTURE.md |
+| Security change | docs/security/overview.md |
+| Timezone/calendar | docs/commands/timezone.md |
+
+**Ignore:** `local/*.md` (temporary/historical)
 
 ## Instructions
 

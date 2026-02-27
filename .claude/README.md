@@ -9,9 +9,9 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 ```
 .claude/
 ├── commands/              # 18 actionable skills (invokable workflows)
-├── rules/                 # 6 development rules (auto-applied)
+├── rules/                 # 2 development rules (auto-applied)
 ├── agents/                # 6 specialized agents
-├── hooks/                 # 4 quality gate hooks
+├── hooks/                 # 3 quality gate hooks
 ├── shared/patterns/       # 3 reusable pattern files
 ├── settings.json          # Security hooks & permissions
 ├── HOOKS-CONFIG.md        # Hook configuration guide
@@ -67,16 +67,12 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 
 ---
 
-## Rules (6 Files)
+## Rules (2 Files)
 
 | Rule | Purpose | Applies To |
 |------|---------|-----------|
-| `testing.md` | Testing requirements & patterns | All new code |
-| `go-quality.md` | Go linting + best practices | All Go code |
-| `file-size-limits.md` | 500-line file limit | All files |
-| `documentation-maintenance.md` | Doc update requirements | Code + doc changes |
-| `git-commits.local.md` | Commit message rules | Git operations |
-| `go-cache-cleanup.local.md` | Go cache cleanup | Build issues |
+| `testing.md` | Test coverage targets & commands | All new code |
+| `go-quality.md` | Go workflow & error handling | All Go code |
 
 ---
 
@@ -93,14 +89,13 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 
 ---
 
-## Hooks (4 Quality Gates)
+## Hooks (3 Quality Gates)
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
 | `quality-gate.sh` | Stop | Block on quality failures |
-| `subagent-review.sh` | SubagentStop | Block on critical issues |
-| `pre-compact.sh` | PreCompact | Warn before compaction |
-| `context-injector.sh` | UserPromptSubmit | Inject context reminders |
+| `file-size-check.sh` | PreToolUse (Write) | Block Go files >600 lines |
+| `auto-format.sh` | PostToolUse (Edit) | Auto-format Go files |
 
 ---
 
@@ -157,7 +152,6 @@ Credentials from `nylas auth config` are stored in system keyring under service 
 
 ## Related Documentation
 
-- **Quick Start:** [`CLAUDE-QUICKSTART.md`](../CLAUDE-QUICKSTART.md)
 - **Main Guide:** [`CLAUDE.md`](../CLAUDE.md)
 - **Hook Setup:** [`HOOKS-CONFIG.md`](HOOKS-CONFIG.md)
 - **Architecture:** [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
@@ -167,8 +161,8 @@ Credentials from `nylas auth config` are stored in system keyring under service 
 ## Metrics
 
 - **Total Skills:** 18
-- **Total Rules:** 6
+- **Total Rules:** 2
 - **Total Agents:** 6
-- **Total Hooks:** 4
+- **Total Hooks:** 3
 - **Shared Patterns:** 3
-- **Last Updated:** December 30, 2024
+- **Last Updated:** February 27, 2026

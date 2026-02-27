@@ -33,9 +33,6 @@ func prop(typ, desc string) JSONSchema {
 	return JSONSchema{Type: typ, Desc: desc}
 }
 
-// grantProp is the standard grant_id property description.
-const grantDesc = "Nylas grant ID (omit for default)"
-
 // epochDesc is a suffix for Unix epoch timestamp fields.
 const epochDesc = " (unix epoch)"
 

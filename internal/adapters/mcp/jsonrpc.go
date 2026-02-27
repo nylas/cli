@@ -4,6 +4,7 @@ package mcp
 import (
 	"encoding/json"
 	"log"
+	"strings"
 )
 
 // fallbackErrorResponse is a pre-built error response for when JSON marshaling fails.
@@ -113,6 +114,25 @@ func toolSuccess(data any) *ToolResponse {
 	return &ToolResponse{
 		Content: []ContentBlock{{Type: "text", Text: string(text)}},
 	}
+}
+
+// toolSuccessText builds a successful MCP tool response with plain text (no JSON encoding).
+func toolSuccessText(text string) *ToolResponse {
+	return &ToolResponse{
+		Content: []ContentBlock{{Type: "text", Text: text}},
+	}
+}
+
+// sanitizeError wraps API errors to prevent leaking internal details.
+// Preserves the high-level message while stripping URLs and auth headers.
+func sanitizeError(err error) string {
+	msg := err.Error()
+	// Strip full API URLs that may contain grant IDs or tokens.
+	if idx := strings.Index(msg, "https://"); idx >= 0 {
+		// Keep the error prefix, replace URL with "[API]"
+		msg = msg[:idx] + "[API]"
+	}
+	return msg
 }
 
 // toolError builds an error MCP tool response.

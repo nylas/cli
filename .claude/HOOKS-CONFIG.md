@@ -11,7 +11,6 @@ This document explains how to enable all the custom hooks created for this proje
 | quality-gate.sh | `.claude/hooks/quality-gate.sh` | Stop | Blocks completion if Go code fails checks |
 | subagent-review.sh | `.claude/hooks/subagent-review.sh` | SubagentStop | Blocks if subagent finds critical issues |
 | pre-compact.sh | `.claude/hooks/pre-compact.sh` | PreCompact | Warns before context compaction |
-| context-injector.sh | `.claude/hooks/context-injector.sh` | UserPromptSubmit | Injects contextual reminders |
 | file-size-check.sh | `.claude/hooks/file-size-check.sh` | PreToolUse (Write) | Blocks Go files >600 lines, warns >500 |
 | auto-format.sh | `.claude/hooks/auto-format.sh` | PostToolUse (Edit) | Auto-runs gofmt on edited Go files |
 
@@ -53,14 +52,6 @@ Add to your Claude Code `settings.json`:
         "matcher": "*",
         "hooks": [
           { "type": "command", "command": ".claude/hooks/pre-compact.sh" }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          { "type": "command", "command": ".claude/hooks/context-injector.sh" }
         ]
       }
     ],
@@ -132,21 +123,6 @@ Create `.claude/settings.json` in your project root (same as Option 2).
 
 **Never blocks:** Always exits 0
 
-### context-injector.sh (UserPromptSubmit Hook)
-
-**Purpose:** Injects relevant contextual reminders based on prompt.
-
-**Triggers on keywords:**
-- test, spec, coverage → Testing reminder
-- security, auth, credential → Security reminder
-- api, endpoint, nylas → API v3 reminder
-- playwright, e2e, browser → Playwright selector reminder
-- css, style, frontend → CSS patterns reminder
-- commit, push, pr → Git rules reminder
-- split, large file → File size reminder
-
-**Never blocks:** Always exits 0
-
 ### file-size-check.sh (PreToolUse Hook for Write)
 
 **Purpose:** Enforces file size limits before writing Go files.
@@ -194,16 +170,6 @@ CLAUDE_TOOL_OUTPUT="Task completed" bash .claude/hooks/subagent-review.sh
 
 # Should block
 CLAUDE_TOOL_OUTPUT="CRITICAL: error found" bash .claude/hooks/subagent-review.sh
-```
-
-### Test context-injector.sh
-
-```bash
-# Test testing context
-CLAUDE_USER_PROMPT="write a test for this" bash .claude/hooks/context-injector.sh
-
-# Test security context
-CLAUDE_USER_PROMPT="add authentication" bash .claude/hooks/context-injector.sh
 ```
 
 ### Test file-size-check.sh

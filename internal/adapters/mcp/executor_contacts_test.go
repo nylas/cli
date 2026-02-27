@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -265,21 +266,13 @@ func TestExecuteDeleteContact(t *testing.T) {
 		args      map[string]any
 		mockFn    func(ctx context.Context, grantID, contactID string) error
 		wantError bool
-		checkFn   func(t *testing.T, result map[string]any)
+		wantText  string
 	}{
 		{
-			name:   "happy path deletes contact",
-			args:   map[string]any{"contact_id": "c5"},
-			mockFn: func(_ context.Context, _, _ string) error { return nil },
-			checkFn: func(t *testing.T, result map[string]any) {
-				t.Helper()
-				if result["status"] != "deleted" {
-					t.Errorf("status = %v, want deleted", result["status"])
-				}
-				if result["contact_id"] != "c5" {
-					t.Errorf("contact_id = %v, want c5", result["contact_id"])
-				}
-			},
+			name:     "happy path deletes contact",
+			args:     map[string]any{"contact_id": "c5"},
+			mockFn:   func(_ context.Context, _, _ string) error { return nil },
+			wantText: "c5",
 		},
 		{
 			name:      "missing contact_id returns error",
@@ -310,10 +303,12 @@ func TestExecuteDeleteContact(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if tt.checkFn != nil {
-				tt.checkFn(t, result)
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "Deleted") {
+				t.Errorf("response text = %q, want to contain 'Deleted'", text)
+			}
+			if tt.wantText != "" && !strings.Contains(text, tt.wantText) {
+				t.Errorf("response text = %q, want to contain %q", text, tt.wantText)
 			}
 		})
 	}

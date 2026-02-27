@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -243,13 +244,12 @@ func TestExecuteDeleteCalendar(t *testing.T) {
 			if resp.IsError {
 				t.Fatalf("unexpected error: %s", resp.Content[0].Text)
 			}
-			var result map[string]any
-			unmarshalText(t, resp, &result)
-			if result["status"] != "deleted" {
-				t.Errorf("status = %v, want deleted", result["status"])
+			text := resp.Content[0].Text
+			if !strings.Contains(text, "Deleted") {
+				t.Errorf("response text = %q, want to contain 'Deleted'", text)
 			}
-			if result["calendar_id"] != "cal1" {
-				t.Errorf("calendar_id = %v, want cal1", result["calendar_id"])
+			if !strings.Contains(text, "cal1") {
+				t.Errorf("response text = %q, want to contain 'cal1'", text)
 			}
 		})
 	}

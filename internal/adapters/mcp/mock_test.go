@@ -11,6 +11,7 @@ import (
 // Fields ending in Func are called if non-nil; otherwise zero values are returned.
 type mockNylasClient struct {
 	getMessagesWithParamsFunc  func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error)
+	getMessagesWithCursorFunc  func(ctx context.Context, grantID string, params *domain.MessageQueryParams) (*domain.MessageListResponse, error)
 	getMessageFunc             func(ctx context.Context, grantID, messageID string) (*domain.Message, error)
 	sendMessageFunc            func(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error)
 	updateMessageFunc          func(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
@@ -34,6 +35,7 @@ type mockNylasClient struct {
 	updateCalendarFunc         func(ctx context.Context, grantID, calendarID string, req *domain.UpdateCalendarRequest) (*domain.Calendar, error)
 	deleteCalendarFunc         func(ctx context.Context, grantID, calendarID string) error
 	getEventsFunc              func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) ([]domain.Event, error)
+	getEventsWithCursorFunc    func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error)
 	getEventFunc               func(ctx context.Context, grantID, calendarID, eventID string) (*domain.Event, error)
 	createEventFunc            func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error)
 	updateEventFunc            func(ctx context.Context, grantID, calendarID, eventID string, req *domain.UpdateEventRequest) (*domain.Event, error)
@@ -42,6 +44,7 @@ type mockNylasClient struct {
 	getFreeBusyFunc            func(ctx context.Context, grantID string, req *domain.FreeBusyRequest) (*domain.FreeBusyResponse, error)
 	getAvailabilityFunc        func(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error)
 	getContactsFunc            func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error)
+	getContactsWithCursorFunc  func(ctx context.Context, grantID string, params *domain.ContactQueryParams) (*domain.ContactListResponse, error)
 	getContactFunc             func(ctx context.Context, grantID, contactID string) (*domain.Contact, error)
 	createContactFunc          func(ctx context.Context, grantID string, req *domain.CreateContactRequest) (*domain.Contact, error)
 	updateContactFunc          func(ctx context.Context, grantID, contactID string, req *domain.UpdateContactRequest) (*domain.Contact, error)
@@ -88,7 +91,15 @@ func (m *mockNylasClient) GetMessagesWithParams(ctx context.Context, grantID str
 	return nil, nil
 }
 func (m *mockNylasClient) GetMessagesWithCursor(ctx context.Context, grantID string, params *domain.MessageQueryParams) (*domain.MessageListResponse, error) {
-	return nil, nil
+	if m.getMessagesWithCursorFunc != nil {
+		return m.getMessagesWithCursorFunc(ctx, grantID, params)
+	}
+	// Fallback: delegate to getMessagesWithParamsFunc if set
+	if m.getMessagesWithParamsFunc != nil {
+		msgs, err := m.getMessagesWithParamsFunc(ctx, grantID, params)
+		return &domain.MessageListResponse{Data: msgs}, err
+	}
+	return &domain.MessageListResponse{}, nil
 }
 func (m *mockNylasClient) GetMessage(ctx context.Context, grantID, messageID string) (*domain.Message, error) {
 	if m.getMessageFunc != nil {
@@ -294,7 +305,15 @@ func (m *mockNylasClient) GetEvents(ctx context.Context, grantID, calendarID str
 	return nil, nil
 }
 func (m *mockNylasClient) GetEventsWithCursor(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error) {
-	return nil, nil
+	if m.getEventsWithCursorFunc != nil {
+		return m.getEventsWithCursorFunc(ctx, grantID, calendarID, params)
+	}
+	// Fallback: delegate to getEventsFunc if set
+	if m.getEventsFunc != nil {
+		events, err := m.getEventsFunc(ctx, grantID, calendarID, params)
+		return &domain.EventListResponse{Data: events}, err
+	}
+	return &domain.EventListResponse{}, nil
 }
 func (m *mockNylasClient) GetEvent(ctx context.Context, grantID, calendarID, eventID string) (*domain.Event, error) {
 	if m.getEventFunc != nil {
@@ -371,7 +390,15 @@ func (m *mockNylasClient) GetContacts(ctx context.Context, grantID string, param
 	return nil, nil
 }
 func (m *mockNylasClient) GetContactsWithCursor(ctx context.Context, grantID string, params *domain.ContactQueryParams) (*domain.ContactListResponse, error) {
-	return nil, nil
+	if m.getContactsWithCursorFunc != nil {
+		return m.getContactsWithCursorFunc(ctx, grantID, params)
+	}
+	// Fallback: delegate to getContactsFunc if set
+	if m.getContactsFunc != nil {
+		contacts, err := m.getContactsFunc(ctx, grantID, params)
+		return &domain.ContactListResponse{Data: contacts}, err
+	}
+	return &domain.ContactListResponse{}, nil
 }
 func (m *mockNylasClient) GetContact(ctx context.Context, grantID, contactID string) (*domain.Contact, error) {
 	if m.getContactFunc != nil {
@@ -439,162 +466,3 @@ func (m *mockNylasClient) SendWebhookTestEvent(ctx context.Context, webhookURL s
 func (m *mockNylasClient) GetWebhookMockPayload(ctx context.Context, triggerType string) (map[string]any, error) {
 	return nil, nil
 }
-
-// ============================================================================
-// NotetakerClient
-// ============================================================================
-
-func (m *mockNylasClient) ListNotetakers(ctx context.Context, grantID string, params *domain.NotetakerQueryParams) ([]domain.Notetaker, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetNotetaker(ctx context.Context, grantID, notetakerID string) (*domain.Notetaker, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateNotetaker(ctx context.Context, grantID string, req *domain.CreateNotetakerRequest) (*domain.Notetaker, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteNotetaker(ctx context.Context, grantID, notetakerID string) error {
-	return nil
-}
-func (m *mockNylasClient) GetNotetakerMedia(ctx context.Context, grantID, notetakerID string) (*domain.MediaData, error) {
-	return nil, nil
-}
-
-// ============================================================================
-// InboundClient
-// ============================================================================
-
-func (m *mockNylasClient) ListInboundInboxes(ctx context.Context) ([]domain.InboundInbox, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetInboundInbox(ctx context.Context, grantID string) (*domain.InboundInbox, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateInboundInbox(ctx context.Context, email string) (*domain.InboundInbox, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteInboundInbox(ctx context.Context, grantID string) error { return nil }
-func (m *mockNylasClient) GetInboundMessages(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.InboundMessage, error) {
-	return nil, nil
-}
-
-// ============================================================================
-// SchedulerClient
-// ============================================================================
-
-func (m *mockNylasClient) ListSchedulerConfigurations(ctx context.Context) ([]domain.SchedulerConfiguration, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetSchedulerConfiguration(ctx context.Context, configID string) (*domain.SchedulerConfiguration, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateSchedulerConfiguration(ctx context.Context, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) UpdateSchedulerConfiguration(ctx context.Context, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteSchedulerConfiguration(ctx context.Context, configID string) error {
-	return nil
-}
-func (m *mockNylasClient) CreateSchedulerSession(ctx context.Context, req *domain.CreateSchedulerSessionRequest) (*domain.SchedulerSession, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetSchedulerSession(ctx context.Context, sessionID string) (*domain.SchedulerSession, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) ListBookings(ctx context.Context, configID string) ([]domain.Booking, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) ConfirmBooking(ctx context.Context, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) RescheduleBooking(ctx context.Context, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CancelBooking(ctx context.Context, bookingID string, reason string) error {
-	return nil
-}
-func (m *mockNylasClient) ListSchedulerPages(ctx context.Context) ([]domain.SchedulerPage, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetSchedulerPage(ctx context.Context, pageID string) (*domain.SchedulerPage, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateSchedulerPage(ctx context.Context, req *domain.CreateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) UpdateSchedulerPage(ctx context.Context, pageID string, req *domain.UpdateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteSchedulerPage(ctx context.Context, pageID string) error { return nil }
-
-// ============================================================================
-// AdminClient
-// ============================================================================
-
-func (m *mockNylasClient) ListApplications(ctx context.Context) ([]domain.Application, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetApplication(ctx context.Context, appID string) (*domain.Application, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateApplication(ctx context.Context, req *domain.CreateApplicationRequest) (*domain.Application, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) UpdateApplication(ctx context.Context, appID string, req *domain.UpdateApplicationRequest) (*domain.Application, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteApplication(ctx context.Context, appID string) error { return nil }
-func (m *mockNylasClient) ListConnectors(ctx context.Context) ([]domain.Connector, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetConnector(ctx context.Context, connectorID string) (*domain.Connector, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateConnector(ctx context.Context, req *domain.CreateConnectorRequest) (*domain.Connector, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) UpdateConnector(ctx context.Context, connectorID string, req *domain.UpdateConnectorRequest) (*domain.Connector, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteConnector(ctx context.Context, connectorID string) error { return nil }
-func (m *mockNylasClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) CreateCredential(ctx context.Context, connectorID string, req *domain.CreateCredentialRequest) (*domain.ConnectorCredential, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) UpdateCredential(ctx context.Context, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) DeleteCredential(ctx context.Context, credentialID string) error {
-	return nil
-}
-func (m *mockNylasClient) ListAllGrants(ctx context.Context, params *domain.GrantsQueryParams) ([]domain.Grant, error) {
-	return nil, nil
-}
-func (m *mockNylasClient) GetGrantStats(ctx context.Context) (*domain.GrantStats, error) {
-	return nil, nil
-}
-
-// ============================================================================
-// TransactionalClient
-// ============================================================================
-
-func (m *mockNylasClient) SendTransactionalMessage(ctx context.Context, domainName string, req *domain.SendMessageRequest) (*domain.Message, error) {
-	return nil, nil
-}
-
-// ============================================================================
-// Configuration methods
-// ============================================================================
-
-func (m *mockNylasClient) SetRegion(region string)                              {}
-func (m *mockNylasClient) SetCredentials(clientID, clientSecret, apiKey string) {}
