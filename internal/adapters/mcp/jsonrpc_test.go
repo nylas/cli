@@ -395,6 +395,152 @@ func TestGetBool(t *testing.T) {
 	}
 }
 
+// TestParseToolCallParams verifies parsing of tool call parameters from raw JSON.
+func TestParseToolCallParams(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		raw      json.RawMessage
+		wantName string
+		wantArgs map[string]any
+	}{
+		{
+			name:     "valid params with name and arguments",
+			raw:      json.RawMessage(`{"name":"list_messages","arguments":{"limit":10}}`),
+			wantName: "list_messages",
+			wantArgs: map[string]any{"limit": float64(10)},
+		},
+		{
+			name:     "valid params with cursor",
+			raw:      json.RawMessage(`{"name":"list_events","arguments":{},"cursor":"abc123"}`),
+			wantName: "list_events",
+		},
+		{
+			name:     "name only without arguments",
+			raw:      json.RawMessage(`{"name":"current_time"}`),
+			wantName: "current_time",
+			wantArgs: nil,
+		},
+		{
+			name:     "nil raw returns zero value",
+			raw:      nil,
+			wantName: "",
+			wantArgs: nil,
+		},
+		{
+			name:     "empty raw returns zero value",
+			raw:      json.RawMessage(``),
+			wantName: "",
+			wantArgs: nil,
+		},
+		{
+			name:     "malformed JSON returns zero value",
+			raw:      json.RawMessage(`{invalid`),
+			wantName: "",
+			wantArgs: nil,
+		},
+		{
+			name:     "empty JSON object returns zero value",
+			raw:      json.RawMessage(`{}`),
+			wantName: "",
+			wantArgs: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := parseToolCallParams(tt.raw)
+
+			if got.Name != tt.wantName {
+				t.Errorf("Name = %q, want %q", got.Name, tt.wantName)
+			}
+			if tt.wantArgs != nil {
+				if got.Arguments == nil {
+					t.Fatal("Arguments = nil, want non-nil")
+				}
+				for k, wantV := range tt.wantArgs {
+					if got.Arguments[k] != wantV {
+						t.Errorf("Arguments[%q] = %v, want %v", k, got.Arguments[k], wantV)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestParseToolCallParams_Cursor verifies the cursor field is parsed correctly.
+func TestParseToolCallParams_Cursor(t *testing.T) {
+	t.Parallel()
+
+	raw := json.RawMessage(`{"name":"list_events","arguments":{},"cursor":"page-2"}`)
+	got := parseToolCallParams(raw)
+
+	if got.Cursor != "page-2" {
+		t.Errorf("Cursor = %q, want %q", got.Cursor, "page-2")
+	}
+}
+
+// TestParseInitializeParams verifies parsing of initialize parameters from raw JSON.
+func TestParseInitializeParams(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		raw         json.RawMessage
+		wantVersion string
+	}{
+		{
+			name:        "valid protocol version",
+			raw:         json.RawMessage(`{"protocolVersion":"2024-11-05"}`),
+			wantVersion: "2024-11-05",
+		},
+		{
+			name:        "latest protocol version",
+			raw:         json.RawMessage(`{"protocolVersion":"2025-03-26"}`),
+			wantVersion: "2025-03-26",
+		},
+		{
+			name:        "empty params object",
+			raw:         json.RawMessage(`{}`),
+			wantVersion: "",
+		},
+		{
+			name:        "nil raw returns zero value",
+			raw:         nil,
+			wantVersion: "",
+		},
+		{
+			name:        "empty raw returns zero value",
+			raw:         json.RawMessage(``),
+			wantVersion: "",
+		},
+		{
+			name:        "malformed JSON returns zero value",
+			raw:         json.RawMessage(`not json`),
+			wantVersion: "",
+		},
+		{
+			name:        "extra fields are ignored",
+			raw:         json.RawMessage(`{"protocolVersion":"2024-11-05","clientInfo":{"name":"test"}}`),
+			wantVersion: "2024-11-05",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := parseInitializeParams(tt.raw)
+			if got.ProtocolVersion != tt.wantVersion {
+				t.Errorf("ProtocolVersion = %q, want %q", got.ProtocolVersion, tt.wantVersion)
+			}
+		})
+	}
+}
+
 func TestGetStringSlice(t *testing.T) {
 	t.Parallel()
 
