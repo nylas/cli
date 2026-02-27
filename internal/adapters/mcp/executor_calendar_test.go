@@ -401,8 +401,13 @@ func TestExecuteCreateEvent(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "missing time returns error",
+			args:      map[string]any{"title": "Meeting"},
+			wantError: true,
+		},
+		{
 			name: "api error propagates",
-			args: map[string]any{"title": "Meeting"},
+			args: map[string]any{"title": "Meeting", "start_time": float64(1700000000), "end_time": float64(1700003600)},
 			mockFn: func(_ context.Context, _, _ string, _ *domain.CreateEventRequest) (*domain.Event, error) {
 				return nil, errors.New("api down")
 			},

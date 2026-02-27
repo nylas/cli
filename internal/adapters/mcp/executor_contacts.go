@@ -16,7 +16,7 @@ import (
 func (s *Server) executeListContacts(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)
 	params := &domain.ContactQueryParams{
-		Limit:       getInt(args, "limit", 10),
+		Limit:       clampLimit(args, "limit", 10),
 		Email:       getString(args, "email", ""),
 		PhoneNumber: getString(args, "phone_number", ""),
 		Source:      getString(args, "source", ""),
@@ -138,6 +138,12 @@ func (s *Server) executeUpdateContact(ctx context.Context, args map[string]any) 
 	}
 	if v := getString(args, "notes", ""); v != "" {
 		req.Notes = &v
+	}
+	if emails := parseContactEmails(args); len(emails) > 0 {
+		req.Emails = emails
+	}
+	if phones := parseContactPhones(args); len(phones) > 0 {
+		req.PhoneNumbers = phones
 	}
 
 	contact, err := s.client.UpdateContact(ctx, grantID, contactID, req)

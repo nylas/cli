@@ -15,7 +15,7 @@ import (
 func (s *Server) executeListThreads(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)
 	params := &domain.ThreadQueryParams{
-		Limit:   getInt(args, "limit", 10),
+		Limit:   clampLimit(args, "limit", 10),
 		Subject: getString(args, "subject", ""),
 		From:    getString(args, "from", ""),
 		To:      getString(args, "to", ""),

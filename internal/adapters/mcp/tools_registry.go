@@ -339,16 +339,30 @@ func registeredTools() []MCPTool {
 			Name:        "update_event",
 			Description: "Update a calendar event.",
 			InputSchema: objectSchema(map[string]JSONSchema{
-				"calendar_id":  prop("string", `Calendar ID (default "primary")`),
-				"event_id":     prop("string", "Event ID"),
-				"title":        prop("string", "Title"),
-				"description":  prop("string", "Description"),
-				"location":     prop("string", "Location"),
-				"start_time":   prop("number", "Start time"+epochDesc),
-				"end_time":     prop("number", "End time"+epochDesc),
-				"participants": participantArraySchema("Participants"),
-				"busy":         prop("boolean", "Blocks time as busy"),
-				"visibility":   {Type: "string", Desc: "Visibility", Enum: []string{"public", "private"}},
+				"calendar_id":      prop("string", `Calendar ID (default "primary")`),
+				"event_id":         prop("string", "Event ID"),
+				"title":            prop("string", "Title"),
+				"description":      prop("string", "Description"),
+				"location":         prop("string", "Location"),
+				"start_time":       prop("number", "Start time"+epochDesc),
+				"end_time":         prop("number", "End time"+epochDesc),
+				"start_date":       prop("string", "All-day start (YYYY-MM-DD)"),
+				"end_date":         prop("string", "All-day end (YYYY-MM-DD)"),
+				"participants":     participantArraySchema("Participants"),
+				"busy":             prop("boolean", "Blocks time as busy"),
+				"visibility":       {Type: "string", Desc: "Visibility", Enum: []string{"public", "private"}},
+				"conferencing_url": prop("string", "Conferencing URL"),
+				"reminders": {
+					Type: "array",
+					Desc: "Reminders",
+					Items: &JSONSchema{
+						Type: "object",
+						Properties: map[string]JSONSchema{
+							"minutes": prop("number", "Minutes before event"),
+							"method":  prop("string", "Method (email, popup)"),
+						},
+					},
+				},
 			}, []string{"event_id"}),
 		},
 		{
@@ -400,7 +414,7 @@ func registeredTools() []MCPTool {
 			InputSchema: objectSchema(map[string]JSONSchema{
 				"calendar_id": prop("string", `Calendar ID (default "primary")`),
 				"event_id":    prop("string", "Event ID"),
-				"status":      prop("string", `"yes", "no", or "maybe"`),
+				"status":      {Type: "string", Desc: `"yes", "no", or "maybe"`, Enum: []string{"yes", "no", "maybe"}},
 				"comment":     prop("string", "Optional comment"),
 			}, []string{"event_id", "status"}),
 		},
@@ -471,6 +485,28 @@ func registeredTools() []MCPTool {
 				"company_name": prop("string", "Company"),
 				"job_title":    prop("string", "Job title"),
 				"notes":        prop("string", "Notes"),
+				"emails": {
+					Type: "array",
+					Desc: "Emails",
+					Items: &JSONSchema{
+						Type: "object",
+						Properties: map[string]JSONSchema{
+							"email": prop("string", "Email"),
+							"type":  prop("string", "Type (work, home)"),
+						},
+					},
+				},
+				"phone_numbers": {
+					Type: "array",
+					Desc: "Phone numbers",
+					Items: &JSONSchema{
+						Type: "object",
+						Properties: map[string]JSONSchema{
+							"number": prop("string", "Number"),
+							"type":   prop("string", "Type (work, mobile)"),
+						},
+					},
+				},
 			}, []string{"contact_id"}),
 		},
 		{

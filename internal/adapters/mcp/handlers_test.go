@@ -235,7 +235,7 @@ func TestHandleToolCall_AllToolsRoute(t *testing.T) {
 		// Event tools
 		{name: "list_events", args: map[string]any{}},
 		{name: "get_event", args: map[string]any{"event_id": "e1"}},
-		{name: "create_event", args: map[string]any{"title": "test"}},
+		{name: "create_event", args: map[string]any{"title": "test", "start_time": float64(1700000000), "end_time": float64(1700003600)}},
 		{name: "update_event", args: map[string]any{"event_id": "e1"}},
 		{name: "delete_event", args: map[string]any{"event_id": "e1"}},
 		{name: "send_rsvp", args: map[string]any{"event_id": "e1", "status": "yes"}},
@@ -250,6 +250,7 @@ func TestHandleToolCall_AllToolsRoute(t *testing.T) {
 			"start_time":       float64(1000),
 			"end_time":         float64(2000),
 			"duration_minutes": float64(30),
+			"participants":     []any{map[string]any{"email": "test@example.com"}},
 		}},
 
 		// Contact tools

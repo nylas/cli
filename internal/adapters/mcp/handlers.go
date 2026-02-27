@@ -35,7 +35,10 @@ func negotiateVersion(requested string) string {
 
 // handleInitialize responds to the MCP initialize request with server capabilities.
 func (s *Server) handleInitialize(req *Request) []byte {
-	params := parseInitializeParams(req.Params)
+	params, err := parseInitializeParams(req.Params)
+	if err != nil {
+		return errorResponse(req.ID, codeInvalidParams, err.Error())
+	}
 	negotiated := negotiateVersion(params.ProtocolVersion)
 
 	// Detect user's timezone for guidance
@@ -82,8 +85,14 @@ func (s *Server) handleToolsList(req *Request) []byte {
 
 // handleToolCall dispatches a tool call to the appropriate executor.
 func (s *Server) handleToolCall(ctx context.Context, req *Request) []byte {
-	params := parseToolCallParams(req.Params)
+	params, err := parseToolCallParams(req.Params)
+	if err != nil {
+		return errorResponse(req.ID, codeInvalidParams, err.Error())
+	}
 	name := params.Name
+	if name == "" {
+		return errorResponse(req.ID, codeInvalidParams, "tool name is required")
+	}
 	args := params.Arguments
 	if args == nil {
 		args = make(map[string]any)

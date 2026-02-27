@@ -290,8 +290,13 @@ func TestExecuteGetAvailability(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:   "happy path returns data",
-			args:   map[string]any{"start_time": float64(1700000000), "end_time": float64(1700086400), "duration_minutes": float64(30)},
+			name: "happy path returns data",
+			args: map[string]any{
+				"start_time":       float64(1700000000),
+				"end_time":         float64(1700086400),
+				"duration_minutes": float64(30),
+				"participants":     []any{map[string]any{"email": "test@example.com"}},
+			},
 			mockFn: happyMock,
 		},
 		{
@@ -310,8 +315,18 @@ func TestExecuteGetAvailability(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "missing participants returns error",
+			args:      map[string]any{"start_time": float64(1700000000), "end_time": float64(1700086400), "duration_minutes": float64(30)},
+			wantError: true,
+		},
+		{
 			name: "api error propagates",
-			args: map[string]any{"start_time": float64(1700000000), "end_time": float64(1700086400), "duration_minutes": float64(30)},
+			args: map[string]any{
+				"start_time":       float64(1700000000),
+				"end_time":         float64(1700086400),
+				"duration_minutes": float64(30),
+				"participants":     []any{map[string]any{"email": "test@example.com"}},
+			},
 			mockFn: func(_ context.Context, _ *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error) {
 				return nil, errors.New("api down")
 			},

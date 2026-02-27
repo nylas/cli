@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -50,7 +51,10 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	grantID, _ := common.GetGrantID(nil)
+	grantID, err := common.GetGrantID(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve grant ID: %v\n", err)
+	}
 
 	server := mcpserver.NewServer(client, grantID)
 
@@ -70,6 +74,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	go func() {
 		<-sigChan
