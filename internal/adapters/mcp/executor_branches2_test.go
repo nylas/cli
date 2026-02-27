@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -385,17 +386,14 @@ func TestHandleToolCall_NilArguments(t *testing.T) {
 	ctx := context.Background()
 	s := newMockServer(&mockNylasClient{})
 
+	params, _ := json.Marshal(ToolCallParams{
+		Name:      "current_time",
+		Arguments: nil,
+	})
 	req := &Request{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
-			Cursor    string         `json:"cursor,omitempty"`
-		}{
-			Name:      "current_time",
-			Arguments: nil,
-		},
+		Params:  params,
 	}
 
 	raw := s.handleToolCall(ctx, req)

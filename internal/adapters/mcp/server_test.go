@@ -131,8 +131,9 @@ func TestHandleInitialize_Fields(t *testing.T) {
 		t.Fatalf("result field missing or wrong type")
 	}
 
-	if result["protocolVersion"] != protocolVersion {
-		t.Errorf("protocolVersion = %v, want %v", result["protocolVersion"], protocolVersion)
+	// With empty params, negotiation returns latestVersion.
+	if result["protocolVersion"] != latestVersion {
+		t.Errorf("protocolVersion = %v, want %v", result["protocolVersion"], latestVersion)
 	}
 
 	serverInfo, ok := result["serverInfo"].(map[string]any)
@@ -153,6 +154,56 @@ func TestHandleInitialize_Fields(t *testing.T) {
 	instructions, ok := result["instructions"].(string)
 	if !ok || instructions == "" {
 		t.Error("instructions field missing or empty")
+	}
+}
+
+// TestHandleInitialize_VersionNegotiation verifies protocol version negotiation.
+func TestHandleInitialize_VersionNegotiation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		clientVer   string
+		wantVersion string
+	}{
+		{
+			name:        "client requests 2024-11-05",
+			clientVer:   "2024-11-05",
+			wantVersion: "2024-11-05",
+		},
+		{
+			name:        "client requests 2025-06-18",
+			clientVer:   "2025-06-18",
+			wantVersion: "2025-06-18",
+		},
+		{
+			name:        "client requests unknown version",
+			clientVer:   "2099-01-01",
+			wantVersion: latestVersion,
+		},
+		{
+			name:        "client sends empty version",
+			clientVer:   "",
+			wantVersion: latestVersion,
+		},
+	}
+
+	s := newTestServer("")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			params, _ := json.Marshal(InitializeParams{ProtocolVersion: tt.clientVer})
+			req := &Request{Method: "initialize", ID: float64(1), Params: params}
+			data := s.handleInitialize(req)
+
+			got := unmarshalResponse(t, data)
+			result := got["result"].(map[string]any)
+
+			if result["protocolVersion"] != tt.wantVersion {
+				t.Errorf("protocolVersion = %v, want %v", result["protocolVersion"], tt.wantVersion)
+			}
+		})
 	}
 }
 
@@ -218,6 +269,31 @@ func TestHandleToolsList_ToolCount(t *testing.T) {
 		name, _ := tool["name"].(string)
 		if name == "" {
 			t.Errorf("tools[%d] has empty name", i)
+		}
+	}
+}
+
+// TestHandleToolsList_ToolsHaveTitlesAndAnnotations verifies JSON output includes new fields.
+func TestHandleToolsList_ToolsHaveTitlesAndAnnotations(t *testing.T) {
+	t.Parallel()
+
+	s := newTestServer("")
+	req := &Request{Method: "tools/list", ID: float64(2)}
+	data := s.handleToolsList(req)
+
+	got := unmarshalResponse(t, data)
+	result := got["result"].(map[string]any)
+	toolsRaw := result["tools"].([]any)
+
+	for i, raw := range toolsRaw {
+		tool := raw.(map[string]any)
+		name, _ := tool["name"].(string)
+
+		if _, ok := tool["title"]; !ok {
+			t.Errorf("tools[%d] (%s) missing 'title' field", i, name)
+		}
+		if _, ok := tool["annotations"]; !ok {
+			t.Errorf("tools[%d] (%s) missing 'annotations' field", i, name)
 		}
 	}
 }

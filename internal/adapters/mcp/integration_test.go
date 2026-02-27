@@ -249,8 +249,9 @@ func TestIntegration_Initialize(t *testing.T) {
 	}
 	result := assertResult(t, resp)
 
-	if result["protocolVersion"] != protocolVersion {
-		t.Errorf("protocolVersion = %v, want %s", result["protocolVersion"], protocolVersion)
+	// Empty params → server returns latestVersion.
+	if result["protocolVersion"] != latestVersion {
+		t.Errorf("protocolVersion = %v, want %s", result["protocolVersion"], latestVersion)
 	}
 
 	serverInfo, ok := result["serverInfo"].(map[string]any)
@@ -526,10 +527,13 @@ func TestIntegration_ToolCall_UnknownTool(t *testing.T) {
 		},
 	})
 
-	// tools/call always returns a success response; error is inside isError field.
-	result := assertResult(t, resp)
-	isErr, _ := result["isError"].(bool)
-	if !isErr {
-		t.Errorf("expected isError=true for unknown tool, got result=%v", result)
+	// Unknown tool now returns a JSON-RPC error with code -32602.
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error field for unknown tool; got %v", resp)
+	}
+	gotCode := int(errObj["code"].(float64))
+	if gotCode != codeInvalidParams {
+		t.Errorf("error.code = %d, want %d", gotCode, codeInvalidParams)
 	}
 }

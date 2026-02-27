@@ -404,15 +404,13 @@ func TestSDK_ToolCall_UnknownTool(t *testing.T) {
 	session := connectSDKClient(t, s)
 	ctx := context.Background()
 
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+	// Unknown tool now returns a JSON-RPC error (-32602), which the SDK surfaces as err.
+	_, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "totally_fake_tool",
 		Arguments: map[string]any{},
 	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !result.IsError {
-		t.Error("expected isError=true for unknown tool")
+	if err == nil {
+		t.Error("expected error for unknown tool, got nil")
 	}
 }
 

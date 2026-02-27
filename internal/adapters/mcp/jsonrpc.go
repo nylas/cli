@@ -14,19 +14,46 @@ const (
 	codeParseError     = -32700
 	codeInvalidRequest = -32600
 	codeMethodNotFound = -32601
+	codeInvalidParams  = -32602
 	codeInternalError  = -32603
 )
 
 // Request represents a JSON-RPC 2.0 request.
 type Request struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      any    `json:"id"`
-	Method  string `json:"method"`
-	Params  struct {
-		Name      string         `json:"name"`
-		Arguments map[string]any `json:"arguments"`
-		Cursor    string         `json:"cursor,omitempty"`
-	} `json:"params"`
+	JSONRPC string          `json:"jsonrpc"`
+	ID      any             `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+}
+
+// ToolCallParams holds parsed parameters for a tools/call request.
+type ToolCallParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+	Cursor    string         `json:"cursor,omitempty"`
+}
+
+// InitializeParams holds parsed parameters for an initialize request.
+type InitializeParams struct {
+	ProtocolVersion string `json:"protocolVersion"`
+}
+
+// parseToolCallParams parses ToolCallParams from raw JSON params.
+func parseToolCallParams(raw json.RawMessage) ToolCallParams {
+	var p ToolCallParams
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &p)
+	}
+	return p
+}
+
+// parseInitializeParams parses InitializeParams from raw JSON params.
+func parseInitializeParams(raw json.RawMessage) InitializeParams {
+	var p InitializeParams
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &p)
+	}
+	return p
 }
 
 // Response represents a JSON-RPC 2.0 response.
