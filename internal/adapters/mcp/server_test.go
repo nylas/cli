@@ -172,9 +172,9 @@ func TestHandleInitialize_VersionNegotiation(t *testing.T) {
 			wantVersion: "2024-11-05",
 		},
 		{
-			name:        "client requests 2025-06-18",
-			clientVer:   "2025-06-18",
-			wantVersion: "2025-06-18",
+			name:        "client requests 2025-03-26",
+			clientVer:   "2025-03-26",
+			wantVersion: "2025-03-26",
 		},
 		{
 			name:        "client requests unknown version",

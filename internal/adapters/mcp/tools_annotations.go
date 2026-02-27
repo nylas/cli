@@ -125,8 +125,18 @@ func buildAnnotations(name string) *ToolAnnotations {
 		}
 	}
 
-	// Mutating tools: send_*, create_*, update_*, smart_compose*.
+	// Idempotent mutating tools: update_* (PUT-like semantics).
+	if strings.HasPrefix(name, "update_") {
+		return &ToolAnnotations{
+			DestructiveHint: boolPtr(false),
+			IdempotentHint:  boolPtr(true),
+			OpenWorldHint:   boolPtr(true),
+		}
+	}
+
+	// Non-destructive mutating tools: send_*, create_*, smart_compose*, send_rsvp.
 	return &ToolAnnotations{
-		OpenWorldHint: boolPtr(true),
+		DestructiveHint: boolPtr(false),
+		OpenWorldHint:   boolPtr(true),
 	}
 }

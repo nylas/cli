@@ -8,12 +8,12 @@ import (
 
 // Supported protocol versions (newest first).
 var supportedVersions = []string{
-	"2025-06-18",
+	"2025-03-26",
 	"2024-11-05",
 }
 
 // latestVersion is the most recent protocol version this server supports.
-const latestVersion = "2025-06-18"
+const latestVersion = "2025-03-26"
 
 // Server info constants.
 const (

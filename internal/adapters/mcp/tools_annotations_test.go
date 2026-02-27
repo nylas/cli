@@ -214,6 +214,63 @@ func TestAnnotateTools_JSONSerialization(t *testing.T) {
 	}
 }
 
+// TestAnnotateTools_MutatingToolsNotDestructive verifies send/create/update/smart_compose
+// tools explicitly set destructiveHint=false.
+func TestAnnotateTools_MutatingToolsNotDestructive(t *testing.T) {
+	t.Parallel()
+
+	tools := registeredTools()
+	for _, tool := range tools {
+		name := tool.Name
+		isMutating := strings.HasPrefix(name, "send_") ||
+			strings.HasPrefix(name, "create_") ||
+			strings.HasPrefix(name, "update_") ||
+			strings.HasPrefix(name, "smart_compose")
+		if !isMutating {
+			continue
+		}
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			a := tool.Annotations
+			if a == nil {
+				t.Fatalf("tool %q has nil annotations", name)
+			}
+			if a.DestructiveHint == nil {
+				t.Errorf("tool %q should explicitly set destructiveHint (spec default is true)", name)
+			} else if *a.DestructiveHint {
+				t.Errorf("tool %q should have destructiveHint=false", name)
+			}
+		})
+	}
+}
+
+// TestAnnotateTools_UpdateToolsIdempotent verifies update_* tools have idempotentHint=true.
+func TestAnnotateTools_UpdateToolsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	tools := registeredTools()
+	for _, tool := range tools {
+		name := tool.Name
+		if !strings.HasPrefix(name, "update_") {
+			continue
+		}
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			a := tool.Annotations
+			if a == nil {
+				t.Fatalf("tool %q has nil annotations", name)
+			}
+			if a.IdempotentHint == nil || !*a.IdempotentHint {
+				t.Errorf("tool %q should have idempotentHint=true", name)
+			}
+		})
+	}
+}
+
 // TestToolTitles_CoverAllTools verifies the toolTitles map covers all registered tools.
 func TestToolTitles_CoverAllTools(t *testing.T) {
 	t.Parallel()
