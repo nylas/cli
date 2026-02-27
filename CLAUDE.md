@@ -59,14 +59,10 @@
 
 ## LEARNINGS
 
-### Project-Specific Gotchas
-- Go tests: ALWAYS use table-driven tests with t.Run()
+### Non-Obvious Gotchas
 - Air handlers: ALWAYS return after error responses
-- Integration tests: ALWAYS use acquireRateLimit(t) before API calls
-- Frontend JS: ALWAYS use textContent, NEVER innerHTML (XSS)
 - Use shared helpers: `common.GetNylasClient()`, `common.GetGrantID(args)`, `common.WithClient()`, `common.FormatSize()`, `common.PrintSuccess()`/`PrintError()`, `common.GetOutputWriter(cmd)`, `httputil.WriteJSON()`/`LimitedBody()`
 - AI clients: Use shared helpers in `adapters/ai/base_client.go`
-- Playwright: ALWAYS use semantic selectors, NEVER CSS/XPath
 
 ### Time-Wasting Bugs
 - Go build cache corruption: `sudo rm -rf ~/.cache/go-build ~/go/pkg/mod && go clean -cache`
