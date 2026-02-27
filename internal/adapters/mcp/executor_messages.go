@@ -70,8 +70,9 @@ func cleanSnippet(s string) string {
 	}
 	s = strings.TrimSpace(s)
 
-	if len(s) > maxSnippetLen {
-		s = s[:maxSnippetLen] + "..."
+	runes := []rune(s)
+	if len(runes) > maxSnippetLen {
+		s = string(runes[:maxSnippetLen]) + "..."
 	}
 	return s
 }
@@ -120,7 +121,7 @@ func formatParticipants(participants []domain.EmailParticipant) []string {
 func (s *Server) executeListMessages(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)
 	params := &domain.MessageQueryParams{
-		Limit:          getInt(args, "limit", 10),
+		Limit:          clampLimit(args, "limit", 10),
 		Subject:        getString(args, "subject", ""),
 		From:           getString(args, "from", ""),
 		To:             getString(args, "to", ""),
@@ -184,8 +185,8 @@ func (s *Server) executeGetMessage(ctx context.Context, args map[string]any) *To
 	}
 
 	body := stripHTML(msg.Body)
-	if len(body) > maxBodyLen {
-		body = body[:maxBodyLen]
+	if bodyRunes := []rune(body); len(bodyRunes) > maxBodyLen {
+		body = string(bodyRunes[:maxBodyLen])
 	}
 
 	from := ""
@@ -335,7 +336,7 @@ func (s *Server) executeSmartComposeReply(ctx context.Context, args map[string]a
 // executeListDrafts lists email drafts.
 func (s *Server) executeListDrafts(ctx context.Context, args map[string]any) *ToolResponse {
 	grantID := s.resolveGrantID(args)
-	limit := getInt(args, "limit", 10)
+	limit := clampLimit(args, "limit", 10)
 
 	drafts, err := s.client.GetDrafts(ctx, grantID, limit)
 	if err != nil {

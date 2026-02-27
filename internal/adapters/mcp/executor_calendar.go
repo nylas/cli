@@ -23,6 +23,7 @@ func (s *Server) executeListCalendars(ctx context.Context, args map[string]any) 
 			"timezone":    cal.Timezone,
 			"read_only":   cal.ReadOnly,
 			"is_primary":  cal.IsPrimary,
+			"hex_color":   cal.HexColor,
 		})
 	}
 	return toolSuccess(result)
@@ -134,7 +135,7 @@ func (s *Server) executeListEvents(ctx context.Context, args map[string]any) *To
 	calendarID := getString(args, "calendar_id", "primary")
 
 	params := &domain.EventQueryParams{
-		Limit: getInt(args, "limit", 10),
+		Limit: clampLimit(args, "limit", 10),
 	}
 	if v := getString(args, "title", ""); v != "" {
 		params.Title = v
@@ -261,15 +262,28 @@ func (s *Server) executeCreateEvent(ctx context.Context, args map[string]any) *T
 	}
 
 	if st := getInt64(args, "start_time", 0); st > 0 {
+		et := getInt64(args, "end_time", 0)
+		if et == 0 {
+			return toolError("end_time is required when start_time is provided")
+		}
+		if et <= st {
+			return toolError("end_time must be after start_time")
+		}
 		req.When = domain.EventWhen{
 			StartTime: st,
-			EndTime:   getInt64(args, "end_time", 0),
+			EndTime:   et,
 		}
 	} else if sd := getString(args, "start_date", ""); sd != "" {
+		ed := getString(args, "end_date", "")
+		if ed == "" {
+			return toolError("end_date is required when start_date is provided")
+		}
 		req.When = domain.EventWhen{
 			StartDate: sd,
-			EndDate:   getString(args, "end_date", ""),
+			EndDate:   ed,
 		}
+	} else {
+		return toolError("start_time or start_date is required")
 	}
 
 	req.Participants = parseEventParticipants(args)
@@ -328,15 +342,26 @@ func (s *Server) executeUpdateEvent(ctx context.Context, args map[string]any) *T
 	}
 
 	if st := getInt64(args, "start_time", 0); st > 0 {
+		et := getInt64(args, "end_time", 0)
+		if et == 0 {
+			return toolError("end_time is required when start_time is provided")
+		}
+		if et <= st {
+			return toolError("end_time must be after start_time")
+		}
 		when := domain.EventWhen{
 			StartTime: st,
-			EndTime:   getInt64(args, "end_time", 0),
+			EndTime:   et,
 		}
 		req.When = &when
 	} else if sd := getString(args, "start_date", ""); sd != "" {
+		ed := getString(args, "end_date", "")
+		if ed == "" {
+			return toolError("end_date is required when start_date is provided")
+		}
 		when := domain.EventWhen{
 			StartDate: sd,
-			EndDate:   getString(args, "end_date", ""),
+			EndDate:   ed,
 		}
 		req.When = &when
 	}
@@ -347,6 +372,16 @@ func (s *Server) executeUpdateEvent(ctx context.Context, args map[string]any) *T
 
 	if b := getBool(args, "busy"); b != nil {
 		req.Busy = b
+	}
+
+	if url := getString(args, "conferencing_url", ""); url != "" {
+		req.Conferencing = &domain.Conferencing{
+			Details: &domain.ConferencingDetails{URL: url},
+		}
+	}
+
+	if reminders := parseReminders(args); reminders != nil {
+		req.Reminders = reminders
 	}
 
 	event, err := s.client.UpdateEvent(ctx, grantID, calendarID, eventID, req)
@@ -387,6 +422,9 @@ func (s *Server) executeSendRSVP(ctx context.Context, args map[string]any) *Tool
 	status := getString(args, "status", "")
 	if status == "" {
 		return toolError("status is required (yes, no, or maybe)")
+	}
+	if status != "yes" && status != "no" && status != "maybe" {
+		return toolError("status must be yes, no, or maybe")
 	}
 	calendarID := getString(args, "calendar_id", "primary")
 	comment := getString(args, "comment", "")
@@ -457,11 +495,16 @@ func (s *Server) executeGetAvailability(ctx context.Context, args map[string]any
 		return toolError("duration_minutes is required")
 	}
 
+	participants := parseAvailabilityParticipants(args)
+	if len(participants) == 0 {
+		return toolError("at least one participant is required")
+	}
+
 	req := &domain.AvailabilityRequest{
 		StartTime:       startTime,
 		EndTime:         endTime,
 		DurationMinutes: durationMinutes,
-		Participants:    parseAvailabilityParticipants(args),
+		Participants:    participants,
 		IntervalMinutes: getInt(args, "interval_minutes", 0),
 		RoundTo:         getInt(args, "round_to", 0),
 	}

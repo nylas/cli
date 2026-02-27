@@ -98,6 +98,7 @@ var (
 	}
 	annotationsDestructive = &ToolAnnotations{
 		DestructiveHint: boolPtr(true),
+		IdempotentHint:  boolPtr(true), // HTTP DELETE is idempotent
 	}
 	annotationsIdempotentMutating = &ToolAnnotations{
 		DestructiveHint: boolPtr(false),

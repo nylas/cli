@@ -452,7 +452,7 @@ func TestParseToolCallParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := parseToolCallParams(tt.raw)
+			got, _ := parseToolCallParams(tt.raw)
 
 			if got.Name != tt.wantName {
 				t.Errorf("Name = %q, want %q", got.Name, tt.wantName)
@@ -476,7 +476,7 @@ func TestParseToolCallParams_Cursor(t *testing.T) {
 	t.Parallel()
 
 	raw := json.RawMessage(`{"name":"list_events","arguments":{},"cursor":"page-2"}`)
-	got := parseToolCallParams(raw)
+	got, _ := parseToolCallParams(raw)
 
 	if got.Cursor != "page-2" {
 		t.Errorf("Cursor = %q, want %q", got.Cursor, "page-2")
@@ -533,7 +533,7 @@ func TestParseInitializeParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := parseInitializeParams(tt.raw)
+			got, _ := parseInitializeParams(tt.raw)
 			if got.ProtocolVersion != tt.wantVersion {
 				t.Errorf("ProtocolVersion = %q, want %q", got.ProtocolVersion, tt.wantVersion)
 			}

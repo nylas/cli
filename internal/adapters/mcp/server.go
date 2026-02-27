@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -61,7 +62,7 @@ func (s *Server) RunWithIO(ctx context.Context, r io.Reader, w io.Writer) error 
 
 		payload, usedContentLength, err := readRequestPayload(reader)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return fmt.Errorf("reading stdin: %w", err)
@@ -118,14 +119,23 @@ func readRequestPayload(reader *bufio.Reader) ([]byte, bool, error) {
 		if peek[0] == '{' || peek[0] == '[' {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					line = bytes.TrimSpace(line)
 					if len(line) == 0 {
 						return nil, false, io.EOF
 					}
+					// SEC-001: enforce size limit on newline-delimited payloads.
+					if len(line) > maxContentLength {
+						return nil, false, fmt.Errorf("payload size %d exceeds maximum %d", len(line), maxContentLength)
+					}
 					return line, false, nil
 				}
 				return nil, false, err
+			}
+
+			// SEC-001: enforce size limit on newline-delimited payloads.
+			if len(line) > maxContentLength {
+				return nil, false, fmt.Errorf("payload size %d exceeds maximum %d", len(line), maxContentLength)
 			}
 
 			line = bytes.TrimSpace(line)

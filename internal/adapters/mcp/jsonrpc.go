@@ -3,8 +3,9 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
-	"strings"
+	"regexp"
 )
 
 // fallbackErrorResponse is a pre-built error response for when JSON marshaling fails.
@@ -40,21 +41,25 @@ type InitializeParams struct {
 }
 
 // parseToolCallParams parses ToolCallParams from raw JSON params.
-func parseToolCallParams(raw json.RawMessage) ToolCallParams {
+func parseToolCallParams(raw json.RawMessage) (ToolCallParams, error) {
 	var p ToolCallParams
 	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &p)
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return p, fmt.Errorf("invalid tool call params: %w", err)
+		}
 	}
-	return p
+	return p, nil
 }
 
 // parseInitializeParams parses InitializeParams from raw JSON params.
-func parseInitializeParams(raw json.RawMessage) InitializeParams {
+func parseInitializeParams(raw json.RawMessage) (InitializeParams, error) {
 	var p InitializeParams
 	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &p)
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return p, fmt.Errorf("invalid initialize params: %w", err)
+		}
 	}
-	return p
+	return p, nil
 }
 
 // Response represents a JSON-RPC 2.0 response.
@@ -123,15 +128,14 @@ func toolSuccessText(text string) *ToolResponse {
 	}
 }
 
+// reURL matches http:// and https:// URLs for sanitization.
+var reURL = regexp.MustCompile(`https?://\S+`)
+
 // sanitizeError wraps API errors to prevent leaking internal details.
-// Preserves the high-level message while stripping URLs and auth headers.
+// Strips all URLs (http/https) that may contain grant IDs or tokens.
 func sanitizeError(err error) string {
 	msg := err.Error()
-	// Strip full API URLs that may contain grant IDs or tokens.
-	if idx := strings.Index(msg, "https://"); idx >= 0 {
-		// Keep the error prefix, replace URL with "[API]"
-		msg = msg[:idx] + "[API]"
-	}
+	msg = reURL.ReplaceAllString(msg, "[API]")
 	return msg
 }
 
@@ -141,6 +145,21 @@ func toolError(message string) *ToolResponse {
 		Content: []ContentBlock{{Type: "text", Text: message}},
 		IsError: true,
 	}
+}
+
+// maxLimit caps the maximum number of results for list operations.
+const maxLimit = 200
+
+// clampLimit returns the limit value clamped to [1, maxLimit].
+func clampLimit(args map[string]any, key string, defaultVal int) int {
+	v := getInt(args, key, defaultVal)
+	if v <= 0 {
+		return defaultVal
+	}
+	if v > maxLimit {
+		return maxLimit
+	}
+	return v
 }
 
 // getString extracts a string argument with a default value.

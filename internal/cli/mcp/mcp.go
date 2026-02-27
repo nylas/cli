@@ -14,7 +14,7 @@ func NewMCPCmd() *cobra.Command {
 your Nylas email, calendar, and contacts.
 
 This runs a native MCP server that calls the Nylas API directly using
-your locally configured credentials. 37 tools across email, calendar,
+your locally configured credentials. 47 tools across email, calendar,
 contacts, and utilities.
 
 Example configuration for Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json):
