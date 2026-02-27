@@ -112,7 +112,7 @@ func TestAnnotateTools_DestructiveTools(t *testing.T) {
 	}
 }
 
-// TestAnnotateTools_LocalUtilityTools verifies utility tools have no openWorldHint.
+// TestAnnotateTools_LocalUtilityTools verifies utility tools have openWorldHint=false (no API call).
 func TestAnnotateTools_LocalUtilityTools(t *testing.T) {
 	t.Parallel()
 
@@ -136,8 +136,8 @@ func TestAnnotateTools_LocalUtilityTools(t *testing.T) {
 			if a == nil {
 				t.Fatalf("tool %q has nil annotations", name)
 			}
-			if a.OpenWorldHint != nil {
-				t.Errorf("tool %q should not have openWorldHint (local tool)", name)
+			if a.OpenWorldHint == nil || *a.OpenWorldHint {
+				t.Errorf("tool %q should have openWorldHint=false (local tool, no API call)", name)
 			}
 			if a.ReadOnlyHint == nil || !*a.ReadOnlyHint {
 				t.Errorf("tool %q should have readOnlyHint=true", name)
@@ -146,8 +146,9 @@ func TestAnnotateTools_LocalUtilityTools(t *testing.T) {
 	}
 }
 
-// TestAnnotateTools_APIToolsHaveOpenWorld verifies all API-calling tools have openWorldHint.
-func TestAnnotateTools_APIToolsHaveOpenWorld(t *testing.T) {
+// TestAnnotateTools_APIToolsOmitOpenWorld verifies all API-calling tools omit openWorldHint
+// (the MCP spec default is true, so explicit true is redundant).
+func TestAnnotateTools_APIToolsOmitOpenWorld(t *testing.T) {
 	t.Parallel()
 
 	tools := registeredTools()
@@ -164,8 +165,8 @@ func TestAnnotateTools_APIToolsHaveOpenWorld(t *testing.T) {
 			if a == nil {
 				t.Fatalf("tool %q has nil annotations", name)
 			}
-			if a.OpenWorldHint == nil || !*a.OpenWorldHint {
-				t.Errorf("tool %q should have openWorldHint=true (API tool)", name)
+			if a.OpenWorldHint != nil {
+				t.Errorf("tool %q should omit openWorldHint (MCP default is true)", name)
 			}
 		})
 	}

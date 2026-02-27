@@ -34,23 +34,26 @@ func prop(typ, desc string) JSONSchema {
 }
 
 // grantProp is the standard grant_id property description.
-const grantDesc = "Nylas grant ID. If omitted, uses the default authenticated grant."
+const grantDesc = "Nylas grant ID (omit for default)"
 
 // epochDesc is a suffix for Unix epoch timestamp fields.
-const epochDesc = " (Unix epoch timestamp)"
+const epochDesc = " (unix epoch)"
+
+// participantItems is the shared schema for {name, email} objects, allocated once.
+var participantItems = &JSONSchema{
+	Type: "object",
+	Properties: map[string]JSONSchema{
+		"name":  prop("string", "Name"),
+		"email": prop("string", "Email"),
+	},
+}
 
 // participantArraySchema returns a JSON Schema for an array of {name, email} objects.
 func participantArraySchema(desc string) JSONSchema {
 	return JSONSchema{
-		Type: "array",
-		Desc: desc,
-		Items: &JSONSchema{
-			Type: "object",
-			Properties: map[string]JSONSchema{
-				"name":  prop("string", "Display name"),
-				"email": prop("string", "Email address"),
-			},
-		},
+		Type:  "array",
+		Desc:  desc,
+		Items: participantItems,
 	}
 }
 

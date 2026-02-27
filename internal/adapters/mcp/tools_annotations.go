@@ -83,6 +83,31 @@ var localUtilityTools = map[string]bool{
 	"datetime_to_epoch": true,
 }
 
+// Pre-allocated annotation singletons to avoid per-call allocations.
+// openWorldHint is omitted for API tools because the MCP spec default is true.
+// Local utility tools explicitly set openWorldHint=false (no network call).
+var (
+	annotationsLocalUtility = &ToolAnnotations{
+		ReadOnlyHint:   boolPtr(true),
+		IdempotentHint: boolPtr(true),
+		OpenWorldHint:  boolPtr(false),
+	}
+	annotationsReadOnly = &ToolAnnotations{
+		ReadOnlyHint:   boolPtr(true),
+		IdempotentHint: boolPtr(true),
+	}
+	annotationsDestructive = &ToolAnnotations{
+		DestructiveHint: boolPtr(true),
+	}
+	annotationsIdempotentMutating = &ToolAnnotations{
+		DestructiveHint: boolPtr(false),
+		IdempotentHint:  boolPtr(true),
+	}
+	annotationsNonDestructiveMutating = &ToolAnnotations{
+		DestructiveHint: boolPtr(false),
+	}
+)
+
 // annotateTools applies titles and behavior annotations to all tools in-place.
 func annotateTools(tools []MCPTool) {
 	for i := range tools {
@@ -100,43 +125,30 @@ func annotateTools(tools []MCPTool) {
 
 // buildAnnotations returns the appropriate ToolAnnotations for a tool based on its name.
 func buildAnnotations(name string) *ToolAnnotations {
-	// Local utility tools: read-only, idempotent, no open-world (no API call).
+	// Local utility tools: read-only, idempotent, explicitly no open-world (no API call).
 	if localUtilityTools[name] {
-		return &ToolAnnotations{
-			ReadOnlyHint:   boolPtr(true),
-			IdempotentHint: boolPtr(true),
-		}
+		return annotationsLocalUtility
 	}
 
 	// Read-only tools: list_*, get_*, get_free_busy, get_availability.
+	// openWorldHint omitted — MCP spec default is true.
 	if strings.HasPrefix(name, "list_") || strings.HasPrefix(name, "get_") {
-		return &ToolAnnotations{
-			ReadOnlyHint:   boolPtr(true),
-			IdempotentHint: boolPtr(true),
-			OpenWorldHint:  boolPtr(true),
-		}
+		return annotationsReadOnly
 	}
 
 	// Destructive tools: delete_*, cancel_scheduled_message.
+	// openWorldHint omitted — MCP spec default is true.
 	if strings.HasPrefix(name, "delete_") || name == "cancel_scheduled_message" {
-		return &ToolAnnotations{
-			DestructiveHint: boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		}
+		return annotationsDestructive
 	}
 
 	// Idempotent mutating tools: update_* (PUT-like semantics).
+	// openWorldHint omitted — MCP spec default is true.
 	if strings.HasPrefix(name, "update_") {
-		return &ToolAnnotations{
-			DestructiveHint: boolPtr(false),
-			IdempotentHint:  boolPtr(true),
-			OpenWorldHint:   boolPtr(true),
-		}
+		return annotationsIdempotentMutating
 	}
 
 	// Non-destructive mutating tools: send_*, create_*, smart_compose*, send_rsvp.
-	return &ToolAnnotations{
-		DestructiveHint: boolPtr(false),
-		OpenWorldHint:   boolPtr(true),
-	}
+	// openWorldHint omitted — MCP spec default is true.
+	return annotationsNonDestructiveMutating
 }

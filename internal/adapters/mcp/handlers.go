@@ -51,7 +51,7 @@ IMPORTANT - Timezone Consistency:
 The user's local timezone is: %s (%s)
 When displaying ANY timestamps to users (from emails, events, availability, etc.):
 1. Always use epoch_to_datetime tool with timezone "%s" to convert Unix timestamps
-2. Display ALL times in %s, never in UTC or the event's original timezone
+2. Display ALL times in %s, never in UTC
 3. Format times clearly (e.g., "2:00 PM %s")`, tzName, localZone, tzName, localZone, localZone)
 
 	result := map[string]any{
