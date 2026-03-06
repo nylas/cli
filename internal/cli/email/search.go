@@ -55,8 +55,15 @@ Examples:
 			remainingArgs := args[1:]
 
 			_, err := common.WithClient(remainingArgs, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				// Auto-paginate when limit exceeds API maximum
+				needsPagination := limit > common.MaxAPILimit
+				apiLimit := limit
+				if needsPagination {
+					apiLimit = common.MaxAPILimit
+				}
+
 				params := &domain.MessageQueryParams{
-					Limit: limit,
+					Limit: apiLimit,
 				}
 
 				// Use query as subject search unless it's a wildcard
@@ -102,7 +109,30 @@ Examples:
 					params.ReceivedBefore = t.Unix()
 				}
 
-				messages, err := client.GetMessagesWithParams(ctx, grantID, params)
+				var messages []domain.Message
+				var err error
+
+				if needsPagination {
+					fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
+						params.PageToken = cursor
+						resp, fetchErr := client.GetMessagesWithCursor(ctx, grantID, params)
+						if fetchErr != nil {
+							return common.PageResult[domain.Message]{}, fetchErr
+						}
+						return common.PageResult[domain.Message]{
+							Data:       resp.Data,
+							NextCursor: resp.Pagination.NextCursor,
+						}, nil
+					}
+
+					config := common.DefaultPaginationConfig()
+					config.PageSize = apiLimit
+					config.MaxItems = limit
+
+					messages, err = common.FetchAllPages(ctx, config, fetcher)
+				} else {
+					messages, err = client.GetMessagesWithParams(ctx, grantID, params)
+				}
 				if err != nil {
 					return struct{}{}, common.WrapSearchError("messages", err)
 				}
@@ -127,7 +157,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Maximum number of results")
+	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Maximum number of results (auto-paginates if >200)")
 	cmd.Flags().StringVar(&from, "from", "", "Filter by sender")
 	cmd.Flags().StringVar(&to, "to", "", "Filter by recipient")
 	cmd.Flags().StringVar(&subject, "subject", "", "Filter by subject")
