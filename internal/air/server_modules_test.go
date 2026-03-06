@@ -373,7 +373,7 @@ func TestTemplateFuncs_SafeHTML(t *testing.T) {
 		t.Fatal("expected safeHTML function to exist in templateFuncs")
 	}
 
-	// The safeHTML function returns template.HTML, not interface{}
+	// The safeHTML function returns template.HTML, not any
 	result := safeHTMLFunc.(func(string) template.HTML)("<p>Test</p>")
 	if string(result) != "<p>Test</p>" {
 		t.Errorf("expected '<p>Test</p>', got %s", result)

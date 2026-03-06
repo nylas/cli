@@ -218,7 +218,8 @@ func TestCreateErrorResponse(t *testing.T) {
 				t.Fatal("expected error to be a map")
 			}
 
-			if errorObj["code"].(float64) != -32603 {
+			code, _ := errorObj["code"].(float64)
+			if code != -32603 {
 				t.Errorf("expected error code -32603, got %v", errorObj["code"])
 			}
 
@@ -256,14 +257,14 @@ func TestModifyToolsListResponse_NoGetGrantTool(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	result := parsed["result"].(map[string]any)
-	tools := result["tools"].([]any)
+	result, _ := parsed["result"].(map[string]any)
+	tools, _ := result["tools"].([]any)
 
 	if len(tools) != 1 {
 		t.Errorf("expected 1 tool, got %d", len(tools))
 	}
 
-	tool := tools[0].(map[string]any)
+	tool, _ := tools[0].(map[string]any)
 	if tool["name"] != "list_messages" {
 		t.Errorf("expected tool name 'list_messages', got %v", tool["name"])
 	}
@@ -320,8 +321,8 @@ func TestModifyInitializeResponse_AddsTimezoneGuidance(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	result := parsed["result"].(map[string]any)
-	instructions := result["instructions"].(string)
+	result, _ := parsed["result"].(map[string]any)
+	instructions, _ := result["instructions"].(string)
 
 	// Verify timezone guidance was added
 	if len(instructions) <= len("You are a helpful assistant.") {

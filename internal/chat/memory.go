@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -103,8 +103,8 @@ func (m *MemoryStore) List() ([]ConversationSummary, error) {
 		})
 	}
 
-	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].UpdatedAt.After(summaries[j].UpdatedAt)
+	slices.SortFunc(summaries, func(a, b ConversationSummary) int {
+		return b.UpdatedAt.Compare(a.UpdatedAt)
 	})
 
 	return summaries, nil

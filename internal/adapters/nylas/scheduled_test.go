@@ -17,8 +17,8 @@ func TestHTTPClient_ListScheduledMessages(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/messages/schedules", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"schedule_id": "schedule-001",
 					"status": map[string]string{
@@ -64,8 +64,8 @@ func TestHTTPClient_GetScheduledMessage(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/messages/schedules/schedule-456", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"schedule_id": "schedule-456",
 				"status": map[string]string{
 					"code":        "scheduled",
@@ -99,8 +99,8 @@ func TestHTTPClient_CancelScheduledMessage(t *testing.T) {
 		assert.Equal(t, "DELETE", r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"message": "Scheduled message cancelled",
 			},
 		}
@@ -123,7 +123,7 @@ func TestHTTPClient_CancelScheduledMessage_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-			map[string]interface{}{
+			map[string]any{
 				"error": map[string]string{
 					"message": "Schedule not found",
 				},
@@ -189,8 +189,8 @@ func TestDemoClient_ScheduledMessages(t *testing.T) {
 
 func TestHTTPClient_ListScheduledMessages_Empty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": []interface{}{},
+		response := map[string]any{
+			"data": []any{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable

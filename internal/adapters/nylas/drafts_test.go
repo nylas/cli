@@ -21,14 +21,14 @@ func TestHTTPClient_CreateDraft_WithoutAttachments(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "Test Subject", body["subject"])
 		assert.Equal(t, "Test Body", body["body"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-001",
 				"grant_id": "grant-123",
 				"subject":  "Test Subject",
@@ -82,13 +82,13 @@ func TestHTTPClient_CreateDraft_WithAttachments(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "test.txt", fileHeader.Filename)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-002",
 				"grant_id": "grant-123",
 				"subject":  "Test Subject",
 				"body":     "Test Body",
-				"attachments": []map[string]interface{}{
+				"attachments": []map[string]any{
 					{
 						"id":           "attach-001",
 						"filename":     "test.txt",
@@ -145,12 +145,12 @@ func TestHTTPClient_CreateDraft_MultipleAttachments(t *testing.T) {
 			}
 		}
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-003",
 				"grant_id": "grant-123",
 				"subject":  "Multi Attachment Test",
-				"attachments": []map[string]interface{}{
+				"attachments": []map[string]any{
 					{"id": "attach-001", "filename": "file1.pdf"},
 					{"id": "attach-002", "filename": "file2.jpg"},
 				},
@@ -271,12 +271,12 @@ func TestHTTPClient_CreateDraftWithAttachmentFromReader(t *testing.T) {
 		content, _ := io.ReadAll(file)
 		assert.Equal(t, "streamed content", string(content))
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-stream",
 				"grant_id": "grant-123",
 				"subject":  "Stream Test",
-				"attachments": []map[string]interface{}{
+				"attachments": []map[string]any{
 					{"id": "attach-stream", "filename": "stream.txt"},
 				},
 			},
@@ -312,14 +312,14 @@ func TestHTTPClient_UpdateDraft_WithoutAttachments(t *testing.T) {
 		assert.Equal(t, "PUT", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "Updated Subject", body["subject"])
 		assert.Equal(t, "Updated Body", body["body"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-456",
 				"grant_id": "grant-123",
 				"subject":  "Updated Subject",
@@ -377,13 +377,13 @@ func TestHTTPClient_UpdateDraft_WithAttachments(t *testing.T) {
 		content, _ := io.ReadAll(file)
 		assert.Equal(t, "PDF content here", string(content))
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-789",
 				"grant_id": "grant-123",
 				"subject":  "Updated with Attachment",
 				"body":     "Body with file",
-				"attachments": []map[string]interface{}{
+				"attachments": []map[string]any{
 					{
 						"id":           "attach-updated",
 						"filename":     "updated.pdf",
@@ -426,15 +426,15 @@ func TestHTTPClient_UpdateDraft_WithAttachments(t *testing.T) {
 
 func TestHTTPClient_UpdateDraft_WithMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
-		metadata := body["metadata"].(map[string]interface{})
+		metadata, _ := body["metadata"].(map[string]any)
 		assert.Equal(t, "value1", metadata["key1"])
 		assert.Equal(t, "value2", metadata["key2"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":       "draft-meta",
 				"grant_id": "grant-123",
 				"subject":  "With Metadata",
@@ -469,7 +469,7 @@ func TestHTTPClient_UpdateDraft_ErrorResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": "Invalid draft ID",
 		})
 	}))

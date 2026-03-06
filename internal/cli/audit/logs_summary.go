@@ -3,7 +3,7 @@ package audit
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/audit"
@@ -117,8 +117,14 @@ func printTopItems(counts map[string]int, limit int) {
 		items = append(items, item{name, count})
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].count > items[j].count
+	slices.SortFunc(items, func(a, b item) int {
+		if a.count > b.count {
+			return -1
+		}
+		if a.count < b.count {
+			return 1
+		}
+		return 0
 	})
 
 	// Print top items

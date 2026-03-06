@@ -21,7 +21,7 @@ func TestHTTPClient_GetThreads(t *testing.T) {
 	tests := []struct {
 		name           string
 		params         *domain.ThreadQueryParams
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantCount      int
 		wantErr        bool
@@ -29,8 +29,8 @@ func TestHTTPClient_GetThreads(t *testing.T) {
 		{
 			name:   "returns threads successfully",
 			params: nil,
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":                           "thread-1",
 						"grant_id":                     "grant-123",
@@ -74,8 +74,8 @@ func TestHTTPClient_GetThreads(t *testing.T) {
 		{
 			name:   "returns empty list",
 			params: &domain.ThreadQueryParams{Limit: 10},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantCount:  0,
@@ -215,8 +215,8 @@ func TestHTTPClient_GetThreads_QueryParams(t *testing.T) {
 				}
 
 				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"data": []interface{}{},
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": []any{},
 				})
 			}))
 			defer server.Close()
@@ -235,7 +235,7 @@ func TestHTTPClient_GetThread(t *testing.T) {
 	tests := []struct {
 		name           string
 		threadID       string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -243,8 +243,8 @@ func TestHTTPClient_GetThread(t *testing.T) {
 		{
 			name:     "returns thread successfully",
 			threadID: "thread-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":                           "thread-123",
 					"grant_id":                     "grant-123",
 					"subject":                      "Important Discussion",
@@ -270,7 +270,7 @@ func TestHTTPClient_GetThread(t *testing.T) {
 		{
 			name:     "returns error for not found",
 			threadID: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "thread not found"},
 			},
 			statusCode:  http.StatusNotFound,
@@ -369,15 +369,15 @@ func TestHTTPClient_UpdateThread(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/threads/thread-456", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for _, field := range tt.wantFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":                           "thread-456",
 						"grant_id":                     "grant-123",
 						"subject":                      "Updated Thread",
@@ -440,7 +440,7 @@ func TestHTTPClient_DeleteThread(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}
@@ -467,8 +467,8 @@ func TestHTTPClient_GetThread_FullConversion(t *testing.T) {
 	now := time.Now().Unix()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":                           "thread-full",
 				"grant_id":                     "grant-full",
 				"subject":                      "Complete Thread",
@@ -541,13 +541,13 @@ func TestHTTPClient_GetThreads_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
 		statusCode  int
-		response    map[string]interface{}
+		response    map[string]any
 		errContains string
 	}{
 		{
 			name:       "handles 401 unauthorized",
 			statusCode: http.StatusUnauthorized,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Invalid API key"},
 			},
 			errContains: "Invalid API key",
@@ -555,7 +555,7 @@ func TestHTTPClient_GetThreads_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 403 forbidden",
 			statusCode: http.StatusForbidden,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Access denied"},
 			},
 			errContains: "Access denied",
@@ -563,7 +563,7 @@ func TestHTTPClient_GetThreads_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 500 server error",
 			statusCode: http.StatusInternalServerError,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Internal server error"},
 			},
 			errContains: "Internal server error",

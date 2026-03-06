@@ -18,12 +18,12 @@ func TestHTTPClient_CreateSchedulerSession(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/sessions", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "config-123", body["configuration_id"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"session_id":       "session-abc",
 				"configuration_id": "config-123",
 			},
@@ -54,8 +54,8 @@ func TestHTTPClient_GetSchedulerSession(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/sessions/session-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"session_id":       "session-123",
 				"configuration_id": "config-456",
 			},
@@ -84,8 +84,8 @@ func TestHTTPClient_GetBooking(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/bookings/booking-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"booking_id": "booking-123",
 				"title":      "Interview with John Doe",
 				"status":     "confirmed",
@@ -116,8 +116,8 @@ func TestHTTPClient_ListBookings(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 		assert.Equal(t, "config-123", r.URL.Query().Get("configuration_id"))
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"booking_id": "booking-1",
 					"title":      "Meeting 1",
@@ -156,8 +156,8 @@ func TestHTTPClient_ConfirmBooking(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/bookings/booking-123", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"booking_id": "booking-123",
 				"status":     "confirmed",
 			},
@@ -186,8 +186,8 @@ func TestHTTPClient_RescheduleBooking(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/bookings/booking-456/reschedule", r.URL.Path)
 		assert.Equal(t, "PATCH", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"booking_id": "booking-456",
 				"status":     "confirmed",
 			},
@@ -240,8 +240,8 @@ func TestHTTPClient_GetSchedulerPage(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/pages/page-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "page-123",
 				"name": "Scheduling Page",
 				"slug": "schedule-me",
@@ -271,8 +271,8 @@ func TestHTTPClient_ListSchedulerPages(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/pages", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":   "page-1",
 					"name": "Page 1",
@@ -308,12 +308,12 @@ func TestHTTPClient_CreateSchedulerPage(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/pages", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Page", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "page-new",
 				"name": "New Page",
 				"slug": "new-page",
@@ -345,12 +345,12 @@ func TestHTTPClient_UpdateSchedulerPage(t *testing.T) {
 		assert.Equal(t, "/v3/scheduling/pages/page-789", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Page", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":   "page-789",
 				"name": "Updated Page",
 			},
@@ -436,8 +436,8 @@ func TestHTTPClient_ListBookings_URLEscaping(t *testing.T) {
 				// Verify the raw query string contains properly escaped value
 				assert.Contains(t, r.URL.RawQuery, "configuration_id="+tt.expectedQuery)
 
-				response := map[string]interface{}{
-					"data": []map[string]interface{}{},
+				response := map[string]any{
+					"data": []map[string]any{},
 				}
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(response)
@@ -483,8 +483,8 @@ func TestHTTPClient_RescheduleBooking_URLEscaping(t *testing.T) {
 					assert.Equal(t, tt.expectedPath, r.URL.Path)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"booking_id": tt.bookingID,
 						"status":     "confirmed",
 					},

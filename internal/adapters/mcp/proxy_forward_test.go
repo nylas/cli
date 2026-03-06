@@ -268,12 +268,12 @@ func TestProxy_forward_ModifiesToolsList(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	result := resp["result"].(map[string]any)
-	tools := result["tools"].([]any)
-	getGrantTool := tools[0].(map[string]any)
+	result, _ := resp["result"].(map[string]any)
+	tools, _ := result["tools"].([]any)
+	getGrantTool, _ := tools[0].(map[string]any)
 
 	// Verify email is no longer required
-	inputSchema := getGrantTool["inputSchema"].(map[string]any)
+	inputSchema, _ := getGrantTool["inputSchema"].(map[string]any)
 	required, _ := inputSchema["required"].([]any)
 	for _, r := range required {
 		if r == "email" {
@@ -282,7 +282,7 @@ func TestProxy_forward_ModifiesToolsList(t *testing.T) {
 	}
 
 	// Verify description was modified
-	desc := getGrantTool["description"].(string)
+	desc, _ := getGrantTool["description"].(string)
 	if !strings.Contains(desc, "default authenticated grant") {
 		t.Error("expected description to be modified")
 	}

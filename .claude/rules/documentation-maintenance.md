@@ -88,4 +88,4 @@ grep -r "old-pattern" docs/ .claude/ *.md
 
 ---
 
-**Last Updated:** January 3, 2025
+**Last Updated:** March 6, 2026

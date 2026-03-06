@@ -39,14 +39,14 @@ func createTestClient(t *testing.T, serverURL string) *Client {
 func TestClient_TestAuth_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 		wantUserID     string
 	}{
 		{
 			name: "successful auth test",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":      true,
 				"url":     "https://workspace.slack.com/",
 				"team":    "Test Workspace",
@@ -60,7 +60,7 @@ func TestClient_TestAuth_HTTP(t *testing.T) {
 		},
 		{
 			name: "auth failed - invalid token",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "invalid_auth",
 			},
@@ -69,7 +69,7 @@ func TestClient_TestAuth_HTTP(t *testing.T) {
 		},
 		{
 			name: "auth failed - token revoked",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "token_revoked",
 			},
@@ -106,16 +106,16 @@ func TestClient_TestAuth_HTTP(t *testing.T) {
 func TestClient_ListChannels_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
 	}{
 		{
 			name: "returns channels successfully",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"channels": []map[string]interface{}{
+				"channels": []map[string]any{
 					{
 						"id":         "C12345",
 						"name":       "general",
@@ -139,9 +139,9 @@ func TestClient_ListChannels_HTTP(t *testing.T) {
 		},
 		{
 			name: "returns empty when no channels",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":       true,
-				"channels": []interface{}{},
+				"channels": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantLen:    0,
@@ -149,7 +149,7 @@ func TestClient_ListChannels_HTTP(t *testing.T) {
 		},
 		{
 			name: "handles not_authed error",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "not_authed",
 			},
@@ -187,7 +187,7 @@ func TestClient_GetChannel_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		channelID      string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 		wantName       string
@@ -195,9 +195,9 @@ func TestClient_GetChannel_HTTP(t *testing.T) {
 		{
 			name:      "returns channel successfully",
 			channelID: "C12345",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"channel": map[string]interface{}{
+				"channel": map[string]any{
 					"id":         "C12345",
 					"name":       "general",
 					"is_channel": true,
@@ -212,7 +212,7 @@ func TestClient_GetChannel_HTTP(t *testing.T) {
 		{
 			name:      "channel not found",
 			channelID: "C99999",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "channel_not_found",
 			},
@@ -250,7 +250,7 @@ func TestClient_GetMessages_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		channelID      string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
@@ -258,9 +258,9 @@ func TestClient_GetMessages_HTTP(t *testing.T) {
 		{
 			name:      "returns messages successfully",
 			channelID: "C12345",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"messages": []map[string]interface{}{
+				"messages": []map[string]any{
 					{
 						"type": "message",
 						"user": "U12345",
@@ -286,7 +286,7 @@ func TestClient_GetMessages_HTTP(t *testing.T) {
 		{
 			name:      "channel not found",
 			channelID: "C99999",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "channel_not_found",
 			},
@@ -327,7 +327,7 @@ func TestClient_SendMessage_HTTP(t *testing.T) {
 		name           string
 		channelID      string
 		text           string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -335,11 +335,11 @@ func TestClient_SendMessage_HTTP(t *testing.T) {
 			name:      "sends message successfully",
 			channelID: "C12345",
 			text:      "Hello!",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":      true,
 				"channel": "C12345",
 				"ts":      "1234567890.123456",
-				"message": map[string]interface{}{
+				"message": map[string]any{
 					"text": "Hello!",
 					"user": "U12345",
 					"ts":   "1234567890.123456",
@@ -352,7 +352,7 @@ func TestClient_SendMessage_HTTP(t *testing.T) {
 			name:      "channel not found",
 			channelID: "C99999",
 			text:      "Test",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "channel_not_found",
 			},
@@ -393,7 +393,7 @@ func TestClient_GetUser_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 		wantName       string
@@ -401,13 +401,13 @@ func TestClient_GetUser_HTTP(t *testing.T) {
 		{
 			name:   "returns user successfully",
 			userID: "U12345",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"user": map[string]interface{}{
+				"user": map[string]any{
 					"id":        "U12345",
 					"name":      "testuser",
 					"real_name": "Test User",
-					"profile": map[string]interface{}{
+					"profile": map[string]any{
 						"display_name": "Tester",
 						"email":        "test@example.com",
 					},
@@ -420,7 +420,7 @@ func TestClient_GetUser_HTTP(t *testing.T) {
 		{
 			name:   "user not found",
 			userID: "U99999",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "user_not_found",
 			},
@@ -439,9 +439,9 @@ func TestClient_GetUser_HTTP(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(tt.serverResponse)
 				} else if strings.Contains(r.URL.Path, "users.profile.get") {
 					// Return empty profile for the profile fetch
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"ok":      true,
-						"profile": map[string]interface{}{},
+						"profile": map[string]any{},
 					})
 				} else {
 					t.Errorf("unexpected endpoint: %s", r.URL.Path)
@@ -469,7 +469,7 @@ func TestClient_SearchMessages_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
@@ -477,17 +477,17 @@ func TestClient_SearchMessages_HTTP(t *testing.T) {
 		{
 			name:  "returns search results",
 			query: "important",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"messages": map[string]interface{}{
-					"matches": []map[string]interface{}{
+				"messages": map[string]any{
+					"matches": []map[string]any{
 						{
 							"type":     "message",
 							"user":     "U12345",
 							"username": "testuser",
 							"text":     "This is important",
 							"ts":       "1234567890.123456",
-							"channel": map[string]interface{}{
+							"channel": map[string]any{
 								"id":   "C12345",
 								"name": "general",
 							},
@@ -502,10 +502,10 @@ func TestClient_SearchMessages_HTTP(t *testing.T) {
 		{
 			name:  "no results",
 			query: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"messages": map[string]interface{}{
-					"matches": []interface{}{},
+				"messages": map[string]any{
+					"matches": []any{},
 				},
 			},
 			statusCode: http.StatusOK,
@@ -543,7 +543,7 @@ func TestClient_DeleteMessage_HTTP(t *testing.T) {
 		name           string
 		channelID      string
 		messageTS      string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -551,7 +551,7 @@ func TestClient_DeleteMessage_HTTP(t *testing.T) {
 			name:      "deletes message successfully",
 			channelID: "C12345",
 			messageTS: "1234567890.123456",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":      true,
 				"channel": "C12345",
 				"ts":      "1234567890.123456",
@@ -563,7 +563,7 @@ func TestClient_DeleteMessage_HTTP(t *testing.T) {
 			name:      "message not found",
 			channelID: "C12345",
 			messageTS: "0000000000.000000",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "message_not_found",
 			},
