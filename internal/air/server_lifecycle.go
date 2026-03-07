@@ -48,25 +48,9 @@ func NewServer(addr string) *Server {
 		tmpl = nil
 	}
 
-	// Initialize cache
+	// Load cache settings; runtime cache components are initialized at server start.
 	cacheCfg := cache.DefaultConfig()
-	cacheManager, _ := cache.NewManager(cacheCfg)
 	cacheSettings, _ := cache.LoadSettings(cacheCfg.BasePath)
-
-	// Initialize photo store with shared database
-	var photoStore *cache.PhotoStore
-	photoDB, err := cache.OpenSharedDB(cacheCfg.BasePath, "photos.db")
-	if err == nil {
-		photoStore, _ = cache.NewPhotoStore(photoDB, cacheCfg.BasePath, cache.DefaultPhotoTTL)
-		// Prune expired photos on startup
-		if photoStore != nil {
-			go func() {
-				if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
-					fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
-				}
-			}()
-		}
-	}
 
 	return &Server{
 		addr:          addr,
@@ -78,13 +62,61 @@ func NewServer(addr string) *Server {
 		nylasClient:   nylasClient,
 		templates:     tmpl,
 		hasAPIKey:     hasAPIKey,
-		cacheManager:  cacheManager,
 		cacheSettings: cacheSettings,
-		photoStore:    photoStore,
 		offlineQueues: make(map[string]*cache.OfflineQueue),
 		syncStopCh:    make(chan struct{}),
 		isOnline:      true,
 	}
+}
+
+// initCacheRuntime initializes runtime cache components for the server.
+// This is intentionally deferred until Start() so NewServer remains lightweight.
+func (s *Server) initCacheRuntime() {
+	if s.demoMode || s.cacheManager != nil {
+		return
+	}
+
+	cacheCfg := cache.DefaultConfig()
+
+	// If settings weren't loaded during construction, best-effort load them now.
+	if s.cacheSettings == nil {
+		settings, err := cache.LoadSettings(cacheCfg.BasePath)
+		if err != nil {
+			return
+		}
+		s.cacheSettings = settings
+	}
+
+	// Respect cache enablement from settings.
+	if !s.cacheSettings.IsCacheEnabled() {
+		return
+	}
+
+	cacheCfg = s.cacheSettings.ToConfig(cacheCfg.BasePath)
+
+	cacheManager, err := cache.NewManager(cacheCfg)
+	if err != nil {
+		return
+	}
+	s.cacheManager = cacheManager
+
+	photoDB, err := cache.OpenSharedDB(cacheCfg.BasePath, "photos.db")
+	if err != nil {
+		return
+	}
+
+	photoStore, err := cache.NewPhotoStore(photoDB, cacheCfg.BasePath, cache.DefaultPhotoTTL)
+	if err != nil {
+		return
+	}
+	s.photoStore = photoStore
+
+	// Prune expired photos asynchronously after startup.
+	go func() {
+		if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
+			fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
+		}
+	}()
 }
 
 // NewDemoServer creates an Air server in demo mode with sample data.
@@ -256,7 +288,10 @@ func (s *Server) Start() error {
 	// Template-rendered index page
 	mux.HandleFunc("/", s.handleIndex)
 
-	// Start background sync if not in demo mode and cache is enabled
+	// Initialize cache runtime components after routes are wired.
+	s.initCacheRuntime()
+
+	// Start background sync if cache is available and enabled.
 	if !s.demoMode && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
 		s.startBackgroundSync()
 	}

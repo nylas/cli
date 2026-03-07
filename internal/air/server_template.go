@@ -3,6 +3,7 @@ package air
 import (
 	"html/template"
 	"net/http"
+	"sync"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -150,12 +151,16 @@ func initials(email string) string {
 
 // loadTemplates parses all template files.
 func loadTemplates() (*template.Template, error) {
-	return template.New("").Funcs(templateFuncs).ParseFS(
-		templateFiles,
-		"templates/*.gohtml",
-		"templates/partials/*.gohtml",
-		"templates/pages/*.gohtml",
-	)
+	templatesOnce.Do(func() {
+		parsedTemplates, parsedTemplatesErr = template.New("").Funcs(templateFuncs).ParseFS(
+			templateFiles,
+			"templates/*.gohtml",
+			"templates/partials/*.gohtml",
+			"templates/pages/*.gohtml",
+		)
+	})
+
+	return parsedTemplates, parsedTemplatesErr
 }
 
 // Template functions.
@@ -165,3 +170,9 @@ var templateFuncs = template.FuncMap{
 		return template.HTML(s)
 	},
 }
+
+var (
+	templatesOnce      sync.Once
+	parsedTemplates    *template.Template
+	parsedTemplatesErr error
+)

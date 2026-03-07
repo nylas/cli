@@ -104,16 +104,14 @@ func newFoldersListCmd() *cobra.Command {
 }
 
 func newFoldersShowCmd() *cobra.Command {
-	client, _ := common.GetNylasClient()
-
 	return common.NewShowCommand(common.ShowCommandConfig{
 		Use:          "show <folder-id> [grant-id]",
 		Short:        "Show folder details",
 		ResourceName: "folder",
-		GetFunc: func(ctx context.Context, grantID, resourceID string) (interface{}, error) {
+		GetFunc: func(ctx context.Context, client ports.NylasClient, grantID, resourceID string) (any, error) {
 			return client.GetFolder(ctx, grantID, resourceID)
 		},
-		DisplayFunc: func(resource interface{}) error {
+		DisplayFunc: func(resource any) error {
 			folder := resource.(*domain.Folder)
 
 			fmt.Println("════════════════════════════════════════════════════════════")

@@ -126,7 +126,7 @@ func (c *ClaudeClient) ChatWithTools(ctx context.Context, req *domain.ChatReques
 			args, ok := content.Input.(map[string]any)
 			if !ok {
 				// Best-effort conversion: re-serialize and deserialize to get map[string]any.
-				// json.Marshal can't fail on a valid interface{} from API response.
+				// json.Marshal can't fail on a valid any from API response.
 				// Unmarshal errors ignored - empty args is acceptable fallback.
 				inputBytes, _ := json.Marshal(content.Input)
 				_ = json.Unmarshal(inputBytes, &args)

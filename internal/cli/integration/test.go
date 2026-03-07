@@ -448,7 +448,7 @@ func getAvailableProvider() string {
 }
 
 // getAIConfigFromUserConfig reads the AI configuration from ~/.config/nylas/config.yaml
-func getAIConfigFromUserConfig() map[string]interface{} {
+func getAIConfigFromUserConfig() map[string]any {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -460,12 +460,12 @@ func getAIConfigFromUserConfig() map[string]interface{} {
 		return nil
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil
 	}
 
-	aiConfig, ok := config["ai"].(map[string]interface{})
+	aiConfig, ok := config["ai"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -493,7 +493,7 @@ func skipIfNoDefaultAIProvider(t *testing.T) {
 }
 
 // getWorkingHoursFromUserConfig reads working hours configuration from ~/.config/nylas/config.yaml
-func getWorkingHoursFromUserConfig() map[string]interface{} {
+func getWorkingHoursFromUserConfig() map[string]any {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -505,12 +505,12 @@ func getWorkingHoursFromUserConfig() map[string]interface{} {
 		return nil
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil
 	}
 
-	whConfig, ok := config["working_hours"].(map[string]interface{})
+	whConfig, ok := config["working_hours"].(map[string]any)
 	if !ok {
 		return nil
 	}

@@ -281,16 +281,14 @@ func detectContentType(filename string, content []byte) string {
 }
 
 func newDraftsShowCmd() *cobra.Command {
-	client, _ := common.GetNylasClient()
-
 	return common.NewShowCommand(common.ShowCommandConfig{
 		Use:          "show <draft-id> [grant-id]",
 		Short:        "Show draft details",
 		ResourceName: "draft",
-		GetFunc: func(ctx context.Context, grantID, resourceID string) (interface{}, error) {
+		GetFunc: func(ctx context.Context, client ports.NylasClient, grantID, resourceID string) (any, error) {
 			return client.GetDraft(ctx, grantID, resourceID)
 		},
-		DisplayFunc: func(resource interface{}) error {
+		DisplayFunc: func(resource any) error {
 			draft := resource.(*domain.Draft)
 
 			fmt.Println("════════════════════════════════════════════════════════════")
