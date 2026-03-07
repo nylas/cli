@@ -314,17 +314,17 @@ func (a *EmailAnalyzer) AnalyzeInbox(ctx context.Context, req *InboxSummaryReque
 func (a *EmailAnalyzer) buildInboxPrompt(messages []domain.Message) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Analyze these %d emails and provide insights:\n\n", len(messages)))
+	_, _ = fmt.Fprintf(&sb, "Analyze these %d emails and provide insights:\n\n", len(messages))
 
 	for i, msg := range messages {
-		sb.WriteString(fmt.Sprintf("--- Email %d ---\n", i+1))
-		sb.WriteString(fmt.Sprintf("From: %s\n", formatInboxParticipants(msg.From)))
-		sb.WriteString(fmt.Sprintf("Subject: %s\n", msg.Subject))
-		sb.WriteString(fmt.Sprintf("Date: %s\n", msg.Date.Format(time.RFC3339)))
+		_, _ = fmt.Fprintf(&sb, "--- Email %d ---\n", i+1)
+		_, _ = fmt.Fprintf(&sb, "From: %s\n", formatInboxParticipants(msg.From))
+		_, _ = fmt.Fprintf(&sb, "Subject: %s\n", msg.Subject)
+		_, _ = fmt.Fprintf(&sb, "Date: %s\n", msg.Date.Format(time.RFC3339))
 
 		// Use snippet for preview (cleaner than full body)
 		if msg.Snippet != "" {
-			sb.WriteString(fmt.Sprintf("Preview: %s\n", truncateStr(msg.Snippet, 200)))
+			_, _ = fmt.Fprintf(&sb, "Preview: %s\n", truncateStr(msg.Snippet, 200))
 		}
 
 		if msg.Unread {

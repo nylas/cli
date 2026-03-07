@@ -111,7 +111,7 @@ func (b *builder) BuildSignedMessage(req *SignedMessageRequest) ([]byte, error) 
 
 	// Write Content-Type for multipart/signed
 	buf.WriteString("Content-Type: multipart/signed; protocol=\"application/pgp-signature\";\r\n")
-	buf.WriteString(fmt.Sprintf("\tmicalg=%s; boundary=\"%s\"\r\n", micalg, signedBoundary))
+	_, _ = fmt.Fprintf(&buf, "\tmicalg=%s; boundary=\"%s\"\r\n", micalg, signedBoundary)
 	buf.WriteString("\r\n")
 
 	// Write first part: the content to be signed

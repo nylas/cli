@@ -14,8 +14,6 @@ linters:
     # Bugs
     - durationcheck
     - reassign
-  disable:
-    - staticcheck
 
   settings:
     govet:

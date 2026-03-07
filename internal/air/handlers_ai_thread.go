@@ -51,10 +51,10 @@ func (s *Server) handleAIThreadSummary(w http.ResponseWriter, r *http.Request) {
 			body = body[:1000] + "..."
 		}
 
-		conversationBuilder.WriteString(fmt.Sprintf("--- Message %d ---\n", i+1))
-		conversationBuilder.WriteString(fmt.Sprintf("From: %s\n", msg.From))
+		_, _ = fmt.Fprintf(&conversationBuilder, "--- Message %d ---\n", i+1)
+		_, _ = fmt.Fprintf(&conversationBuilder, "From: %s\n", msg.From)
 		if msg.Subject != "" {
-			conversationBuilder.WriteString(fmt.Sprintf("Subject: %s\n", msg.Subject))
+			_, _ = fmt.Fprintf(&conversationBuilder, "Subject: %s\n", msg.Subject)
 		}
 		conversationBuilder.WriteString(body)
 		conversationBuilder.WriteString("\n\n")
