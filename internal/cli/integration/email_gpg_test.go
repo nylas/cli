@@ -355,4 +355,3 @@ func extractMessageID(output string) string {
 	}
 	return ""
 }
-
