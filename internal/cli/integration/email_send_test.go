@@ -272,6 +272,10 @@ func TestCLI_EmailSearch_AdvancedFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr, err := runCLI(tt.args...)
 			if err != nil {
+				// Microsoft Graph doesn't support combining search query with unread/starred filters
+				if strings.Contains(stderr, "not supported for Microsoft") {
+					t.Skipf("filter combination not supported for Microsoft grants")
+				}
 				t.Fatalf("email search %s failed: %v\nstderr: %s", tt.name, err, stderr)
 			}
 			t.Logf("email search %s output:\n%s", tt.name, stdout)
