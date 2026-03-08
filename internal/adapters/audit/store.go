@@ -3,6 +3,7 @@ package audit
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -193,13 +194,7 @@ func (s *FileStore) Query(ctx context.Context, opts *domain.AuditQueryOptions) (
 
 	// Sort files by date descending (newest first)
 	slices.SortFunc(files, func(a, b string) int {
-		if a > b {
-			return -1
-		}
-		if a < b {
-			return 1
-		}
-		return 0
+		return cmp.Compare(b, a)
 	})
 
 	var entries []domain.AuditEntry

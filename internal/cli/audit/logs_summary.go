@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -118,13 +119,7 @@ func printTopItems(counts map[string]int, limit int) {
 	}
 
 	slices.SortFunc(items, func(a, b item) int {
-		if a.count > b.count {
-			return -1
-		}
-		if a.count < b.count {
-			return 1
-		}
-		return 0
+		return cmp.Compare(b.count, a.count)
 	})
 
 	// Print top items

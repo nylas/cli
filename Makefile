@@ -139,11 +139,13 @@ test-integration:
 # -p 1: Run test packages sequentially to prevent rate limit issues
 test-integration-fast:
 	@go clean -testcache
-	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
-	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
-	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
-	go test ./internal/cli/integration/... -tags=integration -v -timeout 2m -p 1 \
-		-run "TestCLI_Admin|TestCLI_Timezone|TestCLI_AIConfig|TestCLI_AIProvider|TestCLI_CalendarAI_Basic|TestCLI_CalendarAI_Adapt|TestCLI_CalendarAI_Analyze_Respects|TestCLI_CalendarAI_Analyze_Default|TestCLI_CalendarAI_Analyze_Disabled|TestCLI_CalendarAI_Analyze_Focus|TestCLI_CalendarAI_Analyze_With"
+	@bash -o pipefail -c '\
+		NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+		NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+		NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+		go test ./internal/cli/integration/... -tags=integration -v -timeout 2m -p 1 \
+			-run "TestCLI_Admin|TestCLI_Timezone|TestCLI_AIConfig|TestCLI_AIProvider|TestCLI_CalendarAI_Basic|TestCLI_CalendarAI_Adapt|TestCLI_CalendarAI_Analyze_Respects|TestCLI_CalendarAI_Analyze_Default|TestCLI_CalendarAI_Analyze_Disabled|TestCLI_CalendarAI_Analyze_Focus|TestCLI_CalendarAI_Analyze_With" \
+	'
 
 # Clean up test resources (virtual calendars, test grants, test events, test emails, etc.)
 test-cleanup:

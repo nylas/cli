@@ -9,7 +9,7 @@ Hook scripts for quality enforcement. Some are wired in `settings.json`, others 
 | Hook | File | Trigger | Status |
 |------|------|---------|--------|
 | file-size-check.sh | `.claude/hooks/file-size-check.sh` | PreToolUse (Write) | **Active** |
-| auto-format.sh | `.claude/hooks/auto-format.sh` | PostToolUse (Edit) | **Active** |
+| auto-format.sh | `.claude/hooks/auto-format.sh` | PostToolUse (Edit, Write) | **Active** |
 | quality-gate.sh | `.claude/hooks/quality-gate.sh` | Stop | Available |
 | subagent-review.sh | `.claude/hooks/subagent-review.sh` | SubagentStop | Available |
 | pre-compact.sh | `.claude/hooks/pre-compact.sh` | PreCompact | Available |
@@ -24,7 +24,7 @@ Add to the `"hooks"` section in `.claude/settings.json`:
 ```json
 "Stop": [
   {
-    "matcher": "",
+    "matcher": "*",
     "hooks": [
       { "type": "command", "command": ".claude/hooks/quality-gate.sh" }
     ]
@@ -32,7 +32,7 @@ Add to the `"hooks"` section in `.claude/settings.json`:
 ],
 "SubagentStop": [
   {
-    "matcher": "",
+    "matcher": "*",
     "hooks": [
       { "type": "command", "command": ".claude/hooks/subagent-review.sh" }
     ]
@@ -40,7 +40,7 @@ Add to the `"hooks"` section in `.claude/settings.json`:
 ],
 "PreCompact": [
   {
-    "matcher": "",
+    "matcher": "*",
     "hooks": [
       { "type": "command", "command": ".claude/hooks/pre-compact.sh" }
     ]
@@ -48,7 +48,7 @@ Add to the `"hooks"` section in `.claude/settings.json`:
 ],
 "UserPromptSubmit": [
   {
-    "matcher": "",
+    "matcher": "*",
     "hooks": [
       { "type": "command", "command": ".claude/hooks/context-injector.sh" }
     ]
