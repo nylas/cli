@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"bufio"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -417,19 +419,50 @@ func TestPrintTopItems_LimitRespected(t *testing.T) {
 		"a": 1, "b": 2, "c": 3, "d": 4, "e": 5,
 		"f": 6, "g": 7, "h": 8, "i": 9, "j": 10,
 	}
-	// Just assert no panic and function runs
-	assert.NotPanics(t, func() {
-		printTopItems(counts, 3)
-	})
+
+	// Capture stdout to verify limit is respected
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printTopItems(counts, 3)
+
+	_ = w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	output := buf.String()
+
+	// Should have exactly 3 lines of output
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	assert.Equal(t, 3, len(lines), "expected 3 lines of output, got %d", len(lines))
 }
 
 func TestPrintTopItems_SortedDescending(t *testing.T) {
-	// We test the sort by capturing output indirectly via a fresh run — since
-	// printTopItems writes directly to stdout we just ensure no panic for now.
 	counts := map[string]int{"low": 1, "high": 100, "mid": 50}
-	assert.NotPanics(t, func() {
-		printTopItems(counts, 5)
-	})
+
+	// Capture stdout to verify sort order
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printTopItems(counts, 5)
+
+	_ = w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	output := buf.String()
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	require.Equal(t, 3, len(lines))
+
+	// First line should contain "high" (count 100), last should contain "low" (count 1)
+	assert.Contains(t, lines[0], "high")
+	assert.Contains(t, lines[1], "mid")
+	assert.Contains(t, lines[2], "low")
 }
 
 // =============================================================================
@@ -437,9 +470,6 @@ func TestPrintTopItems_SortedDescending(t *testing.T) {
 // =============================================================================
 
 func TestReadLine_ReadsAndTrims(t *testing.T) {
-	// readLine is tested indirectly via its callers in runInteractiveSetup.
-	// Here we verify its core behavior by calling it directly with a bufio.Reader
-	// built from a strings.Reader.
 	tests := []struct {
 		name     string
 		input    string
@@ -453,22 +483,9 @@ func TestReadLine_ReadsAndTrims(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reader := strings.NewReader(tt.input)
-			// readLine uses bufio.Reader internally — replicate that here.
-			got := strings.TrimSpace(readFromString(reader))
+			reader := bufio.NewReader(strings.NewReader(tt.input))
+			got := readLine(reader)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
-}
-
-// readFromString reads the first line from a strings.Reader, mimicking readLine.
-func readFromString(r *strings.Reader) string {
-	buf := make([]byte, r.Len())
-	n, _ := r.Read(buf)
-	s := string(buf[:n])
-	// Strip newline like bufio.Reader.ReadString('\n') would
-	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
-		s = s[:idx]
-	}
-	return strings.TrimSpace(s)
 }

@@ -396,8 +396,11 @@ func isNonInteractiveGPGFailure(stderr string) bool {
 	markers := []string{
 		"cannot open '/dev/tty'",
 		"no pinentry",
+		"inappropriate ioctl for device",
 		"need_passphrase",
 		"inquire_maxlen",
+		"operation cancelled",
+		"problem with the agent",
 	}
 
 	for _, marker := range markers {

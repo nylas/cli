@@ -82,6 +82,7 @@ func (s *Server) initCacheRuntime() {
 	if s.cacheSettings == nil {
 		settings, err := cache.LoadSettings(cacheCfg.BasePath)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to load cache settings: %v\n", err)
 			return
 		}
 		s.cacheSettings = settings
@@ -96,17 +97,20 @@ func (s *Server) initCacheRuntime() {
 
 	cacheManager, err := cache.NewManager(cacheCfg)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize cache manager: %v\n", err)
 		return
 	}
 	s.cacheManager = cacheManager
 
 	photoDB, err := cache.OpenSharedDB(cacheCfg.BasePath, "photos.db")
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to open photo database: %v\n", err)
 		return
 	}
 
 	photoStore, err := cache.NewPhotoStore(photoDB, cacheCfg.BasePath, cache.DefaultPhotoTTL)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize photo store: %v\n", err)
 		return
 	}
 	s.photoStore = photoStore

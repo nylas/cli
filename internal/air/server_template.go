@@ -149,7 +149,8 @@ func initials(email string) string {
 	return string(c)
 }
 
-// loadTemplates parses all template files.
+// loadTemplates parses all template files. Uses sync.Once since templates are
+// embedded via embed.FS and cannot change at runtime; errors are cached permanently.
 func loadTemplates() (*template.Template, error) {
 	templatesOnce.Do(func() {
 		parsedTemplates, parsedTemplatesErr = template.New("").Funcs(templateFuncs).ParseFS(

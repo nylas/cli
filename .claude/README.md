@@ -84,7 +84,7 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 
 ---
 
-## Agents (9 Specialized)
+## Agents (8 Specialized)
 
 | Agent | Purpose |
 |-------|---------|

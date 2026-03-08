@@ -229,6 +229,7 @@ func isNonInteractiveGPGError(errMsg string) bool {
 		"need_passphrase",
 		"inquire_maxlen",
 		"operation cancelled",
+		"problem with the agent",
 	}
 
 	lowerErr := strings.ToLower(errMsg)
