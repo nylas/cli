@@ -3,12 +3,13 @@ package audit
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -192,8 +193,8 @@ func (s *FileStore) Query(ctx context.Context, opts *domain.AuditQueryOptions) (
 	}
 
 	// Sort files by date descending (newest first)
-	sort.Slice(files, func(i, j int) bool {
-		return files[i] > files[j]
+	slices.SortFunc(files, func(a, b string) int {
+		return cmp.Compare(b, a)
 	})
 
 	var entries []domain.AuditEntry
@@ -224,8 +225,8 @@ func (s *FileStore) Query(ctx context.Context, opts *domain.AuditQueryOptions) (
 	}
 
 	// Sort by timestamp descending (newest first)
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Timestamp.After(entries[j].Timestamp)
+	slices.SortFunc(entries, func(a, b domain.AuditEntry) int {
+		return b.Timestamp.Compare(a.Timestamp)
 	})
 
 	// Apply limit
@@ -356,7 +357,7 @@ func (s *FileStore) Stats() (fileCount int, totalSizeBytes int64, oldestEntry *d
 
 	// Find oldest entry
 	if len(files) > 0 {
-		sort.Strings(files) // Sort by date ascending
+		slices.Sort(files) // Sort by date ascending
 		entries, err := s.readLogFile(filepath.Join(s.basePath, files[0]))
 		if err == nil && len(entries) > 0 {
 			oldestEntry = &entries[0]

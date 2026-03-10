@@ -20,7 +20,7 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		params         *domain.SlackFileQueryParams
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
@@ -28,9 +28,9 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 		{
 			name:   "returns files successfully",
 			params: nil,
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"files": []map[string]interface{}{
+				"files": []map[string]any{
 					{
 						"id":       "F12345",
 						"name":     "document.pdf",
@@ -60,9 +60,9 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 			params: &domain.SlackFileQueryParams{
 				ChannelID: "C12345",
 			},
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"files": []map[string]interface{}{
+				"files": []map[string]any{
 					{
 						"id":   "F12345",
 						"name": "channel-file.txt",
@@ -78,9 +78,9 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 			params: &domain.SlackFileQueryParams{
 				UserID: "U12345",
 			},
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"files": []map[string]interface{}{
+				"files": []map[string]any{
 					{
 						"id":   "F12345",
 						"name": "user-file.doc",
@@ -96,9 +96,9 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 			params: &domain.SlackFileQueryParams{
 				Types: []string{"images", "pdfs"},
 			},
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    true,
-				"files": []interface{}{},
+				"files": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantLen:    0,
@@ -107,7 +107,7 @@ func TestClient_ListFiles_HTTP(t *testing.T) {
 		{
 			name:   "auth failed",
 			params: nil,
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "not_authed",
 			},
@@ -145,7 +145,7 @@ func TestClient_GetFileInfo_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		fileID         string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 		wantName       string
@@ -153,9 +153,9 @@ func TestClient_GetFileInfo_HTTP(t *testing.T) {
 		{
 			name:   "returns file info successfully",
 			fileID: "F12345",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"file": map[string]interface{}{
+				"file": map[string]any{
 					"id":       "F12345",
 					"name":     "document.pdf",
 					"title":    "Important Document",
@@ -172,7 +172,7 @@ func TestClient_GetFileInfo_HTTP(t *testing.T) {
 		{
 			name:   "file not found",
 			fileID: "F99999",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "file_not_found",
 			},
@@ -228,7 +228,7 @@ func TestClient_UpdateMessage_HTTP(t *testing.T) {
 		channelID      string
 		messageTS      string
 		newText        string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -237,7 +237,7 @@ func TestClient_UpdateMessage_HTTP(t *testing.T) {
 			channelID: "C12345",
 			messageTS: "1234567890.123456",
 			newText:   "Updated text",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":      true,
 				"channel": "C12345",
 				"ts":      "1234567890.123456",
@@ -251,7 +251,7 @@ func TestClient_UpdateMessage_HTTP(t *testing.T) {
 			channelID: "C12345",
 			messageTS: "0000000000.000000",
 			newText:   "Won't update",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "message_not_found",
 			},
@@ -263,7 +263,7 @@ func TestClient_UpdateMessage_HTTP(t *testing.T) {
 			channelID: "C12345",
 			messageTS: "1234567890.123456",
 			newText:   "Can't edit",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "cant_update_message",
 			},
@@ -303,7 +303,7 @@ func TestClient_GetThreadReplies_HTTP(t *testing.T) {
 		name           string
 		channelID      string
 		threadTS       string
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
@@ -312,9 +312,9 @@ func TestClient_GetThreadReplies_HTTP(t *testing.T) {
 			name:      "returns thread replies",
 			channelID: "C12345",
 			threadTS:  "1234567890.123456",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"messages": []map[string]interface{}{
+				"messages": []map[string]any{
 					{
 						"type":        "message",
 						"user":        "U12345",
@@ -348,7 +348,7 @@ func TestClient_GetThreadReplies_HTTP(t *testing.T) {
 			name:      "thread not found",
 			channelID: "C12345",
 			threadTS:  "0000000000.000000",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "thread_not_found",
 			},
@@ -385,7 +385,7 @@ func TestClient_ListMyChannels_HTTP(t *testing.T) {
 	tests := []struct {
 		name           string
 		params         *domain.SlackChannelQueryParams
-		serverResponse interface{}
+		serverResponse any
 		statusCode     int
 		wantLen        int
 		wantErr        bool
@@ -393,9 +393,9 @@ func TestClient_ListMyChannels_HTTP(t *testing.T) {
 		{
 			name:   "returns user channels",
 			params: nil,
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok": true,
-				"channels": []map[string]interface{}{
+				"channels": []map[string]any{
 					{
 						"id":         "C12345",
 						"name":       "my-channel",
@@ -414,7 +414,7 @@ func TestClient_ListMyChannels_HTTP(t *testing.T) {
 		{
 			name:   "rate limited",
 			params: nil,
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"ok":    false,
 				"error": "ratelimited",
 			},

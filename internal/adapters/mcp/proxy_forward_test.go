@@ -268,13 +268,28 @@ func TestProxy_forward_ModifiesToolsList(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	result := resp["result"].(map[string]any)
-	tools := result["tools"].([]any)
-	getGrantTool := tools[0].(map[string]any)
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatal("expected result to be map[string]any")
+	}
+	tools, ok := result["tools"].([]any)
+	if !ok {
+		t.Fatal("expected tools to be []any")
+	}
+	getGrantTool, ok := tools[0].(map[string]any)
+	if !ok {
+		t.Fatal("expected first tool to be map[string]any")
+	}
 
 	// Verify email is no longer required
-	inputSchema := getGrantTool["inputSchema"].(map[string]any)
-	required, _ := inputSchema["required"].([]any)
+	inputSchema, ok := getGrantTool["inputSchema"].(map[string]any)
+	if !ok {
+		t.Fatal("expected inputSchema to be map[string]any")
+	}
+	required, ok := inputSchema["required"].([]any)
+	if !ok {
+		t.Fatal("expected required to be []any")
+	}
 	for _, r := range required {
 		if r == "email" {
 			t.Error("expected email to be removed from required, but it's still there")
@@ -282,7 +297,7 @@ func TestProxy_forward_ModifiesToolsList(t *testing.T) {
 	}
 
 	// Verify description was modified
-	desc := getGrantTool["description"].(string)
+	desc, _ := getGrantTool["description"].(string)
 	if !strings.Contains(desc, "default authenticated grant") {
 		t.Error("expected description to be modified")
 	}

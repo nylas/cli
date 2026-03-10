@@ -80,17 +80,17 @@ func (a *EmailAnalyzer) fetchThreadMessages(ctx context.Context, grantID, thread
 func (a *EmailAnalyzer) buildThreadContext(thread *domain.Thread, messages []domain.Message) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("Email Thread: %s\n", thread.Subject))
-	builder.WriteString(fmt.Sprintf("Participants: %d\n", len(thread.Participants)))
-	builder.WriteString(fmt.Sprintf("Messages: %d\n\n", len(messages)))
+	_, _ = fmt.Fprintf(&builder, "Email Thread: %s\n", thread.Subject)
+	_, _ = fmt.Fprintf(&builder, "Participants: %d\n", len(thread.Participants))
+	_, _ = fmt.Fprintf(&builder, "Messages: %d\n\n", len(messages))
 
 	// Add participants
 	builder.WriteString("Participants:\n")
 	for _, p := range thread.Participants {
 		if p.Name != "" {
-			builder.WriteString(fmt.Sprintf("- %s <%s>\n", p.Name, p.Email))
+			_, _ = fmt.Fprintf(&builder, "- %s <%s>\n", p.Name, p.Email)
 		} else {
-			builder.WriteString(fmt.Sprintf("- %s\n", p.Email))
+			_, _ = fmt.Fprintf(&builder, "- %s\n", p.Email)
 		}
 	}
 	builder.WriteString("\n")
@@ -111,7 +111,7 @@ func (a *EmailAnalyzer) buildThreadContext(thread *domain.Thread, messages []dom
 		// Format timestamp
 		timestamp := msg.Date.Format("Jan 2, 2006 3:04 PM")
 
-		builder.WriteString(fmt.Sprintf("\n[%s] %s:\n", timestamp, sender))
+		_, _ = fmt.Fprintf(&builder, "\n[%s] %s:\n", timestamp, sender)
 
 		// Add message body (truncate if too long)
 		body := msg.Body

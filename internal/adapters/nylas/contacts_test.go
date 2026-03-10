@@ -20,7 +20,7 @@ func TestHTTPClient_GetContacts(t *testing.T) {
 	tests := []struct {
 		name           string
 		params         *domain.ContactQueryParams
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantCount      int
 		wantErr        bool
@@ -28,8 +28,8 @@ func TestHTTPClient_GetContacts(t *testing.T) {
 		{
 			name:   "returns contacts without params",
 			params: nil,
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":           "contact-1",
 						"grant_id":     "grant-123",
@@ -55,8 +55,8 @@ func TestHTTPClient_GetContacts(t *testing.T) {
 			params: &domain.ContactQueryParams{
 				Email: "john@example.com",
 			},
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{"id": "contact-1", "given_name": "John"},
 				},
 			},
@@ -67,8 +67,8 @@ func TestHTTPClient_GetContacts(t *testing.T) {
 		{
 			name:   "returns empty list",
 			params: nil,
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantCount:  0,
@@ -115,7 +115,7 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 		name           string
 		params         *domain.ContactQueryParams
 		wantQueryKeys  []string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 	}{
 		{
 			name: "includes limit param",
@@ -123,8 +123,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				Limit: 50,
 			},
 			wantQueryKeys: []string{"limit"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -133,8 +133,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				PageToken: "next-page-token",
 			},
 			wantQueryKeys: []string{"page_token"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -143,8 +143,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				PhoneNumber: "+1-555-0100",
 			},
 			wantQueryKeys: []string{"phone_number"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -153,8 +153,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				Source: "address_book",
 			},
 			wantQueryKeys: []string{"source"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -163,8 +163,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				Group: "group-123",
 			},
 			wantQueryKeys: []string{"group"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -173,8 +173,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				Recurse: true,
 			},
 			wantQueryKeys: []string{"recurse"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 		{
@@ -183,8 +183,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 				ProfilePicture: true,
 			},
 			wantQueryKeys: []string{"profile_picture"},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 		},
 	}
@@ -212,8 +212,8 @@ func TestHTTPClient_GetContactsWithCursor(t *testing.T) {
 
 	t.Run("returns pagination info", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{"id": "contact-1", "given_name": "Alice"},
 				},
 				"next_cursor": "eyJsYXN0X2lkIjoiY29udGFjdC0xIn0=",
@@ -241,7 +241,7 @@ func TestHTTPClient_GetContact(t *testing.T) {
 	tests := []struct {
 		name           string
 		contactID      string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -249,8 +249,8 @@ func TestHTTPClient_GetContact(t *testing.T) {
 		{
 			name:      "returns contact successfully",
 			contactID: "contact-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":           "contact-123",
 					"grant_id":     "grant-123",
 					"given_name":   "John",
@@ -273,7 +273,7 @@ func TestHTTPClient_GetContact(t *testing.T) {
 		{
 			name:      "returns error for not found",
 			contactID: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "contact not found"},
 			},
 			statusCode:  http.StatusNotFound,
@@ -321,8 +321,8 @@ func TestHTTPClient_GetContactWithPicture(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "true", r.URL.Query().Get("profile_picture"))
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":         "contact-123",
 					"given_name": "John",
 					"picture":    "base64encodedpicturedata",
@@ -348,8 +348,8 @@ func TestHTTPClient_GetContactWithPicture(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Empty(t, r.URL.Query().Get("profile_picture"))
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":         "contact-123",
 					"given_name": "John",
 				},
@@ -374,7 +374,7 @@ func TestHTTPClient_CreateContact(t *testing.T) {
 	tests := []struct {
 		name           string
 		request        *domain.CreateContactRequest
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 	}{
@@ -384,8 +384,8 @@ func TestHTTPClient_CreateContact(t *testing.T) {
 				GivenName: "John",
 				Surname:   "Doe",
 			},
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":         "new-contact-123",
 					"grant_id":   "grant-123",
 					"given_name": "John",
@@ -416,8 +416,8 @@ func TestHTTPClient_CreateContact(t *testing.T) {
 					{Number: "+1-555-0100", Type: "mobile"},
 				},
 			},
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":         "new-contact-456",
 					"grant_id":   "grant-123",
 					"given_name": "Jane",
@@ -467,8 +467,8 @@ func TestHTTPClient_UpdateContact(t *testing.T) {
 			assert.Equal(t, "/v3/grants/grant-123/contacts/contact-456", r.URL.Path)
 			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":         "contact-456",
 					"grant_id":   "grant-123",
 					"given_name": "Updated",
@@ -534,7 +534,7 @@ func TestHTTPClient_DeleteContact(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}

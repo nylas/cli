@@ -125,11 +125,13 @@ test-air-integration:
 # -p 1: Run test packages sequentially to prevent rate limit issues
 test-integration:
 	@go clean -testcache
-	NYLAS_DISABLE_KEYRING=true \
-	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
-	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
-	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
-	go test ./... -tags=integration -v -timeout 10m -p 1 2>&1 | tee test-integration.txt
+	@bash -o pipefail -c '\
+		NYLAS_DISABLE_KEYRING=true \
+		NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+		NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+		NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+		go test ./... -tags=integration -v -timeout 10m -p 1 2>&1 | tee test-integration.txt \
+	'
 
 # Integration tests excluding slow LLM-dependent tests (for when Ollama is slow/unavailable)
 # Runs: Admin, Timezone, AIConfig, CalendarAI (Basic, Adapt, Analyze working hours)
@@ -137,11 +139,13 @@ test-integration:
 # -p 1: Run test packages sequentially to prevent rate limit issues
 test-integration-fast:
 	@go clean -testcache
-	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
-	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
-	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
-	go test ./internal/cli/integration/... -tags=integration -v -timeout 2m -p 1 \
-		-run "TestCLI_Admin|TestCLI_Timezone|TestCLI_AIConfig|TestCLI_AIProvider|TestCLI_CalendarAI_Basic|TestCLI_CalendarAI_Adapt|TestCLI_CalendarAI_Analyze_Respects|TestCLI_CalendarAI_Analyze_Default|TestCLI_CalendarAI_Analyze_Disabled|TestCLI_CalendarAI_Analyze_Focus|TestCLI_CalendarAI_Analyze_With"
+	@bash -o pipefail -c '\
+		NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+		NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+		NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+		go test ./internal/cli/integration/... -tags=integration -v -timeout 2m -p 1 \
+			-run "TestCLI_Admin|TestCLI_Timezone|TestCLI_AIConfig|TestCLI_AIProvider|TestCLI_CalendarAI_Basic|TestCLI_CalendarAI_Adapt|TestCLI_CalendarAI_Analyze_Respects|TestCLI_CalendarAI_Analyze_Default|TestCLI_CalendarAI_Analyze_Disabled|TestCLI_CalendarAI_Analyze_Focus|TestCLI_CalendarAI_Analyze_With" \
+	'
 
 # Clean up test resources (virtual calendars, test grants, test events, test emails, etc.)
 test-cleanup:
@@ -302,25 +306,30 @@ ci-full:
 	@echo "================================="
 	@echo "Running Full CI Pipeline..."
 	@echo "================================="
-	@$(MAKE) --no-print-directory ci 2>&1 | tee ci-full.txt
-	@echo "" | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
-	@echo "Running Integration Tests..." | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
-	@$(MAKE) --no-print-directory test-integration 2>&1 | tee ci-full.txt
-	@$(MAKE) --no-print-directory test-air-integration 2>&1 | tee ci-full.txt
-	@echo "" | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
-	@echo "Cleaning up test resources..." | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
-	@$(MAKE) --no-print-directory test-cleanup 2>&1 | tee ci-full.txt
-	@echo "" | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
-	@echo "✓ Full CI pipeline completed!" | tee ci-full.txt
-	@echo "  - All quality checks passed" | tee ci-full.txt
-	@echo "  - All tests passed" | tee ci-full.txt
-	@echo "  - Test resources cleaned up" | tee ci-full.txt
-	@echo "=================================" | tee ci-full.txt
+	@: > ci-full.txt
+	@bash -o pipefail -c '\
+		set -eu; \
+		exec > >(tee -a ci-full.txt) 2>&1; \
+		$(MAKE) --no-print-directory ci; \
+		echo ""; \
+		echo "================================="; \
+		echo "Running Integration Tests..."; \
+		echo "================================="; \
+		$(MAKE) --no-print-directory test-integration; \
+		$(MAKE) --no-print-directory test-air-integration; \
+		echo ""; \
+		echo "================================="; \
+		echo "Cleaning up test resources..."; \
+		echo "================================="; \
+		$(MAKE) --no-print-directory test-cleanup; \
+		echo ""; \
+		echo "================================="; \
+		echo "✓ Full CI pipeline completed!"; \
+		echo "  - All quality checks passed"; \
+		echo "  - All tests passed"; \
+		echo "  - Test resources cleaned up"; \
+		echo "================================="; \
+	'
 	@echo ""
 	@echo "Results saved to ci-full.txt"
 

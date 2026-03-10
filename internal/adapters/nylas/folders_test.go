@@ -18,8 +18,8 @@ func TestHTTPClient_GetFolders(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/folders", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":            "folder-inbox",
 					"name":          "INBOX",
@@ -69,8 +69,8 @@ func TestHTTPClient_GetFolder(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/folders/folder-456", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":               "folder-456",
 				"name":             "Work",
 				"total_count":      150,
@@ -106,12 +106,12 @@ func TestHTTPClient_CreateFolder(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/folders", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "New Folder", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":          "folder-new",
 				"name":        "New Folder",
 				"total_count": 0,
@@ -144,12 +144,12 @@ func TestHTTPClient_UpdateFolder(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-123/folders/folder-789", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Renamed Folder", body["name"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":          "folder-789",
 				"name":        "Renamed Folder",
 				"total_count": 25,
@@ -178,14 +178,14 @@ func TestHTTPClient_UpdateFolder(t *testing.T) {
 
 func TestHTTPClient_UpdateFolder_WithColors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Colorful", body["name"])
 		assert.Equal(t, "#00FF00", body["background_color"])
 		assert.Equal(t, "#000000", body["text_color"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":               "folder-color",
 				"name":             "Colorful",
 				"background_color": "#00FF00",
@@ -238,7 +238,7 @@ func TestHTTPClient_DeleteFolder_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode( // Test helper, encode error not actionable
-			map[string]interface{}{
+			map[string]any{
 				"error": map[string]string{
 					"message": "Folder not found",
 				},
@@ -385,15 +385,15 @@ func TestHTTPClient_CreateFolder_WithAllFields(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-full/folders", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Full Folder", body["name"])
 		assert.Equal(t, "parent-123", body["parent_id"])
 		assert.Equal(t, "#0000FF", body["background_color"])
 		assert.Equal(t, "#FFFF00", body["text_color"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":               "folder-full",
 				"name":             "Full Folder",
 				"parent_id":        "parent-123",
@@ -459,13 +459,13 @@ func TestHTTPClient_UpdateFolder_WithParentID(t *testing.T) {
 		assert.Equal(t, "/v3/grants/grant-parent/folders/folder-move", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Moved Folder", body["name"])
 		assert.Equal(t, "new-parent-456", body["parent_id"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"id":        "folder-move",
 				"name":      "Moved Folder",
 				"parent_id": "new-parent-456",
@@ -518,8 +518,8 @@ func TestHTTPClient_DeleteFolder_EmptyFolderID(t *testing.T) {
 // SystemFolder handling tests
 func TestHTTPClient_GetFolders_WithBoolSystemFolder(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":            "folder-bool-true",
 					"name":          "Bool True Folder",

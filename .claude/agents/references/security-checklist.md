@@ -125,35 +125,9 @@ go list -m -u all
 
 ## Credential Storage Architecture
 
-Credentials are stored in the system keyring under service name `"nylas"`.
+**See:** `agents/references/helper-reference.md` and `CLAUDE.md` for full keyring details (keys, files, platforms).
 
-### Keys Stored
-| Key | Constant | Description |
-|-----|----------|-------------|
-| `client_id` | `ports.KeyClientID` | Nylas Application/Client ID |
-| `api_key` | `ports.KeyAPIKey` | Nylas API key (Bearer auth) |
-| `client_secret` | `ports.KeyClientSecret` | Provider OAuth secret (Google/Microsoft) |
-| `org_id` | `ports.KeyOrgID` | Nylas Organization ID |
-| `grants` | `grantsKey` | JSON array of grant info |
-| `default_grant` | `defaultGrantKey` | Default grant ID |
-| `grant_token_<id>` | `ports.GrantTokenKey()` | Per-grant tokens |
-
-### Implementation Files
-| File | Purpose |
-|------|---------|
-| `internal/ports/secrets.go` | Key constants |
-| `internal/adapters/keyring/keyring.go` | Keyring implementation |
-| `internal/adapters/keyring/grants.go` | Grant storage |
-| `internal/app/auth/config.go` | `SetupConfig()` saves credentials |
-
-### Platform Backends
-- Linux: Secret Service (GNOME Keyring, KWallet)
-- macOS: Keychain
-- Windows: Credential Manager
-- Fallback: Encrypted file (`~/.config/nylas/`)
-
-### Testing Override
-`NYLAS_DISABLE_KEYRING=true` forces encrypted file store.
+**Quick reference:** Service name `"nylas"`, keys in `internal/ports/secrets.go`, implementation in `internal/adapters/keyring/`.
 
 ---
 

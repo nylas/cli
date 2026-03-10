@@ -24,7 +24,7 @@ func TestIntegration_FocusMode(t *testing.T) {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var stateResp map[string]interface{}
+	var stateResp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&stateResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestIntegration_AIConfig(t *testing.T) {
 		t.Fatalf("expected status 200 for providers, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var providers []map[string]interface{}
+	var providers []map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&providers); err != nil {
 		t.Fatalf("failed to decode providers: %v", err)
 	}

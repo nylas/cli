@@ -21,7 +21,7 @@ func TestHTTPClient_GetEvents(t *testing.T) {
 		name           string
 		calendarID     string
 		params         *domain.EventQueryParams
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantCount      int
 		wantErr        bool
@@ -30,15 +30,15 @@ func TestHTTPClient_GetEvents(t *testing.T) {
 			name:       "returns events successfully",
 			calendarID: "cal-123",
 			params:     nil,
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":          "event-1",
 						"calendar_id": "cal-123",
 						"title":       "Team Meeting",
 						"status":      "confirmed",
 						"busy":        true,
-						"when": map[string]interface{}{
+						"when": map[string]any{
 							"start_time": 1704067200,
 							"end_time":   1704070800,
 							"object":     "timespan",
@@ -50,7 +50,7 @@ func TestHTTPClient_GetEvents(t *testing.T) {
 						"title":       "Lunch",
 						"status":      "confirmed",
 						"busy":        false,
-						"when": map[string]interface{}{
+						"when": map[string]any{
 							"start_time": 1704081600,
 							"end_time":   1704085200,
 							"object":     "timespan",
@@ -66,8 +66,8 @@ func TestHTTPClient_GetEvents(t *testing.T) {
 			name:       "returns empty list",
 			calendarID: "cal-456",
 			params:     &domain.EventQueryParams{Limit: 10},
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantCount:  0,
@@ -189,8 +189,8 @@ func TestHTTPClient_GetEventsWithCursor(t *testing.T) {
 					assert.NotEmpty(t, r.URL.Query().Get(key), "Missing query param: %s", key)
 				}
 
-				response := map[string]interface{}{
-					"data": []interface{}{},
+				response := map[string]any{
+					"data": []any{},
 				}
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(response)
@@ -208,8 +208,8 @@ func TestHTTPClient_GetEventsWithCursor(t *testing.T) {
 
 	t.Run("returns pagination info", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": []map[string]interface{}{
+			response := map[string]any{
+				"data": []map[string]any{
 					{"id": "event-1", "title": "Event"},
 				},
 				"next_cursor": "eyJsYXN0X2lkIjoiZXZlbnQtMSJ9",
@@ -237,7 +237,7 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 		name           string
 		eventID        string
 		calendarID     string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -246,8 +246,8 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 			name:       "returns event successfully",
 			eventID:    "event-123",
 			calendarID: "cal-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":          "event-123",
 					"calendar_id": "cal-123",
 					"title":       "Important Meeting",
@@ -256,12 +256,12 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 					"status":      "confirmed",
 					"busy":        true,
 					"visibility":  "public",
-					"when": map[string]interface{}{
+					"when": map[string]any{
 						"start_time": 1704067200,
 						"end_time":   1704070800,
 						"object":     "timespan",
 					},
-					"participants": []map[string]interface{}{
+					"participants": []map[string]any{
 						{
 							"email":  "alice@example.com",
 							"name":   "Alice",
@@ -277,7 +277,7 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 			name:       "returns error for not found",
 			eventID:    "nonexistent",
 			calendarID: "cal-123",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "event not found"},
 			},
 			statusCode:  http.StatusNotFound,
@@ -390,15 +390,15 @@ func TestHTTPClient_CreateEvent(t *testing.T) {
 				assert.Equal(t, "cal-123", r.URL.Query().Get("calendar_id"))
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for _, field := range tt.expectedFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":          "new-event-123",
 						"calendar_id": "cal-123",
 						"title":       tt.request.Title,
@@ -502,15 +502,15 @@ func TestHTTPClient_UpdateEvent(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/events/event-456", r.URL.Path)
 				assert.Equal(t, "cal-123", r.URL.Query().Get("calendar_id"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for _, field := range tt.wantFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":          "event-456",
 						"calendar_id": "cal-123",
 						"title":       "Updated",
@@ -571,7 +571,7 @@ func TestHTTPClient_DeleteEvent(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}

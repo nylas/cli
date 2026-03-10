@@ -253,14 +253,14 @@ func (c *ComposeView) prefillForReply() {
 	if len(msg.From) > 0 {
 		from := msg.From[0]
 		if from.Name != "" {
-			body.WriteString(fmt.Sprintf("On %s %s <%s> wrote:\n",
+			_, _ = fmt.Fprintf(&body, "On %s %s <%s> wrote:\n",
 				msg.Date.Format(common.DisplayWeekdayCommaAt),
 				from.Name,
-				from.Email))
+				from.Email)
 		} else {
-			body.WriteString(fmt.Sprintf("On %s %s wrote:\n",
+			_, _ = fmt.Fprintf(&body, "On %s %s wrote:\n",
 				msg.Date.Format(common.DisplayWeekdayCommaAt),
-				from.Email))
+				from.Email)
 		}
 	}
 

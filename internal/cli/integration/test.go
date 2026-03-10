@@ -18,23 +18,24 @@
 //   - NYLAS_INBOUND_GRANT_ID: Grant ID for inbound inbox tests (skips inbound tests if not set)
 //
 // Parallel Testing:
-//   Tests can use t.Parallel() to run concurrently. The package includes a global
-//   rate limiter that ensures API calls don't exceed Nylas rate limits.
 //
-//   Usage:
-//     func TestExample(t *testing.T) {
-//         skipIfMissingCreds(t)
-//         t.Parallel()  // Enable parallel execution
+//	Tests can use t.Parallel() to run concurrently. The package includes a global
+//	rate limiter that ensures API calls don't exceed Nylas rate limits.
 //
-//         // For API calls, use rate-limited functions:
-//         stdout, stderr, err := runCLIWithRateLimit(t, "calendar", "events", "list")
-//         // OR manually acquire rate limit:
-//         acquireRateLimit(t)
-//         stdout, stderr, err := runCLI("calendar", "events", "list")
-//     }
+//	Usage:
+//	  func TestExample(t *testing.T) {
+//	      skipIfMissingCreds(t)
+//	      t.Parallel()  // Enable parallel execution
 //
-//   For offline commands (timezone, ai config, help), rate limiting is not needed:
-//     stdout, _, _ := runCLI("timezone", "list")  // No rate limit needed
+//	      // For API calls, use rate-limited functions:
+//	      stdout, stderr, err := runCLIWithRateLimit(t, "calendar", "events", "list")
+//	      // OR manually acquire rate limit:
+//	      acquireRateLimit(t)
+//	      stdout, stderr, err := runCLI("calendar", "events", "list")
+//	  }
+//
+//	For offline commands (timezone, ai config, help), rate limiting is not needed:
+//	  stdout, _, _ := runCLI("timezone", "list")  // No rate limit needed
 //
 // Test files are organized by feature:
 //   - test.go: Common setup and helpers (this file)
@@ -72,11 +73,11 @@ import (
 
 // Test configuration loaded from environment
 var (
-	testAPIKey        string
-	testGrantID       string
-	testClientID      string
-	testEmail         string
-	testBinary        string
+	testAPIKey         string
+	testGrantID        string
+	testClientID       string
+	testEmail          string
+	testBinary         string
 	testInboundGrantID string
 )
 
@@ -447,7 +448,7 @@ func getAvailableProvider() string {
 }
 
 // getAIConfigFromUserConfig reads the AI configuration from ~/.config/nylas/config.yaml
-func getAIConfigFromUserConfig() map[string]interface{} {
+func getAIConfigFromUserConfig() map[string]any {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -459,12 +460,12 @@ func getAIConfigFromUserConfig() map[string]interface{} {
 		return nil
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil
 	}
 
-	aiConfig, ok := config["ai"].(map[string]interface{})
+	aiConfig, ok := config["ai"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -492,7 +493,7 @@ func skipIfNoDefaultAIProvider(t *testing.T) {
 }
 
 // getWorkingHoursFromUserConfig reads working hours configuration from ~/.config/nylas/config.yaml
-func getWorkingHoursFromUserConfig() map[string]interface{} {
+func getWorkingHoursFromUserConfig() map[string]any {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -504,12 +505,12 @@ func getWorkingHoursFromUserConfig() map[string]interface{} {
 		return nil
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil
 	}
 
-	whConfig, ok := config["working_hours"].(map[string]interface{})
+	whConfig, ok := config["working_hours"].(map[string]any)
 	if !ok {
 		return nil
 	}

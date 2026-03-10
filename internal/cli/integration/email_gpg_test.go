@@ -4,6 +4,8 @@
 package integration
 
 import (
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,7 @@ func TestCLI_EmailSend_GPGSigned(t *testing.T) {
 	}
 
 	acquireRateLimit(t)
+	gpgKeyID := getIntegrationTestGPGKeyID(t)
 
 	// Send a GPG-signed email to self
 	stdout, stderr, err := runCLI("email", "send",
@@ -31,6 +34,7 @@ func TestCLI_EmailSend_GPGSigned(t *testing.T) {
 		"--subject", "[CLI Test] GPG Signed Email",
 		"--body", "This is a GPG-signed test email from CLI integration tests.",
 		"--sign",
+		"--gpg-key", gpgKeyID,
 		"--yes",
 		testGrantID)
 
@@ -38,6 +42,9 @@ func TestCLI_EmailSend_GPGSigned(t *testing.T) {
 		// Skip if GPG is not available
 		if strings.Contains(stderr, "GPG not found") || strings.Contains(stderr, "no GPG key") {
 			t.Skip("GPG not available or no keys configured, skipping test")
+		}
+		if isNonInteractiveGPGFailure(stderr) {
+			t.Skipf("GPG key requires interactive pinentry in this environment: %s", stderr)
 		}
 		t.Fatalf("email send --sign failed: %v\nstderr: %s", err, stderr)
 	}
@@ -59,6 +66,7 @@ func TestCLI_EmailSend_GPGSignedAndVerify(t *testing.T) {
 	}
 
 	acquireRateLimit(t)
+	gpgKeyID := getIntegrationTestGPGKeyID(t)
 
 	// Step 1: Send a GPG-signed email to self
 	sendStdout, sendStderr, err := runCLI("email", "send",
@@ -66,12 +74,16 @@ func TestCLI_EmailSend_GPGSignedAndVerify(t *testing.T) {
 		"--subject", "[CLI Test] GPG Verify Test "+time.Now().Format("15:04:05"),
 		"--body", "This email will be verified after sending.",
 		"--sign",
+		"--gpg-key", gpgKeyID,
 		"--yes",
 		testGrantID)
 
 	if err != nil {
 		if strings.Contains(sendStderr, "GPG not found") || strings.Contains(sendStderr, "no GPG key") {
 			t.Skip("GPG not available or no keys configured, skipping test")
+		}
+		if isNonInteractiveGPGFailure(sendStderr) {
+			t.Skipf("GPG key requires interactive pinentry in this environment: %s", sendStderr)
 		}
 		t.Fatalf("email send --sign failed: %v\nstderr: %s", err, sendStderr)
 	}
@@ -242,6 +254,7 @@ func TestCLI_EmailRead_SignedMIME(t *testing.T) {
 	}
 
 	acquireRateLimit(t)
+	gpgKeyID := getIntegrationTestGPGKeyID(t)
 
 	// Send a GPG-signed email
 	sendStdout, sendStderr, err := runCLI("email", "send",
@@ -249,12 +262,16 @@ func TestCLI_EmailRead_SignedMIME(t *testing.T) {
 		"--subject", "[CLI Test] Signed MIME Test "+time.Now().Format("15:04:05"),
 		"--body", "Testing signed email MIME structure.",
 		"--sign",
+		"--gpg-key", gpgKeyID,
 		"--yes",
 		testGrantID)
 
 	if err != nil {
 		if strings.Contains(sendStderr, "GPG not found") || strings.Contains(sendStderr, "no GPG key") {
 			t.Skip("GPG not available or no keys configured, skipping test")
+		}
+		if isNonInteractiveGPGFailure(sendStderr) {
+			t.Skipf("GPG key requires interactive pinentry in this environment: %s", sendStderr)
 		}
 		t.Fatalf("email send --sign failed: %v\nstderr: %s", err, sendStderr)
 	}
@@ -356,3 +373,41 @@ func extractMessageID(output string) string {
 	return ""
 }
 
+func getIntegrationTestGPGKeyID(t *testing.T) string {
+	t.Helper()
+
+	if keyID := strings.TrimSpace(os.Getenv("NYLAS_TEST_GPG_KEY_ID")); keyID != "" {
+		return keyID
+	}
+
+	out, err := exec.Command("git", "config", "--get", "user.signingkey").Output()
+	if err == nil {
+		if keyID := strings.TrimSpace(string(out)); keyID != "" {
+			return keyID
+		}
+	}
+
+	t.Skip("No GPG key configured for integration tests. Set NYLAS_TEST_GPG_KEY_ID or git user.signingkey")
+	return ""
+}
+
+func isNonInteractiveGPGFailure(stderr string) bool {
+	lower := strings.ToLower(stderr)
+	markers := []string{
+		"cannot open '/dev/tty'",
+		"no pinentry",
+		"inappropriate ioctl for device",
+		"need_passphrase",
+		"inquire_maxlen",
+		"operation cancelled",
+		"problem with the agent",
+	}
+
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+
+	return false
+}

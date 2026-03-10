@@ -2,6 +2,7 @@ package calendar
 
 import (
 	"testing"
+	"time"
 )
 
 func TestFormatTimezoneBadge(t *testing.T) {
@@ -82,55 +83,56 @@ func TestFormatTimezoneBadge(t *testing.T) {
 	}
 }
 
+// expectedColorForTZ computes the expected color code for a timezone using the
+// same offset-based logic as getTimezoneColor. This avoids hardcoding values
+// that change with DST transitions.
+func expectedColorForTZ(tz string) int {
+	if tz == "" {
+		return 7
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return 7
+	}
+	_, offset := time.Now().In(loc).Zone()
+	offsetHours := offset / 3600
+	switch {
+	case offsetHours <= -8:
+		return 34
+	case offsetHours <= -5:
+		return 36
+	case offsetHours <= 0:
+		return 32
+	case offsetHours <= 3:
+		return 33
+	case offsetHours <= 12:
+		return 35
+	default:
+		return 31
+	}
+}
+
 func TestGetTimezoneColor(t *testing.T) {
 	tests := []struct {
-		name          string
-		tz            string
-		wantColorCode int
+		name string
+		tz   string
 	}{
-		{
-			name:          "empty timezone returns default",
-			tz:            "",
-			wantColorCode: 7, // Default gray
-		},
-		{
-			name:          "Pacific timezone (PST/PDT)",
-			tz:            "America/Los_Angeles",
-			wantColorCode: 34, // Blue (offset -8/-7)
-		},
-		{
-			name:          "Eastern timezone (EST/EDT)",
-			tz:            "America/New_York",
-			wantColorCode: 36, // Cyan (offset -5/-4)
-		},
-		{
-			name:          "UTC timezone",
-			tz:            "UTC",
-			wantColorCode: 32, // Green (offset 0)
-		},
-		{
-			name:          "Europe timezone",
-			tz:            "Europe/London",
-			wantColorCode: 32, // Green (offset 0/+1)
-		},
-		{
-			name:          "Asia timezone",
-			tz:            "Asia/Tokyo",
-			wantColorCode: 35, // Magenta (offset +9)
-		},
-		{
-			name:          "India timezone",
-			tz:            "Asia/Kolkata",
-			wantColorCode: 35, // Magenta (offset +5:30)
-		},
+		{name: "empty timezone returns default", tz: ""},
+		{name: "Pacific timezone (PST/PDT)", tz: "America/Los_Angeles"},
+		{name: "Eastern timezone (EST/EDT)", tz: "America/New_York"},
+		{name: "UTC timezone", tz: "UTC"},
+		{name: "Europe timezone", tz: "Europe/London"},
+		{name: "Asia timezone", tz: "Asia/Tokyo"},
+		{name: "India timezone", tz: "Asia/Kolkata"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getTimezoneColor(tt.tz)
+			want := expectedColorForTZ(tt.tz)
 
-			if got != tt.wantColorCode {
-				t.Errorf("getTimezoneColor(%q) = %d, want %d", tt.tz, got, tt.wantColorCode)
+			if got != want {
+				t.Errorf("getTimezoneColor(%q) = %d, want %d", tt.tz, got, want)
 			}
 
 			// Verify it's a valid ANSI color code

@@ -44,25 +44,11 @@ Generate comprehensive unit and integration tests for Go code.
 | CLI integration | `TestCLI_CommandName` | `TestCLI_EmailSend` |
 | HTTP handler | `TestHandleFeature_Scenario` | `TestHandleAISummarize_EmptyBody` |
 
-## Run Tests
-
-```bash
-# Unit tests
-go test ./internal/cli/email/... -v
-
-# Integration tests
-make test-integration
-
-# Specific test
-go test -tags=integration -v ./internal/cli/integration/... -run "TestCLI_EmailSend"
-
-# With coverage
-make test-coverage
-```
-
 ## Verification
 
 After generating tests:
 - Tests pass: `go test ./path/to/package/...`
 - Linting passes: `golangci-lint run`
 - Coverage improved: `make test-coverage`
+
+**Full test commands:** See `/run-tests` for all test targets and environment setup.

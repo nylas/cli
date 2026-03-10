@@ -171,6 +171,15 @@
             "command": ".claude/hooks/auto-format.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/auto-format.sh"
+          }
+        ]
       }
     ]
   }

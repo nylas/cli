@@ -22,12 +22,12 @@ func TestHTTPClient_ListAttachments(t *testing.T) {
 			assert.Equal(t, "GET", r.Method)
 			assert.Contains(t, r.Header.Get("Authorization"), "Bearer")
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":       "msg-456",
 					"grant_id": "grant-123",
 					"subject":  "Test with attachments",
-					"attachments": []map[string]interface{}{
+					"attachments": []map[string]any{
 						{
 							"id":           "attach-1",
 							"filename":     "report.pdf",
@@ -75,12 +75,12 @@ func TestHTTPClient_ListAttachments(t *testing.T) {
 
 	t.Run("returns empty list for message without attachments", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":          "msg-456",
 					"grant_id":    "grant-123",
 					"subject":     "No attachments",
-					"attachments": []interface{}{},
+					"attachments": []any{},
 				},
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -106,8 +106,8 @@ func TestHTTPClient_GetAttachment(t *testing.T) {
 			assert.Equal(t, "/v3/grants/grant-123/messages/msg-456/attachments/attach-789", r.URL.Path)
 			assert.Equal(t, "GET", r.Method)
 
-			response := map[string]interface{}{
-				"data": map[string]interface{}{
+			response := map[string]any{
+				"data": map[string]any{
 					"id":           "attach-789",
 					"grant_id":     "grant-123",
 					"filename":     "document.pdf",
@@ -138,7 +138,7 @@ func TestHTTPClient_GetAttachment(t *testing.T) {
 	t.Run("returns error for non-existent attachment", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{ // Test helper, encode error not actionable
+			_ = json.NewEncoder(w).Encode(map[string]any{ // Test helper, encode error not actionable
 				"error": map[string]string{
 					"message": "attachment not found",
 					"type":    "not_found",

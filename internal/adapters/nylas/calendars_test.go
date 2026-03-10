@@ -19,15 +19,15 @@ import (
 func TestHTTPClient_GetCalendars(t *testing.T) {
 	tests := []struct {
 		name           string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantCount      int
 		wantErr        bool
 	}{
 		{
 			name: "returns calendars successfully",
-			serverResponse: map[string]interface{}{
-				"data": []map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": []map[string]any{
 					{
 						"id":          "cal-primary",
 						"grant_id":    "grant-123",
@@ -54,8 +54,8 @@ func TestHTTPClient_GetCalendars(t *testing.T) {
 		},
 		{
 			name: "returns empty list",
-			serverResponse: map[string]interface{}{
-				"data": []interface{}{},
+			serverResponse: map[string]any{
+				"data": []any{},
 			},
 			statusCode: http.StatusOK,
 			wantCount:  0,
@@ -97,7 +97,7 @@ func TestHTTPClient_GetCalendar(t *testing.T) {
 	tests := []struct {
 		name           string
 		calendarID     string
-		serverResponse map[string]interface{}
+		serverResponse map[string]any
 		statusCode     int
 		wantErr        bool
 		errContains    string
@@ -105,8 +105,8 @@ func TestHTTPClient_GetCalendar(t *testing.T) {
 		{
 			name:       "returns calendar successfully",
 			calendarID: "cal-123",
-			serverResponse: map[string]interface{}{
-				"data": map[string]interface{}{
+			serverResponse: map[string]any{
+				"data": map[string]any{
 					"id":          "cal-123",
 					"grant_id":    "grant-123",
 					"name":        "Test Calendar",
@@ -124,7 +124,7 @@ func TestHTTPClient_GetCalendar(t *testing.T) {
 		{
 			name:       "returns error for not found",
 			calendarID: "nonexistent",
-			serverResponse: map[string]interface{}{
+			serverResponse: map[string]any{
 				"error": map[string]string{"message": "calendar not found"},
 			},
 			statusCode:  http.StatusNotFound,
@@ -210,15 +210,15 @@ func TestHTTPClient_CreateCalendar(t *testing.T) {
 				assert.Equal(t, "/v3/grants/grant-123/calendars", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for key, expectedValue := range tt.expectedFields {
 					assert.Equal(t, expectedValue, body[key], "Field %s mismatch", key)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":       "new-cal-123",
 						"grant_id": "grant-123",
 						"name":     tt.request.Name,
@@ -302,15 +302,15 @@ func TestHTTPClient_UpdateCalendar(t *testing.T) {
 				expectedPath := "/v3/grants/grant-123/calendars/" + tt.calendarID
 				assert.Equal(t, expectedPath, r.URL.Path)
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 
 				for _, field := range tt.wantFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
 
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
+				response := map[string]any{
+					"data": map[string]any{
 						"id":       tt.calendarID,
 						"grant_id": "grant-123",
 						"name":     "Updated",
@@ -370,7 +370,7 @@ func TestHTTPClient_DeleteCalendar(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
-					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]any{
 						"error": map[string]string{"message": "not found"},
 					})
 				}
@@ -397,13 +397,13 @@ func TestHTTPClient_GetCalendars_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
 		statusCode  int
-		response    map[string]interface{}
+		response    map[string]any
 		errContains string
 	}{
 		{
 			name:       "handles 401 unauthorized",
 			statusCode: http.StatusUnauthorized,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Invalid API key"},
 			},
 			errContains: "Invalid API key",
@@ -411,7 +411,7 @@ func TestHTTPClient_GetCalendars_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 403 forbidden",
 			statusCode: http.StatusForbidden,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Access denied to calendar"},
 			},
 			errContains: "Access denied",
@@ -419,7 +419,7 @@ func TestHTTPClient_GetCalendars_ErrorHandling(t *testing.T) {
 		{
 			name:       "handles 500 server error",
 			statusCode: http.StatusInternalServerError,
-			response: map[string]interface{}{
+			response: map[string]any{
 				"error": map[string]string{"message": "Internal server error"},
 			},
 			errContains: "Internal server error",

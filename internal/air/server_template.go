@@ -3,6 +3,7 @@ package air
 import (
 	"html/template"
 	"net/http"
+	"sync"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -148,14 +149,19 @@ func initials(email string) string {
 	return string(c)
 }
 
-// loadTemplates parses all template files.
+// loadTemplates parses all template files. Uses sync.Once since templates are
+// embedded via embed.FS and cannot change at runtime; errors are cached permanently.
 func loadTemplates() (*template.Template, error) {
-	return template.New("").Funcs(templateFuncs).ParseFS(
-		templateFiles,
-		"templates/*.gohtml",
-		"templates/partials/*.gohtml",
-		"templates/pages/*.gohtml",
-	)
+	templatesOnce.Do(func() {
+		parsedTemplates, parsedTemplatesErr = template.New("").Funcs(templateFuncs).ParseFS(
+			templateFiles,
+			"templates/*.gohtml",
+			"templates/partials/*.gohtml",
+			"templates/pages/*.gohtml",
+		)
+	})
+
+	return parsedTemplates, parsedTemplatesErr
 }
 
 // Template functions.
@@ -165,3 +171,9 @@ var templateFuncs = template.FuncMap{
 		return template.HTML(s)
 	},
 }
+
+var (
+	templatesOnce      sync.Once
+	parsedTemplates    *template.Template
+	parsedTemplatesErr error
+)

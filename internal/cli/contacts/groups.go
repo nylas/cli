@@ -76,14 +76,10 @@ func newGroupsShowCmd() *cobra.Command {
 		Use:          "show <group-id> [grant-id]",
 		Short:        "Show contact group details",
 		ResourceName: "contact group",
-		GetFunc: func(ctx context.Context, grantID, resourceID string) (interface{}, error) {
-			client, err := common.GetNylasClient()
-			if err != nil {
-				return nil, err
-			}
+		GetFunc: func(ctx context.Context, client ports.NylasClient, grantID, resourceID string) (any, error) {
 			return client.GetContactGroup(ctx, grantID, resourceID)
 		},
-		DisplayFunc: func(resource interface{}) error {
+		DisplayFunc: func(resource any) error {
 			group := resource.(*domain.ContactGroup)
 
 			fmt.Println("════════════════════════════════════════════════════════════")

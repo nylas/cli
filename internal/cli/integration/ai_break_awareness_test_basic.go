@@ -37,7 +37,7 @@ func TestCLI_AI_BreakTimeAwareness(t *testing.T) {
 	aiConfig := getAIConfigFromUserConfig()
 	if aiConfig == nil {
 		// Fallback to minimal config if user config not found
-		aiConfig = map[string]interface{}{
+		aiConfig = map[string]any{
 			"default_provider": aiProvider,
 		}
 	}
@@ -51,7 +51,7 @@ func TestCLI_AI_BreakTimeAwareness(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"region":        "us",
 		"callback_port": 8080,
 		"grants": []map[string]string{
@@ -61,8 +61,8 @@ func TestCLI_AI_BreakTimeAwareness(t *testing.T) {
 				"provider": "google",
 			},
 		},
-		"working_hours": map[string]interface{}{
-			"default": map[string]interface{}{
+		"working_hours": map[string]any{
+			"default": map[string]any{
 				"enabled": true,
 				"start":   "09:00",
 				"end":     "17:00",

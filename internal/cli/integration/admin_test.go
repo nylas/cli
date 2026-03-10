@@ -179,7 +179,7 @@ func TestCLI_AdminCredentialsList(t *testing.T) {
 	}
 
 	// Parse connectors JSON to get a connector provider
-	var connectors []map[string]interface{}
+	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(connStdout), &connectors); err != nil || len(connectors) == 0 {
 		t.Skip("No connectors found to test credentials list")
 	}
@@ -222,7 +222,7 @@ func TestCLI_AdminCredentialsListJSON(t *testing.T) {
 	}
 
 	// Parse connectors JSON to get a connector provider
-	var connectors []map[string]interface{}
+	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(connStdout), &connectors); err != nil || len(connectors) == 0 {
 		t.Skip("No connectors found to test credentials list")
 	}

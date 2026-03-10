@@ -1,9 +1,10 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/audit"
@@ -117,8 +118,8 @@ func printTopItems(counts map[string]int, limit int) {
 		items = append(items, item{name, count})
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].count > items[j].count
+	slices.SortFunc(items, func(a, b item) int {
+		return cmp.Compare(b.count, a.count)
 	})
 
 	// Print top items

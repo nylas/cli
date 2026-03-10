@@ -22,13 +22,13 @@ func TestHTTPClient_SmartCompose(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Accept"))
 
 		// Verify request body
-		var req map[string]interface{}
+		var req map[string]any
 		err := json.NewDecoder(r.Body).Decode(&req)
 		assert.NoError(t, err)
 		assert.Equal(t, "Draft a thank you email", req["prompt"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"suggestion": "Thank you for your time in yesterday's meeting. I appreciate the insights you shared.",
 			},
 		}
@@ -60,13 +60,13 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Accept"))
 
 		// Verify request body
-		var req map[string]interface{}
+		var req map[string]any
 		err := json.NewDecoder(r.Body).Decode(&req)
 		assert.NoError(t, err)
 		assert.Equal(t, "Reply accepting the invitation", req["prompt"])
 
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
+		response := map[string]any{
+			"data": map[string]any{
 				"suggestion": "Thank you for the invitation. I'd be happy to attend the event.",
 			},
 		}
@@ -94,8 +94,8 @@ func TestHTTPClient_SmartComposeReply(t *testing.T) {
 func TestHTTPClient_SmartCompose_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		response := map[string]interface{}{
-			"error": map[string]interface{}{
+		response := map[string]any{
+			"error": map[string]any{
 				"message": "Prompt exceeds maximum length",
 			},
 		}

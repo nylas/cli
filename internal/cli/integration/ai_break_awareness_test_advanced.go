@@ -29,7 +29,7 @@ func TestCLI_AI_FocusTime_BreakAwareness(t *testing.T) {
 	// Load AI config from user's config file
 	aiConfig := getAIConfigFromUserConfig()
 	if aiConfig == nil {
-		aiConfig = map[string]interface{}{
+		aiConfig = map[string]any{
 			"default_provider": getAvailableProvider(),
 		}
 	}
@@ -46,7 +46,7 @@ func TestCLI_AI_FocusTime_BreakAwareness(t *testing.T) {
 		t.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"region":        "us",
 		"callback_port": 8080,
 		"grants": []map[string]string{
@@ -56,8 +56,8 @@ func TestCLI_AI_FocusTime_BreakAwareness(t *testing.T) {
 				"provider": "google",
 			},
 		},
-		"working_hours": map[string]interface{}{
-			"default": map[string]interface{}{
+		"working_hours": map[string]any{
+			"default": map[string]any{
 				"enabled": true,
 				"start":   "09:00",
 				"end":     "17:00",
@@ -145,7 +145,7 @@ func TestCLI_AI_Scheduling_BreakAwareness(t *testing.T) {
 	// Load AI config from user's config file
 	aiConfig := getAIConfigFromUserConfig()
 	if aiConfig == nil {
-		aiConfig = map[string]interface{}{
+		aiConfig = map[string]any{
 			"default_provider": getAvailableProvider(),
 		}
 	}
@@ -162,7 +162,7 @@ func TestCLI_AI_Scheduling_BreakAwareness(t *testing.T) {
 		t.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"region":        "us",
 		"callback_port": 8080,
 		"grants": []map[string]string{
@@ -172,8 +172,8 @@ func TestCLI_AI_Scheduling_BreakAwareness(t *testing.T) {
 				"provider": "google",
 			},
 		},
-		"working_hours": map[string]interface{}{
-			"default": map[string]interface{}{
+		"working_hours": map[string]any{
+			"default": map[string]any{
 				"enabled": true,
 				"start":   "09:00",
 				"end":     "17:00",
@@ -272,7 +272,7 @@ func TestCLI_AI_ConflictDetection_BreakAwareness(t *testing.T) {
 	// Load AI config from user's config file
 	aiConfig := getAIConfigFromUserConfig()
 	if aiConfig == nil {
-		aiConfig = map[string]interface{}{
+		aiConfig = map[string]any{
 			"default_provider": getAvailableProvider(),
 		}
 	}
@@ -289,7 +289,7 @@ func TestCLI_AI_ConflictDetection_BreakAwareness(t *testing.T) {
 		t.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"region":        "us",
 		"callback_port": 8080,
 		"grants": []map[string]string{
@@ -299,8 +299,8 @@ func TestCLI_AI_ConflictDetection_BreakAwareness(t *testing.T) {
 				"provider": "google",
 			},
 		},
-		"working_hours": map[string]interface{}{
-			"default": map[string]interface{}{
+		"working_hours": map[string]any{
+			"default": map[string]any{
 				"enabled": true,
 				"start":   "09:00",
 				"end":     "17:00",

@@ -23,14 +23,7 @@ Context: $ARGUMENTS
 
 2. **Identify documentation impact**
 
-   | Changed File Pattern | Docs to Update |
-   |---------------------|----------------|
-   | `internal/cli/*/` | `docs/COMMANDS.md` |
-   | `internal/domain/*.go` | `docs/COMMANDS.md` (if affects CLI output) |
-   | `cmd/nylas/main.go` | `docs/COMMANDS.md` (new commands) |
-   | `internal/adapters/nylas/*.go` | `docs/ARCHITECTURE.md` (if new adapter) |
-   | Major features | `README.md` |
-   | New flags | `docs/COMMANDS.md` |
+   See `.claude/rules/documentation-maintenance.md` for the full update matrix.
 
 3. **Update docs/COMMANDS.md**
 

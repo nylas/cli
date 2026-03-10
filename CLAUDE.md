@@ -59,7 +59,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 
 ## Project Overview
 
-- **Language**: Go 1.24.2 (use latest features!)
+- **Language**: Go (module minimum 1.24.2, use latest installed version features)
 - **Architecture**: Hexagonal (ports and adapters)
 - **CLI Framework**: Cobra
 - **API**: Nylas v3 ONLY (never use v1/v2)
@@ -88,32 +88,13 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 
 ## Credential Storage (Keyring)
 
-Credentials from `nylas auth config` are stored in the system keyring under service name `"nylas"`.
+Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config`.
 
-### Keys Stored
-| Key | Constant | Description |
-|-----|----------|-------------|
-| `client_id` | `ports.KeyClientID` | Nylas Application/Client ID |
-| `api_key` | `ports.KeyAPIKey` | Nylas API key (Bearer auth) |
-| `client_secret` | `ports.KeyClientSecret` | Provider OAuth secret (Google/Microsoft) |
-| `org_id` | `ports.KeyOrgID` | Nylas Organization ID |
-| `grants` | `grantsKey` | JSON array of grant info |
-| `default_grant` | `defaultGrantKey` | Default grant ID |
-| `grant_token_<id>` | `ports.GrantTokenKey()` | Per-grant access tokens |
+**Key files:** `internal/ports/secrets.go` (constants), `internal/adapters/keyring/` (implementation), `internal/app/auth/config.go` (setup)
 
-### Key Files
-- `internal/ports/secrets.go` - Key constants
-- `internal/adapters/keyring/keyring.go` - Keyring implementation (service: `"nylas"`)
-- `internal/adapters/keyring/grants.go` - Grant storage
-- `internal/app/auth/config.go` - `SetupConfig()` saves to keyring
+**Keys:** `client_id`, `api_key`, `client_secret`, `org_id`, `grants`, `default_grant`, `grant_token_<id>`
 
-### Platform Backends
-- **Linux**: Secret Service (GNOME Keyring, KWallet)
-- **macOS**: Keychain
-- **Windows**: Windows Credential Manager
-- **Fallback**: Encrypted file (`~/.config/nylas/`)
-
-**Disable keyring**: `NYLAS_DISABLE_KEYRING=true`
+**Disable keyring:** `NYLAS_DISABLE_KEYRING=true` (falls back to encrypted file at `~/.config/nylas/`)
 
 ---
 
@@ -125,7 +106,9 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 
 **Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`, Chat at `internal/chat/`
 
-**New packages (2024-2026):**
+**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, inbound, mcp, notetaker, otp, scheduler, slack, timezone, webhook
+
+**Additional packages:**
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting
 - `internal/adapters/output/` - Table, JSON, YAML, Quiet output adapters
 - `internal/httputil/` - HTTP response helpers (WriteJSON, LimitedBody, DecodeJSON)
@@ -150,12 +133,6 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 8. Docs: `docs/COMMANDS.md` - Add examples
 
 **Detailed guide:** Use `/add-command` skill
-
----
-
-## Go Modernization
-
-**See:** `.claude/rules/go-quality.md` for modern Go patterns (1.21+), error handling, and linting fixes.
 
 ---
 
@@ -185,7 +162,7 @@ Credentials from `nylas auth config` are stored in the system keyring under serv
 
 **On-demand docs:** `docs/COMMANDS.md`, `docs/ARCHITECTURE.md`, `.claude/shared/patterns/*.md`
 
-**Session handoff:** Update `claude-progress.txt` after major tasks (Branch → Summary → Next Steps)
+**Session handoff:** Use `/diary` skill to record progress after major tasks
 
 ---
 

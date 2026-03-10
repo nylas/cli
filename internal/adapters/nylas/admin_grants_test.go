@@ -18,8 +18,8 @@ func TestHTTPClient_ListAllGrants(t *testing.T) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":           "grant-1",
 					"provider":     "google",
@@ -63,8 +63,8 @@ func TestHTTPClient_ListAllGrants_WithParams(t *testing.T) {
 		assert.Equal(t, "10", query.Get("limit"))
 		assert.Equal(t, "conn-123", query.Get("connector_id"))
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":           "grant-1",
 					"provider":     "google",
@@ -99,8 +99,8 @@ func TestHTTPClient_GetGrantStats(t *testing.T) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		response := map[string]interface{}{
-			"data": []map[string]interface{}{
+		response := map[string]any{
+			"data": []map[string]any{
 				{
 					"id":           "grant-1",
 					"provider":     "google",

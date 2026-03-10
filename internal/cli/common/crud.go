@@ -280,8 +280,10 @@ func NewDeleteCommand(config DeleteCommandConfig) *cobra.Command {
 //	    Aliases: []string{"get", "read"},
 //	    Short: "Show contact details",
 //	    ResourceName: "contact",
-//	    GetFunc: client.GetContact,
-//	    DisplayFunc: func(resource interface{}) error {
+//	    GetFunc: func(ctx context.Context, client ports.NylasClient, grantID, resourceID string) (any, error) {
+//	        return client.GetContact(ctx, grantID, resourceID)
+//	    },
+//	    DisplayFunc: func(resource any) error {
 //	        contact := resource.(*domain.Contact)
 //	        fmt.Printf("Name: %s\n", contact.DisplayName())
 //	        return nil
@@ -289,14 +291,14 @@ func NewDeleteCommand(config DeleteCommandConfig) *cobra.Command {
 //	    GetClient: getClient,
 //	})
 type ShowCommandConfig struct {
-	Use          string                                                                     // Cobra Use string
-	Aliases      []string                                                                   // Cobra aliases
-	Short        string                                                                     // Short description
-	Long         string                                                                     // Long description
-	ResourceName string                                                                     // Resource name for error messages
-	GetFunc      func(ctx context.Context, grantID, resourceID string) (interface{}, error) // Get function
-	DisplayFunc  func(resource interface{}) error                                           // Custom display function
-	GetClient    func() (ports.NylasClient, error)                                          // Client getter function
+	Use          string                                                                                       // Cobra Use string
+	Aliases      []string                                                                                     // Cobra aliases
+	Short        string                                                                                       // Short description
+	Long         string                                                                                       // Long description
+	ResourceName string                                                                                       // Resource name for error messages
+	GetFunc      func(ctx context.Context, client ports.NylasClient, grantID, resourceID string) (any, error) // Get function
+	DisplayFunc  func(resource any) error                                                                     // Custom display function
+	GetClient    func() (ports.NylasClient, error)                                                            // Client getter function
 }
 
 // NewShowCommand creates a fully configured show command with custom display logic.
@@ -319,7 +321,7 @@ func NewShowCommand(config ShowCommandConfig) *cobra.Command {
 			}
 
 			// Get client
-			_, err = config.GetClient()
+			client, err := config.GetClient()
 			if err != nil {
 				return err
 			}
@@ -329,7 +331,7 @@ func NewShowCommand(config ShowCommandConfig) *cobra.Command {
 			defer cancel()
 
 			// Fetch resource
-			resource, err := config.GetFunc(ctx, resourceArgs.GrantID, resourceArgs.ResourceID)
+			resource, err := config.GetFunc(ctx, client, resourceArgs.GrantID, resourceArgs.ResourceID)
 			if err != nil {
 				return WrapGetError(config.ResourceName, err)
 			}

@@ -7,7 +7,7 @@ Auto-applied to all Go code changes. Combines Go best practices and linting requ
 ## Mandatory Workflow
 
 ### Before Writing Code:
-1. **Check Go version:** Currently **Go 1.24.2**
+1. **Check Go version:** Module minimum **Go 1.24.2** (use latest installed version features)
 2. **Research official docs:** `go.dev/ref/spec`, `pkg.go.dev`
 3. **Find existing patterns:** Use Grep/Glob to match project style
 

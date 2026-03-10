@@ -6,6 +6,7 @@ package integration
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// skipIfSandboxLimitReached skips the test if the error indicates sandbox grant limit is hit.
+func skipIfSandboxLimitReached(t *testing.T, err error) {
+	t.Helper()
+	if err != nil && strings.Contains(err.Error(), "Maximum number of sandbox grants") {
+		t.Skip("Sandbox grant limit reached - clean up grants or upgrade plan")
+	}
+}
 
 func TestVirtualCalendarGrants(t *testing.T) {
 	apiKey := os.Getenv("NYLAS_API_KEY")
@@ -33,6 +42,7 @@ func TestVirtualCalendarGrants(t *testing.T) {
 		email := "test-conference-room-" + time.Now().Format("20060102150405") + "@example.com"
 
 		grant, err := client.CreateVirtualCalendarGrant(ctx, email)
+		skipIfSandboxLimitReached(t, err)
 		require.NoError(t, err)
 
 		// Skip test if virtual calendar grants not properly supported
@@ -108,6 +118,7 @@ func TestVirtualCalendarWorkflow(t *testing.T) {
 	// Create virtual calendar grant
 	email := "integration-test-room-" + time.Now().Format("20060102150405") + "@example.com"
 	grant, err := client.CreateVirtualCalendarGrant(ctx, email)
+	skipIfSandboxLimitReached(t, err)
 	require.NoError(t, err)
 
 	// Skip test if virtual calendar grants not properly supported
