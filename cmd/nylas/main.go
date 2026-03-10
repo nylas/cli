@@ -21,6 +21,7 @@ import (
 	"github.com/nylas/cli/internal/cli/mcp"
 	"github.com/nylas/cli/internal/cli/notetaker"
 	"github.com/nylas/cli/internal/cli/otp"
+	"github.com/nylas/cli/internal/cli/provider"
 	"github.com/nylas/cli/internal/cli/scheduler"
 	"github.com/nylas/cli/internal/cli/slack"
 	"github.com/nylas/cli/internal/cli/timezone"
@@ -52,6 +53,7 @@ func main() {
 	rootCmd.AddCommand(mcp.NewMCPCmd())
 	rootCmd.AddCommand(slack.NewSlackCmd())
 	rootCmd.AddCommand(demo.NewDemoCmd())
+	rootCmd.AddCommand(provider.NewProviderCmd())
 	rootCmd.AddCommand(cli.NewTUICmd())
 	rootCmd.AddCommand(ui.NewUICmd())
 	rootCmd.AddCommand(air.NewAirCmd())
