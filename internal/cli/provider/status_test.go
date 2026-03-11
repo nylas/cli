@@ -3,6 +3,7 @@ package provider
 import (
 	"testing"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,4 +55,15 @@ func TestNewStatusCmd(t *testing.T) {
 	// project-id flag should exist
 	f := cmd.Flags().Lookup("project-id")
 	assert.NotNil(t, f)
+}
+
+func TestHasProviderConnector(t *testing.T) {
+	connectors := []domain.Connector{
+		{Provider: "google"},
+		{Provider: "microsoft"},
+	}
+
+	assert.True(t, hasProviderConnector(connectors, "google"))
+	assert.True(t, hasProviderConnector(connectors, "GOOGLE"))
+	assert.False(t, hasProviderConnector(connectors, "imap"))
 }

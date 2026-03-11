@@ -31,7 +31,12 @@ func TestGenerateProjectID(t *testing.T) {
 		{
 			name:     "empty name gets padded",
 			input:    "",
-			expected: "-nylas",
+			expected: "project-nylas",
+		},
+		{
+			name:     "starts with number gets letter prefix",
+			input:    "123 app",
+			expected: "p-123-app-nylas",
 		},
 		{
 			name:     "already lowercase",

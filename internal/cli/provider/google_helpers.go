@@ -19,6 +19,15 @@ func generateProjectID(name string) string {
 	id = multiDash.ReplaceAllString(id, "-")
 	id = strings.Trim(id, "-")
 
+	if id == "" {
+		id = "project"
+	}
+
+	// GCP project IDs must start with a letter.
+	if id[0] < 'a' || id[0] > 'z' {
+		id = "p-" + id
+	}
+
 	// Append "-nylas" suffix
 	if len(id) > 24 {
 		id = id[:24]

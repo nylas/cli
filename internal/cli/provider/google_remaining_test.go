@@ -186,7 +186,7 @@ func TestValidateSetup_ConnectorError(t *testing.T) {
 	// The default mock returns success, so we test the success path
 	// which prints connector ID and scopes
 	nylasClient := nylas.NewMockClient()
-	validateSetup(ctx, nylasClient) // should not panic
+	validateSetup(ctx, nylasClient, "conn-123") // should not panic
 }
 
 // --- saveState error paths ---

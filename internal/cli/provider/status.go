@@ -80,8 +80,11 @@ func newStatusCmd() *cobra.Command {
 
 			// Check Nylas connector
 			checkAndPrint("Nylas Connector", func() bool {
-				connector, err := nylasClient.GetConnector(ctx, "google")
-				return err == nil && connector != nil
+				connectors, err := nylasClient.ListConnectors(ctx)
+				if err != nil {
+					return false
+				}
+				return hasProviderConnector(connectors, "google")
 			})
 
 			fmt.Println()
@@ -113,4 +116,13 @@ func checkAndPrint(label string, check func() bool) {
 func printUnknown(label string) {
 	dots := statusDots(label)
 	_, _ = common.Yellow.Printf("  %s %s ? (cannot verify via API)\n", label, dots)
+}
+
+func hasProviderConnector(connectors []domain.Connector, provider string) bool {
+	for _, connector := range connectors {
+		if strings.EqualFold(connector.Provider, provider) {
+			return true
+		}
+	}
+	return false
 }

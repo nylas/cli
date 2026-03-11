@@ -326,6 +326,30 @@ func TestRunPhase2(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, bro.OpenCalled, "should not open browser for completed steps")
 	})
+
+	t.Run("re-prompts credentials on resume when missing in memory", func(t *testing.T) {
+		dir := t.TempDir()
+		bro := browser.NewMockBrowser()
+
+		cfg := &domain.GoogleSetupConfig{
+			ProjectID: "my-project",
+			Region:    "us",
+		}
+
+		state := &domain.SetupState{
+			StartedAt: time.Now(),
+			CompletedSteps: []string{
+				domain.StepConsentScreen,
+				domain.StepCredentials,
+			},
+		}
+
+		err := runPhase2(bro, newMockReader("resumed-client-id", "resumed-client-secret"), cfg, state, dir)
+		require.NoError(t, err)
+		assert.False(t, bro.OpenCalled, "consent screen should remain skipped")
+		assert.Equal(t, "resumed-client-id", cfg.ClientID)
+		assert.Equal(t, "resumed-client-secret", cfg.ClientSecret)
+	})
 }
 
 func TestRunPhase3(t *testing.T) {
@@ -450,7 +474,7 @@ func TestValidateSetup(t *testing.T) {
 		nylasClient := nylas.NewMockClient()
 
 		// Should not panic
-		validateSetup(ctx, nylasClient)
+		validateSetup(ctx, nylasClient, "conn-123")
 	})
 }
 

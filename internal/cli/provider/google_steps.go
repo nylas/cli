@@ -432,8 +432,8 @@ func createNylasConnector(ctx context.Context, nylasClient ports.NylasClient, cf
 }
 
 // validateSetup verifies the connector was created successfully.
-func validateSetup(ctx context.Context, nylasClient ports.NylasClient) {
-	connector, err := nylasClient.GetConnector(ctx, "google")
+func validateSetup(ctx context.Context, nylasClient ports.NylasClient, connectorID string) {
+	connector, err := nylasClient.GetConnector(ctx, connectorID)
 	if err != nil {
 		common.PrintWarning("Could not verify connector: %v", err)
 		return

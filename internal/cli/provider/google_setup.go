@@ -190,7 +190,7 @@ func runPhase2(bro ports.Browser, reader lineReader, cfg *domain.GoogleSetupConf
 		_ = saveState(configDir, state)
 	}
 
-	if !state.IsStepCompleted(domain.StepCredentials) {
+	if !state.IsStepCompleted(domain.StepCredentials) || cfg.ClientID == "" || cfg.ClientSecret == "" {
 		state.PendingStep = domain.StepCredentials
 		_ = saveState(configDir, state)
 
@@ -213,12 +213,12 @@ func runPhase3(ctx context.Context, nylasClient ports.NylasClient, cfg *domain.G
 		state.PendingStep = domain.StepConnector
 		_ = saveState(configDir, state)
 
-		_, err := createNylasConnector(ctx, nylasClient, cfg)
+		connector, err := createNylasConnector(ctx, nylasClient, cfg)
 		if err != nil {
 			return err
 		}
 
-		validateSetup(ctx, nylasClient)
+		validateSetup(ctx, nylasClient, connector.ID)
 
 		state.CompleteStep(domain.StepConnector)
 	}
