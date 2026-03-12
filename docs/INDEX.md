@@ -1,5 +1,7 @@
 # Documentation Index
 
+> **Website:** [cli.nylas.com](https://cli.nylas.com/)
+
 Quick navigation guide to find the right documentation for your needs.
 
 ---

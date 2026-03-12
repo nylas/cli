@@ -62,7 +62,9 @@ OTP MANAGEMENT:
   nylas otp list       List configured accounts
 
 INTERACTIVE TUI:
-  nylas tui            Launch k9s-style terminal UI for emails`,
+  nylas tui            Launch k9s-style terminal UI for emails
+
+Documentation: https://cli.nylas.com/`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
