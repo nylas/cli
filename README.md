@@ -3,8 +3,9 @@
 ![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/nylas/cli)
+[![Website](https://img.shields.io/badge/docs-cli.nylas.com-blue)](https://cli.nylas.com/)
 
-Unified CLI for [Nylas API](https://www.nylas.com/) - manage email, calendar, and contacts across providers (Google, Microsoft, IMAP) with a single interface.
+**[Documentation](https://cli.nylas.com/)** | Unified CLI for [Nylas API](https://www.nylas.com/) - manage email, calendar, and contacts across providers (Google, Microsoft, IMAP) with a single interface.
 
 ## Installation
 

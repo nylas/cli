@@ -77,7 +77,7 @@ changelog:
 #       branch: main
 #       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 #     directory: Formula
-#     homepage: "https://github.com/nylas/cli"
+#     homepage: "https://cli.nylas.com/"
 #     description: "CLI for Nylas API - manage email, calendar, and contacts"
 #     license: "MIT"
 #     install: |
@@ -97,6 +97,8 @@ release:
   mode: replace
   header: |
     ## Nylas CLI {{ .Version }}
+
+    **Documentation:** https://cli.nylas.com/
 
     ### Installation
 
