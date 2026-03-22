@@ -614,6 +614,7 @@ def call_api():
 
 ### More Resources
 
+- **[Email as Identity for AI Agents](https://cli.nylas.com/guides/email-as-identity-for-ai-agents)** — how AI agents use email for signups, OTP verification, and account recovery
 - **Email Commands:** [Email Operations](email.md)
 - **Calendar Commands:** [Calendar Management](calendar.md)
 - **Webhook Integration:** [Webhook Management](webhooks.md)
