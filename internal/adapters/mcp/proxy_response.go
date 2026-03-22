@@ -148,9 +148,8 @@ func (p *Proxy) createErrorResponse(req *rpcRequest, originalErr error) []byte {
 	return respBytes
 }
 
-// modifyToolsListResponse modifies the tools/list response to make get_grant email optional.
-// This allows AI assistants to call get_grant without providing an email,
-// which triggers the local grant lookup in handleLocalToolCall.
+// modifyToolsListResponse modifies the tools/list response to make get_grant email optional,
+// and dynamically discovers which tools accept grant_id for automatic injection.
 func (p *Proxy) modifyToolsListResponse(response []byte) []byte {
 	// Parse the JSON-RPC response
 	var rpcResp map[string]any
@@ -169,7 +168,8 @@ func (p *Proxy) modifyToolsListResponse(response []byte) []byte {
 		return response
 	}
 
-	// Find and modify the get_grant tool
+	// Discover which tools accept grant_id and modify get_grant
+	discovered := make(map[string]bool)
 	for _, tool := range tools {
 		toolMap, ok := tool.(map[string]any)
 		if !ok {
@@ -177,34 +177,45 @@ func (p *Proxy) modifyToolsListResponse(response []byte) []byte {
 		}
 
 		name, ok := toolMap["name"].(string)
-		if !ok || name != "get_grant" {
+		if !ok {
 			continue
 		}
 
-		// Found get_grant - modify its inputSchema to make email optional
 		inputSchema, ok := toolMap["inputSchema"].(map[string]any)
 		if !ok {
 			continue
 		}
 
-		// Remove "email" from required array
-		required, ok := inputSchema["required"].([]any)
-		if ok {
-			newRequired := make([]any, 0, len(required))
-			for _, r := range required {
-				if r != "email" {
-					newRequired = append(newRequired, r)
-				}
+		// Check if this tool has grant_id in its properties
+		if props, ok := inputSchema["properties"].(map[string]any); ok {
+			if _, hasGrantID := props["grant_id"]; hasGrantID {
+				discovered[name] = true
 			}
-			inputSchema["required"] = newRequired
 		}
 
-		// Update the description to indicate email is optional
-		if desc, ok := toolMap["description"].(string); ok {
-			toolMap["description"] = desc + " If email is not provided, returns the default authenticated grant."
-		}
+		// Modify get_grant to make email optional
+		if name == "get_grant" {
+			if required, ok := inputSchema["required"].([]any); ok {
+				newRequired := make([]any, 0, len(required))
+				for _, r := range required {
+					if r != "email" {
+						newRequired = append(newRequired, r)
+					}
+				}
+				inputSchema["required"] = newRequired
+			}
 
-		break
+			if desc, ok := toolMap["description"].(string); ok {
+				toolMap["description"] = desc + " If email is not provided, returns the default authenticated grant."
+			}
+		}
+	}
+
+	// Cache the discovered grant tools for use in injectDefaultGrant
+	if len(discovered) > 0 {
+		p.mu.Lock()
+		p.grantTools = discovered
+		p.mu.Unlock()
 	}
 
 	// Re-marshal the modified response

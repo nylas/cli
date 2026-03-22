@@ -22,33 +22,18 @@ func newServeCmd() *cobra.Command {
 		Long: `Start the MCP server to enable AI assistants to interact with Nylas.
 
 This command acts as a proxy to the official Nylas MCP server, providing
-access to all Nylas email and calendar tools through the Model Context Protocol.
+access to all Nylas email, calendar, and contacts tools through the
+Model Context Protocol.
+
+The proxy dynamically discovers available tools from the upstream Nylas
+MCP server and adds local enhancements:
+  - Automatic grant_id injection (no need to specify which account)
+  - Local grant lookup (get_grant without email)
+  - Timezone-aware timestamp display
+  - Secure credential handling via system keyring
 
 The server communicates via STDIO (standard input/output) and requires
 Nylas credentials to be configured via 'nylas auth login'.
-
-Available tools (from Nylas MCP):
-
-  Messages:
-    list_messages     - Search and retrieve emails
-    list_threads      - List email threads
-    create_draft      - Create a new draft
-    update_draft      - Update an existing draft
-    send_message      - Send a new email (requires confirmation)
-    send_draft        - Send a draft (requires confirmation)
-
-  Calendar:
-    list_calendars    - List all calendars
-    list_events       - List calendar events
-    create_event      - Create a new event
-    update_event      - Update an existing event
-    availability      - Check availability
-
-  Utilities:
-    get_grant         - Get grant information
-    get_folder_by_id  - Get folder details
-    current_time      - Get current time
-    epoch_to_datetime - Convert epoch to datetime
 
 For more information: https://developer.nylas.com/docs/dev-guide/mcp/`,
 		RunE: runServe,

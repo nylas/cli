@@ -58,6 +58,7 @@ type Proxy struct {
 	grantStore   ports.GrantStore
 	httpClient   *http.Client
 	sessionID    string
+	grantTools   map[string]bool // Dynamically discovered tools that accept grant_id
 	mu           sync.RWMutex
 }
 
@@ -296,12 +297,9 @@ func (p *Proxy) readSSE(reader io.Reader) ([]byte, error) {
 	return batch, nil
 }
 
-// toolsRequiringGrant lists tools that accept a grant_id parameter at the root level.
-// Utility tools like time converters should NOT have grant_id injected.
-// Excluded tools (don't accept grant_id at root level):
-//   - confirm_send_message, confirm_send_draft: only validate message content
-//   - availability: grant_id goes inside participants array, not at root
-var toolsRequiringGrant = map[string]bool{
+// fallbackGrantTools is a static fallback used before the first tools/list response
+// is received. Once tools/list is processed, the dynamically discovered set is used instead.
+var fallbackGrantTools = map[string]bool{
 	"get_grant":        true,
 	"list_calendars":   true,
 	"list_events":      true,
@@ -314,6 +312,19 @@ var toolsRequiringGrant = map[string]bool{
 	"update_draft":     true,
 	"send_draft":       true,
 	"send_message":     true,
+}
+
+// toolRequiresGrant checks whether a tool accepts grant_id, using the dynamically
+// discovered set from tools/list if available, falling back to the static list.
+func (p *Proxy) toolRequiresGrant(toolName string) bool {
+	p.mu.RLock()
+	gt := p.grantTools
+	p.mu.RUnlock()
+
+	if gt != nil {
+		return gt[toolName]
+	}
+	return fallbackGrantTools[toolName]
 }
 
 // injectDefaultGrant injects the default grant_id into tool call requests if not already specified.
@@ -344,9 +355,8 @@ func (p *Proxy) injectDefaultGrant(request []byte, parsed *rpcRequest) []byte {
 		return request
 	}
 
-	// Only inject grant_id for tools that need it
-	// Utility tools like epoch_to_datetime, current_time, datetime_to_epoch don't accept grant_id
-	if !toolsRequiringGrant[req.Params.Name] {
+	// Only inject grant_id for tools that accept it (dynamically discovered)
+	if !p.toolRequiresGrant(req.Params.Name) {
 		return request
 	}
 
