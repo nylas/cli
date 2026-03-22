@@ -196,7 +196,8 @@ docs/
 ### **Users**
 1. [README.md](../README.md) - Getting started
 2. [COMMANDS.md](COMMANDS.md) - Command reference
-3. [troubleshooting/faq.md](troubleshooting/faq.md) - Common questions
+3. [cli.nylas.com/guides](https://cli.nylas.com/guides) - Step-by-step tutorials
+4. [troubleshooting/faq.md](troubleshooting/faq.md) - Common questions
 
 ---
 

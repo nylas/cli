@@ -252,6 +252,8 @@ AI Assistant (Claude/Cursor/etc.)
 
 ## See Also
 
+- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — setup for Claude Code, Cursor, Codex CLI, and OpenClaw
+- [AI agent email access via MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) — full MCP setup guide with all 16 tools
 - [Nylas MCP Documentation](https://developer.nylas.com/docs/dev-guide/mcp/)
 - [Model Context Protocol Spec](https://modelcontextprotocol.io/)
 - [AI Features](ai.md)

@@ -464,3 +464,9 @@ fi
 
 ---
 
+## See Also
+
+- [Send email from the command line](https://cli.nylas.com/guides/send-email-from-terminal) — full guide with examples for Gmail, Outlook, Exchange, Yahoo, iCloud, and IMAP
+- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — connect Claude Code, Cursor, or Codex CLI to your inbox
+- [Email deliverability from the CLI](https://cli.nylas.com/guides/email-deliverability-cli) — debug SPF, DKIM, and DMARC
+
