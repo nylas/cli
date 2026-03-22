@@ -470,6 +470,8 @@ When using both `--sign` and `--encrypt`:
 
 ## Related Documentation
 
+- [GPG Encrypted Email from the CLI](https://cli.nylas.com/guides/gpg-encrypted-email-cli) - Full guide with examples for signing, encrypting, and verifying
+- [Secure Email Handling from the CLI](https://cli.nylas.com/guides/secure-email-handling-cli) - SPF/DKIM/DMARC, GPG, and safe attachment handling
 - [GPG Email Signing](email-signing.md) - Sign emails without encryption
 - [GPG Explained](explain-gpg.md) - Understanding GPG concepts
 - `nylas email send --help` - Full command options

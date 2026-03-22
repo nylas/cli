@@ -959,6 +959,7 @@ gpg --sign-key KEY_ID              # Sign (certify) a key
 
 ## Further Reading
 
+- [GPG Encrypted Email from the CLI](https://cli.nylas.com/guides/gpg-encrypted-email-cli) - Send and receive GPG/PGP encrypted email from your terminal
 - [RFC 4880 - OpenPGP Message Format](https://tools.ietf.org/html/rfc4880)
 - [RFC 3156 - MIME Security with OpenPGP](https://tools.ietf.org/html/rfc3156)
 - [GnuPG Manual](https://www.gnupg.org/documentation/manuals/gnupg/)
