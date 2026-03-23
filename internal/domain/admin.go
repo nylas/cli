@@ -66,6 +66,9 @@ type ConnectorSettings struct {
 	ClientSecret string `json:"client_secret,omitempty"`
 	Tenant       string `json:"tenant,omitempty"` // For Microsoft
 
+	// Pub/Sub settings (Google)
+	TopicName string `json:"topic_name,omitempty"`
+
 	// IMAP-specific settings
 	IMAPHost     string `json:"imap_host,omitempty"`
 	IMAPPort     int    `json:"imap_port,omitempty"`
