@@ -15,6 +15,7 @@ import (
 	"github.com/nylas/cli/internal/cli/calendar"
 	"github.com/nylas/cli/internal/cli/config"
 	"github.com/nylas/cli/internal/cli/contacts"
+	"github.com/nylas/cli/internal/cli/dashboard"
 	"github.com/nylas/cli/internal/cli/demo"
 	"github.com/nylas/cli/internal/cli/email"
 	"github.com/nylas/cli/internal/cli/inbound"
@@ -43,6 +44,7 @@ func main() {
 	rootCmd.AddCommand(email.NewEmailCmd())
 	rootCmd.AddCommand(calendar.NewCalendarCmd())
 	rootCmd.AddCommand(contacts.NewContactsCmd())
+	rootCmd.AddCommand(dashboard.NewDashboardCmd())
 	rootCmd.AddCommand(scheduler.NewSchedulerCmd())
 	rootCmd.AddCommand(admin.NewAdminCmd())
 	rootCmd.AddCommand(webhook.NewWebhookCmd())

@@ -25,6 +25,13 @@ const (
 	KeyClientSecret = "client_secret"
 	KeyAPIKey       = "api_key"
 	KeyOrgID        = "org_id"
+
+	// Dashboard auth keys
+	KeyDashboardUserToken    = "dashboard_user_token"
+	KeyDashboardOrgToken     = "dashboard_org_token"
+	KeyDashboardUserPublicID = "dashboard_user_public_id"
+	KeyDashboardOrgPublicID  = "dashboard_org_public_id"
+	KeyDashboardDPoPKey      = "dashboard_dpop_key"
 )
 
 // GrantTokenKey returns the keystore key for a grant's access token.
