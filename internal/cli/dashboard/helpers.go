@@ -155,6 +155,9 @@ func resolveAuthMethod(google, microsoft, github, email bool, action string) (st
 	case github:
 		return methodGitHub, nil
 	case email:
+		if action == "register" {
+			return "", dashboardError("email/password registration is temporarily disabled", "Use SSO instead: --google, --microsoft, or --github")
+		}
 		return methodEmailPassword, nil
 	default:
 		return chooseAuthMethod(action)
@@ -162,15 +165,25 @@ func resolveAuthMethod(google, microsoft, github, email bool, action string) (st
 }
 
 // chooseAuthMethod presents an interactive menu. SSO first.
+// Email/password registration is temporarily disabled.
 func chooseAuthMethod(action string) (string, error) {
+	allowEmail := action != "register"
+
 	fmt.Printf("\nHow would you like to %s?\n\n", action)
 	_, _ = common.Cyan.Println("  [1] Google      (recommended)")
 	fmt.Println("  [2] Microsoft")
 	fmt.Println("  [3] GitHub")
-	_, _ = common.Dim.Println("  [4] Email and password")
+	if allowEmail {
+		_, _ = common.Dim.Println("  [4] Email and password")
+	}
 	fmt.Println()
 
-	choice, err := readLine("Choose [1-4]: ")
+	maxChoice := "3"
+	if allowEmail {
+		maxChoice = "4"
+	}
+
+	choice, err := readLine(fmt.Sprintf("Choose [1-%s]: ", maxChoice))
 	if err != nil {
 		return "", err
 	}
@@ -183,9 +196,12 @@ func chooseAuthMethod(action string) (string, error) {
 	case "3":
 		return methodGitHub, nil
 	case "4":
-		return methodEmailPassword, nil
+		if allowEmail {
+			return methodEmailPassword, nil
+		}
+		return "", dashboardError("invalid selection", "Choose 1-3")
 	default:
-		return "", dashboardError("invalid selection", "Choose 1-4")
+		return "", dashboardError("invalid selection", fmt.Sprintf("Choose 1-%s", maxChoice))
 	}
 }
 

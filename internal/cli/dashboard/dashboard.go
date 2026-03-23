@@ -14,7 +14,7 @@ func NewDashboardCmd() *cobra.Command {
 		Long: `Authenticate with the Nylas Dashboard and manage applications.
 
 Commands:
-  register   Create a new Nylas Dashboard account
+  register   Create a new Nylas Dashboard account (SSO only)
   login      Log in to your Nylas Dashboard account
   sso        Authenticate via SSO (Google, Microsoft, GitHub)
   logout     Log out of the Nylas Dashboard
