@@ -51,6 +51,8 @@ func (m *MockAccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID str
 type MockGatewayClient struct {
 	ListApplicationsFn  func(ctx context.Context, orgPublicID, region, userToken, orgToken string) ([]domain.GatewayApplication, error)
 	CreateApplicationFn func(ctx context.Context, orgPublicID, region, name, userToken, orgToken string) (*domain.GatewayCreatedApplication, error)
+	ListAPIKeysFn       func(ctx context.Context, appID, region, userToken, orgToken string) ([]domain.GatewayAPIKey, error)
+	CreateAPIKeyFn      func(ctx context.Context, appID, region, name string, expiresInDays int, userToken, orgToken string) (*domain.GatewayCreatedAPIKey, error)
 }
 
 func (m *MockGatewayClient) ListApplications(ctx context.Context, orgPublicID, region, userToken, orgToken string) ([]domain.GatewayApplication, error) {
@@ -58,4 +60,10 @@ func (m *MockGatewayClient) ListApplications(ctx context.Context, orgPublicID, r
 }
 func (m *MockGatewayClient) CreateApplication(ctx context.Context, orgPublicID, region, name, userToken, orgToken string) (*domain.GatewayCreatedApplication, error) {
 	return m.CreateApplicationFn(ctx, orgPublicID, region, name, userToken, orgToken)
+}
+func (m *MockGatewayClient) ListAPIKeys(ctx context.Context, appID, region, userToken, orgToken string) ([]domain.GatewayAPIKey, error) {
+	return m.ListAPIKeysFn(ctx, appID, region, userToken, orgToken)
+}
+func (m *MockGatewayClient) CreateAPIKey(ctx context.Context, appID, region, name string, expiresInDays int, userToken, orgToken string) (*domain.GatewayCreatedAPIKey, error) {
+	return m.CreateAPIKeyFn(ctx, appID, region, name, expiresInDays, userToken, orgToken)
 }

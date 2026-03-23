@@ -112,6 +112,27 @@ type GatewayApplicationBrand struct {
 	Description string `json:"description,omitempty"`
 }
 
+// GatewayAPIKey represents an API key as returned by the dashboard API gateway.
+type GatewayAPIKey struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Status      string   `json:"status"`
+	Permissions []string `json:"permissions"`
+	ExpiresAt   float64  `json:"expiresAt"`
+	CreatedAt   float64  `json:"createdAt"`
+}
+
+// GatewayCreatedAPIKey includes the actual key value (shown once on creation).
+type GatewayCreatedAPIKey struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	APIKey      string   `json:"apiKey"`
+	Status      string   `json:"status"`
+	Permissions []string `json:"permissions"`
+	ExpiresAt   float64  `json:"expiresAt"`
+	CreatedAt   float64  `json:"createdAt"`
+}
+
 // DashboardConfig holds dashboard authentication settings.
 type DashboardConfig struct {
 	AccountBaseURL string `yaml:"account_base_url,omitempty"`

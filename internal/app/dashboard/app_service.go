@@ -85,6 +85,26 @@ func (s *AppService) CreateApplication(ctx context.Context, orgPublicID, region,
 	return s.gateway.CreateApplication(ctx, orgPublicID, region, name, userToken, orgToken)
 }
 
+// ListAPIKeys retrieves API keys for an application.
+func (s *AppService) ListAPIKeys(ctx context.Context, appID, region string) ([]domain.GatewayAPIKey, error) {
+	userToken, orgToken, err := s.loadTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	return s.gateway.ListAPIKeys(ctx, appID, region, userToken, orgToken)
+}
+
+// CreateAPIKey creates a new API key for an application.
+func (s *AppService) CreateAPIKey(ctx context.Context, appID, region, name string, expiresInDays int) (*domain.GatewayCreatedAPIKey, error) {
+	userToken, orgToken, err := s.loadTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	return s.gateway.CreateAPIKey(ctx, appID, region, name, expiresInDays, userToken, orgToken)
+}
+
 // deduplicateApps removes duplicate applications (same applicationId).
 func deduplicateApps(apps []domain.GatewayApplication) []domain.GatewayApplication {
 	seen := make(map[string]bool, len(apps))

@@ -44,6 +44,12 @@ type DashboardGatewayClient interface {
 
 	// CreateApplication creates a new application via the dashboard API gateway.
 	CreateApplication(ctx context.Context, orgPublicID, region, name, userToken, orgToken string) (*domain.GatewayCreatedApplication, error)
+
+	// ListAPIKeys retrieves API keys for an application.
+	ListAPIKeys(ctx context.Context, appID, region, userToken, orgToken string) ([]domain.GatewayAPIKey, error)
+
+	// CreateAPIKey creates a new API key for an application.
+	CreateAPIKey(ctx context.Context, appID, region, name string, expiresInDays int, userToken, orgToken string) (*domain.GatewayCreatedAPIKey, error)
 }
 
 // DPoP defines the interface for DPoP proof generation.

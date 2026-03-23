@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/ports"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -13,7 +14,7 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show current dashboard authentication status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			authSvc, _, err := createAuthService()
+			authSvc, secrets, err := createAuthService()
 			if err != nil {
 				return wrapDashboardError(err)
 			}
@@ -34,6 +35,13 @@ func newStatusCmd() *cobra.Command {
 				fmt.Printf("  Organization: %s\n", status.OrgID)
 			}
 			fmt.Printf("  Org token:    %s\n", presentAbsent(status.HasOrgToken))
+
+			// Active app
+			appID, _ := secrets.Get(ports.KeyDashboardAppID)
+			appRegion, _ := secrets.Get(ports.KeyDashboardAppRegion)
+			if appID != "" {
+				fmt.Printf("  Active app:   %s (%s)\n", appID, appRegion)
+			}
 
 			dpopSvc, _, dpopErr := createDPoPService()
 			if dpopErr == nil {

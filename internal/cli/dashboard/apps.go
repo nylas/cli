@@ -19,6 +19,8 @@ func newAppsCmd() *cobra.Command {
 
 	cmd.AddCommand(newAppsListCmd())
 	cmd.AddCommand(newAppsCreateCmd())
+	cmd.AddCommand(newAppsUseCmd())
+	cmd.AddCommand(newAPIKeysCmd())
 
 	return cmd
 }
@@ -153,6 +155,87 @@ func newAppsCreateCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&region, "region", "r", "", "Region (required: us or eu)")
 
 	return cmd
+}
+
+func newAppsUseCmd() *cobra.Command {
+	var region string
+
+	cmd := &cobra.Command{
+		Use:   "use <application-id>",
+		Short: "Set the active application for subsequent commands",
+		Long: `Set an application as active so you don't need to pass --app and --region
+to every apikeys command.`,
+		Example: `  # Set active app
+  nylas dashboard apps use b09141da-ead2-46bd-8f4c-c9ec5af4c6cc --region us
+
+  # Now apikeys commands use the active app automatically
+  nylas dashboard apps apikeys list
+  nylas dashboard apps apikeys create --name "My key"`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			appID := args[0]
+			if region == "" {
+				return dashboardError("region is required", "Use --region us or --region eu")
+			}
+
+			_, secrets, err := createDPoPService()
+			if err != nil {
+				return wrapDashboardError(err)
+			}
+
+			if err := secrets.Set(ports.KeyDashboardAppID, appID); err != nil {
+				return wrapDashboardError(err)
+			}
+			if err := secrets.Set(ports.KeyDashboardAppRegion, region); err != nil {
+				return wrapDashboardError(err)
+			}
+
+			_, _ = common.Green.Printf("✓ Active app: %s (%s)\n", appID, region)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&region, "region", "r", "", "Region of the application (required: us or eu)")
+
+	return cmd
+}
+
+// getActiveApp returns the active app ID and region from the keyring.
+// Flags take priority over the stored active app.
+func getActiveApp(appFlag, regionFlag string) (appID, region string, err error) {
+	if appFlag != "" && regionFlag != "" {
+		return appFlag, regionFlag, nil
+	}
+
+	_, secrets, sErr := createDPoPService()
+	if sErr != nil {
+		return appFlag, regionFlag, sErr
+	}
+
+	if appFlag == "" {
+		appID, _ = secrets.Get(ports.KeyDashboardAppID)
+	} else {
+		appID = appFlag
+	}
+	if regionFlag == "" {
+		region, _ = secrets.Get(ports.KeyDashboardAppRegion)
+	} else {
+		region = regionFlag
+	}
+
+	if appID == "" {
+		return "", "", dashboardError(
+			"no active application",
+			"Run 'nylas dashboard apps use <app-id> --region <region>' or pass --app and --region",
+		)
+	}
+	if region == "" {
+		return "", "", dashboardError(
+			"no region set for active application",
+			"Run 'nylas dashboard apps use <app-id> --region <region>' or pass --region",
+		)
+	}
+	return appID, region, nil
 }
 
 // getActiveOrgID retrieves the active organization ID from the keyring.

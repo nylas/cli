@@ -68,7 +68,7 @@ func (c *GatewayClient) ListApplications(ctx context.Context, orgPublicID, regio
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", resp.Errors[0].Message)
+		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
 	}
 
 	return resp.Data.Applications.Applications, nil
@@ -115,10 +115,101 @@ func (c *GatewayClient) CreateApplication(ctx context.Context, orgPublicID, regi
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", resp.Errors[0].Message)
+		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
 	}
 
 	return &resp.Data.CreateApplication, nil
+}
+
+// ListAPIKeys retrieves API keys for an application.
+func (c *GatewayClient) ListAPIKeys(ctx context.Context, appID, region, userToken, orgToken string) ([]domain.GatewayAPIKey, error) {
+	query := `query V3_ApiKeys($appId: String!) {
+  apiKeys(appId: $appId) {
+    id
+    name
+    status
+    permissions
+    expiresAt
+    createdAt
+  }
+}`
+
+	variables := map[string]any{
+		"appId": appID,
+	}
+
+	url := gatewayURL(region)
+	raw, err := c.doGraphQL(ctx, url, query, variables, userToken, orgToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API keys: %w", err)
+	}
+
+	var resp struct {
+		Data struct {
+			APIKeys []domain.GatewayAPIKey `json:"apiKeys"`
+		} `json:"data"`
+		Errors []graphQLError `json:"errors"`
+	}
+
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("failed to decode API keys response: %w", err)
+	}
+
+	if len(resp.Errors) > 0 {
+		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+	}
+
+	return resp.Data.APIKeys, nil
+}
+
+// CreateAPIKey creates a new API key for an application.
+func (c *GatewayClient) CreateAPIKey(ctx context.Context, appID, region, name string, expiresInDays int, userToken, orgToken string) (*domain.GatewayCreatedAPIKey, error) {
+	query := `mutation V3_CreateApiKey($appId: String!, $options: ApiKeyOptions) {
+  createApiKey(appId: $appId, options: $options) {
+    id
+    name
+    apiKey
+    status
+    permissions
+    expiresAt
+    createdAt
+  }
+}`
+
+	options := map[string]any{
+		"name": name,
+	}
+	if expiresInDays > 0 {
+		options["expiresIn"] = expiresInDays
+	}
+
+	variables := map[string]any{
+		"appId":   appID,
+		"options": options,
+	}
+
+	url := gatewayURL(region)
+	raw, err := c.doGraphQL(ctx, url, query, variables, userToken, orgToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API key: %w", err)
+	}
+
+	var resp struct {
+		Data struct {
+			CreateAPIKey domain.GatewayCreatedAPIKey `json:"createApiKey"`
+		} `json:"data"`
+		Errors []graphQLError `json:"errors"`
+	}
+
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("failed to decode create API key response: %w", err)
+	}
+
+	if len(resp.Errors) > 0 {
+		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+	}
+
+	return &resp.Data.CreateAPIKey, nil
 }
 
 // doGraphQL sends a GraphQL request with auth headers and DPoP proof.
@@ -196,5 +287,20 @@ func gatewayURL(region string) string {
 
 // graphQLError represents a GraphQL error from the gateway.
 type graphQLError struct {
-	Message string `json:"message"`
+	Message    string              `json:"message"`
+	Extensions *graphQLExtensions  `json:"extensions,omitempty"`
+}
+
+type graphQLExtensions struct {
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// formatGraphQLError returns a human-readable error from a GraphQL error.
+func formatGraphQLError(e graphQLError) string {
+	// Prefer extensions.message (more specific), fall back to top-level message
+	if e.Extensions != nil && e.Extensions.Message != "" && e.Extensions.Message != e.Message {
+		return e.Extensions.Message
+	}
+	return e.Message
 }
