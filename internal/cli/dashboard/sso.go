@@ -50,8 +50,8 @@ func newSSORegisterCmd() *cobra.Command {
 	var provider string
 
 	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "Register via SSO",
+		Use:     "register",
+		Short:   "Register via SSO",
 		Example: `  nylas dashboard sso register --provider google`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := acceptPrivacyPolicy(); err != nil {

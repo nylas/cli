@@ -287,8 +287,8 @@ func gatewayURL(region string) string {
 
 // graphQLError represents a GraphQL error from the gateway.
 type graphQLError struct {
-	Message    string              `json:"message"`
-	Extensions *graphQLExtensions  `json:"extensions,omitempty"`
+	Message    string             `json:"message"`
+	Extensions *graphQLExtensions `json:"extensions,omitempty"`
 }
 
 type graphQLExtensions struct {
