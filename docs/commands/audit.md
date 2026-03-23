@@ -694,6 +694,7 @@ nylas audit logs clear
 
 ## Related Documentation
 
+- **[Audit AI Agent Activity](https://cli.nylas.com/guides/audit-ai-agent-activity)** - Track what Claude Code, Copilot, and MCP agents execute
 - **[Command Reference](../COMMANDS.md)** - Quick command reference
 - **[Security Overview](../security/overview.md)** - Security best practices
 - **[MCP Integration](mcp.md)** - AI assistant integration

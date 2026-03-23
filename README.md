@@ -48,6 +48,15 @@ nylas email list     # You're ready!
 
 **[Full Command Reference →](docs/COMMANDS.md)** | **[All Documentation →](docs/INDEX.md)**
 
+## Guides
+
+Step-by-step tutorials on [cli.nylas.com](https://cli.nylas.com/guides):
+
+- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — setup for Claude Code, Cursor, Codex CLI, and OpenClaw
+- [Send email from the command line](https://cli.nylas.com/guides/send-email-from-terminal) — no SMTP, no sendmail, one command
+- [AI agent email access via MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) — connect any MCP-compatible assistant
+- [Manage calendar from the terminal](https://cli.nylas.com/guides/manage-calendar-from-terminal) — events, availability, timezone handling
+
 ## Features
 
 - **Email**: list, read, send, search, templates, GPG signing/encryption
@@ -56,7 +65,7 @@ nylas email list     # You're ready!
 - **Webhooks**: create, test, manage
 - **Timezone**: ⚡ offline conversion, DST info, meeting finder (no API required)
 - **Admin**: applications, connectors, credentials, grants
-- **Integrations**: MCP (AI assistants)
+- **Integrations**: [MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) (AI assistants)
 - **Interfaces**: CLI, TUI (terminal), Air (web)
 
 ## Timezone Tools (No API Required)

@@ -1420,3 +1420,8 @@ done
 
 ---
 
+## See Also
+
+- [Manage calendar from the terminal](https://cli.nylas.com/guides/manage-calendar-from-terminal) — DST-aware event creation, timezone locking, AI scheduling, and break time protection
+- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — connect Claude Code, Cursor, or Codex CLI to your calendar and email
+
