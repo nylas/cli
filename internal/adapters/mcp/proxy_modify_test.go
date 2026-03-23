@@ -192,15 +192,24 @@ func TestProxy_toolRequiresGrant_Fallback(t *testing.T) {
 	proxy := NewProxy("test-api-key", "us")
 
 	// Before tools/list, should use fallback
-	if !proxy.toolRequiresGrant("list_messages") {
-		t.Error("expected fallback to include list_messages")
+	for _, name := range []string{
+		"list_messages", "get_message", "list_events", "create_event", "delete_event",
+		"list_calendars", "get_calendar", "list_contacts", "get_contact",
+		"create_draft", "send_message", "get_folder_by_id",
+	} {
+		if !proxy.toolRequiresGrant(name) {
+			t.Errorf("expected fallback to include %q", name)
+		}
 	}
-	if proxy.toolRequiresGrant("current_time") {
-		t.Error("expected fallback to exclude current_time")
-	}
-	// A tool not in the fallback (but present upstream)
-	if proxy.toolRequiresGrant("get_contact") {
-		t.Error("expected fallback to NOT include get_contact (not in static list)")
+
+	// Utility tools and tools where grant_id is nested should NOT be in fallback
+	for _, name := range []string{
+		"current_time", "epoch_to_datetime", "datetime_to_epoch",
+		"availability", "confirm_send_message", "confirm_send_draft",
+	} {
+		if proxy.toolRequiresGrant(name) {
+			t.Errorf("expected fallback to exclude %q", name)
+		}
 	}
 }
 

@@ -176,6 +176,24 @@ func TestProxy_injectDefaultGrant(t *testing.T) {
 			wantGrant:  true,
 			grantValue: "my-grant-id",
 		},
+		{
+			name:       "injects grant_id for delete_event",
+			input:      `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"delete_event","arguments":{"event_id":"evt-123"}}}`,
+			wantGrant:  true,
+			grantValue: "my-grant-id",
+		},
+		{
+			name:       "injects grant_id for list_contacts",
+			input:      `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_contacts","arguments":{}}}`,
+			wantGrant:  true,
+			grantValue: "my-grant-id",
+		},
+		{
+			name:       "injects grant_id for get_contact",
+			input:      `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_contact","arguments":{"contact_id":"ct-456"}}}`,
+			wantGrant:  true,
+			grantValue: "my-grant-id",
+		},
 	}
 
 	for _, tt := range tests {
