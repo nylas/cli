@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -178,12 +180,13 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 }
 
 // handleAPIKeyDelivery prompts the user to choose how to handle the newly created key.
+// The API key is never printed to stdout to prevent leaking it in terminal history or logs.
 func handleAPIKeyDelivery(apiKey, appID, region string) error {
 	fmt.Println("\nWhat would you like to do with this API key?")
 	fmt.Println()
 	_, _ = common.Cyan.Println("  [1] Activate for this CLI (recommended)")
 	fmt.Println("  [2] Copy to clipboard")
-	fmt.Println("  [3] Print to terminal")
+	fmt.Println("  [3] Save to file")
 	fmt.Println()
 
 	choice, err := readLine("Choose [1-3]: ")
@@ -203,15 +206,18 @@ func handleAPIKeyDelivery(apiKey, appID, region string) error {
 	case "2":
 		if err := common.CopyToClipboard(apiKey); err != nil {
 			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
-			fmt.Println("  Falling back to print:")
-			fmt.Printf("  %s\n", apiKey)
+			_, _ = common.Dim.Println("  Try option [3] to save to a file instead")
 			return nil
 		}
 		_, _ = common.Green.Println("✓ API key copied to clipboard")
 
 	case "3":
-		fmt.Println()
-		fmt.Println(apiKey)
+		keyFile := filepath.Join(os.TempDir(), "nylas-api-key.txt")
+		if err := os.WriteFile(keyFile, []byte(apiKey+"\n"), 0o600); err != nil { // #nosec G306
+			return wrapDashboardError(fmt.Errorf("failed to write key file: %w", err))
+		}
+		_, _ = common.Green.Printf("✓ API key saved to: %s\n", keyFile)
+		_, _ = common.Dim.Println("  Read it, then delete the file")
 
 	default:
 		return dashboardError("invalid selection", "Choose 1-3")
