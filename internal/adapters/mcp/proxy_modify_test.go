@@ -97,6 +97,122 @@ func TestProxy_modifyInitializeResponse(t *testing.T) {
 	}
 }
 
+func TestProxy_modifyToolsListResponse_DiscoverGrantTools(t *testing.T) {
+	t.Parallel()
+
+	proxy := NewProxy("test-api-key", "us")
+
+	// Verify grantTools is nil before tools/list
+	if proxy.grantTools != nil {
+		t.Fatal("expected grantTools to be nil initially")
+	}
+
+	// Simulate a tools/list response with various tools
+	response := `{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"result": {
+			"tools": [
+				{
+					"name": "list_messages",
+					"description": "List messages",
+					"inputSchema": {
+						"type": "object",
+						"properties": {
+							"grant_id": {"type": "string"},
+							"limit": {"type": "integer"}
+						}
+					}
+				},
+				{
+					"name": "get_contact",
+					"description": "Get a contact",
+					"inputSchema": {
+						"type": "object",
+						"properties": {
+							"grant_id": {"type": "string"},
+							"contact_id": {"type": "string"}
+						}
+					}
+				},
+				{
+					"name": "current_time",
+					"description": "Get current time",
+					"inputSchema": {
+						"type": "object",
+						"properties": {}
+					}
+				},
+				{
+					"name": "delete_event",
+					"description": "Delete an event",
+					"inputSchema": {
+						"type": "object",
+						"properties": {
+							"grant_id": {"type": "string"},
+							"event_id": {"type": "string"}
+						}
+					}
+				}
+			]
+		}
+	}`
+
+	proxy.modifyToolsListResponse([]byte(response))
+
+	// Verify dynamic discovery
+	if proxy.grantTools == nil {
+		t.Fatal("expected grantTools to be populated after tools/list")
+	}
+
+	// Tools with grant_id should be discovered
+	for _, name := range []string{"list_messages", "get_contact", "delete_event"} {
+		if !proxy.grantTools[name] {
+			t.Errorf("expected %q to be discovered as a grant tool", name)
+		}
+	}
+
+	// Tools without grant_id should NOT be included
+	if proxy.grantTools["current_time"] {
+		t.Error("expected current_time to NOT be a grant tool")
+	}
+
+	// toolRequiresGrant should now use the dynamic set
+	if !proxy.toolRequiresGrant("get_contact") {
+		t.Error("expected toolRequiresGrant to return true for dynamically discovered tool")
+	}
+	if proxy.toolRequiresGrant("current_time") {
+		t.Error("expected toolRequiresGrant to return false for utility tool")
+	}
+}
+
+func TestProxy_toolRequiresGrant_Fallback(t *testing.T) {
+	t.Parallel()
+
+	proxy := NewProxy("test-api-key", "us")
+
+	// Before tools/list, should use fallback
+	for _, name := range []string{
+		"list_messages", "get_message", "list_events", "create_event", "delete_event",
+		"list_calendars", "get_calendar", "list_contacts", "get_contact",
+		"create_draft", "confirm_send_draft", "send_message", "get_folder_by_id",
+	} {
+		if !proxy.toolRequiresGrant(name) {
+			t.Errorf("expected fallback to include %q", name)
+		}
+	}
+
+	// Utility tools and tools where grant_id is nested should NOT be in fallback
+	for _, name := range []string{
+		"current_time", "epoch_to_datetime", "datetime_to_epoch",
+		"availability", "confirm_send_message",
+	} {
+		if proxy.toolRequiresGrant(name) {
+			t.Errorf("expected fallback to exclude %q", name)
+		}
+	}
+}
+
 func TestProxy_modifyToolsListResponse(t *testing.T) {
 	t.Parallel()
 
