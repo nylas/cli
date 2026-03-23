@@ -327,12 +327,13 @@ var fallbackGrantTools = map[string]bool{
 	"update_folder":    true,
 	"delete_folder":    true,
 	// Drafts
-	"list_drafts":  true,
-	"get_draft":    true,
-	"create_draft": true,
-	"update_draft": true,
-	"delete_draft": true,
-	"send_draft":   true,
+	"list_drafts":        true,
+	"get_draft":          true,
+	"create_draft":       true,
+	"update_draft":       true,
+	"delete_draft":       true,
+	"send_draft":         true,
+	"confirm_send_draft": true,
 	// Send
 	"send_message": true,
 	// Contacts

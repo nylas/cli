@@ -160,9 +160,10 @@ func TestProxy_injectDefaultGrant(t *testing.T) {
 			wantGrant: false,
 		},
 		{
-			name:      "does not inject grant_id for confirm_send_draft (validates draft content only)",
-			input:     `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"confirm_send_draft","arguments":{"grant_id":"abc","draft_id":"123"}}}`,
-			wantGrant: false,
+			name:       "injects grant_id for confirm_send_draft",
+			input:      `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"confirm_send_draft","arguments":{"draft_id":"123"}}}`,
+			wantGrant:  true,
+			grantValue: "my-grant-id",
 		},
 		{
 			name:       "injects grant_id for create_event",

@@ -195,7 +195,7 @@ func TestProxy_toolRequiresGrant_Fallback(t *testing.T) {
 	for _, name := range []string{
 		"list_messages", "get_message", "list_events", "create_event", "delete_event",
 		"list_calendars", "get_calendar", "list_contacts", "get_contact",
-		"create_draft", "send_message", "get_folder_by_id",
+		"create_draft", "confirm_send_draft", "send_message", "get_folder_by_id",
 	} {
 		if !proxy.toolRequiresGrant(name) {
 			t.Errorf("expected fallback to include %q", name)
@@ -205,7 +205,7 @@ func TestProxy_toolRequiresGrant_Fallback(t *testing.T) {
 	// Utility tools and tools where grant_id is nested should NOT be in fallback
 	for _, name := range []string{
 		"current_time", "epoch_to_datetime", "datetime_to_epoch",
-		"availability", "confirm_send_message", "confirm_send_draft",
+		"availability", "confirm_send_message",
 	} {
 		if proxy.toolRequiresGrant(name) {
 			t.Errorf("expected fallback to exclude %q", name)
