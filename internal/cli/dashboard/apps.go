@@ -141,8 +141,12 @@ func newAppsCreateCmd() *cobra.Command {
 				fmt.Printf("  Environment:    %s\n", app.Environment)
 			}
 
-			_, _ = common.Yellow.Println("\n  Client Secret (shown once — save it now):")
-			fmt.Printf("  %s\n", app.ClientSecret)
+			if app.ClientSecret != "" {
+				_, _ = common.Yellow.Println("\n  Client Secret (available once — save it now):")
+				if err := handleSecretDelivery(app.ClientSecret, "Client Secret"); err != nil {
+					return err
+				}
+			}
 
 			fmt.Println("\nTo configure the CLI with this application:")
 			fmt.Printf("  nylas auth config --api-key <your-api-key> --region %s\n", app.Region)

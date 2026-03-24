@@ -226,6 +226,44 @@ func handleAPIKeyDelivery(apiKey, appID, region string) error {
 	return nil
 }
 
+// handleSecretDelivery prompts the user to choose how to receive a secret.
+// Secrets are never printed to stdout to prevent leaking in terminal history or logs.
+func handleSecretDelivery(secret, label string) error {
+	fmt.Printf("\nHow would you like to receive the %s?\n", label)
+	fmt.Println()
+	_, _ = common.Cyan.Println("  [1] Copy to clipboard (recommended)")
+	fmt.Println("  [2] Save to file")
+	fmt.Println()
+
+	choice, err := readLine("Choose [1-2]: ")
+	if err != nil {
+		return wrapDashboardError(err)
+	}
+
+	switch choice {
+	case "1", "":
+		if err := common.CopyToClipboard(secret); err != nil {
+			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
+			_, _ = common.Dim.Println("  Try option [2] to save to a file instead")
+			return nil
+		}
+		_, _ = common.Green.Printf("✓ %s copied to clipboard\n", label)
+
+	case "2":
+		keyFile := filepath.Join(os.TempDir(), "nylas-client-secret.txt")
+		if err := os.WriteFile(keyFile, []byte(secret+"\n"), 0o600); err != nil { // #nosec G306
+			return wrapDashboardError(fmt.Errorf("failed to write file: %w", err))
+		}
+		_, _ = common.Green.Printf("✓ %s saved to: %s\n", label, keyFile)
+		_, _ = common.Dim.Println("  Read it, then delete the file")
+
+	default:
+		return dashboardError("invalid selection", "Choose 1-2")
+	}
+
+	return nil
+}
+
 // activateAPIKey stores the API key and configures the CLI to use it.
 func activateAPIKey(apiKey, clientID, region string) error {
 	configStore := config.NewDefaultFileStore()
