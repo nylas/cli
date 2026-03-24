@@ -83,20 +83,70 @@ Documentation: https://cli.nylas.com/`,
 
 // printWelcome displays the first-run welcome message.
 func printWelcome() {
+	// Banner
 	fmt.Println()
-	_, _ = common.Bold.Println("  Welcome to the Nylas CLI!")
+	_, _ = common.Dim.Println("  ╭──────────────────────────────────────────╮")
+	_, _ = common.Dim.Println("  │                                          │")
+	fmt.Print("  ")
+	_, _ = common.Dim.Print("│")
+	fmt.Print("   ")
+	_, _ = common.BoldCyan.Print("◈  N Y L A S   C L I")
+	fmt.Print("                  ")
+	_, _ = common.Dim.Println("│")
+	_, _ = common.Dim.Println("  │                                          │")
+	fmt.Print("  ")
+	_, _ = common.Dim.Print("│")
+	fmt.Print("   Email, calendar, and contacts          ")
+	_, _ = common.Dim.Println("│")
+	fmt.Print("  ")
+	_, _ = common.Dim.Print("│")
+	fmt.Print("   from your terminal.                    ")
+	_, _ = common.Dim.Println("│")
+	_, _ = common.Dim.Println("  │                                          │")
+	_, _ = common.Dim.Println("  ╰──────────────────────────────────────────╯")
+
+	// Getting started
 	fmt.Println()
-	fmt.Println("  Get started in under a minute:")
+	_, _ = common.Bold.Println("  Get started in under a minute:")
 	fmt.Println()
-	_, _ = common.Cyan.Println("    nylas init              Guided setup")
-	_, _ = common.Dim.Println("    nylas init --api-key    Quick setup with existing key")
+	fmt.Print("    ")
+	_, _ = common.BoldCyan.Print("❯ nylas init")
+	fmt.Println("                Guided setup")
+	fmt.Print("    ")
+	_, _ = common.Dim.Println("  nylas init --api-key      Quick setup with existing key")
+
+	// Capabilities box
 	fmt.Println()
-	fmt.Println("  Already configured? Run:")
+	_, _ = common.Dim.Print("  ╭─")
+	_, _ = common.Bold.Print(" What you can do ")
+	_, _ = common.Dim.Println("────────────────────────╮")
+	_, _ = common.Dim.Println("  │                                          │")
+	printCapability("email", "Send, search, and read")
+	printCapability("calendar", "Events and availability")
+	printCapability("contacts", "People and groups")
+	printCapability("webhook", "Real-time notifications")
+	printCapability("ai", "Chat with your data")
+	_, _ = common.Dim.Println("  │                                          │")
+	_, _ = common.Dim.Println("  ╰──────────────────────────────────────────╯")
+
+	// Footer
 	fmt.Println()
-	fmt.Println("    nylas --help            See all commands")
+	fmt.Print("  ")
+	_, _ = common.Dim.Print("nylas --help")
+	fmt.Println("              All commands")
+	fmt.Print("  ")
+	_, _ = common.Dim.Println("https://cli.nylas.com     Documentation")
 	fmt.Println()
-	_, _ = common.Dim.Println("  Docs: https://cli.nylas.com/")
-	fmt.Println()
+}
+
+// printCapability prints a single capability row inside the box.
+func printCapability(name, desc string) {
+	fmt.Print("  ")
+	_, _ = common.Dim.Print("│")
+	fmt.Print("  ")
+	_, _ = common.Cyan.Printf("%-12s", name)
+	fmt.Printf("%-28s", desc)
+	_, _ = common.Dim.Println("│")
 }
 
 func init() {
