@@ -66,7 +66,12 @@ func newSSORegisterCmd() *cobra.Command {
 	return cmd
 }
 
-func runSSO(provider, mode string, privacyPolicyAccepted bool) error {
+func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...string) error {
+	orgPublicID := ""
+	if len(orgPublicIDs) > 0 {
+		orgPublicID = orgPublicIDs[0]
+	}
+
 	loginType, err := mapProvider(provider)
 	if err != nil {
 		return err
@@ -115,7 +120,7 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool) error {
 		interval = 5 * time.Second
 	}
 
-	auth, err := pollSSO(ctx, authSvc, resp.FlowID, interval)
+	auth, err := pollSSO(ctx, authSvc, resp.FlowID, orgPublicID, interval)
 	if err != nil {
 		return wrapDashboardError(err)
 	}
@@ -124,7 +129,7 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool) error {
 	return nil
 }
 
-func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID string, interval time.Duration) (*domain.DashboardAuthResponse, error) {
+func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID, orgPublicID string, interval time.Duration) (*domain.DashboardAuthResponse, error) {
 	spinner := common.NewSpinner("Waiting for browser authentication...")
 	spinner.Start()
 	defer spinner.Stop()
@@ -137,7 +142,7 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID stri
 		case <-time.After(interval):
 		}
 
-		resp, err := authSvc.SSOPoll(ctx, flowID, "")
+		resp, err := authSvc.SSOPoll(ctx, flowID, orgPublicID)
 		if err != nil {
 			spinner.StopWithError("Failed")
 			return nil, err
@@ -163,8 +168,12 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID stri
 
 			ctx2, cancel := common.CreateContext()
 			var auth *domain.DashboardAuthResponse
+			mfaOrg := orgPublicID
+			if mfaOrg == "" && len(resp.MFA.Organizations) > 0 {
+				mfaOrg = resp.MFA.Organizations[0].PublicID
+			}
 			mfaErr := common.RunWithSpinner("Verifying MFA...", func() error {
-				auth, err = authSvc.CompleteMFA(ctx2, resp.MFA.User.PublicID, code, "")
+				auth, err = authSvc.CompleteMFA(ctx2, resp.MFA.User.PublicID, code, mfaOrg)
 				return err
 			})
 			cancel()

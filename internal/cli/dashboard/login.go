@@ -43,7 +43,7 @@ Choose SSO (recommended) or email/password. Pass a flag to skip the menu.`,
 
 			switch method {
 			case methodGoogle, methodMicrosoft, methodGitHub:
-				return runSSO(method, "login", false)
+				return runSSO(method, "login", false, orgPublicID)
 			case methodEmailPassword:
 				return runEmailLogin(userFlag, passFlag, orgPublicID)
 			default:

@@ -17,7 +17,7 @@ func CreateAppService() (*dashboardapp.AppService, error) {
 
 // RunSSO executes the SSO device-code flow (exported for setup wizard).
 func RunSSO(provider, mode string, privacyAccepted bool) error {
-	return runSSO(provider, mode, privacyAccepted)
+	return runSSO(provider, mode, privacyAccepted, "")
 }
 
 // AcceptPrivacyPolicy prompts for privacy policy acceptance (exported for setup wizard).

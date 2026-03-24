@@ -191,12 +191,15 @@ func (s *AuthService) SetActiveOrg(orgPublicID string) error {
 	return s.secrets.Set(ports.KeyDashboardOrgPublicID, orgPublicID)
 }
 
-// clearTokens removes all dashboard auth data from the keyring.
+// clearTokens removes all dashboard auth data from the keyring,
+// including the active app selection to prevent stale state after re-login.
 func (s *AuthService) clearTokens() {
 	_ = s.secrets.Delete(ports.KeyDashboardUserToken)
 	_ = s.secrets.Delete(ports.KeyDashboardOrgToken)
 	_ = s.secrets.Delete(ports.KeyDashboardUserPublicID)
 	_ = s.secrets.Delete(ports.KeyDashboardOrgPublicID)
+	_ = s.secrets.Delete(ports.KeyDashboardAppID)
+	_ = s.secrets.Delete(ports.KeyDashboardAppRegion)
 }
 
 // loadTokens retrieves the stored tokens.

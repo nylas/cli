@@ -70,6 +70,7 @@ func runWizard(opts wizardOpts) error {
 			"nylas dashboard apps list",
 			"nylas dashboard apps create --name 'My App' --region us",
 		})
+		return fmt.Errorf("application setup failed: %w", err)
 	}
 
 	// Step 3: API Key
@@ -77,6 +78,7 @@ func runWizard(opts wizardOpts) error {
 		printStepRecovery("API key", []string{
 			"nylas dashboard apps apikeys create",
 		})
+		return fmt.Errorf("API key setup failed: %w", err)
 	}
 
 	// Step 4: Grants
@@ -443,6 +445,7 @@ func stepGrantSync(status *SetupStatus) {
 		// Multiple grants, prompt.
 		defaultID, _ := PromptDefaultGrant(grantStore, result.ValidGrants)
 		if defaultID != "" {
+			result.DefaultGrantID = defaultID
 			for _, g := range result.ValidGrants {
 				if g.ID == defaultID {
 					_, _ = common.Green.Printf("  ✓ Set %s as default account\n", g.Email)
