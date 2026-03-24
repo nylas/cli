@@ -110,6 +110,57 @@ nylas auth migrate               # Migrate from v2 to v3
 
 ---
 
+## Dashboard
+
+Manage your Nylas Dashboard account, applications, and API keys directly from the CLI.
+
+### Account
+
+```bash
+nylas dashboard register             # Create a new account (SSO)
+nylas dashboard register --google    # Register with Google SSO
+nylas dashboard register --microsoft # Register with Microsoft SSO
+nylas dashboard register --github    # Register with GitHub SSO
+
+nylas dashboard login                # Log in (interactive)
+nylas dashboard login --google       # Log in with Google SSO
+nylas dashboard login --email --user user@example.com  # Email/password
+
+nylas dashboard logout               # Log out
+nylas dashboard status               # Show current auth status
+nylas dashboard refresh              # Refresh session tokens
+```
+
+### SSO (Direct)
+
+```bash
+nylas dashboard sso login --provider google      # SSO login
+nylas dashboard sso register --provider github   # SSO registration
+```
+
+### Applications
+
+```bash
+nylas dashboard apps list                        # List all applications
+nylas dashboard apps list --region us            # Filter by region
+nylas dashboard apps create --name "My App" --region us  # Create app
+nylas dashboard apps use <app-id> --region us    # Set active app
+```
+
+### API Keys
+
+```bash
+nylas dashboard apps apikeys list                # List keys (active app)
+nylas dashboard apps apikeys list --app <id> --region us  # Explicit app
+nylas dashboard apps apikeys create              # Create key (active app)
+nylas dashboard apps apikeys create --name "CI"  # Custom name
+nylas dashboard apps apikeys create --expires 30 # Expire in 30 days
+```
+
+After creating a key, you choose: activate in CLI (recommended), copy to clipboard, or save to file.
+
+---
+
 ## Demo Mode (No Account Required)
 
 Explore the CLI with sample data before connecting your accounts:
