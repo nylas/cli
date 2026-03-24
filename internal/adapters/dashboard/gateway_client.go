@@ -23,7 +23,7 @@ type GatewayClient struct {
 // NewGatewayClient creates a new dashboard gateway GraphQL client.
 func NewGatewayClient(dpop ports.DPoP) *GatewayClient {
 	return &GatewayClient{
-		httpClient: &http.Client{},
+		httpClient: newNonRedirectClient(),
 		dpop:       dpop,
 	}
 }
@@ -251,6 +251,11 @@ func (c *GatewayClient) doGraphQL(ctx context.Context, url, query string, variab
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		location := resp.Header.Get("Location")
+		return nil, fmt.Errorf("server redirected to %s — the gateway URL may be incorrect", location)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

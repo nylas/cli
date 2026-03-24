@@ -24,7 +24,7 @@ type AccountClient struct {
 func NewAccountClient(baseURL string, dpop ports.DPoP) *AccountClient {
 	return &AccountClient{
 		baseURL:    baseURL,
-		httpClient: &http.Client{},
+		httpClient: newNonRedirectClient(),
 		dpop:       dpop,
 	}
 }

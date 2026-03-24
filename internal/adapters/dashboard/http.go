@@ -13,6 +13,17 @@ const (
 	maxResponseBody = 1 << 20 // 1 MB
 )
 
+// newNonRedirectClient creates an HTTP client that does not follow redirects.
+// DPoP proofs are bound to a specific URL (the htu claim), so following a
+// redirect would cause the proof to be invalid at the destination.
+func newNonRedirectClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 // doPost sends a JSON POST request and decodes the response into result.
 // The server wraps responses in {"request_id","success","data":{...}}.
 // This method unwraps the data field before decoding into result.
@@ -78,6 +89,11 @@ func (c *AccountClient) doPostRaw(ctx context.Context, path string, body any, ex
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		location := resp.Header.Get("Location")
+		return nil, fmt.Errorf("server redirected to %s — the dashboard URL may be incorrect (set NYLAS_DASHBOARD_ACCOUNT_URL)", location)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
