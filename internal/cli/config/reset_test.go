@@ -62,4 +62,4 @@ func (m *memStore) Get(key string) (string, error) {
 }
 func (m *memStore) Delete(key string) error { delete(m.data, key); return nil }
 func (m *memStore) IsAvailable() bool       { return true }
-func (m *memStore) Name() string             { return "mem" }
+func (m *memStore) Name() string            { return "mem" }

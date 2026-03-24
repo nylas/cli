@@ -26,7 +26,7 @@ func (m *mockSecretStore) Get(key string) (string, error) {
 }
 func (m *mockSecretStore) Delete(key string) error { delete(m.data, key); return nil }
 func (m *mockSecretStore) IsAvailable() bool       { return true }
-func (m *mockSecretStore) Name() string             { return "mock" }
+func (m *mockSecretStore) Name() string            { return "mock" }
 
 func TestConfigService_ResetConfig(t *testing.T) {
 	t.Run("clears only API credentials", func(t *testing.T) {
