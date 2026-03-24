@@ -2,7 +2,12 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
+
+	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/cli/setup"
 )
 
 var rootCmd = &cobra.Command{
@@ -67,6 +72,31 @@ INTERACTIVE TUI:
 Documentation: https://cli.nylas.com/`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if setup.IsFirstRun() {
+			printWelcome()
+			return nil
+		}
+		return cmd.Help()
+	},
+}
+
+// printWelcome displays the first-run welcome message.
+func printWelcome() {
+	fmt.Println()
+	_, _ = common.Bold.Println("  Welcome to the Nylas CLI!")
+	fmt.Println()
+	fmt.Println("  Get started in under a minute:")
+	fmt.Println()
+	_, _ = common.Cyan.Println("    nylas init              Guided setup")
+	_, _ = common.Dim.Println("    nylas init --api-key    Quick setup with existing key")
+	fmt.Println()
+	fmt.Println("  Already configured? Run:")
+	fmt.Println()
+	fmt.Println("    nylas --help            See all commands")
+	fmt.Println()
+	_, _ = common.Dim.Println("  Docs: https://cli.nylas.com/")
+	fmt.Println()
 }
 
 func init() {

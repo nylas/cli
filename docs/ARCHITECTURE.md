@@ -40,6 +40,7 @@ internal/
     notetaker/                # Meeting notetaker
     otp/                      # OTP extraction
     scheduler/                # Booking pages
+    setup/                    # First-time setup wizard (nylas init)
     slack/                    # Slack integration
     timezone/                 # Timezone utilities
     update/                   # Self-update

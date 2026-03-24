@@ -71,6 +71,25 @@ nylas completion powershell >> $PROFILE
 
 ---
 
+## Getting Started
+
+```bash
+nylas init                       # Guided first-time setup
+nylas init --api-key <key>       # Quick setup with existing API key
+nylas init --api-key <key> --region eu  # Setup with EU region
+nylas init --google              # Setup with Google SSO shortcut
+```
+
+The `init` command walks you through:
+1. Creating or logging into your Nylas account (SSO)
+2. Selecting or creating an application
+3. Generating and activating an API key
+4. Syncing existing email accounts
+
+Run `nylas init` again after partial setup — it skips completed steps.
+
+---
+
 ## Authentication
 
 ```bash

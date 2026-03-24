@@ -70,7 +70,8 @@ internal/
   ├── domain/               # Domain models
   ├── ports/                # Interfaces
   ├── adapters/             # Implementations
-  └── cli/                  # Commands
+  ├── cli/                  # Commands (incl. setup/ for nylas init)
+  └── ...
 ```
 
 ---

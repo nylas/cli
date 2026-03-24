@@ -28,11 +28,15 @@ go install github.com/nylas/cli/cmd/nylas@latest
 nylas tui --demo
 ```
 
-**Ready to connect your account?** [Get API credentials](https://dashboard.nylas.com/) (free tier available), then:
+**Ready to connect your account?** The setup wizard handles everything:
 ```bash
-nylas auth config    # Enter your API key
-nylas auth login     # Connect your email provider
+nylas init           # Guided setup — account, app, API key, done
 nylas email list     # You're ready!
+```
+
+Already have an API key? Skip the wizard:
+```bash
+nylas init --api-key <your-key>
 ```
 
 ## Basic Commands

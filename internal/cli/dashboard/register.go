@@ -56,4 +56,3 @@ func runSSORegister(provider string) error {
 	}
 	return runSSO(provider, "register", true)
 }
-

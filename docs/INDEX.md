@@ -10,6 +10,7 @@ Quick navigation guide to find the right documentation for your needs.
 
 ### Get Started
 
+- **First-time setup** → `nylas init` ([details](COMMANDS.md#getting-started))
 - **Learn about Nylas CLI** → [README.md](../README.md)
 - **Quick command reference** → [COMMANDS.md](COMMANDS.md)
 - **See examples** → [COMMANDS.md](COMMANDS.md) and [commands/](commands/)

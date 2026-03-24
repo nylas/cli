@@ -106,7 +106,7 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 
 **Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`, Chat at `internal/chat/`
 
-**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, inbound, mcp, notetaker, otp, scheduler, slack, timezone, webhook
+**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, inbound, mcp, notetaker, otp, scheduler, setup, slack, timezone, webhook
 
 **Additional packages:**
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting
@@ -115,6 +115,7 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 - `internal/adapters/gpg/` - GPG/PGP email signing service (2026)
 - `internal/adapters/mime/` - RFC 3156 PGP/MIME message builder (2026)
 - `internal/chat/` - AI chat interface with local agent support (2026)
+- `internal/cli/setup/` - First-time setup wizard (`nylas init`)
 
 **Full inventory:** `docs/ARCHITECTURE.md`
 
@@ -173,6 +174,7 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 | `make ci-full` | Complete CI (quality + tests) - **run before commits** |
 | `make ci` | Quick quality checks (no integration) |
 | `make build` | Build binary |
+| `nylas init` | First-time setup wizard |
 | `nylas air` | Start Air web UI (localhost:7365) |
 | `nylas chat` | Start AI chat interface (localhost:7367) |
 
