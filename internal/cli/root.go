@@ -36,9 +36,9 @@ Documentation: https://cli.nylas.com/`,
 // printHelpHeader prints the branded ASCII art header.
 func printHelpHeader() {
 	fmt.Println()
-	_, _ = common.BoldCyan.Println("  ░█▀█░█░█░█░░░█▀█░█▀▀")
-	_, _ = common.BoldCyan.Println("  ░█░█░░█░░█░░░█▀█░▀▀█")
-	_, _ = common.BoldCyan.Println("  ░▀░▀░░▀░░▀▀▀░▀░▀░▀▀▀")
+	fmt.Println(common.Brand.Render("  ░█▀█░█░█░█░░░█▀█░█▀▀"))
+	fmt.Println(common.Brand.Render("  ░█░█░░█░░█░░░█▀█░▀▀█"))
+	fmt.Println(common.Brand.Render("  ░▀░▀░░▀░░▀▀▀░▀░▀░▀▀▀"))
 	fmt.Println()
 }
 
@@ -51,7 +51,7 @@ func printWelcome() {
 	fmt.Print("  ")
 	_, _ = common.Dim.Print("│")
 	fmt.Print("   ")
-	_, _ = common.BoldCyan.Print("◈  N Y L A S   C L I")
+	fmt.Print(common.Brand.Render("◈  N Y L A S   C L I"))
 	fmt.Print("                  ")
 	_, _ = common.Dim.Println("│")
 	_, _ = common.Dim.Println("  │                                          │")
@@ -71,7 +71,7 @@ func printWelcome() {
 	_, _ = common.Bold.Println("  Get started in under a minute:")
 	fmt.Println()
 	fmt.Print("    ")
-	_, _ = common.BoldCyan.Print("❯ nylas init")
+	fmt.Print(common.Brand.Render("❯ nylas init"))
 	fmt.Println("                Guided setup")
 	fmt.Print("    ")
 	_, _ = common.Dim.Println("  nylas init --api-key      Quick setup with existing key")
@@ -105,7 +105,7 @@ func printCapability(name, desc string) {
 	fmt.Print("  ")
 	_, _ = common.Dim.Print("│")
 	fmt.Print("  ")
-	_, _ = common.Cyan.Printf("%-12s", name)
+	fmt.Print(common.Brand.Render(fmt.Sprintf("%-12s", name)))
 	fmt.Printf("%-28s", desc)
 	_, _ = common.Dim.Println("│")
 }
