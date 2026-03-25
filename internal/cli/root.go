@@ -14,9 +14,7 @@ var rootCmd = &cobra.Command{
 	Use:     "nylas",
 	Short:   "Nylas CLI - Email, calendar, and contacts from your terminal",
 	Version: Version,
-	Long: `Email, calendar, and contacts from your terminal.
-
-Quick start:
+	Long: `Quick start:
   nylas init             Guided setup (first time)
   nylas email list       List recent emails
   nylas calendar events  Upcoming events
@@ -30,8 +28,19 @@ Documentation: https://cli.nylas.com/`,
 			printWelcome()
 			return nil
 		}
+		printHelpHeader()
 		return cmd.Help()
 	},
+}
+
+// printHelpHeader prints the branded ASCII art header.
+func printHelpHeader() {
+	fmt.Println()
+	_, _ = common.BoldCyan.Println("  ┳┓      ┓       ┏┓┓ ┳")
+	_, _ = common.BoldCyan.Println("  ┃┃┓┏┃┏┓┏┃  ╺━╸  ┃ ┃ ┃")
+	_, _ = common.BoldCyan.Println("  ┛┗┗┫┗┗┻┛┗       ┗┛┗┛┻")
+	_, _ = common.BoldCyan.Println("     ┛")
+	fmt.Println()
 }
 
 // printWelcome displays the first-run welcome message.
