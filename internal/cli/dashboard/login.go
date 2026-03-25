@@ -71,7 +71,7 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 
 	email := userFlag
 	if email == "" {
-		email, err = readLine("Email: ")
+		email, err = common.InputPrompt("Email", "")
 		if err != nil {
 			return wrapDashboardError(err)
 		}
@@ -82,7 +82,7 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 
 	password := passFlag
 	if password == "" {
-		password, err = readPassword("Password: ")
+		password, err = common.PasswordPrompt("Password")
 		if err != nil {
 			return wrapDashboardError(err)
 		}
@@ -106,7 +106,7 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 	}
 
 	if mfa != nil {
-		code, readErr := readPassword("MFA code: ")
+		code, readErr := common.PasswordPrompt("MFA code")
 		if readErr != nil {
 			return wrapDashboardError(readErr)
 		}

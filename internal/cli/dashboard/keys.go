@@ -182,20 +182,24 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 // handleAPIKeyDelivery prompts the user to choose how to handle the newly created key.
 // The API key is never printed to stdout to prevent leaking it in terminal history or logs.
 func handleAPIKeyDelivery(apiKey, appID, region string) error {
-	fmt.Println("\nWhat would you like to do with this API key?")
-	fmt.Println()
-	_, _ = common.Cyan.Println("  [1] Activate for this CLI (recommended)")
-	fmt.Println("  [2] Copy to clipboard")
-	fmt.Println("  [3] Save to file")
-	fmt.Println()
+	type deliveryChoice string
+	const (
+		choiceActivate  deliveryChoice = "activate"
+		choiceClipboard deliveryChoice = "clipboard"
+		choiceFile      deliveryChoice = "file"
+	)
 
-	choice, err := readLine("Choose [1-3]: ")
+	choice, err := common.Select("What would you like to do with this API key?", []common.SelectOption[deliveryChoice]{
+		{Label: "Activate for this CLI (recommended)", Value: choiceActivate},
+		{Label: "Copy to clipboard", Value: choiceClipboard},
+		{Label: "Save to file", Value: choiceFile},
+	})
 	if err != nil {
 		return wrapDashboardError(err)
 	}
 
 	switch choice {
-	case "1", "":
+	case choiceActivate:
 		if err := activateAPIKey(apiKey, appID, region); err != nil {
 			_, _ = common.Yellow.Printf("  Could not activate: %v\n", err)
 			return nil
@@ -203,24 +207,16 @@ func handleAPIKeyDelivery(apiKey, appID, region string) error {
 		_, _ = common.Green.Println("✓ API key activated — CLI is ready to use")
 		_, _ = common.Dim.Println("  Try: nylas auth status")
 
-	case "2":
+	case choiceClipboard:
 		if err := common.CopyToClipboard(apiKey); err != nil {
 			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
-			_, _ = common.Dim.Println("  Try option [3] to save to a file instead")
-			return nil
+			_, _ = common.Dim.Println("  Falling back to file save")
+			return saveSecretToFile(apiKey, "nylas-api-key.txt", "API key")
 		}
 		_, _ = common.Green.Println("✓ API key copied to clipboard")
 
-	case "3":
-		keyFile := filepath.Join(os.TempDir(), "nylas-api-key.txt")
-		if err := os.WriteFile(keyFile, []byte(apiKey+"\n"), 0o600); err != nil { // #nosec G306
-			return wrapDashboardError(fmt.Errorf("failed to write key file: %w", err))
-		}
-		_, _ = common.Green.Printf("✓ API key saved to: %s\n", keyFile)
-		_, _ = common.Dim.Println("  Read it, then delete the file")
-
-	default:
-		return dashboardError("invalid selection", "Choose 1-3")
+	case choiceFile:
+		return saveSecretToFile(apiKey, "nylas-api-key.txt", "API key")
 	}
 
 	return nil
@@ -229,38 +225,44 @@ func handleAPIKeyDelivery(apiKey, appID, region string) error {
 // handleSecretDelivery prompts the user to choose how to receive a secret.
 // Secrets are never printed to stdout to prevent leaking in terminal history or logs.
 func handleSecretDelivery(secret, label string) error {
-	fmt.Printf("\nHow would you like to receive the %s?\n", label)
-	fmt.Println()
-	_, _ = common.Cyan.Println("  [1] Copy to clipboard (recommended)")
-	fmt.Println("  [2] Save to file")
-	fmt.Println()
+	type deliveryChoice string
+	const (
+		choiceClipboard deliveryChoice = "clipboard"
+		choiceFile      deliveryChoice = "file"
+	)
 
-	choice, err := readLine("Choose [1-2]: ")
+	choice, err := common.Select(fmt.Sprintf("How would you like to receive the %s?", label), []common.SelectOption[deliveryChoice]{
+		{Label: "Copy to clipboard (recommended)", Value: choiceClipboard},
+		{Label: "Save to file", Value: choiceFile},
+	})
 	if err != nil {
 		return wrapDashboardError(err)
 	}
 
 	switch choice {
-	case "1", "":
+	case choiceClipboard:
 		if err := common.CopyToClipboard(secret); err != nil {
 			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
-			_, _ = common.Dim.Println("  Try option [2] to save to a file instead")
-			return nil
+			_, _ = common.Dim.Println("  Falling back to file save")
+			return saveSecretToFile(secret, "nylas-client-secret.txt", label)
 		}
 		_, _ = common.Green.Printf("✓ %s copied to clipboard\n", label)
 
-	case "2":
-		keyFile := filepath.Join(os.TempDir(), "nylas-client-secret.txt")
-		if err := os.WriteFile(keyFile, []byte(secret+"\n"), 0o600); err != nil { // #nosec G306
-			return wrapDashboardError(fmt.Errorf("failed to write file: %w", err))
-		}
-		_, _ = common.Green.Printf("✓ %s saved to: %s\n", label, keyFile)
-		_, _ = common.Dim.Println("  Read it, then delete the file")
-
-	default:
-		return dashboardError("invalid selection", "Choose 1-2")
+	case choiceFile:
+		return saveSecretToFile(secret, "nylas-client-secret.txt", label)
 	}
 
+	return nil
+}
+
+// saveSecretToFile writes a secret to a temp file with restrictive permissions.
+func saveSecretToFile(secret, filename, label string) error {
+	keyFile := filepath.Join(os.TempDir(), filename)
+	if err := os.WriteFile(keyFile, []byte(secret+"\n"), 0o600); err != nil { // #nosec G306
+		return wrapDashboardError(fmt.Errorf("failed to write file: %w", err))
+	}
+	_, _ = common.Green.Printf("✓ %s saved to: %s\n", label, keyFile)
+	_, _ = common.Dim.Println("  Read it, then delete the file")
 	return nil
 }
 

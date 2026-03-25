@@ -55,50 +55,25 @@ func resolveProvider(opts wizardOpts) string {
 
 // chooseProvider presents an SSO provider menu.
 func chooseProvider() (string, error) {
-	fmt.Println()
-	fmt.Println("  How would you like to authenticate?")
-	fmt.Println()
-	_, _ = common.Cyan.Println("    [1] Google      (recommended)")
-	fmt.Println("    [2] Microsoft")
-	fmt.Println("    [3] GitHub")
-	fmt.Println()
-
-	choice, err := readLine("  Choose [1-3]: ")
-	if err != nil {
-		return "google", nil
-	}
-
-	switch strings.TrimSpace(choice) {
-	case "1", "":
-		return "google", nil
-	case "2":
-		return "microsoft", nil
-	case "3":
-		return "github", nil
-	default:
-		return "google", nil
-	}
+	return common.Select("How would you like to authenticate?", []common.SelectOption[string]{
+		{Label: "Google (recommended)", Value: "google"},
+		{Label: "Microsoft", Value: "microsoft"},
+		{Label: "GitHub", Value: "github"},
+	})
 }
 
 // selectApp prompts the user to select from multiple applications.
 func selectApp(apps []domain.GatewayApplication) (domain.GatewayApplication, error) {
-	fmt.Printf("  Found %d applications:\n\n", len(apps))
+	opts := make([]common.SelectOption[int], len(apps))
 	for i, app := range apps {
-		fmt.Printf("    [%d] %s\n", i+1, appDisplayName(app))
+		opts[i] = common.SelectOption[int]{Label: appDisplayName(app), Value: i}
 	}
-	fmt.Println()
 
-	choice, err := readLine(fmt.Sprintf("  Select application [1-%d]: ", len(apps)))
+	idx, err := common.Select("Select application", opts)
 	if err != nil {
 		return apps[0], nil
 	}
-
-	var selected int
-	if _, err := fmt.Sscanf(choice, "%d", &selected); err != nil || selected < 1 || selected > len(apps) {
-		_, _ = common.Yellow.Println("  Invalid selection, using first application")
-		return apps[0], nil
-	}
-	return apps[selected-1], nil
+	return apps[idx], nil
 }
 
 // createDefaultApp creates a new application with defaults.
@@ -106,16 +81,16 @@ func createDefaultApp(appSvc *dashboardapp.AppService, orgID string) (*domain.Ga
 	fmt.Println("  No applications found. Creating one for you...")
 	fmt.Println()
 
-	name, err := readLine("  App name [My First App]: ")
-	if err != nil || name == "" {
+	name, err := common.InputPrompt("App name", "My First App")
+	if err != nil {
 		name = "My First App"
 	}
 
-	region, err := readLine("  Region [us/eu] (default: us): ")
-	if err != nil || region == "" {
-		region = "us"
-	}
-	if region != "us" && region != "eu" {
+	region, err := common.Select("Region", []common.SelectOption[string]{
+		{Label: "US", Value: "us"},
+		{Label: "EU", Value: "eu"},
+	})
+	if err != nil {
 		region = "us"
 	}
 

@@ -1,10 +1,7 @@
 package setup
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/cli/common"
@@ -68,37 +65,19 @@ func SyncGrants(grantStore ports.GrantStore, apiKey, clientID, region string) (*
 
 // PromptDefaultGrant presents an interactive menu for the user to select a default grant.
 func PromptDefaultGrant(grantStore ports.GrantStore, grants []domain.Grant) (string, error) {
-	fmt.Println()
-	fmt.Println("Select default account:")
+	opts := make([]common.SelectOption[string], len(grants))
 	for i, grant := range grants {
-		fmt.Printf("  [%d] %s (%s)\n", i+1, grant.Email, grant.Provider.DisplayName())
+		opts[i] = common.SelectOption[string]{
+			Label: fmt.Sprintf("%s (%s)", grant.Email, grant.Provider.DisplayName()),
+			Value: grant.ID,
+		}
 	}
-	fmt.Println()
 
-	choice, err := readLine(fmt.Sprintf("Choose [1-%d]: ", len(grants)))
+	chosen, err := common.Select("Select default account", opts)
 	if err != nil {
-		return grants[0].ID, nil
+		chosen = grants[0].ID
 	}
 
-	var selected int
-	if _, err := fmt.Sscanf(choice, "%d", &selected); err != nil || selected < 1 || selected > len(grants) {
-		_, _ = common.Yellow.Printf("Invalid selection, defaulting to %s\n", grants[0].Email)
-		_ = grantStore.SetDefaultGrant(grants[0].ID)
-		return grants[0].ID, nil
-	}
-
-	chosen := grants[selected-1]
-	_ = grantStore.SetDefaultGrant(chosen.ID)
-	return chosen.ID, nil
-}
-
-// readLine prompts for a line of text input.
-func readLine(prompt string) (string, error) {
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	return strings.TrimSpace(input), nil
+	_ = grantStore.SetDefaultGrant(chosen)
+	return chosen, nil
 }

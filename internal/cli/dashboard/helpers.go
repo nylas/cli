@@ -1,13 +1,9 @@
 package dashboard
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
-
-	"golang.org/x/term"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/dashboard"
@@ -70,28 +66,6 @@ func getDashboardAccountBaseURL(secrets ports.SecretStore) string {
 		return cfg.Dashboard.AccountBaseURL
 	}
 	return domain.DefaultDashboardAccountBaseURL
-}
-
-// readPassword prompts for a password without terminal echo.
-func readPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
-	pwBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	return strings.TrimSpace(string(pwBytes)), nil
-}
-
-// readLine prompts for a line of text input.
-func readLine(prompt string) (string, error) {
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
-	}
-	return strings.TrimSpace(input), nil
 }
 
 // wrapDashboardError wraps a dashboard error as a CLIError, preserving
@@ -167,42 +141,16 @@ func resolveAuthMethod(google, microsoft, github, email bool, action string) (st
 // chooseAuthMethod presents an interactive menu. SSO first.
 // Email/password registration is temporarily disabled.
 func chooseAuthMethod(action string) (string, error) {
-	allowEmail := action != "register"
-
-	fmt.Printf("\nHow would you like to %s?\n\n", action)
-	_, _ = common.Cyan.Println("  [1] Google      (recommended)")
-	fmt.Println("  [2] Microsoft")
-	fmt.Println("  [3] GitHub")
-	if allowEmail {
-		_, _ = common.Dim.Println("  [4] Email and password")
+	opts := []common.SelectOption[string]{
+		{Label: "Google (recommended)", Value: methodGoogle},
+		{Label: "Microsoft", Value: methodMicrosoft},
+		{Label: "GitHub", Value: methodGitHub},
 	}
-	fmt.Println()
-
-	maxChoice := "3"
-	if allowEmail {
-		maxChoice = "4"
+	if action != "register" {
+		opts = append(opts, common.SelectOption[string]{Label: "Email and password", Value: methodEmailPassword})
 	}
 
-	choice, err := readLine(fmt.Sprintf("Choose [1-%s]: ", maxChoice))
-	if err != nil {
-		return "", err
-	}
-
-	switch strings.TrimSpace(choice) {
-	case "1", "":
-		return methodGoogle, nil
-	case "2":
-		return methodMicrosoft, nil
-	case "3":
-		return methodGitHub, nil
-	case "4":
-		if allowEmail {
-			return methodEmailPassword, nil
-		}
-		return "", dashboardError("invalid selection", "Choose 1-3")
-	default:
-		return "", dashboardError("invalid selection", fmt.Sprintf("Choose 1-%s", maxChoice))
-	}
+	return common.Select(fmt.Sprintf("How would you like to %s?", action), opts)
 }
 
 // selectOrg prompts the user to select an organization if multiple are available.
@@ -214,26 +162,20 @@ func selectOrg(orgs []domain.DashboardOrganization) string {
 		return ""
 	}
 
-	fmt.Println("\nAvailable organizations:")
+	opts := make([]common.SelectOption[string], len(orgs))
 	for i, org := range orgs {
-		name := org.Name
-		if name == "" {
-			name = org.PublicID
+		label := org.Name
+		if label == "" {
+			label = org.PublicID
 		}
-		fmt.Printf("  [%d] %s\n", i+1, name)
+		opts[i] = common.SelectOption[string]{Label: label, Value: org.PublicID}
 	}
-	fmt.Println()
 
-	choice, err := readLine(fmt.Sprintf("Select organization [1-%d]: ", len(orgs)))
+	selected, err := common.Select("Select organization", opts)
 	if err != nil {
 		return orgs[0].PublicID
 	}
-
-	var selected int
-	if _, err := fmt.Sscanf(choice, "%d", &selected); err != nil || selected < 1 || selected > len(orgs) {
-		return orgs[0].PublicID
-	}
-	return orgs[selected-1].PublicID
+	return selected
 }
 
 // printAuthSuccess prints the standard post-login success message.
@@ -246,7 +188,11 @@ func printAuthSuccess(auth *domain.DashboardAuthResponse) {
 
 // acceptPrivacyPolicy prompts for or validates privacy policy acceptance.
 func acceptPrivacyPolicy() error {
-	if !common.Confirm("Accept Nylas Privacy Policy?", true) {
+	accepted, err := common.ConfirmPrompt("Accept Nylas Privacy Policy?", true)
+	if err != nil {
+		return err
+	}
+	if !accepted {
 		return dashboardError("privacy policy must be accepted to continue", "")
 	}
 	return nil

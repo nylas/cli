@@ -3,7 +3,6 @@ package setup
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -170,29 +169,11 @@ func chooseAccountPath(opts wizardOpts) (pathChoice, error) {
 		return pathLogin, nil
 	}
 
-	fmt.Println("  Do you have a Nylas account?")
-	fmt.Println()
-	_, _ = common.Cyan.Println("    [1] No, create one (free)")
-	fmt.Println("    [2] Yes, log me in")
-	fmt.Println("    [3] I already have an API key")
-	fmt.Println()
-
-	choice, err := readLine("  Choose [1-3]: ")
-	if err != nil {
-		return 0, fmt.Errorf("failed to read choice: %w", err)
-	}
-
-	switch strings.TrimSpace(choice) {
-	case "1", "":
-		return pathRegister, nil
-	case "2":
-		return pathLogin, nil
-	case "3":
-		return pathAPIKey, nil
-	default:
-		common.PrintError("Invalid selection")
-		return 0, fmt.Errorf("invalid selection: %s", choice)
-	}
+	return common.Select("Do you have a Nylas account?", []common.SelectOption[pathChoice]{
+		{Label: "No, create one (free)", Value: pathRegister},
+		{Label: "Yes, log me in", Value: pathLogin},
+		{Label: "I already have an API key", Value: pathAPIKey},
+	})
 }
 
 // accountSSO handles SSO registration or login.
@@ -217,24 +198,22 @@ func accountSSO(opts wizardOpts, mode string) error {
 
 // accountAPIKey handles the "I have an API key" path.
 func accountAPIKey(status *SetupStatus) error {
-	fmt.Print("  API Key (hidden): ")
-	apiKeyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
+	apiKeyRaw, err := common.PasswordPrompt("API Key")
 	if err != nil {
 		return fmt.Errorf("failed to read API key: %w", err)
 	}
 
-	apiKey := sanitizeAPIKey(string(apiKeyBytes))
+	apiKey := sanitizeAPIKey(apiKeyRaw)
 	if apiKey == "" {
 		return fmt.Errorf("API key is required")
 	}
 
-	region, err := readLine("  Region [us/eu] (default: us): ")
+	region, err := common.Select("Region", []common.SelectOption[string]{
+		{Label: "US", Value: "us"},
+		{Label: "EU", Value: "eu"},
+	})
 	if err != nil {
 		return err
-	}
-	if region == "" {
-		region = "us"
 	}
 
 	var verifyErr error

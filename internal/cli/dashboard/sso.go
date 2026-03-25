@@ -161,7 +161,7 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID, org
 			if resp.MFA == nil {
 				return nil, fmt.Errorf("unexpected empty MFA response")
 			}
-			code, readErr := readPassword("MFA code: ")
+			code, readErr := common.PasswordPrompt("MFA code")
 			if readErr != nil {
 				return nil, readErr
 			}

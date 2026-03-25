@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -37,5 +38,5 @@ func GetActiveOrgID() (string, error) {
 
 // ReadLine prompts for a line of text input (exported for setup wizard).
 func ReadLine(prompt string) (string, error) {
-	return readLine(prompt)
+	return common.InputPrompt(prompt, "")
 }
