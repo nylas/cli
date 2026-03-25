@@ -7,7 +7,7 @@ import (
 
 // Nylas brand color palette — used consistently across all CLI output.
 const (
-	ColorPrimary = lipgloss.Color("#00BCD4") // Cyan — brand accent
+	ColorPrimary = lipgloss.Color("#4169E1") // Royal Blue — brand accent
 	ColorSuccess = lipgloss.Color("#4CAF50") // Green
 	ColorWarning = lipgloss.Color("#FFC107") // Amber
 	ColorError   = lipgloss.Color("#F44336") // Red
