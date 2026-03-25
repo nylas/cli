@@ -36,10 +36,9 @@ Documentation: https://cli.nylas.com/`,
 // printHelpHeader prints the branded ASCII art header.
 func printHelpHeader() {
 	fmt.Println()
-	_, _ = common.BoldCyan.Println("  ┳┓      ┓       ┏┓┓ ┳")
-	_, _ = common.BoldCyan.Println("  ┃┃┓┏┃┏┓┏┃  ╺━╸  ┃ ┃ ┃")
-	_, _ = common.BoldCyan.Println("  ┛┗┗┫┗┗┻┛┗       ┗┛┗┛┻")
-	_, _ = common.BoldCyan.Println("     ┛")
+	_, _ = common.BoldCyan.Println("  ░█▀█░█░█░█░░░█▀█░█▀▀")
+	_, _ = common.BoldCyan.Println("  ░█░█░░█░░█░░░█▀█░▀▀█")
+	_, _ = common.BoldCyan.Println("  ░▀░▀░░▀░░▀▀▀░▀░▀░▀▀▀")
 	fmt.Println()
 }
 
