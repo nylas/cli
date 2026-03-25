@@ -56,6 +56,14 @@ var (
 	ErrConnectorNotFound   = errors.New("connector not found")
 	ErrCredentialNotFound  = errors.New("credential not found")
 
+	// Dashboard auth errors
+	ErrDashboardNotLoggedIn    = errors.New("not logged in to Nylas Dashboard")
+	ErrDashboardSessionExpired = errors.New("dashboard session expired")
+	ErrDashboardLoginFailed    = errors.New("dashboard login failed")
+	ErrDashboardMFARequired    = errors.New("MFA required")
+	ErrDashboardSSOFailed      = errors.New("SSO authentication failed")
+	ErrDashboardDPoP           = errors.New("DPoP proof generation failed")
+
 	// Scheduler errors
 	ErrBookingNotFound       = errors.New("booking not found")
 	ErrSessionNotFound       = errors.New("session not found")

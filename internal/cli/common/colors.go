@@ -1,6 +1,9 @@
 package common
 
-import "github.com/fatih/color"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/fatih/color"
+)
 
 // Common color definitions used across CLI commands.
 // Import these instead of defining package-local color vars.
@@ -29,4 +32,8 @@ var (
 
 	// Reset (no formatting)
 	Reset = color.New(color.Reset)
+
+	// Brand — matches the Nylas theme primary color.
+	// Use for ASCII art, banners, and branded elements.
+	Brand = lipgloss.NewStyle().Foreground(ColorPrimary).Bold(true)
 )

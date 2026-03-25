@@ -71,6 +71,25 @@ nylas completion powershell >> $PROFILE
 
 ---
 
+## Getting Started
+
+```bash
+nylas init                       # Guided first-time setup
+nylas init --api-key <key>       # Quick setup with existing API key
+nylas init --api-key <key> --region eu  # Setup with EU region
+nylas init --google              # Setup with Google SSO shortcut
+```
+
+The `init` command walks you through:
+1. Creating or logging into your Nylas account (SSO)
+2. Selecting or creating an application
+3. Generating and activating an API key
+4. Syncing existing email accounts
+
+Run `nylas init` again after partial setup — it skips completed steps.
+
+---
+
 ## Authentication
 
 ```bash
@@ -88,6 +107,57 @@ nylas auth scopes [grant-id]     # Show granted OAuth scopes
 nylas auth providers             # List available providers
 nylas auth migrate               # Migrate from v2 to v3
 ```
+
+---
+
+## Dashboard
+
+Manage your Nylas Dashboard account, applications, and API keys directly from the CLI.
+
+### Account
+
+```bash
+nylas dashboard register             # Create a new account (SSO)
+nylas dashboard register --google    # Register with Google SSO
+nylas dashboard register --microsoft # Register with Microsoft SSO
+nylas dashboard register --github    # Register with GitHub SSO
+
+nylas dashboard login                # Log in (interactive)
+nylas dashboard login --google       # Log in with Google SSO
+nylas dashboard login --email --user user@example.com  # Email/password
+
+nylas dashboard logout               # Log out
+nylas dashboard status               # Show current auth status
+nylas dashboard refresh              # Refresh session tokens
+```
+
+### SSO (Direct)
+
+```bash
+nylas dashboard sso login --provider google      # SSO login
+nylas dashboard sso register --provider github   # SSO registration
+```
+
+### Applications
+
+```bash
+nylas dashboard apps list                        # List all applications
+nylas dashboard apps list --region us            # Filter by region
+nylas dashboard apps create --name "My App" --region us  # Create app
+nylas dashboard apps use <app-id> --region us    # Set active app
+```
+
+### API Keys
+
+```bash
+nylas dashboard apps apikeys list                # List keys (active app)
+nylas dashboard apps apikeys list --app <id> --region us  # Explicit app
+nylas dashboard apps apikeys create              # Create key (active app)
+nylas dashboard apps apikeys create --name "CI"  # Custom name
+nylas dashboard apps apikeys create --expires 30 # Expire in 30 days
+```
+
+After creating a key, you choose: activate in CLI (recommended), copy to clipboard, or save to file.
 
 ---
 

@@ -43,7 +43,10 @@ If the config file doesn't exist, sensible defaults are used automatically.`,
   nylas config set gpg.auto_sign true
 
   # Initialize config with defaults
-  nylas config init`,
+  nylas config init
+
+  # Reset everything (credentials, grants, config)
+  nylas config reset`,
 	}
 
 	cmd.AddCommand(newListCmd())
@@ -51,6 +54,7 @@ If the config file doesn't exist, sensible defaults are used automatically.`,
 	cmd.AddCommand(newSetCmd())
 	cmd.AddCommand(newInitCmd())
 	cmd.AddCommand(newPathCmd())
+	cmd.AddCommand(newResetCmd())
 
 	return cmd
 }

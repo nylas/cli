@@ -62,6 +62,9 @@ type Config struct {
 
 	// GPG settings
 	GPG *GPGConfig `yaml:"gpg,omitempty"`
+
+	// Dashboard authentication settings
+	Dashboard *DashboardConfig `yaml:"dashboard,omitempty"`
 }
 
 // APIConfig represents API-specific configuration.

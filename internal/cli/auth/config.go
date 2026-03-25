@@ -11,6 +11,7 @@ import (
 
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/cli/setup"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -222,14 +223,13 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 			fmt.Println()
 			fmt.Println("Checking for existing grants...")
 
-			client := nylasadapter.NewHTTPClient()
-			client.SetRegion(region)
-			client.SetCredentials(clientID, "", apiKey)
+			grantStore, err := createGrantStore()
+			if err != nil {
+				_, _ = common.Yellow.Printf("  Could not access grant store: %v\n", err)
+				return nil
+			}
 
-			ctx, cancel := common.CreateContext()
-			defer cancel()
-
-			grants, err := client.ListGrants(ctx)
+			result, err := setup.SyncGrants(grantStore, apiKey, clientID, region)
 			if err != nil {
 				_, _ = common.Yellow.Printf("  Could not fetch grants: %v\n", err)
 				fmt.Println()
@@ -238,43 +238,7 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				return nil
 			}
 
-			if len(grants) == 0 {
-				fmt.Println("  No existing grants found")
-				fmt.Println()
-				fmt.Println("Next steps:")
-				fmt.Println("  nylas auth login    Authenticate with your email provider")
-				return nil
-			}
-
-			// Get grant store to save grants locally
-			grantStore, err := createGrantStore()
-			if err != nil {
-				_, _ = common.Yellow.Printf("  Could not save grants locally: %v\n", err)
-				return nil
-			}
-
-			// First pass: Add all valid grants without setting default
-			var validGrants []domain.Grant
-			for _, grant := range grants {
-				if !grant.IsValid() {
-					continue
-				}
-
-				grantInfo := domain.GrantInfo{
-					ID:       grant.ID,
-					Email:    grant.Email,
-					Provider: grant.Provider,
-				}
-
-				if err := grantStore.SaveGrant(grantInfo); err != nil {
-					continue
-				}
-
-				validGrants = append(validGrants, grant)
-				_, _ = common.Green.Printf("  ✓ Added %s (%s)\n", grant.Email, grant.Provider.DisplayName())
-			}
-
-			if len(validGrants) == 0 {
+			if len(result.ValidGrants) == 0 {
 				fmt.Println("  No valid grants found")
 				fmt.Println()
 				fmt.Println("Next steps:")
@@ -282,53 +246,30 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				return nil
 			}
 
-			// Second pass: Set default grant
-			var defaultGrantID string
-			if len(validGrants) == 1 {
-				// Single grant - auto-select as default
-				defaultGrantID = validGrants[0].ID
-				_ = grantStore.SetDefaultGrant(defaultGrantID)
+			// Set default grant
+			defaultGrantID := result.DefaultGrantID
+			if defaultGrantID != "" {
+				// Single grant, auto-selected
 				fmt.Println()
-				_, _ = common.Green.Printf("✓ Set %s as default account\n", validGrants[0].Email)
-			} else {
-				// Multiple grants - let user choose default
-				fmt.Println()
-				fmt.Println("Select default account:")
-				for i, grant := range validGrants {
-					fmt.Printf("  [%d] %s (%s)\n", i+1, grant.Email, grant.Provider.DisplayName())
-				}
-				fmt.Println()
-				fmt.Print("Select default account (1-", len(validGrants), "): ")
-				input, _ := reader.ReadString('\n')
-				choice := strings.TrimSpace(input)
-
-				var selected int
-				if _, err := fmt.Sscanf(choice, "%d", &selected); err != nil || selected < 1 || selected > len(validGrants) {
-					// If invalid selection, default to first
-					_, _ = common.Yellow.Printf("Invalid selection, defaulting to %s\n", validGrants[0].Email)
-					defaultGrantID = validGrants[0].ID
-				} else {
-					defaultGrantID = validGrants[selected-1].ID
-				}
-
-				_ = grantStore.SetDefaultGrant(defaultGrantID)
-				selectedGrant := validGrants[0]
-				for _, g := range validGrants {
+				_, _ = common.Green.Printf("✓ Set %s as default account\n", result.ValidGrants[0].Email)
+			} else if len(result.ValidGrants) > 1 {
+				// Multiple grants, prompt
+				defaultGrantID, _ = setup.PromptDefaultGrant(grantStore, result.ValidGrants)
+				for _, g := range result.ValidGrants {
 					if g.ID == defaultGrantID {
-						selectedGrant = g
+						_, _ = common.Green.Printf("✓ Set %s as default account\n", g.Email)
 						break
 					}
 				}
-				_, _ = common.Green.Printf("✓ Set %s as default account\n", selectedGrant.Email)
 			}
 
 			fmt.Println()
-			fmt.Printf("Added %d grant(s). Run 'nylas auth list' to see all accounts.\n", len(validGrants))
+			fmt.Printf("Added %d grant(s). Run 'nylas auth list' to see all accounts.\n", len(result.ValidGrants))
 
 			// Update config file with default grant and grants list
 			cfg.DefaultGrant = defaultGrantID
-			cfg.Grants = make([]domain.GrantInfo, len(validGrants))
-			for i, grant := range validGrants {
+			cfg.Grants = make([]domain.GrantInfo, len(result.ValidGrants))
+			for i, grant := range result.ValidGrants {
 				cfg.Grants[i] = domain.GrantInfo{
 					ID:       grant.ID,
 					Email:    grant.Email,
