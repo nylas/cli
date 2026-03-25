@@ -8,6 +8,9 @@ import (
 	"golang.org/x/term"
 )
 
+// theme is the shared huh theme applied to all prompts.
+var theme = NylasTheme()
+
 // SelectOption represents a labeled option for Select prompts.
 type SelectOption[T comparable] struct {
 	Label string
@@ -37,6 +40,7 @@ func Select[T comparable](title string, options []SelectOption[T]) (T, error) {
 		Title(title).
 		Options(huhOpts...).
 		Value(&result).
+		WithTheme(theme).
 		Run()
 
 	return result, err
@@ -54,6 +58,7 @@ func ConfirmPrompt(title string, defaultYes bool) (bool, error) {
 		Affirmative("Yes").
 		Negative("No").
 		Value(&result).
+		WithTheme(theme).
 		Run()
 
 	return result, err
@@ -71,10 +76,10 @@ func InputPrompt(title, placeholder string) (string, error) {
 		Value(&result)
 
 	if placeholder != "" {
-		field.Placeholder(placeholder)
+		field = field.Placeholder(placeholder)
 	}
 
-	err := field.Run()
+	err := field.WithTheme(theme).Run()
 	if err != nil {
 		return "", err
 	}
@@ -95,6 +100,7 @@ func PasswordPrompt(title string) (string, error) {
 		Title(title).
 		EchoMode(huh.EchoModePassword).
 		Value(&result).
+		WithTheme(theme).
 		Run()
 
 	return result, err
