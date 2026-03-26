@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.2.3 or 1.3.0-rc.1). Do NOT include the "v" prefix.'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run — build and validate without publishing'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -12,10 +23,50 @@ jobs:
   release:
     runs-on: macos-latest
     steps:
+      - name: Validate version format
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: '$INPUT_VERSION'. Expected semver (e.g., 1.2.3 or 1.3.0-rc.1)"
+            exit 1
+          fi
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "VERSION=v${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Check tag does not already exist
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists"
+            exit 1
+          fi
+
+      - name: Create tag
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        env:
+          TAG: ${{ steps.version.outputs.VERSION }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -30,20 +81,22 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: release --clean ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.VERSION }}
 
       - name: Create DMG files
-        run: ./scripts/create-dmg.sh ${{ steps.version.outputs.VERSION }}
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          TAG: ${{ steps.version.outputs.VERSION }}
+        run: ./scripts/create-dmg.sh "$TAG"
 
       - name: Upload DMG to release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
           files: |
             dist/*.dmg
         env:
