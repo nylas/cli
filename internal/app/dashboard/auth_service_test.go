@@ -45,7 +45,6 @@ func (m *memSecretStore) IsAvailable() bool { return true }
 
 func (m *memSecretStore) Name() string { return "mem" }
 
-
 // seedTokens pre-populates userToken (and optionally orgToken) so that
 // loadTokens() succeeds without going through a full Login flow.
 func seedTokens(s ports.SecretStore, userToken, orgToken string) {
