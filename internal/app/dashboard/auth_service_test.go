@@ -203,11 +203,13 @@ func TestAuthService_SwitchOrg(t *testing.T) {
 		wantResp        *domain.DashboardSwitchOrgResponse
 	}{
 		{
-			name:            "stores new org token and clears active app",
-			seedUser:        "ut-abc",
-			seedOrg:         "ot-old",
-			orgPublicID:     "org-new",
-			mockFn:          func(_ context.Context, _, _, _ string) (*domain.DashboardSwitchOrgResponse, error) { return switchResp, nil },
+			name:        "stores new org token and clears active app",
+			seedUser:    "ut-abc",
+			seedOrg:     "ot-old",
+			orgPublicID: "org-new",
+			mockFn: func(_ context.Context, _, _, _ string) (*domain.DashboardSwitchOrgResponse, error) {
+				return switchResp, nil
+			},
 			wantOrgToken:    "new-org-token",
 			wantOrgPublicID: "org-new",
 			wantAppIDGone:   true,
@@ -260,7 +262,9 @@ func TestAuthService_SwitchOrg(t *testing.T) {
 				_ = s.Set(ports.KeyDashboardAppID, "app-old-123")
 				_ = s.Set(ports.KeyDashboardAppRegion, "us")
 			},
-			mockFn:          func(_ context.Context, _, _, _ string) (*domain.DashboardSwitchOrgResponse, error) { return switchResp, nil },
+			mockFn: func(_ context.Context, _, _, _ string) (*domain.DashboardSwitchOrgResponse, error) {
+				return switchResp, nil
+			},
 			wantAppIDGone:   true,
 			wantOrgToken:    "new-org-token",
 			wantOrgPublicID: "org-new",
@@ -374,7 +378,7 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 			wantNoOrgPublicID: true,
 		},
 		{
-			name:     "returns nil when not logged in (best-effort)",
+			name: "returns nil when not logged in (best-effort)",
 			// No seedUser means loadTokens returns ErrDashboardNotLoggedIn.
 			// SyncSessionOrg should still return nil.
 			wantNoOrgPublicID: true,

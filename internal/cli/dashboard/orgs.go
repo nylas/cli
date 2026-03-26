@@ -54,9 +54,9 @@ func newOrgsListCmd() *cobra.Command {
 				}
 				rows[i] = orgRow{
 					PublicID: rel.OrgPublicID,
-					Name:    rel.OrgName,
-					Role:    rel.Role,
-					Current: current,
+					Name:     rel.OrgName,
+					Role:     rel.Role,
+					Current:  current,
 				}
 			}
 

@@ -156,9 +156,9 @@ type DashboardSwitchOrgOrg struct {
 
 // DashboardSwitchOrgResponse is the response from POST /sessions/switch-org.
 type DashboardSwitchOrgResponse struct {
-	OrgToken     string                 `json:"orgToken"`
-	OrgSessionID string                 `json:"orgSessionId"`
-	Org          DashboardSwitchOrgOrg  `json:"org"`
+	OrgToken     string                `json:"orgToken"`
+	OrgSessionID string                `json:"orgSessionId"`
+	Org          DashboardSwitchOrgOrg `json:"org"`
 }
 
 // DashboardConfig holds dashboard authentication settings.
