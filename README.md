@@ -5,84 +5,156 @@
 ![Release](https://img.shields.io/github/v/release/nylas/cli)
 [![Website](https://img.shields.io/badge/docs-cli.nylas.com-blue)](https://cli.nylas.com/)
 
-**[Documentation](https://cli.nylas.com/)** | Unified CLI for [Nylas API](https://www.nylas.com/) - manage email, calendar, and contacts across providers (Google, Microsoft, IMAP) with a single interface.
+Email, calendar, and contacts from your terminal. One CLI for Google, Microsoft, and IMAP -- no SMTP config, no provider SDKs, no boilerplate.
 
-## Installation
+**[Documentation](https://cli.nylas.com/)** | **[API Reference](https://developer.nylas.com/docs/api/v3/)**
+
+## Install
 
 **Homebrew (macOS/Linux):**
 ```bash
 brew install nylas/nylas-cli/nylas
 ```
 
-**Go Install:**
+**Go:**
 ```bash
 go install github.com/nylas/cli/cmd/nylas@latest
 ```
 
 **Binary:** Download from [Releases](https://github.com/nylas/cli/releases) and add to PATH.
 
-## Getting Started
+## Get Started
 
-**Just want to explore?** Try the demo first - no credentials needed:
+### 1. Run the setup wizard
+
+```bash
+nylas init
+```
+
+The wizard walks you through four steps:
+
+1. **Account** -- Create a free Nylas account (via Google, Microsoft, or GitHub SSO), or log into an existing one
+2. **Application** -- Select an existing app or create your first one automatically
+3. **API Key** -- Generate and activate a key (stored securely in your system keyring)
+4. **Email Accounts** -- Detect and sync any email accounts already connected to your app
+
+That's it. You're ready to go:
+
+```bash
+nylas email list             # See your latest emails
+nylas calendar events list   # See upcoming events
+nylas contacts list          # See your contacts
+```
+
+### Already have an API key?
+
+Skip the interactive wizard entirely:
+
+```bash
+nylas init --api-key nyl_abc123
+# EU region:
+nylas init --api-key nyl_abc123 --region eu
+```
+
+### Just want to explore first?
+
+Try the demo mode -- no account or API key needed:
+
 ```bash
 nylas tui --demo
 ```
 
-**Ready to connect your account?** The setup wizard handles everything:
+### Connect an email account later
+
+After setup, you can authenticate additional email accounts at any time:
+
 ```bash
-nylas init           # Guided setup — account, app, API key, done
-nylas email list     # You're ready!
+nylas auth login                      # Google (default)
+nylas auth login --provider microsoft # Microsoft / Outlook
 ```
 
-Already have an API key? Skip the wizard:
+## What You Can Do
+
+### Email
+
 ```bash
-nylas init --api-key <your-key>
+nylas email list                          # Recent emails
+nylas email read <message-id>             # Read a message
+nylas email send --to hi@example.com \
+  --subject "Hello" --body "World"        # Send an email
+nylas email search "invoice"              # Search
 ```
 
-## Basic Commands
+### Calendar
 
-| Command | Example |
-|---------|---------|
-| Email | `nylas email list`, `nylas email send --to user@example.com` |
-| Calendar | `nylas calendar events list` |
-| Contacts | `nylas contacts list` |
-| Webhooks | `nylas webhook list` |
-| TUI | `nylas tui` (interactive terminal, vim keys, [9 themes](docs/commands/tui.md)) |
-| Web UI | `nylas air` (browser interface) |
+```bash
+nylas calendar events list                # Upcoming events
+nylas calendar availability               # Check availability
+nylas scheduler                           # AI-powered scheduling
+```
 
-**[Full Command Reference →](docs/COMMANDS.md)** | **[All Documentation →](docs/INDEX.md)**
+### Contacts
+
+```bash
+nylas contacts list                       # All contacts
+nylas contacts create --name "Jane"       # Create a contact
+```
+
+### Webhooks
+
+```bash
+nylas webhook list                        # List webhooks
+nylas webhook create                      # Create a webhook
+```
+
+### Timezone Tools (works offline, no API key required)
+
+```bash
+nylas timezone convert --from PST --to IST     # Convert times
+nylas timezone dst --zone America/New_York      # DST transitions
+nylas timezone find-meeting --zones "NYC,LON"   # Find meeting times
+```
+
+**[Full Command Reference](docs/COMMANDS.md)**
+
+## Interfaces
+
+The CLI has three ways to interact with your data:
+
+| Interface | Launch | Description |
+|-----------|--------|-------------|
+| **CLI** | `nylas <command>` | Standard command-line interface |
+| **TUI** | `nylas tui` | Interactive terminal UI with vim keys and [9 themes](docs/commands/tui.md) |
+| **Air** | `nylas air` | Modern web client at localhost:7365 -- email, calendar, contacts in your browser |
+
+## AI & MCP Integration
+
+Give your AI coding agent access to email, calendar, and contacts:
+
+```bash
+nylas mcp    # Start the MCP server for AI assistants
+nylas ai     # Chat with your data
+```
+
+Works with Claude Code, Cursor, Codex CLI, and any MCP-compatible assistant.
 
 ## Guides
 
 Step-by-step tutorials on [cli.nylas.com](https://cli.nylas.com/guides):
 
-- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — setup for Claude Code, Cursor, Codex CLI, and OpenClaw
-- [Send email from the command line](https://cli.nylas.com/guides/send-email-from-terminal) — no SMTP, no sendmail, one command
-- [AI agent email access via MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) — connect any MCP-compatible assistant
-- [Manage calendar from the terminal](https://cli.nylas.com/guides/manage-calendar-from-terminal) — events, availability, timezone handling
-
-## Features
-
-- **Email**: list, read, send, search, templates, GPG signing/encryption
-- **Calendar**: events, availability, timezone conversion, AI scheduling
-- **Contacts**: list, create, groups
-- **Webhooks**: create, test, manage
-- **Timezone**: ⚡ offline conversion, DST info, meeting finder (no API required)
-- **Admin**: applications, connectors, credentials, grants
-- **Integrations**: [MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) (AI assistants)
-- **Interfaces**: CLI, TUI (terminal), Air (web)
-
-## Timezone Tools (No API Required)
-
-```bash
-nylas timezone convert --from PST --to IST     # Convert time
-nylas timezone dst --zone America/New_York     # Check DST transitions
-nylas timezone find-meeting --zones "NYC,LON"  # Find meeting times
-```
+- [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) -- Claude Code, Cursor, Codex CLI, and OpenClaw
+- [Send email from the command line](https://cli.nylas.com/guides/send-email-from-terminal) -- one command, no SMTP
+- [AI agent email access via MCP](https://cli.nylas.com/guides/ai-agent-email-mcp) -- connect any MCP-compatible assistant
+- [Manage calendar from the terminal](https://cli.nylas.com/guides/manage-calendar-from-terminal) -- events, availability, timezone handling
 
 ## Configuration
 
-Credentials stored securely in system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager).
+Credentials are stored in your system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager). Nothing is written to plain-text files.
+
+```bash
+nylas auth status    # Check what's configured
+nylas config         # View/edit settings
+```
 
 Config file: `~/.config/nylas/config.yaml`
 
@@ -95,10 +167,6 @@ make ci-full    # Complete CI (quality + integration tests)
 ```
 
 **[Development Guide](docs/DEVELOPMENT.md)** | **[Contributing](CONTRIBUTING.md)**
-
-## API Reference
-
-This CLI uses the [Nylas v3 API](https://developer.nylas.com/docs/api/v3/).
 
 ## License
 
