@@ -31,8 +31,30 @@ func newStatusCmd() *cobra.Command {
 			if status.UserID != "" {
 				fmt.Printf("  User:         %s\n", status.UserID)
 			}
-			if status.OrgID != "" {
-				fmt.Printf("  Organization: %s\n", status.OrgID)
+
+			// Try to get org details from server for richer display
+			orgLabel := status.OrgID
+			orgCount := 0
+			ctx, cancel := common.CreateContext()
+			defer cancel()
+			if session, sErr := authSvc.GetCurrentSession(ctx); sErr == nil {
+				if session.CurrentOrg != "" {
+					orgLabel = session.CurrentOrg
+					// Find the org name from relations
+					for _, rel := range session.Relations {
+						if rel.OrgPublicID == session.CurrentOrg && rel.OrgName != "" {
+							orgLabel = formatOrgLabel(session.CurrentOrg, rel.OrgName)
+							break
+						}
+					}
+				}
+				orgCount = len(session.Relations)
+			}
+			if orgLabel != "" {
+				fmt.Printf("  Organization: %s\n", orgLabel)
+			}
+			if orgCount > 1 {
+				fmt.Printf("  Total orgs:   %d (switch with: nylas dashboard orgs switch)\n", orgCount)
 			}
 			fmt.Printf("  Org token:    %s\n", presentAbsent(status.HasOrgToken))
 

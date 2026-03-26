@@ -20,7 +20,8 @@ Commands:
   logout     Log out of the Nylas Dashboard
   status     Show current dashboard authentication status
   refresh    Refresh dashboard session tokens
-  apps       Manage Nylas applications`,
+  apps       Manage Nylas applications
+  orgs       Manage organizations (list, switch)`,
 	}
 
 	cmd.AddCommand(newRegisterCmd())
@@ -30,6 +31,7 @@ Commands:
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newRefreshCmd())
 	cmd.AddCommand(newAppsCmd())
+	cmd.AddCommand(newOrgsCmd())
 
 	return cmd
 }

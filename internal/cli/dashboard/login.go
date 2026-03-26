@@ -140,6 +140,11 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 		_ = authSvc.SetActiveOrg(orgID)
 	}
 
+	// Sync the actual active org from the server session
+	syncCtx, syncCancel := common.CreateContext()
+	defer syncCancel()
+	_ = authSvc.SyncSessionOrg(syncCtx)
+
 	printAuthSuccess(auth)
 	return nil
 }

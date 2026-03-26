@@ -179,10 +179,34 @@ func selectOrg(orgs []domain.DashboardOrganization) string {
 }
 
 // printAuthSuccess prints the standard post-login success message.
+// It reads the stored active org from the keyring (set by SyncSessionOrg)
+// so it reflects the server's actual current org.
 func printAuthSuccess(auth *domain.DashboardAuthResponse) {
 	_, _ = common.Green.Printf("✓ Authenticated as %s\n", auth.User.PublicID)
-	if len(auth.Organizations) > 0 {
-		fmt.Printf("  Organization: %s\n", auth.Organizations[0].PublicID)
+
+	// Show the active org from keyring (most accurate after SyncSessionOrg)
+	orgID := ""
+	if _, secrets, err := createDPoPService(); err == nil {
+		orgID, _ = secrets.Get(ports.KeyDashboardOrgPublicID)
+	}
+	if orgID == "" && len(auth.Organizations) > 0 {
+		orgID = auth.Organizations[0].PublicID
+	}
+
+	if orgID != "" {
+		// Find the org name if available
+		orgLabel := orgID
+		for _, org := range auth.Organizations {
+			if org.PublicID == orgID && org.Name != "" {
+				orgLabel = fmt.Sprintf("%s (%s)", org.Name, orgID)
+				break
+			}
+		}
+		fmt.Printf("  Organization: %s\n", orgLabel)
+	}
+
+	if len(auth.Organizations) > 1 {
+		fmt.Printf("  Available orgs: %d (switch with: nylas dashboard orgs switch)\n", len(auth.Organizations))
 	}
 }
 

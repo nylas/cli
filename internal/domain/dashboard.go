@@ -133,6 +133,34 @@ type GatewayCreatedAPIKey struct {
 	CreatedAt   float64  `json:"createdAt"`
 }
 
+// DashboardSessionRelation represents an org membership in the session response.
+type DashboardSessionRelation struct {
+	OrgPublicID string `json:"orgPublicId"`
+	OrgName     string `json:"orgName"`
+	OrgRegion   string `json:"orgRegion,omitempty"`
+	Role        string `json:"role,omitempty"`
+}
+
+// DashboardSessionResponse is the response from GET /sessions/current.
+type DashboardSessionResponse struct {
+	User       DashboardUser              `json:"user"`
+	CurrentOrg string                     `json:"currentOrg"`
+	Relations  []DashboardSessionRelation `json:"relations"`
+}
+
+// DashboardSwitchOrgOrg is the org object in the switch-org response.
+type DashboardSwitchOrgOrg struct {
+	PublicID string `json:"publicId"`
+	Name     string `json:"name"`
+}
+
+// DashboardSwitchOrgResponse is the response from POST /sessions/switch-org.
+type DashboardSwitchOrgResponse struct {
+	OrgToken     string                 `json:"orgToken"`
+	OrgSessionID string                 `json:"orgSessionId"`
+	Org          DashboardSwitchOrgOrg  `json:"org"`
+}
+
 // DashboardConfig holds dashboard authentication settings.
 type DashboardConfig struct {
 	AccountBaseURL string `yaml:"account_base_url,omitempty"`

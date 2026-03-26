@@ -35,6 +35,12 @@ type DashboardAccountClient interface {
 
 	// SSOPoll polls the SSO device flow for completion.
 	SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
+
+	// GetCurrentSession returns the current session info including the active org.
+	GetCurrentSession(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
+
+	// SwitchOrg switches the session to a different organization.
+	SwitchOrg(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
 }
 
 // DashboardGatewayClient defines the interface for dashboard API gateway GraphQL operations.
