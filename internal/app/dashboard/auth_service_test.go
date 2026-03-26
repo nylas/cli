@@ -45,23 +45,6 @@ func (m *memSecretStore) IsAvailable() bool { return true }
 
 func (m *memSecretStore) Name() string { return "mem" }
 
-// errSecretStore is a secret store that always returns an error on Set,
-// used to test secret-persistence failure paths.
-type errSecretStore struct {
-	memSecretStore
-	setErr error
-}
-
-func newErrSecretStore(setErr error) *errSecretStore {
-	return &errSecretStore{
-		memSecretStore: memSecretStore{data: make(map[string]string)},
-		setErr:         setErr,
-	}
-}
-
-func (e *errSecretStore) Set(key, value string) error {
-	return e.setErr
-}
 
 // seedTokens pre-populates userToken (and optionally orgToken) so that
 // loadTokens() succeeds without going through a full Login flow.
