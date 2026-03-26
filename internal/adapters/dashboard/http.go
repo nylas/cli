@@ -126,6 +126,69 @@ func unwrapEnvelope(body []byte) ([]byte, error) {
 	return envelope.Data, nil
 }
 
+// doGetRaw sends a GET request and returns the raw (envelope-unwrapped) response body.
+func (c *AccountClient) doGetRaw(ctx context.Context, path string, extraHeaders map[string]string, accessToken string) ([]byte, error) {
+	fullURL := c.baseURL + path
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add DPoP proof
+	proof, err := c.dpop.GenerateProof(http.MethodGet, fullURL, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("DPoP", proof)
+
+	for k, v := range extraHeaders {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		location := resp.Header.Get("Location")
+		return nil, fmt.Errorf("server redirected to %s — the dashboard URL may be incorrect (set NYLAS_DASHBOARD_ACCOUNT_URL)", location)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, parseErrorResponse(resp.StatusCode, respBody)
+	}
+
+	data, unwrapErr := unwrapEnvelope(respBody)
+	if unwrapErr != nil {
+		return nil, unwrapErr
+	}
+
+	return data, nil
+}
+
+// doGet sends a GET request and decodes the envelope-unwrapped response into result.
+func (c *AccountClient) doGet(ctx context.Context, path string, extraHeaders map[string]string, accessToken string, result any) error {
+	raw, err := c.doGetRaw(ctx, path, extraHeaders, accessToken)
+	if err != nil {
+		return err
+	}
+
+	if result != nil {
+		if err := json.Unmarshal(raw, result); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+	return nil
+}
+
 // DashboardAPIError represents an error from the dashboard API.
 // It carries the status code and server message for debugging.
 type DashboardAPIError struct {

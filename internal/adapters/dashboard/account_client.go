@@ -196,6 +196,29 @@ func (c *AccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID string)
 	return &result, nil
 }
 
+// GetCurrentSession returns the current session info including the active org.
+func (c *AccountClient) GetCurrentSession(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error) {
+	headers := bearerHeaders(userToken, orgToken)
+	var result domain.DashboardSessionResponse
+	if err := c.doGet(ctx, "/sessions/current", headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to get current session: %w", err)
+	}
+	return &result, nil
+}
+
+// SwitchOrg switches the session to a different organization.
+func (c *AccountClient) SwitchOrg(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error) {
+	body := map[string]any{
+		"orgPublicId": orgPublicID,
+	}
+	headers := bearerHeaders(userToken, orgToken)
+	var result domain.DashboardSwitchOrgResponse
+	if err := c.doPost(ctx, "/sessions/switch-org", body, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to switch organization: %w", err)
+	}
+	return &result, nil
+}
+
 // bearerHeaders creates the Authorization and X-Nylas-Org headers.
 func bearerHeaders(userToken, orgToken string) map[string]string {
 	h := map[string]string{

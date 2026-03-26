@@ -17,6 +17,8 @@ type MockAccountClient struct {
 	LogoutFn                 func(ctx context.Context, userToken, orgToken string) error
 	SSOStartFn               func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error)
 	SSOPollFn                func(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
+	GetCurrentSessionFn      func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
+	SwitchOrgFn              func(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
 }
 
 func (m *MockAccountClient) Register(ctx context.Context, email, password string, privacyPolicyAccepted bool) (*domain.DashboardRegisterResponse, error) {
@@ -45,6 +47,18 @@ func (m *MockAccountClient) SSOStart(ctx context.Context, loginType, mode string
 }
 func (m *MockAccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error) {
 	return m.SSOPollFn(ctx, flowID, orgPublicID)
+}
+func (m *MockAccountClient) GetCurrentSession(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error) {
+	if m.GetCurrentSessionFn != nil {
+		return m.GetCurrentSessionFn(ctx, userToken, orgToken)
+	}
+	return &domain.DashboardSessionResponse{}, nil
+}
+func (m *MockAccountClient) SwitchOrg(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error) {
+	if m.SwitchOrgFn != nil {
+		return m.SwitchOrgFn(ctx, orgPublicID, userToken, orgToken)
+	}
+	return &domain.DashboardSwitchOrgResponse{}, nil
 }
 
 // MockGatewayClient is a test mock for ports.DashboardGatewayClient.

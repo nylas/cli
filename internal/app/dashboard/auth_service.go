@@ -163,6 +163,60 @@ func (s *AuthService) GetStatus() Status {
 	return st
 }
 
+// GetCurrentSession returns the current session info, including the active org and all orgs.
+func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardSessionResponse, error) {
+	userToken, orgToken, err := s.loadTokens()
+	if err != nil {
+		return nil, err
+	}
+	return s.account.GetCurrentSession(ctx, userToken, orgToken)
+}
+
+// SwitchOrg switches the active organization and stores the new org token.
+func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domain.DashboardSwitchOrgResponse, error) {
+	userToken, orgToken, err := s.loadTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := s.account.SwitchOrg(ctx, orgPublicID, userToken, orgToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the new org token and org ID
+	if resp.OrgToken != "" {
+		if err := s.secrets.Set(ports.KeyDashboardOrgToken, resp.OrgToken); err != nil {
+			return nil, fmt.Errorf("failed to store org token: %w", err)
+		}
+	}
+	if resp.Org.PublicID != "" {
+		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, resp.Org.PublicID); err != nil {
+			return nil, fmt.Errorf("failed to store org ID: %w", err)
+		}
+	}
+
+	// Clear active app since it belongs to the previous org
+	_ = s.secrets.Delete(ports.KeyDashboardAppID)
+	_ = s.secrets.Delete(ports.KeyDashboardAppRegion)
+
+	return resp, nil
+}
+
+// SyncSessionOrg fetches the current session from the server and stores the
+// actual active org. Call this after login to ensure the stored org matches
+// the server-side default rather than guessing from the organizations list.
+func (s *AuthService) SyncSessionOrg(ctx context.Context) error {
+	session, err := s.GetCurrentSession(ctx)
+	if err != nil {
+		return nil // best effort — login already succeeded
+	}
+	if session.CurrentOrg != "" {
+		_ = s.secrets.Set(ports.KeyDashboardOrgPublicID, session.CurrentOrg)
+	}
+	return nil
+}
+
 // storeTokens persists auth tokens and user/org identifiers.
 func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
 	if err := s.secrets.Set(ports.KeyDashboardUserToken, resp.UserToken); err != nil {

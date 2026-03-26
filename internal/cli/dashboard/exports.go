@@ -36,6 +36,17 @@ func GetActiveOrgID() (string, error) {
 	return getActiveOrgID()
 }
 
+// SyncSessionOrg syncs the active org from the server session (exported for setup wizard).
+func SyncSessionOrg() error {
+	authSvc, _, err := createAuthService()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+	return authSvc.SyncSessionOrg(ctx)
+}
+
 // ReadLine prompts for a line of text input (exported for setup wizard).
 func ReadLine(prompt string) (string, error) {
 	return common.InputPrompt(prompt, "")

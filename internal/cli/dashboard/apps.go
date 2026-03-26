@@ -165,19 +165,38 @@ func newAppsUseCmd() *cobra.Command {
 	var region string
 
 	cmd := &cobra.Command{
-		Use:   "use <application-id>",
+		Use:   "use [application-id]",
 		Short: "Set the active application for subsequent commands",
 		Long: `Set an application as active so you don't need to pass --app and --region
-to every apikeys command.`,
-		Example: `  # Set active app
+to every apikeys command.
+
+When called without arguments, lists your applications and lets you pick one interactively.`,
+		Example: `  # Interactive — choose from your apps
+  nylas dashboard apps use
+
+  # Set active app directly
   nylas dashboard apps use b09141da-ead2-46bd-8f4c-c9ec5af4c6cc --region us
 
   # Now apikeys commands use the active app automatically
   nylas dashboard apps apikeys list
   nylas dashboard apps apikeys create --name "My key"`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appID := args[0]
+			appID := ""
+			if len(args) > 0 {
+				appID = args[0]
+			}
+
+			// If no app ID provided, show interactive selector
+			if appID == "" {
+				selectedID, selectedRegion, err := selectApp(region)
+				if err != nil {
+					return wrapDashboardError(err)
+				}
+				appID = selectedID
+				region = selectedRegion
+			}
+
 			if region == "" {
 				return dashboardError("region is required", "Use --region us or --region eu")
 			}
@@ -199,9 +218,63 @@ to every apikeys command.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&region, "region", "r", "", "Region of the application (required: us or eu)")
+	cmd.Flags().StringVarP(&region, "region", "r", "", "Region of the application (us or eu)")
 
 	return cmd
+}
+
+// selectApp fetches apps and presents an interactive selector.
+// Returns the selected app ID and region.
+func selectApp(regionFilter string) (appID, region string, err error) {
+	appSvc, err := createAppService()
+	if err != nil {
+		return "", "", err
+	}
+
+	orgPublicID, err := getActiveOrgID()
+	if err != nil {
+		return "", "", err
+	}
+
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+
+	var apps []domain.GatewayApplication
+	err = common.RunWithSpinner("Loading applications...", func() error {
+		apps, err = appSvc.ListApplications(ctx, orgPublicID, regionFilter)
+		return err
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(apps) == 0 {
+		return "", "", dashboardError(
+			"no applications found",
+			"Create one with: nylas dashboard apps create --name MyApp --region us",
+		)
+	}
+
+	opts := make([]common.SelectOption[int], len(apps))
+	for i, app := range apps {
+		name := ""
+		if app.Branding != nil {
+			name = app.Branding.Name
+		}
+		label := fmt.Sprintf("%s (%s)", app.ApplicationID, app.Region)
+		if name != "" {
+			label = fmt.Sprintf("%s — %s (%s)", name, app.ApplicationID, app.Region)
+		}
+		opts[i] = common.SelectOption[int]{Label: label, Value: i}
+	}
+
+	idx, err := common.Select("Select application", opts)
+	if err != nil {
+		return "", "", err
+	}
+
+	selected := apps[idx]
+	return selected.ApplicationID, selected.Region, nil
 }
 
 // getActiveApp returns the active app ID and region from the keyring.
