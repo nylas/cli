@@ -129,10 +129,5 @@ func deduplicateApps(apps []domain.GatewayApplication) []domain.GatewayApplicati
 
 // loadTokens retrieves the stored dashboard tokens.
 func (s *AppService) loadTokens() (userToken, orgToken string, err error) {
-	userToken, err = s.secrets.Get(ports.KeyDashboardUserToken)
-	if err != nil || userToken == "" {
-		return "", "", fmt.Errorf("%w", domain.ErrDashboardNotLoggedIn)
-	}
-	orgToken, _ = s.secrets.Get(ports.KeyDashboardOrgToken)
-	return userToken, orgToken, nil
+	return loadDashboardTokens(s.secrets)
 }

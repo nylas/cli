@@ -37,14 +37,15 @@ func GetActiveOrgID() (string, error) {
 }
 
 // SyncSessionOrg syncs the active org from the server session (exported for setup wizard).
-func SyncSessionOrg() error {
+// Failures are logged as warnings rather than returned, since this is a
+// best-effort step that should not block an otherwise successful login.
+func SyncSessionOrg() {
 	authSvc, _, err := createAuthService()
 	if err != nil {
-		return err
+		common.PrintWarning("failed to create auth service for org sync: %v", err)
+		return
 	}
-	ctx, cancel := common.CreateContext()
-	defer cancel()
-	return authSvc.SyncSessionOrg(ctx)
+	syncSessionOrgWithWarning(authSvc)
 }
 
 // ReadLine prompts for a line of text input (exported for setup wizard).

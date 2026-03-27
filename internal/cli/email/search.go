@@ -11,6 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type messagesClient interface {
+	GetMessagesWithParams(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error)
+	GetMessagesWithCursor(ctx context.Context, grantID string, params *domain.MessageQueryParams) (*domain.MessageListResponse, error)
+}
+
 func newSearchCmd() *cobra.Command {
 	var (
 		limit         int
@@ -55,15 +60,14 @@ Examples:
 			remainingArgs := args[1:]
 
 			_, err := common.WithClient(remainingArgs, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				// Auto-paginate when limit exceeds API maximum
-				needsPagination := limit > common.MaxAPILimit
-				apiLimit := limit
-				if needsPagination {
-					apiLimit = common.MaxAPILimit
+				// maxItems >= 0 triggers auto-pagination; < 0 means single-page fetch
+				maxItems := -1
+				if limit > common.MaxAPILimit {
+					maxItems = limit
 				}
 
 				params := &domain.MessageQueryParams{
-					Limit: apiLimit,
+					Limit: limit,
 				}
 
 				// Use query as subject search unless it's a wildcard
@@ -109,30 +113,7 @@ Examples:
 					params.ReceivedBefore = t.Unix()
 				}
 
-				var messages []domain.Message
-				var err error
-
-				if needsPagination {
-					fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
-						params.PageToken = cursor
-						resp, fetchErr := client.GetMessagesWithCursor(ctx, grantID, params)
-						if fetchErr != nil {
-							return common.PageResult[domain.Message]{}, fetchErr
-						}
-						return common.PageResult[domain.Message]{
-							Data:       resp.Data,
-							NextCursor: resp.Pagination.NextCursor,
-						}, nil
-					}
-
-					config := common.DefaultPaginationConfig()
-					config.PageSize = apiLimit
-					config.MaxItems = limit
-
-					messages, err = common.FetchAllPages(ctx, config, fetcher)
-				} else {
-					messages, err = client.GetMessagesWithParams(ctx, grantID, params)
-				}
+				messages, err := fetchMessages(ctx, client, grantID, params, maxItems)
 				if err != nil {
 					return struct{}{}, common.WrapSearchError("messages", err)
 				}
@@ -170,6 +151,39 @@ Examples:
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
+}
+
+// fetchMessages retrieves messages, using automatic pagination when maxItems >= 0.
+// Pass maxItems = 0 for unlimited pagination, >0 for a capped fetch, or <0 to
+// skip pagination and perform a single-page request via GetMessagesWithParams.
+func fetchMessages(ctx context.Context, client messagesClient, grantID string, params *domain.MessageQueryParams, maxItems int) ([]domain.Message, error) {
+	if maxItems < 0 {
+		return client.GetMessagesWithParams(ctx, grantID, params)
+	}
+
+	pageSize := min(params.Limit, common.MaxAPILimit)
+	if pageSize <= 0 {
+		pageSize = common.MaxAPILimit
+	}
+	params.Limit = pageSize
+
+	fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
+		params.PageToken = cursor
+		resp, err := client.GetMessagesWithCursor(ctx, grantID, params)
+		if err != nil {
+			return common.PageResult[domain.Message]{}, err
+		}
+		return common.PageResult[domain.Message]{
+			Data:       resp.Data,
+			NextCursor: resp.Pagination.NextCursor,
+		}, nil
+	}
+
+	config := common.DefaultPaginationConfig()
+	config.PageSize = pageSize
+	config.MaxItems = maxItems
+
+	return common.FetchAllPages(ctx, config, fetcher)
 }
 
 // parseDate parses a date string in YYYY-MM-DD format using local timezone.

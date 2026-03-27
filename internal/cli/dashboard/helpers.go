@@ -178,6 +178,20 @@ func selectOrg(orgs []domain.DashboardOrganization) string {
 	return selected
 }
 
+func persistActiveOrg(authSvc *dashboardapp.AuthService, auth *domain.DashboardAuthResponse, orgPublicID string) error {
+	selectedOrgID := orgPublicID
+	if selectedOrgID == "" && len(auth.Organizations) > 1 {
+		selectedOrgID = selectOrg(auth.Organizations)
+	}
+	if selectedOrgID == "" {
+		return nil
+	}
+	if err := authSvc.SetActiveOrg(selectedOrgID); err != nil {
+		return fmt.Errorf("failed to store selected organization: %w", err)
+	}
+	return nil
+}
+
 // printAuthSuccess prints the standard post-login success message.
 // It reads the stored active org from the keyring (set by SyncSessionOrg)
 // so it reflects the server's actual current org.
@@ -189,7 +203,7 @@ func printAuthSuccess(auth *domain.DashboardAuthResponse) {
 	if _, secrets, err := createDPoPService(); err == nil {
 		orgID, _ = secrets.Get(ports.KeyDashboardOrgPublicID)
 	}
-	if orgID == "" && len(auth.Organizations) > 0 {
+	if orgID == "" && len(auth.Organizations) == 1 {
 		orgID = auth.Organizations[0].PublicID
 	}
 
@@ -207,6 +221,15 @@ func printAuthSuccess(auth *domain.DashboardAuthResponse) {
 
 	if len(auth.Organizations) > 1 {
 		fmt.Printf("  Available orgs: %d (switch with: nylas dashboard orgs switch)\n", len(auth.Organizations))
+	}
+}
+
+func syncSessionOrgWithWarning(authSvc *dashboardapp.AuthService) {
+	syncCtx, syncCancel := common.CreateContext()
+	defer syncCancel()
+
+	if err := authSvc.SyncSessionOrg(syncCtx); err != nil {
+		common.PrintWarning("authenticated, but failed to sync the active dashboard organization: %v", err)
 	}
 }
 

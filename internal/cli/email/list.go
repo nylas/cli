@@ -57,9 +57,10 @@ Use --max to limit total messages when using --all.`,
 
 			// Auto-paginate when limit exceeds API maximum
 			if limit > common.MaxAPILimit && !all {
-				all = true
 				maxItems = limit
 				limit = common.MaxAPILimit
+			} else if !all {
+				maxItems = -1 // single-page fetch
 			}
 
 			// Traditional formatted output
@@ -110,43 +111,9 @@ Use --max to limit total messages when using --all.`,
 					}
 				}
 
-				var messages []domain.Message
-				var err error
-
-				if all {
-					// Use pagination to fetch all messages
-					pageSize := min(limit, common.MaxAPILimit)
-					if pageSize <= 0 {
-						pageSize = common.MaxAPILimit
-					}
-					params.Limit = pageSize
-
-					fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
-						params.PageToken = cursor
-						resp, err := client.GetMessagesWithCursor(ctx, grantID, params)
-						if err != nil {
-							return common.PageResult[domain.Message]{}, err
-						}
-						return common.PageResult[domain.Message]{
-							Data:       resp.Data,
-							NextCursor: resp.Pagination.NextCursor,
-						}, nil
-					}
-
-					config := common.DefaultPaginationConfig()
-					config.PageSize = pageSize
-					config.MaxItems = maxItems
-
-					messages, err = common.FetchAllPages(ctx, config, fetcher)
-					if err != nil {
-						return struct{}{}, common.WrapFetchError("messages", err)
-					}
-				} else {
-					// Standard single-page fetch
-					messages, err = client.GetMessagesWithParams(ctx, grantID, params)
-					if err != nil {
-						return struct{}{}, common.WrapGetError("messages", err)
-					}
+				messages, err := fetchMessages(ctx, client, grantID, params, maxItems)
+				if err != nil {
+					return struct{}{}, common.WrapFetchError("messages", err)
 				}
 
 				if len(messages) == 0 {
@@ -235,9 +202,10 @@ func runListStructured(cmd *cobra.Command, args []string, limit int, unread, sta
 
 	// Auto-paginate when limit exceeds API maximum
 	if limit > common.MaxAPILimit && !all {
-		all = true
 		maxItems = limit
 		limit = common.MaxAPILimit
+	} else if !all {
+		maxItems = -1 // single-page fetch
 	}
 
 	_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
@@ -281,41 +249,9 @@ func runListStructured(cmd *cobra.Command, args []string, limit int, unread, sta
 			}
 		}
 
-		var messages []domain.Message
-		var err error
-
-		if all {
-			pageSize := min(limit, common.MaxAPILimit)
-			if pageSize <= 0 {
-				pageSize = common.MaxAPILimit
-			}
-			params.Limit = pageSize
-
-			fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
-				params.PageToken = cursor
-				resp, err := client.GetMessagesWithCursor(ctx, grantID, params)
-				if err != nil {
-					return common.PageResult[domain.Message]{}, err
-				}
-				return common.PageResult[domain.Message]{
-					Data:       resp.Data,
-					NextCursor: resp.Pagination.NextCursor,
-				}, nil
-			}
-
-			config := common.DefaultPaginationConfig()
-			config.PageSize = pageSize
-			config.MaxItems = maxItems
-
-			messages, err = common.FetchAllPages(ctx, config, fetcher)
-			if err != nil {
-				return struct{}{}, common.WrapFetchError("messages", err)
-			}
-		} else {
-			messages, err = client.GetMessagesWithParams(ctx, grantID, params)
-			if err != nil {
-				return struct{}{}, common.WrapGetError("messages", err)
-			}
+		messages, err := fetchMessages(ctx, client, grantID, params, maxItems)
+		if err != nil {
+			return struct{}{}, common.WrapFetchError("messages", err)
 		}
 
 		// Output structured data
