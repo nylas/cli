@@ -125,10 +125,11 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...s
 		return wrapDashboardError(err)
 	}
 
-	// Sync the actual active org from the server session
-	syncCtx, syncCancel := common.CreateContext()
-	defer syncCancel()
-	_ = authSvc.SyncSessionOrg(syncCtx)
+	if err := persistActiveOrg(authSvc, auth, orgPublicID); err != nil {
+		return wrapDashboardError(err)
+	}
+
+	syncSessionOrgWithWarning(authSvc)
 
 	printAuthSuccess(auth)
 	return nil

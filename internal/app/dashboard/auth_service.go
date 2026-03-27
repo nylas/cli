@@ -209,10 +209,12 @@ func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domai
 func (s *AuthService) SyncSessionOrg(ctx context.Context) error {
 	session, err := s.GetCurrentSession(ctx)
 	if err != nil {
-		return nil // best effort — login already succeeded
+		return fmt.Errorf("failed to fetch current dashboard session: %w", err)
 	}
 	if session.CurrentOrg != "" {
-		_ = s.secrets.Set(ports.KeyDashboardOrgPublicID, session.CurrentOrg)
+		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, session.CurrentOrg); err != nil {
+			return fmt.Errorf("failed to store active organization: %w", err)
+		}
 	}
 	return nil
 }
@@ -232,7 +234,7 @@ func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
 			return err
 		}
 	}
-	if len(resp.Organizations) > 0 {
+	if len(resp.Organizations) == 1 {
 		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, resp.Organizations[0].PublicID); err != nil {
 			return err
 		}
@@ -258,10 +260,5 @@ func (s *AuthService) clearTokens() {
 
 // loadTokens retrieves the stored tokens.
 func (s *AuthService) loadTokens() (userToken, orgToken string, err error) {
-	userToken, err = s.secrets.Get(ports.KeyDashboardUserToken)
-	if err != nil || userToken == "" {
-		return "", "", fmt.Errorf("%w", domain.ErrDashboardNotLoggedIn)
-	}
-	orgToken, _ = s.secrets.Get(ports.KeyDashboardOrgToken)
-	return userToken, orgToken, nil
+	return loadDashboardTokens(s.secrets)
 }

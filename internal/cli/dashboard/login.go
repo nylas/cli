@@ -135,15 +135,11 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 		}
 	}
 
-	if orgPublicID == "" && len(auth.Organizations) > 1 {
-		orgID := selectOrg(auth.Organizations)
-		_ = authSvc.SetActiveOrg(orgID)
+	if err := persistActiveOrg(authSvc, auth, orgPublicID); err != nil {
+		return wrapDashboardError(err)
 	}
 
-	// Sync the actual active org from the server session
-	syncCtx, syncCancel := common.CreateContext()
-	defer syncCancel()
-	_ = authSvc.SyncSessionOrg(syncCtx)
+	syncSessionOrgWithWarning(authSvc)
 
 	printAuthSuccess(auth)
 	return nil

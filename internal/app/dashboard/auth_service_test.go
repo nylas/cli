@@ -45,6 +45,18 @@ func (m *memSecretStore) IsAvailable() bool { return true }
 
 func (m *memSecretStore) Name() string { return "mem" }
 
+type failingSecretStore struct {
+	*memSecretStore
+	failSetKey string
+}
+
+func (f *failingSecretStore) Set(key, value string) error {
+	if key == f.failSetKey {
+		return errors.New("set failed")
+	}
+	return f.memSecretStore.Set(key, value)
+}
+
 // seedTokens pre-populates userToken (and optionally orgToken) so that
 // loadTokens() succeeds without going through a full Login flow.
 func seedTokens(s ports.SecretStore, userToken, orgToken string) {
@@ -335,8 +347,10 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 		name              string
 		seedUser          string
 		seedOrg           string
+		storeFactory      func() ports.SecretStore
 		mockFn            func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
-		wantErr           bool // SyncSessionOrg is best-effort; always returns nil
+		wantErr           bool
+		wantErrIs         error
 		wantOrgPublicID   string
 		wantNoOrgPublicID bool
 	}{
@@ -351,18 +365,18 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 			wantOrgPublicID: "org-synced",
 		},
 		{
-			name:     "returns nil when GetCurrentSession fails (best-effort)",
+			name:     "returns error when GetCurrentSession fails",
 			seedUser: "ut-abc",
 			mockFn: func(_ context.Context, _, _ string) (*domain.DashboardSessionResponse, error) {
 				return nil, errors.New("session fetch failed")
 			},
-			// wantErr is false — SyncSessionOrg is best-effort.
+			wantErr:           true,
 			wantNoOrgPublicID: true,
 		},
 		{
-			name: "returns nil when not logged in (best-effort)",
-			// No seedUser means loadTokens returns ErrDashboardNotLoggedIn.
-			// SyncSessionOrg should still return nil.
+			name:              "returns error when not logged in",
+			wantErr:           true,
+			wantErrIs:         domain.ErrDashboardNotLoggedIn,
 			wantNoOrgPublicID: true,
 		},
 		{
@@ -386,6 +400,23 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 			},
 			wantOrgPublicID: "org-from-server",
 		},
+		{
+			name:     "returns error when storing synced org fails",
+			seedUser: "ut-abc",
+			storeFactory: func() ports.SecretStore {
+				return &failingSecretStore{
+					memSecretStore: newMemSecretStore(),
+					failSetKey:     ports.KeyDashboardOrgPublicID,
+				}
+			},
+			mockFn: func(_ context.Context, _, _ string) (*domain.DashboardSessionResponse, error) {
+				return &domain.DashboardSessionResponse{
+					CurrentOrg: "org-synced",
+				}, nil
+			},
+			wantErr:           true,
+			wantNoOrgPublicID: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -393,7 +424,12 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			store := newMemSecretStore()
+			var store ports.SecretStore
+			if tt.storeFactory != nil {
+				store = tt.storeFactory()
+			} else {
+				store = newMemSecretStore()
+			}
 			seedTokens(store, tt.seedUser, tt.seedOrg)
 
 			mock := &dashboardadapter.MockAccountClient{
@@ -403,8 +439,14 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 			svc := NewAuthService(mock, store)
 			err := svc.SyncSessionOrg(context.Background())
 
-			// SyncSessionOrg is always best-effort — it must never return an error.
-			require.NoError(t, err)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrIs != nil {
+					assert.ErrorIs(t, err, tt.wantErrIs)
+				}
+			} else {
+				require.NoError(t, err)
+			}
 
 			stored, _ := store.Get(ports.KeyDashboardOrgPublicID)
 			if tt.wantOrgPublicID != "" {
@@ -415,4 +457,49 @@ func TestAuthService_SyncSessionOrg(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthServiceStoreTokens(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stores org when there is exactly one organization", func(t *testing.T) {
+		t.Parallel()
+
+		store := newMemSecretStore()
+		svc := NewAuthService(&dashboardadapter.MockAccountClient{}, store)
+
+		err := svc.storeTokens(&domain.DashboardAuthResponse{
+			UserToken: "user-token",
+			User:      domain.DashboardUser{PublicID: "user-1"},
+			Organizations: []domain.DashboardOrganization{
+				{PublicID: "org-only"},
+			},
+		})
+
+		require.NoError(t, err)
+
+		storedOrgID, _ := store.Get(ports.KeyDashboardOrgPublicID)
+		assert.Equal(t, "org-only", storedOrgID)
+	})
+
+	t.Run("does not guess active org when multiple organizations exist", func(t *testing.T) {
+		t.Parallel()
+
+		store := newMemSecretStore()
+		svc := NewAuthService(&dashboardadapter.MockAccountClient{}, store)
+
+		err := svc.storeTokens(&domain.DashboardAuthResponse{
+			UserToken: "user-token",
+			User:      domain.DashboardUser{PublicID: "user-1"},
+			Organizations: []domain.DashboardOrganization{
+				{PublicID: "org-1"},
+				{PublicID: "org-2"},
+			},
+		})
+
+		require.NoError(t, err)
+
+		storedOrgID, _ := store.Get(ports.KeyDashboardOrgPublicID)
+		assert.Empty(t, storedOrgID)
+	})
 }
