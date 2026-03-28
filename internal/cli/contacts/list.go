@@ -25,12 +25,9 @@ func newListCmd() *cobra.Command {
 		Long:    "List all contacts for the specified grant or default account.",
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Auto-paginate when limit exceeds API maximum
-			maxItems := 0
-			if limit > common.MaxAPILimit {
-				maxItems = limit
-				limit = common.MaxAPILimit
-			}
+			pag := common.SetupPagination(limit, false, 0)
+			limit = pag.Limit
+			maxItems := pag.MaxItems
 
 			// Check if we should use structured output (JSON/YAML/quiet)
 			if common.IsStructuredOutput(cmd) {
@@ -125,7 +122,7 @@ func newListCmd() *cobra.Command {
 // fetchContacts retrieves contacts, using pagination when maxItems > 0.
 func fetchContacts(ctx context.Context, client ports.NylasClient, grantID string, params *domain.ContactQueryParams, maxItems int) ([]domain.Contact, error) {
 	if maxItems > 0 {
-		pageSize := min(params.Limit, common.MaxAPILimit)
+		pageSize := common.NormalizePageSize(params.Limit)
 		params.Limit = pageSize
 
 		fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Contact], error) {
@@ -140,11 +137,7 @@ func fetchContacts(ctx context.Context, client ports.NylasClient, grantID string
 			}, nil
 		}
 
-		config := common.DefaultPaginationConfig()
-		config.PageSize = pageSize
-		config.MaxItems = maxItems
-
-		return common.FetchAllPages(ctx, config, fetcher)
+		return common.FetchCursorPages(ctx, pageSize, maxItems, fetcher)
 	}
 
 	return client.GetContacts(ctx, grantID, params)

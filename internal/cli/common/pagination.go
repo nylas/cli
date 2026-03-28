@@ -34,6 +34,16 @@ type PaginationConfig struct {
 	Writer       io.Writer // Output writer for progress
 }
 
+// NormalizePageSize clamps a requested page size to the API maximum.
+// Zero or negative values fall back to the maximum API page size.
+func NormalizePageSize(limit int) int {
+	pageSize := min(limit, MaxAPILimit)
+	if pageSize <= 0 {
+		return MaxAPILimit
+	}
+	return pageSize
+}
+
 // DefaultPaginationConfig returns default pagination settings.
 func DefaultPaginationConfig() PaginationConfig {
 	return PaginationConfig{
@@ -107,6 +117,68 @@ func FetchAllPages[T any](ctx context.Context, config PaginationConfig, fetcher 
 	}
 
 	return results, nil
+}
+
+// FetchCursorPages fetches one or more cursor-based pages using the shared
+// pagination config. maxItems uses the same semantics as FetchAllPages:
+// 0 means unlimited, values >0 cap the total returned items.
+func FetchCursorPages[T any](ctx context.Context, limit int, maxItems int, fetcher PageFetcher[T]) ([]T, error) {
+	config := DefaultPaginationConfig()
+	config.PageSize = NormalizePageSize(limit)
+	config.MaxItems = maxItems
+	return FetchAllPages(ctx, config, fetcher)
+}
+
+// PaginationMode distinguishes between the three pagination behaviors.
+type PaginationMode int
+
+const (
+	// PaginateSinglePage fetches one page only.
+	PaginateSinglePage PaginationMode = iota
+	// PaginateWithCap fetches multiple pages up to MaxItems.
+	PaginateWithCap
+	// PaginateAll fetches every page with no cap.
+	PaginateAll
+)
+
+// PaginationLimits holds the resolved pagination parameters after applying
+// auto-pagination logic. Use SetupPagination to compute these from user flags.
+type PaginationLimits struct {
+	Limit    int            // Per-page limit to pass to the API
+	MaxItems int            // Total items to fetch (only meaningful when Mode == PaginateWithCap)
+	Mode     PaginationMode // Which pagination behavior to use
+}
+
+// SetupPagination resolves pagination parameters from user-provided flags.
+// When limit exceeds MaxAPILimit, it enables auto-pagination.
+// When fetchAll is true, it fetches all items up to maxItems (0 = unlimited).
+//
+// This eliminates duplicate logic across list commands (contacts, email, etc.).
+func SetupPagination(limit int, fetchAll bool, maxItems int) PaginationLimits {
+	if fetchAll {
+		if maxItems > 0 {
+			return PaginationLimits{
+				Limit:    MaxAPILimit,
+				MaxItems: maxItems,
+				Mode:     PaginateWithCap,
+			}
+		}
+		return PaginationLimits{
+			Limit: MaxAPILimit,
+			Mode:  PaginateAll,
+		}
+	}
+	if limit > MaxAPILimit {
+		return PaginationLimits{
+			Limit:    MaxAPILimit,
+			MaxItems: limit,
+			Mode:     PaginateWithCap,
+		}
+	}
+	return PaginationLimits{
+		Limit: limit,
+		Mode:  PaginateSinglePage,
+	}
 }
 
 // FetchAllWithProgress fetches all pages and shows a progress indicator.

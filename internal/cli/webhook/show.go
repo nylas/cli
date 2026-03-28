@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
@@ -60,68 +61,49 @@ status, and notification settings.`,
 	return cmd
 }
 
-func displayWebhookDetails(webhook any) error {
-	data, _ := json.Marshal(webhook)
-	var w map[string]any
-	_ = json.Unmarshal(data, &w)
+func displayWebhookDetails(webhook *domain.Webhook) error {
+	statusIcon := common.StatusIcon(webhook.Status)
 
-	id := getString(w, "id")
-	desc := getString(w, "description")
-	url := getString(w, "webhook_url")
-	secret := getString(w, "webhook_secret")
-	status := getString(w, "status")
-
-	statusIcon := getStatusIcon(status)
-
-	fmt.Printf("Webhook: %s\n", id)
+	fmt.Printf("Webhook: %s\n", webhook.ID)
 	fmt.Println(strings.Repeat("─", 60))
 
-	if desc != "" {
-		fmt.Printf("Description:  %s\n", desc)
+	if webhook.Description != "" {
+		fmt.Printf("Description:  %s\n", webhook.Description)
 	}
-	fmt.Printf("URL:          %s\n", url)
-	fmt.Printf("Status:       %s %s\n", statusIcon, status)
+	fmt.Printf("URL:          %s\n", webhook.WebhookURL)
+	fmt.Printf("Status:       %s %s\n", statusIcon, webhook.Status)
 
-	if secret != "" {
-		fmt.Printf("Secret:       %s\n", maskSecret(secret))
+	if webhook.WebhookSecret != "" {
+		fmt.Printf("Secret:       %s\n", maskSecret(webhook.WebhookSecret))
 	}
 
 	// Trigger types
 	fmt.Println("\nTrigger Types:")
-	if triggers, ok := w["trigger_types"].([]any); ok {
-		for _, t := range triggers {
-			fmt.Printf("  • %s\n", t)
-		}
+	for _, trigger := range webhook.TriggerTypes {
+		fmt.Printf("  • %s\n", trigger)
 	}
 
 	// Notification emails
-	if emails, ok := w["notification_email_addresses"].([]any); ok && len(emails) > 0 {
+	if len(webhook.NotificationEmailAddresses) > 0 {
 		fmt.Println("\nNotification Emails:")
-		for _, e := range emails {
-			fmt.Printf("  • %s\n", e)
+		for _, email := range webhook.NotificationEmailAddresses {
+			fmt.Printf("  • %s\n", email)
 		}
 	}
 
 	// Timestamps
 	fmt.Println("\nTimestamps:")
-	if created := getString(w, "created_at"); created != "" {
-		fmt.Printf("  Created:        %s\n", created)
+	if !webhook.CreatedAt.IsZero() {
+		fmt.Printf("  Created:        %s\n", webhook.CreatedAt.Format(time.RFC3339))
 	}
-	if updated := getString(w, "updated_at"); updated != "" {
-		fmt.Printf("  Updated:        %s\n", updated)
+	if !webhook.UpdatedAt.IsZero() {
+		fmt.Printf("  Updated:        %s\n", webhook.UpdatedAt.Format(time.RFC3339))
 	}
-	if statusUpdated := getString(w, "status_updated_at"); statusUpdated != "" {
-		fmt.Printf("  Status Updated: %s\n", statusUpdated)
+	if !webhook.StatusUpdatedAt.IsZero() {
+		fmt.Printf("  Status Updated: %s\n", webhook.StatusUpdatedAt.Format(time.RFC3339))
 	}
 
 	return nil
-}
-
-func getString(m map[string]any, key string) string {
-	if v, ok := m[key]; ok {
-		return fmt.Sprintf("%v", v)
-	}
-	return ""
 }
 
 // maskSecret masks a secret for display, showing first 4 and last 4 characters.

@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
-
-// Note: fatih/color import needed for getStatusColor return type (*color.Color)
 
 func newBookingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -63,18 +60,8 @@ func newBookingListCmd() *cobra.Command {
 
 				table := common.NewTable("TITLE", "ID", "START TIME", "STATUS")
 				for _, b := range bookings {
-					status := b.Status
-					switch b.Status {
-					case "confirmed":
-						status = common.Green.Sprint(status)
-					case "pending":
-						status = common.Yellow.Sprint(status)
-					case "cancelled":
-						status = common.Dim.Sprint(status)
-					}
-
 					startTime := b.StartTime.Format("2006-01-02 15:04")
-					table.AddRow(common.Cyan.Sprint(b.Title), b.BookingID, startTime, status)
+					table.AddRow(common.Cyan.Sprint(b.Title), b.BookingID, startTime, common.ColorSprint(b.Status))
 				}
 				table.Render()
 
@@ -112,7 +99,7 @@ func newBookingShowCmd() *cobra.Command {
 
 				_, _ = common.Bold.Printf("Booking: %s\n", booking.Title)
 				fmt.Printf("  ID: %s\n", common.Cyan.Sprint(booking.BookingID))
-				fmt.Printf("  Status: %s\n", getStatusColor(booking.Status).Sprint(booking.Status))
+				fmt.Printf("  Status: %s\n", common.ColorSprint(booking.Status))
 				fmt.Printf("  Start: %s\n", booking.StartTime.Format(time.RFC1123))
 				fmt.Printf("  End: %s\n", booking.EndTime.Format(time.RFC1123))
 
@@ -300,17 +287,4 @@ func newBookingCancelCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
 
 	return cmd
-}
-
-func getStatusColor(status string) *color.Color {
-	switch status {
-	case "confirmed":
-		return common.Green
-	case "pending":
-		return common.Yellow
-	case "cancelled":
-		return common.Dim
-	default:
-		return common.Reset
-	}
 }

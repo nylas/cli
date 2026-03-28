@@ -58,26 +58,23 @@ func TestHelperFunctions(t *testing.T) {
 		assert.Equal(t, "hello", result)
 	})
 
-	t.Run("getStatusIcon_active", func(t *testing.T) {
-		result := getStatusIcon("active")
+	t.Run("StatusIcon_active", func(t *testing.T) {
+		result := common.StatusIcon("active")
 		assert.Contains(t, result, "●")
-		// Color codes are only present in TTY environments
 	})
 
-	t.Run("getStatusIcon_inactive", func(t *testing.T) {
-		result := getStatusIcon("inactive")
+	t.Run("StatusIcon_inactive", func(t *testing.T) {
+		result := common.StatusIcon("inactive")
 		assert.Contains(t, result, "●")
-		// Color codes are only present in TTY environments
 	})
 
-	t.Run("getStatusIcon_failing", func(t *testing.T) {
-		result := getStatusIcon("failing")
+	t.Run("StatusIcon_failing", func(t *testing.T) {
+		result := common.StatusIcon("failing")
 		assert.Contains(t, result, "●")
-		// Color codes are only present in TTY environments
 	})
 
-	t.Run("getStatusIcon_unknown", func(t *testing.T) {
-		result := getStatusIcon("unknown")
+	t.Run("StatusIcon_unknown", func(t *testing.T) {
+		result := common.StatusIcon("unknown")
 		assert.Equal(t, "○", result)
 	})
 

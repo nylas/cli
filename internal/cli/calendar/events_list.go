@@ -54,11 +54,11 @@ Examples:
 				}
 			}
 
-			// Auto-paginate when limit exceeds API maximum
+			pag := common.SetupPagination(limit, false, 0)
+			limit = pag.Limit
 			maxItems := 0
-			if limit > common.MaxAPILimit {
-				maxItems = limit
-				limit = common.MaxAPILimit
+			if pag.Mode == common.PaginateWithCap {
+				maxItems = pag.MaxItems
 			}
 
 			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
@@ -84,38 +84,9 @@ Examples:
 					params.ShowCancelled = true
 				}
 
-				var events []domain.Event
-				if maxItems > 0 {
-					// Paginated fetch for large limits
-					pageSize := min(limit, common.MaxAPILimit)
-					params.Limit = pageSize
-
-					fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Event], error) {
-						params.PageToken = cursor
-						resp, err := client.GetEventsWithCursor(ctx, grantID, calID, params)
-						if err != nil {
-							return common.PageResult[domain.Event]{}, err
-						}
-						return common.PageResult[domain.Event]{
-							Data:       resp.Data,
-							NextCursor: resp.Pagination.NextCursor,
-						}, nil
-					}
-
-					config := common.DefaultPaginationConfig()
-					config.PageSize = pageSize
-					config.MaxItems = maxItems
-
-					events, err = common.FetchAllPages(ctx, config, fetcher)
-					if err != nil {
-						return struct{}{}, common.WrapListError("events", err)
-					}
-				} else {
-					// Standard single-page fetch
-					events, err = client.GetEvents(ctx, grantID, calID, params)
-					if err != nil {
-						return struct{}{}, common.WrapListError("events", err)
-					}
+				events, err := fetchEvents(ctx, client, grantID, calID, params, maxItems)
+				if err != nil {
+					return struct{}{}, common.WrapListError("events", err)
 				}
 
 				// JSON output (including empty array)
@@ -222,4 +193,27 @@ Examples:
 	cmd.Flags().BoolVar(&showTZ, "show-tz", false, "Show timezone abbreviations (e.g., PST, EST)")
 
 	return cmd
+}
+
+func fetchEvents(ctx context.Context, client ports.NylasClient, grantID, calendarID string, params *domain.EventQueryParams, maxItems int) ([]domain.Event, error) {
+	if maxItems <= 0 {
+		return client.GetEvents(ctx, grantID, calendarID, params)
+	}
+
+	pageSize := common.NormalizePageSize(params.Limit)
+	params.Limit = pageSize
+
+	fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Event], error) {
+		params.PageToken = cursor
+		resp, err := client.GetEventsWithCursor(ctx, grantID, calendarID, params)
+		if err != nil {
+			return common.PageResult[domain.Event]{}, err
+		}
+		return common.PageResult[domain.Event]{
+			Data:       resp.Data,
+			NextCursor: resp.Pagination.NextCursor,
+		}, nil
+	}
+
+	return common.FetchCursorPages(ctx, pageSize, maxItems, fetcher)
 }
