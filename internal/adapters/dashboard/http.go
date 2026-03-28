@@ -46,6 +46,16 @@ func (c *AccountClient) doPost(ctx context.Context, path string, body any, extra
 	return nil
 }
 
+// setDPoPProof generates and sets the DPoP proof header on the request.
+func (c *AccountClient) setDPoPProof(req *http.Request, method, fullURL, accessToken string) error {
+	proof, err := c.dpop.GenerateProof(method, fullURL, accessToken)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("DPoP", proof)
+	return nil
+}
+
 // doPostRaw sends a JSON POST request and returns the raw response body.
 func (c *AccountClient) doPostRaw(ctx context.Context, path string, body any, extraHeaders map[string]string, accessToken string) ([]byte, error) {
 	fullURL := c.baseURL + path
@@ -68,12 +78,9 @@ func (c *AccountClient) doPostRaw(ctx context.Context, path string, body any, ex
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// Add DPoP proof
-	proof, err := c.dpop.GenerateProof(http.MethodPost, fullURL, accessToken)
-	if err != nil {
+	if err := c.setDPoPProof(req, http.MethodPost, fullURL, accessToken); err != nil {
 		return nil, err
 	}
-	req.Header.Set("DPoP", proof)
 
 	// Add extra headers (Authorization, X-Nylas-Org)
 	for k, v := range extraHeaders {
@@ -135,12 +142,9 @@ func (c *AccountClient) doGetRaw(ctx context.Context, path string, extraHeaders 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add DPoP proof
-	proof, err := c.dpop.GenerateProof(http.MethodGet, fullURL, accessToken)
-	if err != nil {
+	if err := c.setDPoPProof(req, http.MethodGet, fullURL, accessToken); err != nil {
 		return nil, err
 	}
-	req.Header.Set("DPoP", proof)
 
 	for k, v := range extraHeaders {
 		req.Header.Set(k, v)

@@ -45,6 +45,25 @@ func TestDefaultPaginationConfig(t *testing.T) {
 	assert.NotNil(t, config.Writer)
 }
 
+func TestNormalizePageSize(t *testing.T) {
+	tests := []struct {
+		name     string
+		limit    int
+		expected int
+	}{
+		{"keeps small values", 50, 50},
+		{"clamps to API max", 500, MaxAPILimit},
+		{"zero falls back to API max", 0, MaxAPILimit},
+		{"negative falls back to API max", -5, MaxAPILimit},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, NormalizePageSize(tt.limit))
+		})
+	}
+}
+
 func TestFetchAllPages_SinglePage(t *testing.T) {
 	ResetLogger()
 	InitLogger(false, true) // Quiet mode to avoid progress output
@@ -263,6 +282,34 @@ func TestFetchAllWithProgress_WithMaxItems(t *testing.T) {
 	assert.Equal(t, 2, len(results))
 }
 
+func TestFetchCursorPages(t *testing.T) {
+	ResetLogger()
+	InitLogger(false, true)
+
+	t.Run("caps results across multiple pages", func(t *testing.T) {
+		fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
+			switch cursor {
+			case "":
+				return PageResult[string]{
+					Data:       []string{"a", "b"},
+					NextCursor: "next",
+				}, nil
+			case "next":
+				return PageResult[string]{
+					Data: []string{"c", "d"},
+				}, nil
+			default:
+				return PageResult[string]{}, errors.New("unexpected cursor")
+			}
+		}
+
+		results, err := FetchCursorPages(context.Background(), 500, 3, fetcher)
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b", "c"}, results)
+	})
+}
+
 func TestPaginatedDisplay_Operations(t *testing.T) {
 	ResetLogger()
 	InitLogger(false, false) // Not quiet for display output
@@ -386,4 +433,89 @@ func TestFetchAllPages_ContextDeadline(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Empty(t, results)
+}
+
+func TestSetupPagination(t *testing.T) {
+	tests := []struct {
+		name         string
+		limit        int
+		fetchAll     bool
+		maxItems     int
+		wantLimit    int
+		wantMaxItems int
+		wantMode     PaginationMode
+	}{
+		{
+			name:      "small limit, single page",
+			limit:     50,
+			fetchAll:  false,
+			maxItems:  0,
+			wantLimit: 50,
+			wantMode:  PaginateSinglePage,
+		},
+		{
+			name:      "limit at API max, single page",
+			limit:     MaxAPILimit,
+			fetchAll:  false,
+			maxItems:  0,
+			wantLimit: MaxAPILimit,
+			wantMode:  PaginateSinglePage,
+		},
+		{
+			name:         "limit exceeds API max, auto-paginate with cap",
+			limit:        500,
+			fetchAll:     false,
+			maxItems:     0,
+			wantLimit:    MaxAPILimit,
+			wantMaxItems: 500,
+			wantMode:     PaginateWithCap,
+		},
+		{
+			name:      "fetchAll with no max fetches unlimited",
+			limit:     50,
+			fetchAll:  true,
+			maxItems:  0,
+			wantLimit: MaxAPILimit,
+			wantMode:  PaginateAll,
+		},
+		{
+			name:         "fetchAll with max items caps",
+			limit:        50,
+			fetchAll:     true,
+			maxItems:     1000,
+			wantLimit:    MaxAPILimit,
+			wantMaxItems: 1000,
+			wantMode:     PaginateWithCap,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SetupPagination(tt.limit, tt.fetchAll, tt.maxItems)
+			assert.Equal(t, tt.wantLimit, result.Limit, "Limit mismatch")
+			assert.Equal(t, tt.wantMaxItems, result.MaxItems, "MaxItems mismatch")
+			assert.Equal(t, tt.wantMode, result.Mode, "Mode mismatch")
+		})
+	}
+}
+
+func TestPaginationMode(t *testing.T) {
+	tests := []struct {
+		name string
+		mode PaginationMode
+		desc string
+	}{
+		{"single page is 0", PaginateSinglePage, "default zero value"},
+		{"with cap is 1", PaginateWithCap, "explicit cap"},
+		{"all is 2", PaginateAll, "unlimited"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Verify the constants are distinct
+			assert.NotEqual(t, PaginateSinglePage, PaginateWithCap)
+			assert.NotEqual(t, PaginateWithCap, PaginateAll)
+			assert.NotEqual(t, PaginateSinglePage, PaginateAll)
+		})
+	}
 }

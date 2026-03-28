@@ -3,7 +3,6 @@ package webhook
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -89,50 +88,35 @@ Shows webhook ID, description, URL, status, and trigger types.`,
 	return cmd
 }
 
-func outputJSON(webhooks any) error {
+func outputJSON(webhooks []domain.Webhook) error {
 	return common.PrintJSON(webhooks)
 }
 
-func outputYAML(webhooks any) error {
+func outputYAML(webhooks []domain.Webhook) error {
 	return yaml.NewEncoder(os.Stdout).Encode(webhooks)
 }
 
-func outputCSV(webhooks any) error {
+func outputCSV(webhooks []domain.Webhook) error {
 	w := csv.NewWriter(os.Stdout)
 	defer w.Flush()
 
 	// Write header
 	_ = w.Write([]string{"ID", "Description", "URL", "Status", "Triggers"})
 
-	// Get webhooks as slice
-	data, _ := json.Marshal(webhooks)
-	var items []map[string]any
-	_ = json.Unmarshal(data, &items)
-
-	for _, item := range items {
-		id, _ := item["id"].(string)
-		desc, _ := item["description"].(string)
-		url, _ := item["webhook_url"].(string)
-		status, _ := item["status"].(string)
-
-		var triggers []string
-		if triggerList, ok := item["trigger_types"].([]any); ok {
-			for _, t := range triggerList {
-				triggers = append(triggers, fmt.Sprintf("%v", t))
-			}
-		}
-
-		_ = w.Write([]string{id, desc, url, status, strings.Join(triggers, ";")})
+	for _, webhook := range webhooks {
+		_ = w.Write([]string{
+			webhook.ID,
+			webhook.Description,
+			webhook.WebhookURL,
+			webhook.Status,
+			strings.Join(webhook.TriggerTypes, ";"),
+		})
 	}
 
 	return nil
 }
 
-func outputTable(webhooks any, fullIDs bool) error {
-	data, _ := json.Marshal(webhooks)
-	var items []map[string]any
-	_ = json.Unmarshal(data, &items)
-
+func outputTable(webhooks []domain.Webhook, fullIDs bool) error {
 	// Calculate column widths
 	headers := []string{"ID", "Description", "URL", "Status", "Triggers"}
 	widths := make([]int, len(headers))
@@ -145,25 +129,19 @@ func outputTable(webhooks any, fullIDs bool) error {
 	}
 	var rows []row
 
-	for _, item := range items {
-		id := fmt.Sprintf("%v", item["id"])
+	for _, webhook := range webhooks {
+		id := webhook.ID
 		if !fullIDs {
 			id = common.Truncate(id, 20)
 		}
 		r := row{
 			id:     id,
-			desc:   common.Truncate(fmt.Sprintf("%v", item["description"]), 25),
-			url:    common.Truncate(fmt.Sprintf("%v", item["webhook_url"]), 35),
-			status: fmt.Sprintf("%v", item["status"]),
+			desc:   common.Truncate(webhook.Description, 25),
+			url:    common.Truncate(webhook.WebhookURL, 35),
+			status: webhook.Status,
 		}
 
-		var triggers []string
-		if triggerList, ok := item["trigger_types"].([]any); ok {
-			for _, t := range triggerList {
-				triggers = append(triggers, fmt.Sprintf("%v", t))
-			}
-		}
-		r.triggers = common.Truncate(strings.Join(triggers, ", "), 30)
+		r.triggers = common.Truncate(strings.Join(webhook.TriggerTypes, ", "), 30)
 
 		rows = append(rows, r)
 
@@ -203,7 +181,7 @@ func outputTable(webhooks any, fullIDs bool) error {
 
 	// Print rows
 	for _, r := range rows {
-		statusIcon := getStatusIcon(r.status)
+		statusIcon := common.StatusIcon(r.status)
 		fmt.Printf("%-*s  %-*s  %-*s  %s %-*s  %s\n",
 			widths[0], r.id,
 			widths[1], r.desc,
@@ -214,17 +192,4 @@ func outputTable(webhooks any, fullIDs bool) error {
 
 	fmt.Printf("\nTotal: %d webhooks\n", len(rows))
 	return nil
-}
-
-func getStatusIcon(status string) string {
-	switch status {
-	case "active":
-		return common.Green.Sprint("●")
-	case "inactive":
-		return common.Yellow.Sprint("●")
-	case "failing":
-		return common.Red.Sprint("●")
-	default:
-		return "○"
-	}
 }

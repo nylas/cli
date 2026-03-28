@@ -161,10 +161,7 @@ func fetchMessages(ctx context.Context, client messagesClient, grantID string, p
 		return client.GetMessagesWithParams(ctx, grantID, params)
 	}
 
-	pageSize := min(params.Limit, common.MaxAPILimit)
-	if pageSize <= 0 {
-		pageSize = common.MaxAPILimit
-	}
+	pageSize := common.NormalizePageSize(params.Limit)
 	params.Limit = pageSize
 
 	fetcher := func(ctx context.Context, cursor string) (common.PageResult[domain.Message], error) {
@@ -179,11 +176,7 @@ func fetchMessages(ctx context.Context, client messagesClient, grantID string, p
 		}, nil
 	}
 
-	config := common.DefaultPaginationConfig()
-	config.PageSize = pageSize
-	config.MaxItems = maxItems
-
-	return common.FetchAllPages(ctx, config, fetcher)
+	return common.FetchCursorPages(ctx, pageSize, maxItems, fetcher)
 }
 
 // parseDate parses a date string in YYYY-MM-DD format using local timezone.

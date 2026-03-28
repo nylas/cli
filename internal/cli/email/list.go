@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -50,68 +51,26 @@ Use --max to limit total messages when using --all.`,
   nylas email list --all --max 500`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check if we should use structured output (JSON/YAML/quiet)
-			if common.IsStructuredOutput(cmd) {
-				return runListStructured(cmd, args, limit, unread, starred, from, folder, allFolders, all, maxItems, metadataPair)
+			opts := listOptions{
+				limit:        limit,
+				unread:       unread,
+				starred:      starred,
+				from:         from,
+				folder:       folder,
+				allFolders:   allFolders,
+				all:          all,
+				maxItems:     maxItems,
+				metadataPair: metadataPair,
 			}
 
-			// Auto-paginate when limit exceeds API maximum
-			if limit > common.MaxAPILimit && !all {
-				maxItems = limit
-				limit = common.MaxAPILimit
-			} else if !all {
-				maxItems = -1 // single-page fetch
+			// Check if we should use structured output (JSON/YAML/quiet)
+			if common.IsStructuredOutput(cmd) {
+				return runListStructured(cmd, args, opts)
 			}
 
 			// Traditional formatted output
 			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				params := &domain.MessageQueryParams{
-					Limit: limit,
-				}
-
-				if cmd.Flags().Changed("unread") {
-					params.Unread = &unread
-				}
-				if cmd.Flags().Changed("starred") {
-					params.Starred = &starred
-				}
-				if from != "" {
-					params.From = from
-				}
-				if metadataPair != "" {
-					params.MetadataPair = metadataPair
-				}
-
-				// Default to INBOX unless --all-folders is set or specific folder is provided
-				if folder != "" {
-					// Resolve folder name to ID if needed (for Microsoft accounts)
-					resolvedFolder, err := resolveFolderName(ctx, client, grantID, folder)
-					if err != nil {
-						// API error - warn user but continue with literal name
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not resolve folder '%s': %v\n", folder, err)
-						params.In = []string{folder}
-					} else if resolvedFolder != "" {
-						params.In = []string{resolvedFolder}
-					} else {
-						// Folder not found by name, use literal
-						params.In = []string{folder}
-					}
-				} else if !allFolders {
-					// Try to find inbox folder ID (works for both Google and Microsoft)
-					inboxID, err := resolveFolderName(ctx, client, grantID, "INBOX")
-					if err != nil {
-						// API error - warn but fallback to literal INBOX
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not resolve INBOX folder: %v\n", err)
-						params.In = []string{"INBOX"}
-					} else if inboxID != "" {
-						params.In = []string{inboxID}
-					} else {
-						// Fallback to INBOX (works for Google)
-						params.In = []string{"INBOX"}
-					}
-				}
-
-				messages, err := fetchMessages(ctx, client, grantID, params, maxItems)
+				messages, err := fetchListMessages(ctx, cmd, client, grantID, opts)
 				if err != nil {
 					return struct{}{}, common.WrapFetchError("messages", err)
 				}
@@ -144,6 +103,59 @@ Use --max to limit total messages when using --all.`,
 	cmd.Flags().StringVar(&metadataPair, "metadata", "", "Filter by metadata (format: key:value, only key1-key5 supported)")
 
 	return cmd
+}
+
+type listOptions struct {
+	limit        int
+	unread       bool
+	starred      bool
+	from         string
+	folder       string
+	allFolders   bool
+	all          bool
+	maxItems     int
+	metadataPair string
+}
+
+func resolveListPagination(limit int, all bool, maxItems int) (int, int) {
+	pag := common.SetupPagination(limit, all, maxItems)
+	limit = pag.Limit
+
+	switch pag.Mode {
+	case common.PaginateSinglePage:
+		return limit, -1 // fetchMessages uses -1 for single-page
+	case common.PaginateAll:
+		return limit, 0 // fetchMessages uses 0 for unlimited
+	case common.PaginateWithCap:
+		return limit, pag.MaxItems
+	default:
+		return limit, -1
+	}
+}
+
+func fetchListMessages(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, grantID string, opts listOptions) ([]domain.Message, error) {
+	limit, maxItems := resolveListPagination(opts.limit, opts.all, opts.maxItems)
+
+	params := &domain.MessageQueryParams{
+		Limit: limit,
+	}
+
+	if cmd.Flags().Changed("unread") {
+		params.Unread = &opts.unread
+	}
+	if cmd.Flags().Changed("starred") {
+		params.Starred = &opts.starred
+	}
+	if opts.from != "" {
+		params.From = opts.from
+	}
+	if opts.metadataPair != "" {
+		params.MetadataPair = opts.metadataPair
+	}
+
+	applyListFolderFilter(ctx, cmd.ErrOrStderr(), client, grantID, params, opts.folder, opts.allFolders)
+
+	return fetchMessages(ctx, client, grantID, params, maxItems)
 }
 
 // resolveFolderName looks up a folder by name and returns its ID.
@@ -196,67 +208,61 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 	return "", nil
 }
 
-// runListStructured handles structured output (JSON/YAML/quiet) for the list command.
-func runListStructured(cmd *cobra.Command, args []string, limit int, unread, starred bool,
-	from, folder string, allFolders, all bool, maxItems int, metadataPair string) error {
+func applyListFolderFilter(ctx context.Context, stderr io.Writer, client ports.NylasClient, grantID string, params *domain.MessageQueryParams, folder string, allFolders bool) {
+	if folder != "" {
+		// Resolve folder name to ID if needed (for Microsoft accounts)
+		resolvedFolder, err := resolveFolderName(ctx, client, grantID, folder)
+		if err != nil {
+			// API error - warn user but continue with literal name
+			_, _ = fmt.Fprintf(stderr, "Warning: could not resolve folder '%s': %v\n", folder, err)
+			params.In = []string{folder}
+			return
+		}
+		if resolvedFolder != "" {
+			params.In = []string{resolvedFolder}
+			return
+		}
 
-	// Auto-paginate when limit exceeds API maximum
-	if limit > common.MaxAPILimit && !all {
-		maxItems = limit
-		limit = common.MaxAPILimit
-	} else if !all {
-		maxItems = -1 // single-page fetch
+		// Folder not found by name, use literal
+		params.In = []string{folder}
+		return
 	}
 
+	if allFolders {
+		return
+	}
+
+	// Try to find inbox folder ID (works for both Google and Microsoft)
+	inboxID, err := resolveFolderName(ctx, client, grantID, "INBOX")
+	if err != nil {
+		// API error - warn but fallback to literal INBOX
+		_, _ = fmt.Fprintf(stderr, "Warning: could not resolve INBOX folder: %v\n", err)
+		params.In = []string{"INBOX"}
+		return
+	}
+	if inboxID != "" {
+		params.In = []string{inboxID}
+		return
+	}
+
+	// Fallback to INBOX (works for Google)
+	params.In = []string{"INBOX"}
+}
+
+// runListStructured handles structured output (JSON/YAML/quiet) for the list command.
+func runListStructured(cmd *cobra.Command, args []string, opts listOptions) error {
 	_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-		params := &domain.MessageQueryParams{
-			Limit: limit,
-		}
-
-		if cmd.Flags().Changed("unread") {
-			params.Unread = &unread
-		}
-		if cmd.Flags().Changed("starred") {
-			params.Starred = &starred
-		}
-		if from != "" {
-			params.From = from
-		}
-		if metadataPair != "" {
-			params.MetadataPair = metadataPair
-		}
-
-		// Default to INBOX unless --all-folders is set or specific folder is provided
-		if folder != "" {
-			resolvedFolder, err := resolveFolderName(ctx, client, grantID, folder)
-			if err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not resolve folder '%s': %v\n", folder, err)
-				params.In = []string{folder}
-			} else if resolvedFolder != "" {
-				params.In = []string{resolvedFolder}
-			} else {
-				params.In = []string{folder}
-			}
-		} else if !allFolders {
-			inboxID, err := resolveFolderName(ctx, client, grantID, "INBOX")
-			if err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not resolve INBOX folder: %v\n", err)
-				params.In = []string{"INBOX"}
-			} else if inboxID != "" {
-				params.In = []string{inboxID}
-			} else {
-				params.In = []string{"INBOX"}
-			}
-		}
-
-		messages, err := fetchMessages(ctx, client, grantID, params, maxItems)
-		if err != nil {
-			return struct{}{}, common.WrapFetchError("messages", err)
-		}
-
-		// Output structured data
-		out := common.GetOutputWriter(cmd)
-		return struct{}{}, out.Write(messages)
+		return struct{}{}, writeListStructured(ctx, cmd, client, grantID, opts)
 	})
 	return err
+}
+
+func writeListStructured(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, grantID string, opts listOptions) error {
+	messages, err := fetchListMessages(ctx, cmd, client, grantID, opts)
+	if err != nil {
+		return common.WrapFetchError("messages", err)
+	}
+
+	out := common.GetOutputWriter(cmd)
+	return out.Write(messages)
 }

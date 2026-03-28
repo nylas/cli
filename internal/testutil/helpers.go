@@ -3,6 +3,9 @@
 package testutil
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -252,6 +255,38 @@ func AssertNotEmpty[T any](t *testing.T, slice []T, msg string) {
 	if len(slice) == 0 {
 		t.Errorf("%s: expected non-empty slice, got empty slice", msg)
 	}
+}
+
+// WriteJSONResponse writes a JSON response to an http.ResponseWriter in tests.
+// This eliminates the duplicate pattern of setting Content-Type, writing status,
+// and encoding JSON that appears 180+ times across test files.
+//
+// Safe to call from httptest.NewServer handler goroutines — on encode failure it
+// writes a 500 error response instead of calling t.Fatalf (which is unsafe from
+// non-test goroutines).
+//
+// Example:
+//
+//	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//	    testutil.WriteJSONResponse(t, w, http.StatusOK, map[string]string{"id": "123"})
+//	}))
+func WriteJSONResponse(t *testing.T, w http.ResponseWriter, statusCode int, data any) {
+	t.Helper()
+
+	// Encode into a buffer first so that on failure we can return 500
+	// instead of a success status with a broken body. Writing headers
+	// is deferred until we know encoding succeeded.
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(data); err != nil {
+		// t.Errorf is safe from any goroutine (unlike t.Fatalf).
+		t.Errorf("WriteJSONResponse: failed to encode JSON: %v", err)
+		http.Error(w, "WriteJSONResponse: encode failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_, _ = w.Write(buf.Bytes())
 }
 
 // Helper function to check if string contains substring

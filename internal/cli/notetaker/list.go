@@ -95,24 +95,13 @@ func newListCmd() *cobra.Command {
 }
 
 func formatState(state string) string {
+	// Map API state names to display-friendly labels
+	displayName := state
 	switch state {
-	case domain.NotetakerStateScheduled:
-		return common.Yellow.Sprint("scheduled")
-	case domain.NotetakerStateConnecting:
-		return common.Cyan.Sprint("connecting")
 	case domain.NotetakerStateWaitingForEntry:
-		return common.Cyan.Sprint("waiting")
-	case domain.NotetakerStateAttending:
-		return common.Green.Sprint("attending")
+		displayName = "waiting"
 	case domain.NotetakerStateMediaProcessing:
-		return common.Cyan.Sprint("processing")
-	case domain.NotetakerStateComplete:
-		return common.Green.Sprint("complete")
-	case domain.NotetakerStateCancelled:
-		return common.Dim.Sprint("cancelled")
-	case domain.NotetakerStateFailed:
-		return common.Red.Sprint("failed")
-	default:
-		return state
+		displayName = "processing"
 	}
+	return common.StatusColor(state).Sprint(displayName)
 }

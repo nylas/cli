@@ -7,8 +7,6 @@ Quick reference for AI assistants working on this codebase.
 ## ⛔ CRITICAL RULES - YOU MUST FOLLOW THESE
 
 ### NEVER DO (IMPORTANT - violations will break the workflow):
-- **NEVER run `git commit`** - User commits manually
-- **NEVER run `git push`** - User pushes manually
 - **NEVER commit secrets** - No API keys, tokens, passwords, .env files
 - **NEVER skip tests** - All changes require passing tests
 - **NEVER skip security scans** - Run `make security` before commits
@@ -139,31 +137,17 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 
 ## Testing
 
-**Command:** `make ci-full` (complete CI: quality + tests + cleanup)
-
-**Quick checks:** `make ci` (no integration tests)
-
 **Details:** `.claude/rules/testing.md`
 
 ---
 
-## Hooks & Commands
+## Hooks, Skills & Agents
 
-**Hooks:** Auto-enforce quality (blocks bad code, auto-formats). See `.claude/HOOKS-CONFIG.md`
+**Hooks:** Auto-enforce quality. See `.claude/HOOKS-CONFIG.md`
 
-**Skills:** `/session-start`, `/run-tests`, `/add-command`, `/generate-tests`, `/security-scan`
+**Skills:** `/run-tests`, `/add-command`, `/generate-tests`, `/security-scan`
 
-**Agents:** See `.claude/agents/README.md` for parallelization guide
-
----
-
-## Context & Session
-
-**Token tips:** Use `/compact` mid-session, `/clear` for new tasks, `/mcp` to disable unused servers
-
-**On-demand docs:** `docs/COMMANDS.md`, `docs/ARCHITECTURE.md`, `.claude/shared/patterns/*.md`
-
-**Session handoff:** Use `/diary` skill to record progress after major tasks
+**Agents:** See `.claude/agents/README.md`
 
 ---
 
@@ -206,6 +190,10 @@ This section captures lessons learned from mistakes. Claude updates this section
 - AI clients: Use shared helpers in `adapters/ai/base_client.go` (ConvertMessagesToMaps, ConvertToolsOpenAIFormat, FallbackStreamChat)
 - Output formatting: Use `common.GetOutputWriter(cmd)` for JSON/YAML/quiet support, NEVER create custom --format flags
 - Client helpers: Use `common.WithClient()` and `WithClientNoGrant()` to reduce boilerplate, NEVER duplicate setup code
+- Status colors: Use `common.StatusColor()`/`StatusIcon()`/`ColorSprint()`, NEVER create package-local status color functions
+- Pagination: Use `common.SetupPagination()` for limit/maxItems resolution, NEVER duplicate auto-pagination logic in list commands
+- Pagination helpers: Use `common.NormalizePageSize()` and `FetchCursorPages()` for cursor-based pagination boilerplate
+- Test JSON responses: Use `testutil.WriteJSONResponse()` in httptest handlers, NEVER repeat the Content-Type/WriteHeader/Encode triplet
 
 ### Non-Obvious Workflows
 - Progressive disclosure: Keep main skill files under 100 lines, use references/ for details

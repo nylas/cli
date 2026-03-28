@@ -125,7 +125,7 @@ You can update the URL, triggers, description, notification emails, or status.`,
 				fmt.Println()
 				fmt.Printf("  ID:     %s\n", webhook.ID)
 				fmt.Printf("  URL:    %s\n", webhook.WebhookURL)
-				fmt.Printf("  Status: %s %s\n", getStatusIcon(webhook.Status), webhook.Status)
+				fmt.Printf("  Status: %s %s\n", common.StatusIcon(webhook.Status), webhook.Status)
 
 				if len(webhook.TriggerTypes) > 0 {
 					fmt.Println("\nTriggers:")
