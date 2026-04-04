@@ -21,6 +21,18 @@ type CallbackURI struct {
 	URL      string `json:"url,omitempty"`
 }
 
+// CreateCallbackURIRequest represents a request to create a callback URI
+type CreateCallbackURIRequest struct {
+	URL      string `json:"url"`
+	Platform string `json:"platform"`
+}
+
+// UpdateCallbackURIRequest represents a request to update a callback URI
+type UpdateCallbackURIRequest struct {
+	URL      *string `json:"url,omitempty"`
+	Platform *string `json:"platform,omitempty"`
+}
+
 // BrandingSettings represents application branding configuration
 type BrandingSettings struct {
 	Name              string `json:"name,omitempty"`

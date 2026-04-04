@@ -40,6 +40,47 @@ func (m *MockClient) DeleteApplication(ctx context.Context, appID string) error 
 	return nil
 }
 
+func (m *MockClient) ListCallbackURIs(ctx context.Context) ([]domain.CallbackURI, error) {
+	return []domain.CallbackURI{
+		{ID: "cb-1", URL: "http://localhost:9007/callback", Platform: "web"},
+	}, nil
+}
+
+func (m *MockClient) GetCallbackURI(ctx context.Context, uriID string) (*domain.CallbackURI, error) {
+	return &domain.CallbackURI{
+		ID:       uriID,
+		URL:      "http://localhost:9007/callback",
+		Platform: "web",
+	}, nil
+}
+
+func (m *MockClient) CreateCallbackURI(ctx context.Context, req *domain.CreateCallbackURIRequest) (*domain.CallbackURI, error) {
+	return &domain.CallbackURI{
+		ID:       "cb-new",
+		URL:      req.URL,
+		Platform: req.Platform,
+	}, nil
+}
+
+func (m *MockClient) UpdateCallbackURI(ctx context.Context, uriID string, req *domain.UpdateCallbackURIRequest) (*domain.CallbackURI, error) {
+	uri := &domain.CallbackURI{
+		ID:       uriID,
+		URL:      "http://localhost:9007/callback",
+		Platform: "web",
+	}
+	if req.URL != nil {
+		uri.URL = *req.URL
+	}
+	if req.Platform != nil {
+		uri.Platform = *req.Platform
+	}
+	return uri, nil
+}
+
+func (m *MockClient) DeleteCallbackURI(ctx context.Context, uriID string) error {
+	return nil
+}
+
 func (m *MockClient) ListConnectors(ctx context.Context) ([]domain.Connector, error) {
 	return []domain.Connector{
 		{ID: "conn-1", Name: "Google Connector", Provider: "google"},

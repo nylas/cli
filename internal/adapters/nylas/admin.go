@@ -127,6 +127,94 @@ func (c *HTTPClient) DeleteApplication(ctx context.Context, appID string) error 
 	return c.doDelete(ctx, queryURL)
 }
 
+// Callback URI Operations
+
+// ListCallbackURIs retrieves all callback URIs for the application.
+func (c *HTTPClient) ListCallbackURIs(ctx context.Context) ([]domain.CallbackURI, error) {
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris", c.baseURL)
+
+	var result struct {
+		Data []domain.CallbackURI `json:"data"`
+	}
+	if err := c.doGet(ctx, queryURL, &result); err != nil {
+		return nil, err
+	}
+	return result.Data, nil
+}
+
+// GetCallbackURI retrieves a specific callback URI.
+func (c *HTTPClient) GetCallbackURI(ctx context.Context, uriID string) (*domain.CallbackURI, error) {
+	if err := validateRequired("callback URI ID", uriID); err != nil {
+		return nil, err
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+
+	var result struct {
+		Data domain.CallbackURI `json:"data"`
+	}
+	if err := c.doGetWithNotFound(ctx, queryURL, &result, domain.ErrCallbackURINotFound); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// CreateCallbackURI creates a new callback URI for the application.
+func (c *HTTPClient) CreateCallbackURI(ctx context.Context, req *domain.CreateCallbackURIRequest) (*domain.CallbackURI, error) {
+	if req == nil {
+		return nil, fmt.Errorf("create callback URI request is required")
+	}
+	if err := validateRequired("callback URI URL", req.URL); err != nil {
+		return nil, err
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris", c.baseURL)
+
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data domain.CallbackURI `json:"data"`
+	}
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// UpdateCallbackURI updates an existing callback URI.
+func (c *HTTPClient) UpdateCallbackURI(ctx context.Context, uriID string, req *domain.UpdateCallbackURIRequest) (*domain.CallbackURI, error) {
+	if err := validateRequired("callback URI ID", uriID); err != nil {
+		return nil, err
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+
+	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data domain.CallbackURI `json:"data"`
+	}
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// DeleteCallbackURI deletes a callback URI.
+func (c *HTTPClient) DeleteCallbackURI(ctx context.Context, uriID string) error {
+	if err := validateRequired("callback URI ID", uriID); err != nil {
+		return err
+	}
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+	return c.doDelete(ctx, queryURL)
+}
+
 // Admin Connectors
 
 // ListConnectors retrieves all connectors.

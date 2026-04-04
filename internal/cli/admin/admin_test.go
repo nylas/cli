@@ -28,7 +28,7 @@ func TestNewAdminCmd(t *testing.T) {
 
 	t.Run("has_required_subcommands", func(t *testing.T) {
 		// TODO: Add "credentials" back when implemented
-		expectedCmds := []string{"applications", "connectors", "grants"}
+		expectedCmds := []string{"applications", "callback-uris", "connectors", "grants"}
 
 		cmdMap := make(map[string]bool)
 		for _, sub := range cmd.Commands() {
