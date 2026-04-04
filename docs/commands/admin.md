@@ -63,6 +63,62 @@ Callback URIs (2):
   2. https://myapp.com/oauth/redirect
 ```
 
+### Callback URIs
+
+Manage OAuth callback URIs for your Nylas application. These are the redirect endpoints used during OAuth authentication flows.
+
+```bash
+# List callback URIs
+nylas admin callback-uris list
+nylas admin cb list                # Alias
+nylas admin callbacks list --json  # Output as JSON
+
+# Show callback URI details
+nylas admin callback-uris show <uri-id>
+nylas admin cb show <uri-id> --json
+
+# Create callback URI
+nylas admin callback-uris create --url http://localhost:9007/callback
+nylas admin cb create --url https://myapp.com/oauth/callback --platform web
+
+# Update callback URI
+nylas admin callback-uris update <uri-id> --url https://myapp.com/new-callback
+nylas admin cb update <uri-id> --platform ios
+
+# Delete callback URI
+nylas admin callback-uris delete <uri-id>
+nylas admin cb delete <uri-id> --yes  # Skip confirmation
+```
+
+**Example: List callback URIs**
+```bash
+$ nylas admin callback-uris list
+
+Found 2 callback URI(s):
+
+ID                                    URL                             PLATFORM
+f454b6d7-22e4-4f22-8536-35b6c2706a5d  http://localhost:8080/callback  web
+732ae831-06e4-4fe2-91de-bd20b099ff38  http://localhost:9007/callback  web
+```
+
+**Example: Create callback URI**
+```bash
+$ nylas admin cb create --url http://localhost:9007/callback
+
+✓ Created callback URI
+  ID:       732ae831-06e4-4fe2-91de-bd20b099ff38
+  URL:      http://localhost:9007/callback
+  Platform: web
+```
+
+**Flags:**
+- `--url` - Callback URL (required for create)
+- `--platform` - Platform type: `web`, `ios`, `android` (default: `web`)
+- `--yes`, `-y` - Skip delete confirmation
+- `--json` - Output as JSON
+
+> **Note:** `nylas auth config` automatically creates a callback URI (`http://localhost:<port>/callback`) during initial setup. Use these commands to manage additional URIs or troubleshoot OAuth issues.
+
 ### Connectors
 
 Manage email provider connectors (Google, Microsoft, IMAP, etc.).

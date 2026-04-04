@@ -27,6 +27,21 @@ type AdminClient interface {
 	// DeleteApplication deletes an application.
 	DeleteApplication(ctx context.Context, appID string) error
 
+	// ListCallbackURIs retrieves all callback URIs for the application.
+	ListCallbackURIs(ctx context.Context) ([]domain.CallbackURI, error)
+
+	// GetCallbackURI retrieves a specific callback URI.
+	GetCallbackURI(ctx context.Context, uriID string) (*domain.CallbackURI, error)
+
+	// CreateCallbackURI creates a new callback URI for the application.
+	CreateCallbackURI(ctx context.Context, req *domain.CreateCallbackURIRequest) (*domain.CallbackURI, error)
+
+	// UpdateCallbackURI updates an existing callback URI.
+	UpdateCallbackURI(ctx context.Context, uriID string, req *domain.UpdateCallbackURIRequest) (*domain.CallbackURI, error)
+
+	// DeleteCallbackURI deletes a callback URI.
+	DeleteCallbackURI(ctx context.Context, uriID string) error
+
 	// ================================
 	// CONNECTOR OPERATIONS
 	// ================================

@@ -53,6 +53,7 @@ var (
 	ErrNotetakerNotFound   = errors.New("notetaker not found")
 	ErrTemplateNotFound    = errors.New("template not found")
 	ErrApplicationNotFound = errors.New("application not found")
+	ErrCallbackURINotFound = errors.New("callback URI not found")
 	ErrConnectorNotFound   = errors.New("connector not found")
 	ErrCredentialNotFound  = errors.New("credential not found")
 

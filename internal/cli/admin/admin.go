@@ -17,6 +17,7 @@ the Nylas platform at an organizational level.`,
 	}
 
 	cmd.AddCommand(newApplicationsCmd())
+	cmd.AddCommand(newCallbackURIsCmd())
 	cmd.AddCommand(newConnectorsCmd())
 	cmd.AddCommand(newCredentialsCmd())
 	cmd.AddCommand(newGrantsCmd())

@@ -174,6 +174,47 @@ func (d *DemoClient) DeleteApplication(ctx context.Context, appID string) error 
 	return nil
 }
 
+func (d *DemoClient) ListCallbackURIs(ctx context.Context) ([]domain.CallbackURI, error) {
+	return []domain.CallbackURI{
+		{ID: "cb-demo-1", URL: "http://localhost:9007/callback", Platform: "web"},
+	}, nil
+}
+
+func (d *DemoClient) GetCallbackURI(ctx context.Context, uriID string) (*domain.CallbackURI, error) {
+	return &domain.CallbackURI{
+		ID:       uriID,
+		URL:      "http://localhost:9007/callback",
+		Platform: "web",
+	}, nil
+}
+
+func (d *DemoClient) CreateCallbackURI(ctx context.Context, req *domain.CreateCallbackURIRequest) (*domain.CallbackURI, error) {
+	return &domain.CallbackURI{
+		ID:       "cb-demo-new",
+		URL:      req.URL,
+		Platform: req.Platform,
+	}, nil
+}
+
+func (d *DemoClient) UpdateCallbackURI(ctx context.Context, uriID string, req *domain.UpdateCallbackURIRequest) (*domain.CallbackURI, error) {
+	uri := &domain.CallbackURI{
+		ID:       uriID,
+		URL:      "http://localhost:9007/callback",
+		Platform: "web",
+	}
+	if req.URL != nil {
+		uri.URL = *req.URL
+	}
+	if req.Platform != nil {
+		uri.Platform = *req.Platform
+	}
+	return uri, nil
+}
+
+func (d *DemoClient) DeleteCallbackURI(ctx context.Context, uriID string) error {
+	return nil
+}
+
 func (d *DemoClient) ListConnectors(ctx context.Context) ([]domain.Connector, error) {
 	return []domain.Connector{
 		{ID: "conn-demo-1", Name: "Google Demo Connector", Provider: "google"},

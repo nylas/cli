@@ -788,7 +788,7 @@ nylas scheduler sessions show <session-id>            # Show session details
 
 ## Admin (API Management)
 
-Manage Nylas applications, connectors, credentials, and grants.
+Manage Nylas applications, callback URIs, connectors, credentials, and grants.
 
 ```bash
 # Applications
@@ -797,6 +797,13 @@ nylas admin applications show <app-id>                # Show app details
 nylas admin applications create                       # Create application
 nylas admin applications update <app-id>              # Update application
 nylas admin applications delete <app-id>              # Delete application
+
+# Callback URIs (OAuth redirect endpoints)
+nylas admin callback-uris list                        # List callback URIs
+nylas admin callback-uris show <uri-id>               # Show callback URI
+nylas admin callback-uris create --url <url>          # Create callback URI
+nylas admin callback-uris update <uri-id> --url <url> # Update callback URI
+nylas admin callback-uris delete <uri-id>             # Delete callback URI
 
 # Connectors (provider integrations)
 nylas admin connectors list                           # List connectors
