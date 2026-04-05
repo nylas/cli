@@ -278,7 +278,7 @@ func TestMockClient_Grants(t *testing.T) {
 	mock := nylas.NewMockClient()
 
 	t.Run("ExchangeCode", func(t *testing.T) {
-		grant, err := mock.ExchangeCode(ctx, "auth-code", "http://localhost")
+		grant, err := mock.ExchangeCode(ctx, "auth-code", "http://localhost", "test-verifier")
 		require.NoError(t, err)
 		assert.Equal(t, "mock-grant-id", grant.ID)
 		assert.True(t, mock.ExchangeCodeCalled)

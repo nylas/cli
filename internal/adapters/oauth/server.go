@@ -3,6 +3,7 @@ package oauth
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net"
 	"net/http"
@@ -20,6 +21,8 @@ type CallbackServer struct {
 	codeChan chan string
 	errChan  chan error
 	once     sync.Once
+	mu       sync.RWMutex
+	state    string
 }
 
 // NewCallbackServer creates a new callback server.
@@ -33,6 +36,11 @@ func NewCallbackServer(port int) *CallbackServer {
 
 // Start starts the callback server.
 func (s *CallbackServer) Start() error {
+	s.once = sync.Once{}
+	s.codeChan = make(chan string, 1)
+	s.errChan = make(chan error, 1)
+	s.setExpectedState("")
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", s.handleCallback)
 
@@ -68,7 +76,9 @@ func (s *CallbackServer) Stop() error {
 }
 
 // WaitForCallback waits for the OAuth callback and returns the auth code.
-func (s *CallbackServer) WaitForCallback(ctx context.Context) (string, error) {
+func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
+	s.setExpectedState(expectedState)
+
 	select {
 	case code := <-s.codeChan:
 		return code, nil
@@ -95,6 +105,14 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 			s.errChan <- fmt.Errorf("%w: %s", domain.ErrAuthFailed, errMsg)
 		})
 		http.Error(w, "Authentication failed: "+errMsg, http.StatusBadRequest)
+		return
+	}
+
+	if !s.matchesExpectedState(r.URL.Query().Get("state")) {
+		s.once.Do(func() {
+			s.errChan <- fmt.Errorf("%w: invalid OAuth state", domain.ErrAuthFailed)
+		})
+		http.Error(w, "Authentication failed: invalid OAuth state", http.StatusBadRequest)
 		return
 	}
 
@@ -125,4 +143,22 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
     </div>
 </body>
 </html>`)
+}
+
+func (s *CallbackServer) setExpectedState(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state = state
+}
+
+func (s *CallbackServer) matchesExpectedState(state string) bool {
+	s.mu.RLock()
+	expected := s.state
+	s.mu.RUnlock()
+
+	if expected == "" || state == "" || len(expected) != len(state) {
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(state), []byte(expected)) == 1
 }

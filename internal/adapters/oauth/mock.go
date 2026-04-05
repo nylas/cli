@@ -11,6 +11,7 @@ import (
 type MockServer struct {
 	Port                  int
 	AuthCode              string
+	ExpectedState         string
 	StartCalled           bool
 	StopCalled            bool
 	WaitForCallbackCalled bool
@@ -38,8 +39,9 @@ func (m *MockServer) Stop() error {
 }
 
 // WaitForCallback waits for the OAuth callback.
-func (m *MockServer) WaitForCallback(ctx context.Context) (string, error) {
+func (m *MockServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
 	m.WaitForCallbackCalled = true
+	m.ExpectedState = expectedState
 
 	if m.TimeoutAfter > 0 {
 		select {

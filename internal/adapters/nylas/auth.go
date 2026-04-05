@@ -10,19 +10,26 @@ import (
 )
 
 // BuildAuthURL builds the OAuth authorization URL.
-func (c *HTTPClient) BuildAuthURL(provider domain.Provider, redirectURI string) string {
+func (c *HTTPClient) BuildAuthURL(provider domain.Provider, redirectURI, state, codeChallenge string) string {
 	baseURL := fmt.Sprintf("%s/v3/connect/auth", c.baseURL)
-	return NewQueryBuilder().
+	query := NewQueryBuilder().
 		Add("client_id", c.clientID).
 		Add("redirect_uri", redirectURI).
 		Add("response_type", "code").
 		Add("provider", string(provider)).
 		Add("access_type", "offline").
-		BuildURL(baseURL)
+		Add("state", state)
+
+	if codeChallenge != "" {
+		query.Add("code_challenge", codeChallenge).
+			Add("code_challenge_method", "S256")
+	}
+
+	return query.BuildURL(baseURL)
 }
 
 // ExchangeCode exchanges an authorization code for tokens.
-func (c *HTTPClient) ExchangeCode(ctx context.Context, code, redirectURI string) (*domain.Grant, error) {
+func (c *HTTPClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
 	// In Nylas v3, client_secret is the API key
 	secret := c.clientSecret
 	if secret == "" {
@@ -35,7 +42,7 @@ func (c *HTTPClient) ExchangeCode(ctx context.Context, code, redirectURI string)
 		"grant_type":    "authorization_code",
 		"client_id":     c.clientID,
 		"client_secret": secret,
-		"code_verifier": "nylas",
+		"code_verifier": codeVerifier,
 	}
 
 	resp, err := c.doJSONRequestNoAuth(ctx, "POST", c.baseURL+"/v3/connect/token", payload)

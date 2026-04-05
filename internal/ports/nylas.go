@@ -39,7 +39,7 @@ type OAuthServer interface {
 	Stop() error
 
 	// WaitForCallback waits for the OAuth callback and returns the auth code.
-	WaitForCallback(ctx context.Context) (string, error)
+	WaitForCallback(ctx context.Context, expectedState string) (string, error)
 
 	// GetRedirectURI returns the redirect URI for OAuth.
 	GetRedirectURI() string

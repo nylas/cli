@@ -263,6 +263,7 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 // readSSE reads Server-Sent Events and extracts JSON-RPC messages.
 func (p *Proxy) readSSE(reader io.Reader) ([]byte, error) {
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
 	var responses []json.RawMessage
 
 	for scanner.Scan() {

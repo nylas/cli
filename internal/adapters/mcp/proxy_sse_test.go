@@ -105,6 +105,22 @@ func TestProxy_readSSE(t *testing.T) {
 	}
 }
 
+func TestProxy_readSSE_LargeFrame(t *testing.T) {
+	t.Parallel()
+
+	proxy := NewProxy("test-key", "us")
+	largePayload := strings.Repeat("x", 70*1024)
+
+	result, err := proxy.readSSE(strings.NewReader("data: {\"payload\":\"" + largePayload + "\"}\n\n"))
+	if err != nil {
+		t.Fatalf("readSSE failed: %v", err)
+	}
+
+	if !json.Valid(result) {
+		t.Fatalf("expected valid JSON, got %d bytes", len(result))
+	}
+}
+
 // mockGrantStore implements ports.GrantStore for testing.
 type mockGrantStore struct {
 	grants       []domain.GrantInfo

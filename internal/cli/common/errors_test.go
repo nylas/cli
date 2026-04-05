@@ -4,6 +4,7 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -108,6 +109,22 @@ func TestWrapError_DomainErrors_Extended(t *testing.T) {
 			assert.True(t, errors.Is(result, tt.err))
 		})
 	}
+}
+
+func TestWrapError_SecretStorePassphraseRequirement(t *testing.T) {
+	err := fmt.Errorf("%w: %s must be set to unlock the encrypted file store", domain.ErrSecretStoreFailed, "NYLAS_FILE_STORE_PASSPHRASE")
+
+	result := WrapError(err)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "Failed to access encrypted file secret store", result.Message)
+	assert.Equal(t, ErrCodePermissionDenied, result.Code)
+	assert.Empty(t, result.Suggestion)
+	assert.Equal(t, []string{
+		"Set NYLAS_FILE_STORE_PASSPHRASE before using the file-based secret store",
+		"Unset NYLAS_DISABLE_KEYRING to use the system keyring instead",
+	}, result.Suggestions)
+	assert.True(t, errors.Is(result, domain.ErrSecretStoreFailed))
 }
 
 // TestWrapError_HTTPStatusPatterns tests HTTP status code patterns.
@@ -240,6 +257,23 @@ func TestFormatError_WithCodeAndSuggestion(t *testing.T) {
 	assert.Contains(t, result, "Code: E001")
 	assert.Contains(t, result, "Suggestion:")
 	assert.Contains(t, result, "• Try this fix")
+}
+
+func TestFormatError_WithMultipleSuggestions(t *testing.T) {
+	cliErr := &CLIError{
+		Message: "Secret store locked",
+		Code:    ErrCodePermissionDenied,
+		Suggestions: []string{
+			"Set NYLAS_FILE_STORE_PASSPHRASE",
+			"Unset NYLAS_DISABLE_KEYRING",
+		},
+	}
+
+	result := FormatError(cliErr)
+
+	assert.Contains(t, result, "Suggestions:")
+	assert.Contains(t, result, "• Set NYLAS_FILE_STORE_PASSPHRASE")
+	assert.Contains(t, result, "• Unset NYLAS_DISABLE_KEYRING")
 }
 
 // TestErrorCodeConstants tests that all error codes are unique.
