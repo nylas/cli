@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -49,14 +50,25 @@ func GetNylasClient() (ports.NylasClient, error) {
 
 	// If API key not in env, try keyring/file store
 	if apiKey == "" {
-		secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-		if err == nil {
-			apiKey, _ = secretStore.Get(ports.KeyAPIKey)
-			if clientID == "" {
-				clientID, _ = secretStore.Get(ports.KeyClientID)
+		secretStore, err := openSecretStore()
+		if err != nil {
+			return nil, err
+		}
+
+		apiKey, err = getStoredSecret(secretStore, ports.KeyAPIKey)
+		if err != nil {
+			return nil, err
+		}
+		if clientID == "" {
+			clientID, err = getStoredSecret(secretStore, ports.KeyClientID)
+			if err != nil {
+				return nil, err
 			}
-			if clientSecret == "" {
-				clientSecret, _ = secretStore.Get(ports.KeyClientSecret)
+		}
+		if clientSecret == "" {
+			clientSecret, err = getStoredSecret(secretStore, ports.KeyClientSecret)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -118,9 +130,13 @@ func GetAPIKey() (string, error) {
 
 	// If not in env, try keyring/file store
 	if apiKey == "" {
-		secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-		if err == nil {
-			apiKey, _ = secretStore.Get(ports.KeyAPIKey)
+		secretStore, err := openSecretStore()
+		if err != nil {
+			return "", err
+		}
+		apiKey, err = getStoredSecret(secretStore, ports.KeyAPIKey)
+		if err != nil {
+			return "", err
 		}
 	}
 
@@ -140,42 +156,17 @@ func GetAPIKey() (string, error) {
 // It checks in this order:
 // 1. Command line argument (if provided) - supports email lookup if arg contains "@"
 // 2. Environment variable (NYLAS_GRANT_ID)
-// 3. Config file (default_grant)
-// 4. Stored default grant (from keyring/file)
+// 3. Stored default grant (from keyring/file)
+// 4. Config file (default_grant)
 func GetGrantID(args []string) (string, error) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-	if err != nil {
-		// Fall back to env var and config only if keyring unavailable
-		if grantID := os.Getenv("NYLAS_GRANT_ID"); grantID != "" {
-			return grantID, nil
-		}
-
-		// Try config file
-		configStore := config.NewDefaultFileStore()
-		cfg, err := configStore.Load()
-		if err == nil && cfg.DefaultGrant != "" {
-			return cfg.DefaultGrant, nil
-		}
-
-		return "", fmt.Errorf("couldn't access secret store and NYLAS_GRANT_ID not set: %w", err)
-	}
-	grantStore := keyring.NewGrantStore(secretStore)
-
 	// If provided as argument
 	if len(args) > 0 && args[0] != "" {
 		identifier := args[0]
 
-		// If it looks like an email, try to find by email
-		if containsAt(identifier) {
-			grant, err := grantStore.GetGrantByEmail(identifier)
-			if err != nil {
-				return "", fmt.Errorf("no grant found for email: %s", identifier)
-			}
-			return grant.ID, nil
+		// Direct grant IDs should not depend on local secret-store health.
+		if !containsAt(identifier) {
+			return identifier, nil
 		}
-
-		// Otherwise treat as grant ID
-		return identifier, nil
 	}
 
 	// Check environment variable
@@ -183,31 +174,80 @@ func GetGrantID(args []string) (string, error) {
 		return grantID, nil
 	}
 
-	// Check config file
+	secretStore, err := openSecretStore()
+	if err != nil {
+		return "", err
+	}
+	grantStore := keyring.NewGrantStore(secretStore)
+
+	// Email arguments require a local grant lookup.
+	if len(args) > 0 && args[0] != "" {
+		identifier := args[0]
+		grant, err := grantStore.GetGrantByEmail(identifier)
+		if err != nil {
+			if errors.Is(err, domain.ErrGrantNotFound) {
+				return "", fmt.Errorf("no grant found for email: %s", identifier)
+			}
+			return "", wrapSecretStoreError(err)
+		}
+		return grant.ID, nil
+	}
+
+	// Try to get default grant from keyring first - it is the authoritative source.
+	grantID, err := grantStore.GetDefaultGrant()
+	switch {
+	case err == nil:
+		return grantID, nil
+	case !errors.Is(err, domain.ErrNoDefaultGrant):
+		return "", wrapSecretStoreError(err)
+	}
+
+	// Fall back to config for backward compatibility with older setups.
 	configStore := config.NewDefaultFileStore()
-	cfg, err := configStore.Load()
-	if err == nil && cfg.DefaultGrant != "" {
+	cfg, cfgErr := configStore.Load()
+	if cfgErr == nil && cfg.DefaultGrant != "" {
 		return cfg.DefaultGrant, nil
 	}
 
-	// Try to get default grant from keyring
-	grantID, err := grantStore.GetDefaultGrant()
-	if err != nil {
-		return "", NewUserErrorWithSuggestions(
-			"No grant ID provided",
-			"Check available grants with: nylas auth list",
-			"Set default grant with: nylas config set default_grant <grant-id>",
-			"Use environment variable: export NYLAS_GRANT_ID=<grant-id>",
-			"Or specify as argument: nylas [command] <grant-id>",
-		)
-	}
-
-	return grantID, nil
+	return "", NewUserErrorWithSuggestions(
+		"No grant ID provided",
+		"Check available grants with: nylas auth list",
+		"Set default grant with: nylas config set default_grant <grant-id>",
+		"Use environment variable: export NYLAS_GRANT_ID=<grant-id>",
+		"Or specify as argument: nylas [command] <grant-id>",
+	)
 }
 
 // containsAt checks if a string contains "@" (for email detection).
 func containsAt(s string) bool {
 	return strings.ContainsRune(s, '@')
+}
+
+func openSecretStore() (ports.SecretStore, error) {
+	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	if err != nil {
+		return nil, wrapSecretStoreError(err)
+	}
+	return secretStore, nil
+}
+
+func getStoredSecret(secretStore ports.SecretStore, key string) (string, error) {
+	value, err := secretStore.Get(key)
+	switch {
+	case err == nil:
+		return value, nil
+	case errors.Is(err, domain.ErrSecretNotFound):
+		return "", nil
+	default:
+		return "", wrapSecretStoreError(err)
+	}
+}
+
+func wrapSecretStoreError(err error) error {
+	if err == nil || errors.Is(err, domain.ErrSecretStoreFailed) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", domain.ErrSecretStoreFailed, err)
 }
 
 // WithClient is a generic helper that handles client setup, context creation, and grant ID resolution.

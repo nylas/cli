@@ -64,7 +64,7 @@ func TestClient_BuildAuthURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := client.BuildAuthURL(tt.provider, tt.redirectURI)
+			got := client.BuildAuthURL(tt.provider, tt.redirectURI, "", "")
 			if got != tt.want {
 				t.Errorf("BuildAuthURL() = %q, want %q", got, tt.want)
 			}
@@ -104,7 +104,7 @@ func TestClient_ExchangeCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			grant, err := client.ExchangeCode(ctx, tt.code, tt.redirectURI)
+			grant, err := client.ExchangeCode(ctx, tt.code, tt.redirectURI, "test-verifier")
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ExchangeCode() error = %v, wantErr %v", err, tt.wantErr)
@@ -136,7 +136,7 @@ func TestClient_ExchangeCode_FieldValidation(t *testing.T) {
 	client := New()
 	ctx := context.Background()
 
-	grant, err := client.ExchangeCode(ctx, "test-code", "http://localhost/callback")
+	grant, err := client.ExchangeCode(ctx, "test-code", "http://localhost/callback", "test-verifier")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,9 +178,9 @@ func TestClient_ExchangeCode_Consistency(t *testing.T) {
 	ctx := context.Background()
 
 	// Call multiple times to ensure consistency
-	grant1, err1 := client.ExchangeCode(ctx, "code1", "uri1")
-	grant2, err2 := client.ExchangeCode(ctx, "code2", "uri2")
-	grant3, err3 := client.ExchangeCode(ctx, "code3", "uri3")
+	grant1, err1 := client.ExchangeCode(ctx, "code1", "uri1", "verifier-1")
+	grant2, err2 := client.ExchangeCode(ctx, "code2", "uri2", "verifier-2")
+	grant3, err3 := client.ExchangeCode(ctx, "code3", "uri3", "verifier-3")
 
 	if err1 != nil || err2 != nil || err3 != nil {
 		t.Fatal("unexpected errors")
@@ -205,7 +205,7 @@ func TestClient_ContextCancellation(t *testing.T) {
 
 	// Demo client should still work even with cancelled context
 	// because it doesn't make real API calls
-	grant, err := client.ExchangeCode(ctx, "code", "uri")
+	grant, err := client.ExchangeCode(ctx, "code", "uri", "test-verifier")
 	if err != nil {
 		t.Errorf("demo client should ignore context cancellation, got error: %v", err)
 	}

@@ -13,6 +13,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func setFileStorePassphrase(t *testing.T) {
+	t.Helper()
+
+	orig := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
+	require.NoError(t, os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "test-file-store-passphrase"))
+	t.Cleanup(func() {
+		if orig != "" {
+			_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", orig)
+		} else {
+			_ = os.Unsetenv("NYLAS_FILE_STORE_PASSPHRASE")
+		}
+	})
+}
+
 func TestMockSecretStore(t *testing.T) {
 	store := keyring.NewMockSecretStore()
 
@@ -94,6 +108,7 @@ func TestMockSecretStore(t *testing.T) {
 
 func TestEncryptedFileStore(t *testing.T) {
 	tmpDir := t.TempDir()
+	setFileStorePassphrase(t)
 
 	store, err := keyring.NewEncryptedFileStore(tmpDir)
 	require.NoError(t, err)
@@ -168,6 +183,8 @@ func TestEncryptedFileStore(t *testing.T) {
 
 func TestNewSecretStore(t *testing.T) {
 	tmpDir := t.TempDir()
+	setFileStorePassphrase(t)
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
 
 	store, err := keyring.NewSecretStore(tmpDir)
 	require.NoError(t, err)
@@ -176,13 +193,16 @@ func TestNewSecretStore(t *testing.T) {
 	assert.True(t, store.IsAvailable())
 
 	name := store.Name()
-	assert.True(t, name == "system keyring" || name == "encrypted file",
-		"store name should be 'system keyring' or 'encrypted file', got: %s", name)
+	assert.Equal(t, "encrypted file", name)
 
 	t.Logf("Platform: %s, Secret store: %s", runtime.GOOS, name)
 }
 
 func TestSystemKeyring(t *testing.T) {
+	if os.Getenv("NYLAS_RUN_SYSTEM_KEYRING_TESTS") != "true" {
+		t.Skip("set NYLAS_RUN_SYSTEM_KEYRING_TESTS=true to run live system keyring tests")
+	}
+
 	kr := keyring.NewSystemKeyring()
 	require.NotNil(t, kr)
 
@@ -214,6 +234,7 @@ func TestSystemKeyring(t *testing.T) {
 
 func TestCrossPlatformKeyDerivation(t *testing.T) {
 	tmpDir := t.TempDir()
+	setFileStorePassphrase(t)
 
 	store, err := keyring.NewEncryptedFileStore(tmpDir)
 	require.NoError(t, err, "EncryptedFileStore should be creatable on %s", runtime.GOOS)

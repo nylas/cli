@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,9 @@ func TestHTTPClient_BuildAuthURL(t *testing.T) {
 				"response_type=code",
 				"provider=google",
 				"access_type=offline",
+				"state=test-state",
+				"code_challenge=test-challenge",
+				"code_challenge_method=S256",
 			},
 		},
 		{
@@ -63,7 +67,7 @@ func TestHTTPClient_BuildAuthURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			url := client.BuildAuthURL(tt.provider, tt.redirectURI)
+			url := client.BuildAuthURL(tt.provider, tt.redirectURI, "test-state", "test-challenge")
 
 			for _, want := range tt.wantInURL {
 				assert.Contains(t, url, want)
@@ -135,7 +139,7 @@ func TestHTTPClient_ExchangeCode(t *testing.T) {
 			client := newTestClient("test-api-key", "test-client-id", "test-client-secret")
 			client.SetBaseURL(server.URL)
 
-			grant, err := client.ExchangeCode(context.Background(), "test-code", "http://localhost/callback")
+			grant, err := client.ExchangeCode(context.Background(), "test-code", "http://localhost/callback", "test-verifier")
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -173,12 +177,13 @@ func TestHTTPClient_ExchangeCode_UsesAPIKeyAsSecret(t *testing.T) {
 	client := newTestClient("my-api-key", "my-client-id", "")
 	client.SetBaseURL(server.URL)
 
-	_, err := client.ExchangeCode(context.Background(), "test-code", "http://localhost/callback")
+	_, err := client.ExchangeCode(context.Background(), "test-code", "http://localhost/callback", "test-verifier")
 	require.NoError(t, err)
 
 	assert.Equal(t, "my-api-key", receivedBody["client_secret"])
 	assert.Equal(t, "my-client-id", receivedBody["client_id"])
 	assert.Equal(t, "test-code", receivedBody["code"])
+	assert.Equal(t, "test-verifier", receivedBody["code_verifier"])
 }
 
 func TestHTTPClient_ListGrants(t *testing.T) {
@@ -441,7 +446,31 @@ func TestHTTPClient_ExchangeCode_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err := client.ExchangeCode(ctx, "test-code", "http://localhost/callback")
+	_, err := client.ExchangeCode(ctx, "test-code", "http://localhost/callback", "test-verifier")
 
 	assert.Error(t, err)
+}
+
+func TestHTTPClient_ExchangeCode_DoesNotCancelBodyReads(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+
+		time.Sleep(50 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"grant_id":"grant-123","email":"user@example.com","provider":"google"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient("test-api-key", "test-client-id", "")
+	client.SetBaseURL(server.URL)
+	client.requestTimeout = time.Second
+
+	grant, err := client.ExchangeCode(context.Background(), "test-code", "http://localhost/callback", "test-verifier")
+	require.NoError(t, err)
+	require.NotNil(t, grant)
+	assert.Equal(t, "grant-123", grant.ID)
 }

@@ -92,6 +92,17 @@ func WrapError(err error) *CLIError {
 			Code:       ErrCodeNotConfigured,
 		}
 
+	case errors.Is(err, domain.ErrSecretStoreFailed) && strings.Contains(err.Error(), "NYLAS_FILE_STORE_PASSPHRASE"):
+		return &CLIError{
+			Err:     err,
+			Message: "Failed to access encrypted file secret store",
+			Suggestions: []string{
+				"Set NYLAS_FILE_STORE_PASSPHRASE before using the file-based secret store",
+				"Unset NYLAS_DISABLE_KEYRING to use the system keyring instead",
+			},
+			Code: ErrCodePermissionDenied,
+		}
+
 	case errors.Is(err, domain.ErrSecretStoreFailed):
 		return &CLIError{
 			Err:        err,

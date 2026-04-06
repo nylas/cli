@@ -8,6 +8,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -78,6 +79,101 @@ func TestProvidersCmd(t *testing.T) {
 				if !strings.Contains(output, want) {
 					t.Errorf("newProvidersCmd() output = %v, want to contain %v", output, want)
 				}
+			}
+		})
+	}
+}
+
+func TestRenderProviders(t *testing.T) {
+	tests := []struct {
+		name        string
+		connectors  []domain.Connector
+		wantContain []string
+		wantAbsent  []string
+	}{
+		{
+			name: "omits empty connector fields",
+			connectors: []domain.Connector{
+				{
+					Provider: "google",
+					Settings: &domain.ConnectorSettings{ClientID: "client-id"},
+				},
+			},
+			wantContain: []string{
+				"Available Authentication Providers:",
+				"  Google",
+				"    Provider:   google",
+			},
+			wantAbsent: []string{
+				"Name:       ",
+				"ID:         ",
+			},
+		},
+		{
+			name: "prints populated connector metadata",
+			connectors: []domain.Connector{
+				{
+					ID:       "conn-imap-1",
+					Name:     "Custom IMAP",
+					Provider: "imap",
+					Scopes:   []string{"mail.read_only", "mail.send"},
+				},
+			},
+			wantContain: []string{
+				"  Custom IMAP",
+				"    Provider:   imap",
+				"    ID:         conn-imap-1",
+				"    Scopes:     2 configured",
+			},
+		},
+		{
+			name:       "shows empty state",
+			connectors: nil,
+			wantContain: []string{
+				"No providers configured.",
+				"nylas admin connectors create",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			renderProviders(&buf, tt.connectors)
+
+			output := buf.String()
+			for _, want := range tt.wantContain {
+				if !strings.Contains(output, want) {
+					t.Fatalf("renderProviders() output = %q, want to contain %q", output, want)
+				}
+			}
+			for _, unwanted := range tt.wantAbsent {
+				if strings.Contains(output, unwanted) {
+					t.Fatalf("renderProviders() output = %q, should not contain %q", output, unwanted)
+				}
+			}
+		})
+	}
+}
+
+func TestProviderDisplayName(t *testing.T) {
+	tests := []struct {
+		provider string
+		want     string
+	}{
+		{provider: "google", want: "Google"},
+		{provider: "microsoft", want: "Microsoft"},
+		{provider: "imap", want: "IMAP"},
+		{provider: "icloud", want: "iCloud"},
+		{provider: "ews", want: "EWS"},
+		{provider: "virtual-calendar", want: "Virtual Calendar"},
+		{provider: "custom-provider", want: "Custom Provider"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			if got := providerDisplayName(tt.provider); got != tt.want {
+				t.Fatalf("providerDisplayName(%q) = %q, want %q", tt.provider, got, tt.want)
 			}
 		})
 	}

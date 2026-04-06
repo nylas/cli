@@ -226,9 +226,11 @@ func checkSecretStore() CheckResult {
 	// Check if keyring is disabled via environment
 	keyringDisabled := os.Getenv("NYLAS_DISABLE_KEYRING") == "true"
 
-	// First check if system keyring is available
-	kr := keyring.NewSystemKeyring()
-	keyringAvailable := kr.IsAvailable()
+	keyringAvailable := false
+	if !keyringDisabled {
+		kr := keyring.NewSystemKeyring()
+		keyringAvailable = kr.IsAvailable()
+	}
 
 	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
 	if err != nil {
@@ -257,7 +259,7 @@ func checkSecretStore() CheckResult {
 			Name:    "Secret Store",
 			Status:  CheckStatusWarning,
 			Message: storeName,
-			Detail:  "NYLAS_DISABLE_KEYRING is set. Unset to use system keyring.",
+			Detail:  "NYLAS_DISABLE_KEYRING is set. Set NYLAS_FILE_STORE_PASSPHRASE for the fallback store, or unset NYLAS_DISABLE_KEYRING to use the system keyring.",
 		}
 	}
 
@@ -266,7 +268,7 @@ func checkSecretStore() CheckResult {
 			Name:    "Secret Store",
 			Status:  CheckStatusWarning,
 			Message: storeName,
-			Detail:  "System keyring unavailable. Using encrypted file fallback.",
+			Detail:  "System keyring unavailable. The encrypted file fallback requires NYLAS_FILE_STORE_PASSPHRASE.",
 		}
 	}
 

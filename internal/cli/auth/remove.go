@@ -26,13 +26,18 @@ on the Nylas server.`,
 				return err
 			}
 
+			authSvc, _, err := createAuthService()
+			if err != nil {
+				return err
+			}
+
 			// Check if grant exists locally
 			if _, err := grantStore.GetGrant(grantID); err != nil {
 				return err
 			}
 
 			// Remove from local store only
-			if err := grantStore.DeleteGrant(grantID); err != nil {
+			if err := authSvc.RemoveLocalGrant(grantID); err != nil {
 				return err
 			}
 

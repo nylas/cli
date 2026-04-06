@@ -16,28 +16,56 @@ import (
 	"sync"
 
 	"github.com/nylas/cli/internal/domain"
+	"golang.org/x/crypto/argon2"
+)
+
+const (
+	fileStorePassphraseEnv = "NYLAS_FILE_STORE_PASSPHRASE"
+	fileStoreSaltSize      = 16
 )
 
 // EncryptedFileStore implements SecretStore using an encrypted file.
 // This is a fallback for environments where the system keyring is unavailable.
-// Uses AES-256-GCM encryption with a machine-specific key.
+// Uses AES-256-GCM encryption with a key derived from user-supplied secret material.
 type EncryptedFileStore struct {
-	path string
-	key  []byte
-	mu   sync.RWMutex
+	path         string
+	keyPath      string
+	saltPath     string
+	passphrase   []byte
+	migrationKey []byte
+	legacyKey    []byte
+	mu           sync.RWMutex
 }
 
 // NewEncryptedFileStore creates a new EncryptedFileStore.
 // The secrets are stored in an encrypted file within the config directory.
 func NewEncryptedFileStore(configDir string) (*EncryptedFileStore, error) {
 	path := filepath.Join(configDir, ".secrets.enc")
-	key, err := deriveKey()
+	keyPath := filepath.Join(configDir, ".secrets.key")
+	saltPath := filepath.Join(configDir, ".secrets.salt")
+
+	legacyKey, err := deriveLegacyKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to derive encryption key: %w", err)
+		return nil, fmt.Errorf("failed to derive legacy encryption key: %w", err)
 	}
+
+	migrationKey, err := readCompatibilityMasterKey(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load legacy file-store key: %w", err)
+	}
+
+	var passphrase []byte
+	if value := os.Getenv(fileStorePassphraseEnv); value != "" {
+		passphrase = []byte(value)
+	}
+
 	return &EncryptedFileStore{
-		path: path,
-		key:  key,
+		path:         path,
+		keyPath:      keyPath,
+		saltPath:     saltPath,
+		passphrase:   passphrase,
+		migrationKey: migrationKey,
+		legacyKey:    legacyKey,
 	}, nil
 }
 
@@ -149,12 +177,61 @@ func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 	}
 
 	// Write with restrictive permissions
-	return os.WriteFile(f.path, ciphertext, 0600)
+	if err := os.WriteFile(f.path, ciphertext, 0600); err != nil {
+		return err
+	}
+
+	// Remove the plaintext migration key once the store has been rewritten.
+	if f.keyPath != "" {
+		_ = os.Remove(f.keyPath)
+	}
+
+	return nil
 }
 
 // encrypt encrypts plaintext using AES-256-GCM.
 func (f *EncryptedFileStore) encrypt(plaintext []byte) ([]byte, error) {
-	block, err := aes.NewCipher(f.key)
+	key, err := f.passphraseKey(true)
+	if err != nil {
+		return nil, err
+	}
+	return encryptWithKey(key, plaintext)
+}
+
+// decrypt decrypts ciphertext using AES-256-GCM.
+func (f *EncryptedFileStore) decrypt(data []byte) ([]byte, error) {
+	if key, err := f.passphraseKey(false); err == nil {
+		plaintext, err := decryptWithKey(key, data)
+		if err == nil {
+			return plaintext, nil
+		}
+	} else if !os.IsNotExist(err) && len(f.passphrase) > 0 {
+		return nil, err
+	}
+
+	if len(f.migrationKey) > 0 {
+		plaintext, err := decryptWithKey(f.migrationKey, data)
+		if err == nil {
+			return plaintext, nil
+		}
+	}
+
+	if len(f.legacyKey) > 0 {
+		plaintext, err := decryptWithKey(f.legacyKey, data)
+		if err == nil {
+			return plaintext, nil
+		}
+	}
+
+	if len(f.passphrase) == 0 {
+		return nil, fmt.Errorf("%s must be set to unlock the encrypted file store", fileStorePassphraseEnv)
+	}
+
+	return nil, fmt.Errorf("failed to decrypt encrypted file store with the configured passphrase")
+}
+
+func encryptWithKey(key, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -173,14 +250,13 @@ func (f *EncryptedFileStore) encrypt(plaintext []byte) ([]byte, error) {
 	return []byte(base64.StdEncoding.EncodeToString(ciphertext)), nil
 }
 
-// decrypt decrypts ciphertext using AES-256-GCM.
-func (f *EncryptedFileStore) decrypt(data []byte) ([]byte, error) {
+func decryptWithKey(key, data []byte) ([]byte, error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(string(data))
 	if err != nil {
 		return nil, err
 	}
 
-	block, err := aes.NewCipher(f.key)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -198,9 +274,83 @@ func (f *EncryptedFileStore) decrypt(data []byte) ([]byte, error) {
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// deriveKey derives a 32-byte encryption key from machine-specific identifiers.
-// This makes the encrypted file non-portable but provides reasonable security.
-func deriveKey() ([]byte, error) {
+func readCompatibilityMasterKey(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil {
+		return nil, err
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("invalid master key length: %d", len(key))
+	}
+	return key, nil
+}
+
+func (f *EncryptedFileStore) passphraseKey(createSalt bool) ([]byte, error) {
+	if len(f.passphrase) == 0 {
+		return nil, fmt.Errorf("%s must be set to use the encrypted file secret store", fileStorePassphraseEnv)
+	}
+
+	salt, err := f.loadSalt(createSalt)
+	if err != nil {
+		return nil, err
+	}
+
+	return derivePassphraseKey(f.passphrase, salt), nil
+}
+
+func (f *EncryptedFileStore) loadSalt(create bool) ([]byte, error) {
+	data, err := os.ReadFile(f.saltPath)
+	if err == nil {
+		salt, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+		if err != nil {
+			return nil, err
+		}
+		if len(salt) != fileStoreSaltSize {
+			return nil, fmt.Errorf("invalid file-store salt length: %d", len(salt))
+		}
+		return salt, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	if !create {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(f.saltPath), 0700); err != nil {
+		return nil, err
+	}
+
+	salt := make([]byte, fileStoreSaltSize)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return nil, err
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(salt)
+	if err := os.WriteFile(f.saltPath, []byte(encoded), 0600); err != nil {
+		return nil, err
+	}
+
+	return salt, nil
+}
+
+func derivePassphraseKey(passphrase, salt []byte) []byte {
+	// Argon2id keeps the fallback store bound to user-supplied secret material
+	// instead of host metadata while staying fast enough for CLI use.
+	return argon2.IDKey(passphrase, salt, 1, 64*1024, 4, 32)
+}
+
+// deriveLegacyKey derives the pre-v2 machine-specific fallback key so older
+// encrypted files can still be read and rewritten with a passphrase-derived key.
+func deriveLegacyKey() ([]byte, error) {
 	// Collect machine-specific identifiers
 	var identifiers []byte
 

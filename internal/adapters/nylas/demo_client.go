@@ -22,12 +22,12 @@ func (d *DemoClient) SetRegion(region string) {}
 func (d *DemoClient) SetCredentials(clientID, clientSecret, apiKey string) {}
 
 // BuildAuthURL returns a mock auth URL.
-func (d *DemoClient) BuildAuthURL(provider domain.Provider, redirectURI string) string {
+func (d *DemoClient) BuildAuthURL(provider domain.Provider, redirectURI, state, codeChallenge string) string {
 	return "https://demo.nylas.com/auth"
 }
 
 // ExchangeCode returns a mock grant.
-func (d *DemoClient) ExchangeCode(ctx context.Context, code, redirectURI string) (*domain.Grant, error) {
+func (d *DemoClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
 	return &domain.Grant{
 		ID:          "demo-grant-id",
 		Email:       "demo@example.com",

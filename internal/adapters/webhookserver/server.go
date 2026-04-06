@@ -203,12 +203,26 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = r.Body.Close() }()
 
+	signature := r.Header.Get("X-Nylas-Signature")
+	if s.config.WebhookSecret != "" {
+		if signature == "" {
+			http.Error(w, "Missing webhook signature", http.StatusUnauthorized)
+			return
+		}
+		if !s.verifySignature(body, signature) {
+			http.Error(w, "Invalid webhook signature", http.StatusForbidden)
+			return
+		}
+	}
+
 	// Parse webhook event
 	event := &ports.WebhookEvent{
 		Timestamp:  time.Now(),
 		ReceivedAt: time.Now(),
 		Headers:    make(map[string]string),
 		RawBody:    body,
+		Signature:  signature,
+		Verified:   s.config.WebhookSecret != "",
 	}
 
 	// Copy relevant headers
@@ -216,14 +230,6 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if len(v) > 0 {
 			event.Headers[k] = v[0]
 		}
-	}
-
-	// Get signature header
-	event.Signature = r.Header.Get("X-Nylas-Signature")
-
-	// Verify signature if secret is configured
-	if s.config.WebhookSecret != "" && event.Signature != "" {
-		event.Verified = s.verifySignature(body, event.Signature)
 	}
 
 	// Parse JSON body

@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"testing"
 
@@ -107,6 +109,8 @@ func TestService_autoSwitchDefault(t *testing.T) {
 	t.Run("clears default when no grants remain", func(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := newMockConfigStore()
+		configStore.config.Grants = []domain.GrantInfo{{ID: "old-deleted-grant", Email: "user@example.com"}}
+		configStore.config.DefaultGrant = "old-deleted-grant"
 
 		// Set up a default grant that doesn't exist in grants list
 		grantStore.defaultGrant = "old-deleted-grant"
@@ -122,6 +126,8 @@ func TestService_autoSwitchDefault(t *testing.T) {
 		// Default should be cleared
 		_, err := grantStore.GetDefaultGrant()
 		assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
+		assert.Empty(t, configStore.config.DefaultGrant)
+		assert.Empty(t, configStore.config.Grants)
 	})
 
 	t.Run("sets first remaining grant as default", func(t *testing.T) {
@@ -144,6 +150,8 @@ func TestService_autoSwitchDefault(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Contains(t, []string{"grant-1", "grant-2"}, defaultID)
+		assert.Equal(t, defaultID, configStore.config.DefaultGrant)
+		assert.Len(t, configStore.config.Grants, 2)
 	})
 }
 
@@ -238,12 +246,13 @@ func TestService_FirstGrantBecomesDefault(t *testing.T) {
 
 // mockOAuthServer implements ports.OAuthServer for testing
 type mockOAuthServer struct {
-	redirectURI string
-	code        string
-	startErr    error
-	waitErr     error
-	startCalled bool
-	stopCalled  bool
+	redirectURI   string
+	code          string
+	expectedState string
+	startErr      error
+	waitErr       error
+	startCalled   bool
+	stopCalled    bool
 }
 
 func (m *mockOAuthServer) Start() error {
@@ -260,7 +269,8 @@ func (m *mockOAuthServer) GetRedirectURI() string {
 	return m.redirectURI
 }
 
-func (m *mockOAuthServer) WaitForCallback(ctx context.Context) (string, error) {
+func (m *mockOAuthServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
+	m.expectedState = expectedState
 	if m.waitErr != nil {
 		return "", m.waitErr
 	}
@@ -298,7 +308,16 @@ func TestNewService(t *testing.T) {
 func TestService_Login(t *testing.T) {
 	t.Run("successful login sets grant as default", func(t *testing.T) {
 		client := nylas.NewMockClient()
-		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI string) (*domain.Grant, error) {
+		var capturedState string
+		var capturedChallenge string
+		client.BuildAuthURLFunc = func(provider domain.Provider, redirectURI, state, codeChallenge string) string {
+			capturedState = state
+			capturedChallenge = codeChallenge
+			return "https://mock.nylas.com/auth?state=" + state
+		}
+		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
+			assert.Equal(t, "auth-code-123", code)
+			assert.Equal(t, capturedChallenge, pkceChallenge(codeVerifier))
 			return &domain.Grant{
 				ID:       "grant-123",
 				Email:    "user@example.com",
@@ -327,8 +346,11 @@ func TestService_Login(t *testing.T) {
 		assert.True(t, server.startCalled)
 		assert.True(t, server.stopCalled)
 
-		// Verify browser was used (MockClient returns default auth URL)
-		assert.NotEmpty(t, browser.openedURL)
+		// Verify browser and callback state/PKCE values were wired through.
+		assert.Equal(t, "https://mock.nylas.com/auth?state="+capturedState, browser.openedURL)
+		assert.Equal(t, capturedState, server.expectedState)
+		assert.NotEmpty(t, capturedState)
+		assert.NotEmpty(t, capturedChallenge)
 
 		// Verify grant was saved
 		savedGrant, err := grantStore.GetGrant("grant-123")
@@ -339,6 +361,8 @@ func TestService_Login(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-123", defaultID)
+		assert.Equal(t, "grant-123", configStore.config.DefaultGrant)
+		assert.Len(t, configStore.config.Grants, 1)
 	})
 
 	t.Run("server start failure returns error", func(t *testing.T) {
@@ -392,7 +416,7 @@ func TestService_Login(t *testing.T) {
 
 	t.Run("code exchange failure returns error", func(t *testing.T) {
 		client := nylas.NewMockClient()
-		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI string) (*domain.Grant, error) {
+		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
 			return nil, errors.New("code exchange failed")
 		}
 
@@ -415,8 +439,11 @@ func TestService_Logout(t *testing.T) {
 		grantStore := newMockGrantStore()
 		grantStore.grants["grant-123"] = domain.GrantInfo{ID: "grant-123", Email: "user@example.com"}
 		grantStore.defaultGrant = "grant-123"
+		configStore := newMockConfigStore()
+		configStore.config.Grants = []domain.GrantInfo{{ID: "grant-123", Email: "user@example.com"}}
+		configStore.config.DefaultGrant = "grant-123"
 
-		svc := NewService(client, grantStore, newMockConfigStore(), &mockOAuthServer{}, &mockBrowser{})
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
 
 		err := svc.Logout(context.Background())
 
@@ -432,6 +459,8 @@ func TestService_Logout(t *testing.T) {
 		// Verify default was cleared
 		_, err = grantStore.GetDefaultGrant()
 		assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
+		assert.Empty(t, configStore.config.DefaultGrant)
+		assert.Empty(t, configStore.config.Grants)
 	})
 
 	t.Run("no default grant returns error", func(t *testing.T) {
@@ -488,8 +517,14 @@ func TestService_Logout(t *testing.T) {
 		grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
 		grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "user2@example.com"}
 		grantStore.defaultGrant = "grant-1"
+		configStore := newMockConfigStore()
+		configStore.config.Grants = []domain.GrantInfo{
+			{ID: "grant-1", Email: "user1@example.com"},
+			{ID: "grant-2", Email: "user2@example.com"},
+		}
+		configStore.config.DefaultGrant = "grant-1"
 
-		svc := NewService(client, grantStore, newMockConfigStore(), &mockOAuthServer{}, &mockBrowser{})
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
 
 		err := svc.Logout(context.Background())
 
@@ -503,6 +538,9 @@ func TestService_Logout(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
+		assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
+		assert.Len(t, configStore.config.Grants, 1)
+		assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
 	})
 }
 
@@ -513,8 +551,14 @@ func TestService_LogoutGrant(t *testing.T) {
 		grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
 		grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "user2@example.com"}
 		grantStore.defaultGrant = "grant-1"
+		configStore := newMockConfigStore()
+		configStore.config.Grants = []domain.GrantInfo{
+			{ID: "grant-1", Email: "user1@example.com"},
+			{ID: "grant-2", Email: "user2@example.com"},
+		}
+		configStore.config.DefaultGrant = "grant-1"
 
-		svc := NewService(client, grantStore, newMockConfigStore(), &mockOAuthServer{}, &mockBrowser{})
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
 
 		err := svc.LogoutGrant(context.Background(), "grant-2")
 
@@ -528,6 +572,9 @@ func TestService_LogoutGrant(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-1", defaultID)
+		assert.Equal(t, "grant-1", configStore.config.DefaultGrant)
+		assert.Len(t, configStore.config.Grants, 1)
+		assert.Equal(t, "grant-1", configStore.config.Grants[0].ID)
 	})
 
 	t.Run("logging out default grant switches to another", func(t *testing.T) {
@@ -536,8 +583,14 @@ func TestService_LogoutGrant(t *testing.T) {
 		grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
 		grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "user2@example.com"}
 		grantStore.defaultGrant = "grant-1"
+		configStore := newMockConfigStore()
+		configStore.config.Grants = []domain.GrantInfo{
+			{ID: "grant-1", Email: "user1@example.com"},
+			{ID: "grant-2", Email: "user2@example.com"},
+		}
+		configStore.config.DefaultGrant = "grant-1"
 
-		svc := NewService(client, grantStore, newMockConfigStore(), &mockOAuthServer{}, &mockBrowser{})
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
 
 		err := svc.LogoutGrant(context.Background(), "grant-1")
 
@@ -551,6 +604,9 @@ func TestService_LogoutGrant(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
+		assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
+		assert.Len(t, configStore.config.Grants, 1)
+		assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
 	})
 
 	t.Run("grant not found on revoke is ignored", func(t *testing.T) {
@@ -571,4 +627,34 @@ func TestService_LogoutGrant(t *testing.T) {
 		_, err = grantStore.GetGrant("grant-123")
 		assert.ErrorIs(t, err, domain.ErrGrantNotFound)
 	})
+}
+
+func TestService_RemoveLocalGrant(t *testing.T) {
+	grantStore := newMockGrantStore()
+	grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
+	grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "user2@example.com"}
+	grantStore.defaultGrant = "grant-1"
+	configStore := newMockConfigStore()
+	configStore.config.Grants = []domain.GrantInfo{
+		{ID: "grant-1", Email: "user1@example.com"},
+		{ID: "grant-2", Email: "user2@example.com"},
+	}
+	configStore.config.DefaultGrant = "grant-1"
+
+	svc := NewService(nylas.NewMockClient(), grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
+
+	err := svc.RemoveLocalGrant("grant-1")
+	require.NoError(t, err)
+
+	defaultID, err := grantStore.GetDefaultGrant()
+	require.NoError(t, err)
+	assert.Equal(t, "grant-2", defaultID)
+	assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
+	assert.Len(t, configStore.config.Grants, 1)
+	assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
+}
+
+func pkceChallenge(verifier string) string {
+	hash := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
 }

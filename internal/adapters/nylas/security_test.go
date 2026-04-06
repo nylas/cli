@@ -178,7 +178,7 @@ func TestInputValidation(t *testing.T) {
 
 		// These should handle empty strings gracefully
 		// Not crash or panic
-		_ = client.BuildAuthURL("google", "")
+		_ = client.BuildAuthURL("google", "", "", "")
 		t.Log("Empty redirect URI handled")
 	})
 

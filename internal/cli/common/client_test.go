@@ -4,8 +4,13 @@ package common
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -149,59 +154,29 @@ func TestGetAPIKey_NoAPIKey(t *testing.T) {
 }
 
 func TestGetGrantID_WithArgument(t *testing.T) {
-	// Save original env var
-	origGrantID := os.Getenv("NYLAS_GRANT_ID")
-	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
+	configDir := seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		require.NoError(t, store.Set("placeholder", "value"))
+	})
+	require.DirExists(t, configDir)
+	t.Setenv("NYLAS_GRANT_ID", "")
 
-	// Restore after test
-	defer func() {
-		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
-		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
+	grantID, err := GetGrantID([]string{"grant-id-12345"})
 
-	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
-	_ = os.Unsetenv("NYLAS_GRANT_ID")
-
-	// Test with direct grant ID argument (not email)
-	args := []string{"grant-id-12345"}
-
-	grantID, err := GetGrantID(args)
-
-	// This may fail if keyring is not accessible, which is expected in test env
-	if err != nil {
-		// If keyring not accessible, check the error message
-		assert.Contains(t, err.Error(), "secret store")
-	} else {
-		assert.Equal(t, "grant-id-12345", grantID)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "grant-id-12345", grantID)
 }
 
 func TestGetGrantID_WithEnvVar(t *testing.T) {
-	// Save original env var
-	origGrantID := os.Getenv("NYLAS_GRANT_ID")
-	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
-
-	// Restore after test
-	defer func() {
-		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
-		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
-	}()
-
 	testGrantID := "env-grant-id-67890"
-	_ = os.Setenv("NYLAS_GRANT_ID", testGrantID)
-	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		require.NoError(t, store.Set("placeholder", "value"))
+	})
+	t.Setenv("NYLAS_GRANT_ID", testGrantID)
 
-	// Test with empty args - should fall back to env var
 	grantID, err := GetGrantID([]string{})
 
-	// This may fail if keyring is not accessible
-	if err != nil {
-		// If keyring fails but we have env var, we should still get the grant ID
-		// The function tries keyring first, so we need to check behavior
-		t.Logf("Error (expected in test env): %v", err)
-	} else {
-		assert.Equal(t, testGrantID, grantID)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, testGrantID, grantID)
 }
 
 func TestGetGrantID_EmptyArgs(t *testing.T) {
@@ -232,29 +207,79 @@ func TestGetGrantID_EmptyArgs(t *testing.T) {
 }
 
 func TestGetGrantID_EmptyStringArg(t *testing.T) {
-	// Save original env vars
+	testGrantID := "env-grant-fallback"
+	seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		require.NoError(t, store.Set("placeholder", "value"))
+	})
+	t.Setenv("NYLAS_GRANT_ID", testGrantID)
+
+	grantID, err := GetGrantID([]string{""})
+
+	require.NoError(t, err)
+	assert.Equal(t, testGrantID, grantID)
+}
+
+func TestGetGrantID_PrefersStoredDefaultOverStaleConfig(t *testing.T) {
 	origGrantID := os.Getenv("NYLAS_GRANT_ID")
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
+	origFileStorePassphrase := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
+	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	origHome := os.Getenv("HOME")
 
-	// Restore after test
 	defer func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
+		setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
+		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfigHome)
+		setEnvOrUnset("HOME", origHome)
 	}()
 
-	testGrantID := "env-grant-fallback"
-	_ = os.Setenv("NYLAS_GRANT_ID", testGrantID)
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	_ = os.Setenv("XDG_CONFIG_HOME", configHome)
+	_ = os.Setenv("HOME", tempDir)
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "test-file-store-passphrase")
+	_ = os.Unsetenv("NYLAS_GRANT_ID")
 
-	// Test with empty string arg - should fall back to env var
-	grantID, err := GetGrantID([]string{""})
+	configStore := config.NewFileStore(filepath.Join(configHome, "nylas", "config.yaml"))
+	require.NoError(t, configStore.Save(&domain.Config{
+		Region:       "us",
+		DefaultGrant: "stale-config-grant",
+		Grants:       []domain.GrantInfo{{ID: "stale-config-grant", Email: "stale@example.com"}},
+	}))
 
-	// May fail due to keyring access
-	if err != nil {
-		t.Logf("Error (expected in test env): %v", err)
-	} else {
-		assert.Equal(t, testGrantID, grantID)
-	}
+	secretStore, err := keyring.NewEncryptedFileStore(filepath.Join(configHome, "nylas"))
+	require.NoError(t, err)
+	grantStore := keyring.NewGrantStore(secretStore)
+	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}))
+	require.NoError(t, grantStore.SetDefaultGrant("stored-default"))
+
+	grantID, err := GetGrantID(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "stored-default", grantID)
+}
+
+func TestGetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testing.T) {
+	configDir := seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		grantStore := keyring.NewGrantStore(store)
+		require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}))
+		require.NoError(t, grantStore.SetDefaultGrant("stored-default"))
+	})
+
+	configStore := config.NewFileStore(filepath.Join(configDir, "config.yaml"))
+	require.NoError(t, configStore.Save(&domain.Config{
+		Region:       "us",
+		DefaultGrant: "stale-config-grant",
+		Grants:       []domain.GrantInfo{{ID: "stale-config-grant", Email: "stale@example.com"}},
+	}))
+
+	grantID, err := GetGrantID(nil)
+
+	require.Error(t, err)
+	assert.Empty(t, grantID)
+	assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)
+	assert.Contains(t, err.Error(), "NYLAS_FILE_STORE_PASSPHRASE")
 }
 
 // setEnvOrUnset sets an environment variable if value is non-empty, otherwise unsets it
@@ -264,6 +289,29 @@ func setEnvOrUnset(key, value string) {
 	} else {
 		_ = os.Unsetenv(key)
 	}
+}
+
+func seedLockedFileStore(t *testing.T, seed func(store *keyring.EncryptedFileStore)) string {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	configDir := filepath.Join(configHome, "nylas")
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("HOME", tempDir)
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "test-file-store-passphrase")
+	t.Setenv("NYLAS_API_KEY", "")
+	t.Setenv("NYLAS_GRANT_ID", "")
+
+	store, err := keyring.NewEncryptedFileStore(configDir)
+	require.NoError(t, err)
+	if seed != nil {
+		seed(store)
+	}
+
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "")
+	return configDir
 }
 
 func TestGetNylasClient_EnvVarPriority(t *testing.T) {
@@ -307,6 +355,33 @@ func TestGetAPIKey_EnvVarPriority(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "priority-test-key", apiKey)
+}
+
+func TestGetAPIKey_ReportsLockedFileStore(t *testing.T) {
+	seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		require.NoError(t, store.Set(ports.KeyAPIKey, "stored-api-key"))
+	})
+
+	apiKey, err := GetAPIKey()
+
+	require.Error(t, err)
+	assert.Empty(t, apiKey)
+	assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)
+	assert.Contains(t, err.Error(), "NYLAS_FILE_STORE_PASSPHRASE")
+}
+
+func TestGetNylasClient_ReportsLockedFileStore(t *testing.T) {
+	seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
+		require.NoError(t, store.Set(ports.KeyAPIKey, "stored-api-key"))
+		require.NoError(t, store.Set(ports.KeyClientID, "stored-client-id"))
+	})
+
+	client, err := GetNylasClient()
+
+	require.Error(t, err)
+	assert.Nil(t, client)
+	assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)
+	assert.Contains(t, err.Error(), "NYLAS_FILE_STORE_PASSPHRASE")
 }
 
 func TestContainsAt_UnicodeSupport(t *testing.T) {

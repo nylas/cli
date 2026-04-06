@@ -3,10 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 )
 
 func newProvidersCmd() *cobra.Command {
@@ -50,26 +53,7 @@ This command shows connectors configured for your Nylas application.`,
 				return enc.Encode(connectors)
 			}
 
-			// Display as table
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Available Authentication Providers:")
-			_, _ = fmt.Fprintln(cmd.OutOrStdout())
-
-			if len(connectors) == 0 {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No providers configured.")
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\nTo add a provider, use: nylas admin connectors create")
-				return nil
-			}
-
-			for _, connector := range connectors {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", connector.Provider)
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    Name:       %s\n", connector.Name)
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    ID:         %s\n", connector.ID)
-				if len(connector.Scopes) > 0 {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    Scopes:     %d configured\n", len(connector.Scopes))
-				}
-				_, _ = fmt.Fprintln(cmd.OutOrStdout())
-			}
-
+			renderProviders(cmd.OutOrStdout(), connectors)
 			return nil
 		},
 	}
@@ -77,4 +61,68 @@ This command shows connectors configured for your Nylas application.`,
 	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
+}
+
+func renderProviders(w io.Writer, connectors []domain.Connector) {
+	_, _ = fmt.Fprintln(w, "Available Authentication Providers:")
+	_, _ = fmt.Fprintln(w)
+
+	if len(connectors) == 0 {
+		_, _ = fmt.Fprintln(w, "No providers configured.")
+		_, _ = fmt.Fprintln(w, "\nTo add a provider, use: nylas admin connectors create")
+		return
+	}
+
+	for _, connector := range connectors {
+		title := connector.Name
+		if title == "" {
+			title = providerDisplayName(connector.Provider)
+		}
+
+		_, _ = fmt.Fprintf(w, "  %s\n", title)
+		_, _ = fmt.Fprintf(w, "    Provider:   %s\n", connector.Provider)
+		if connector.Name != "" && connector.Name != title {
+			_, _ = fmt.Fprintf(w, "    Name:       %s\n", connector.Name)
+		}
+		if connector.ID != "" {
+			_, _ = fmt.Fprintf(w, "    ID:         %s\n", connector.ID)
+		}
+		if len(connector.Scopes) > 0 {
+			_, _ = fmt.Fprintf(w, "    Scopes:     %d configured\n", len(connector.Scopes))
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+}
+
+func providerDisplayName(provider string) string {
+	switch provider {
+	case "google":
+		return "Google"
+	case "microsoft":
+		return "Microsoft"
+	case "imap":
+		return "IMAP"
+	case "icloud":
+		return "iCloud"
+	case "ews":
+		return "EWS"
+	case "inbox":
+		return "Inbox"
+	case "virtual-calendar":
+		return "Virtual Calendar"
+	default:
+		return titleProviderName(provider)
+	}
+}
+
+func titleProviderName(provider string) string {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(provider, "-", " "), "_", " ")
+	parts := strings.Fields(normalized)
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
 }

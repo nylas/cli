@@ -3,6 +3,9 @@ package webhookserver
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -122,6 +125,56 @@ func TestServer_HandleWebhook(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+}
+
+func TestServer_HandleWebhook_RejectsInvalidSignatures(t *testing.T) {
+	secret := "test-webhook-secret"
+	server := NewServer(ports.WebhookServerConfig{
+		Port:          3008,
+		Path:          "/webhook",
+		WebhookSecret: secret,
+	})
+	handler := http.HandlerFunc(server.handleWebhook)
+	payload := []byte(`{"type":"message.created","id":"event-123"}`)
+
+	t.Run("missing signature", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+		assert.Equal(t, 0, server.GetStats().EventsReceived)
+		select {
+		case event := <-server.Events():
+			t.Fatalf("unexpected event received: %+v", event)
+		default:
+		}
+	})
+
+	t.Run("invalid signature", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Nylas-Signature", "invalid-signature")
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+		assert.Equal(t, 0, server.GetStats().EventsReceived)
+	})
+
+	t.Run("valid signature", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Nylas-Signature", signWebhookPayload(secret, payload))
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, 1, server.GetStats().EventsReceived)
+		event := <-server.Events()
+		assert.True(t, event.Verified)
 	})
 }
 
@@ -258,4 +311,10 @@ func TestServer_GetPublicURL(t *testing.T) {
 	// Without tunnel, public URL equals local URL
 	url := server.GetPublicURL()
 	assert.Equal(t, "http://localhost:8080/webhook", url)
+}
+
+func signWebhookPayload(secret string, payload []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
 }

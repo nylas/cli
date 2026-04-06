@@ -16,6 +16,7 @@
 //   - NYLAS_TEST_RATE_LIMIT_RPS: API rate limit (requests/sec, default: 2.0)
 //   - NYLAS_TEST_RATE_LIMIT_BURST: API rate limit burst capacity (default: 5)
 //   - NYLAS_INBOUND_GRANT_ID: Grant ID for inbound inbox tests (skips inbound tests if not set)
+//   - NYLAS_FILE_STORE_PASSPHRASE: Passphrase for the encrypted file secret-store fallback
 //
 // Parallel Testing:
 //
@@ -133,7 +134,11 @@ func init() {
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
-			testBinary = c
+			if abs, err := filepath.Abs(c); err == nil {
+				testBinary = abs
+			} else {
+				testBinary = c
+			}
 			break
 		}
 	}
@@ -204,32 +209,21 @@ func runCLIWithTimeout(timeout time.Duration, args ...string) (string, string, e
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Build environment with all necessary variables
-	env := []string{
-		"NYLAS_API_KEY=" + testAPIKey,
-		"NYLAS_GRANT_ID=" + testGrantID,
-		"NYLAS_DISABLE_KEYRING=true", // Disable keyring during tests to avoid macOS prompts
-	}
+	cmd.Env = cliTestEnv(nil)
 
-	// Pass through AI provider credentials if set
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		env = append(env, "ANTHROPIC_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		env = append(env, "OPENAI_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		env = append(env, "GROQ_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		env = append(env, "OPENROUTER_API_KEY="+apiKey)
-	}
-	if ollamaHost := os.Getenv("OLLAMA_HOST"); ollamaHost != "" {
-		env = append(env, "OLLAMA_HOST="+ollamaHost)
-	}
+	err := cmd.Run()
+	return stdout.String(), stderr.String(), err
+}
 
-	// Set environment for the CLI
-	cmd.Env = append(os.Environ(), env...)
+func runCLIWithOverrides(timeout time.Duration, envOverrides map[string]string, args ...string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, testBinary, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Env = cliTestEnv(envOverrides)
 
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
@@ -255,33 +249,63 @@ func runCLIWithInput(input string, args ...string) (string, string, error) {
 	cmd.Stdin = strings.NewReader(input)
 
 	// Build environment with all necessary variables
-	env := []string{
-		"NYLAS_API_KEY=" + testAPIKey,
-		"NYLAS_GRANT_ID=" + testGrantID,
-		"NYLAS_DISABLE_KEYRING=true", // Disable keyring during tests to avoid macOS prompts
-	}
-
-	// Pass through AI provider credentials if set
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		env = append(env, "ANTHROPIC_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		env = append(env, "OPENAI_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		env = append(env, "GROQ_API_KEY="+apiKey)
-	}
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		env = append(env, "OPENROUTER_API_KEY="+apiKey)
-	}
-	if ollamaHost := os.Getenv("OLLAMA_HOST"); ollamaHost != "" {
-		env = append(env, "OLLAMA_HOST="+ollamaHost)
-	}
-
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = cliTestEnv(nil)
 
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
+}
+
+func cliTestEnv(overrides map[string]string) []string {
+	env := os.Environ()
+	for key := range overrides {
+		env = removeEnvKey(env, key)
+	}
+
+	defaults := map[string]string{
+		"NYLAS_API_KEY":               testAPIKey,
+		"NYLAS_GRANT_ID":              testGrantID,
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+	}
+
+	for key, value := range defaults {
+		if _, overridden := overrides[key]; overridden {
+			continue
+		}
+		env = append(env, key+"="+value)
+	}
+
+	for _, key := range []string{
+		"ANTHROPIC_API_KEY",
+		"OPENAI_API_KEY",
+		"GROQ_API_KEY",
+		"OPENROUTER_API_KEY",
+		"OLLAMA_HOST",
+	} {
+		if _, overridden := overrides[key]; overridden {
+			continue
+		}
+		if value := os.Getenv(key); value != "" {
+			env = append(env, key+"="+value)
+		}
+	}
+
+	for key, value := range overrides {
+		env = append(env, key+"="+value)
+	}
+
+	return env
+}
+
+func removeEnvKey(env []string, key string) []string {
+	prefix := key + "="
+	filtered := env[:0]
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, prefix) {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
 }
 
 // runCLIWithInputAndRateLimit executes a CLI command with stdin input and rate limiting.

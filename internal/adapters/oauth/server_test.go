@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,9 +61,10 @@ func TestCallbackServer_GetRedirectURI(t *testing.T) {
 
 func TestCallbackServer_handleCallback_Success(t *testing.T) {
 	server := NewCallbackServer(8080)
+	server.setExpectedState("test-state-123")
 
 	// Create request with auth code
-	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123&state=test-state-123", nil)
 	w := httptest.NewRecorder()
 
 	// Handle callback
@@ -148,6 +150,79 @@ func TestCallbackServer_handleCallback_MissingCode(t *testing.T) {
 	}
 }
 
+func TestCallbackServer_handleCallback_InvalidState(t *testing.T) {
+	server := NewCallbackServer(8080)
+	server.setExpectedState("expected-state")
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123&state=wrong-state", nil)
+	w := httptest.NewRecorder()
+
+	server.handleCallback(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	select {
+	case code := <-server.codeChan:
+		t.Errorf("unexpected code received: %q", code)
+	default:
+	}
+
+	select {
+	case err := <-server.errChan:
+		if !errors.Is(err, domain.ErrAuthFailed) {
+			t.Fatalf("error = %v, want %v", err, domain.ErrAuthFailed)
+		}
+		if !contains(err.Error(), "invalid OAuth state") {
+			t.Fatalf("error = %q, want invalid state message", err.Error())
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected invalid state error to be sent")
+	}
+}
+
+func TestCallbackServer_WaitForCallback_InvalidState(t *testing.T) {
+	server := NewCallbackServer(8080)
+	resultCh := make(chan error, 1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	go func() {
+		_, err := server.WaitForCallback(ctx, "expected-state")
+		resultCh <- err
+	}()
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if server.matchesExpectedState("expected-state") {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123&state=wrong-state", nil)
+	w := httptest.NewRecorder()
+	server.handleCallback(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	select {
+	case err := <-resultCh:
+		if !errors.Is(err, domain.ErrAuthFailed) {
+			t.Fatalf("error = %v, want %v", err, domain.ErrAuthFailed)
+		}
+		if !contains(err.Error(), "invalid OAuth state") {
+			t.Fatalf("error = %q, want invalid state message", err.Error())
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("WaitForCallback did not return after invalid state")
+	}
+}
+
 func TestCallbackServer_WaitForCallback_Success(t *testing.T) {
 	server := NewCallbackServer(8080)
 
@@ -158,7 +233,7 @@ func TestCallbackServer_WaitForCallback_Success(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	code, err := server.WaitForCallback(ctx)
+	code, err := server.WaitForCallback(ctx, "expected-state")
 
 	if err != nil {
 		t.Errorf("WaitForCallback() error = %v, want nil", err)
@@ -179,7 +254,7 @@ func TestCallbackServer_WaitForCallback_Error(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	code, err := server.WaitForCallback(ctx)
+	code, err := server.WaitForCallback(ctx, "expected-state")
 
 	if err == nil {
 		t.Error("WaitForCallback() error = nil, want error")
@@ -199,7 +274,7 @@ func TestCallbackServer_WaitForCallback_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	code, err := server.WaitForCallback(ctx)
+	code, err := server.WaitForCallback(ctx, "expected-state")
 
 	if err != domain.ErrAuthTimeout {
 		t.Errorf("error = %v, want %v", err, domain.ErrAuthTimeout)
@@ -232,12 +307,13 @@ func TestCallbackServer_handleCallback_OnlyOnce(t *testing.T) {
 	server := NewCallbackServer(8080)
 
 	// First callback - should succeed
-	req1 := httptest.NewRequest(http.MethodGet, "/callback?code=first", nil)
+	server.setExpectedState("test-state")
+	req1 := httptest.NewRequest(http.MethodGet, "/callback?code=first&state=test-state", nil)
 	w1 := httptest.NewRecorder()
 	server.handleCallback(w1, req1)
 
 	// Second callback - should not overwrite
-	req2 := httptest.NewRequest(http.MethodGet, "/callback?code=second", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/callback?code=second&state=test-state", nil)
 	w2 := httptest.NewRecorder()
 	server.handleCallback(w2, req2)
 

@@ -6,10 +6,12 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-func (m *MockClient) ExchangeCode(ctx context.Context, code, redirectURI string) (*domain.Grant, error) {
+func (m *MockClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
 	m.ExchangeCodeCalled = true
+	m.LastRedirectURI = redirectURI
+	m.LastCodeVerifier = codeVerifier
 	if m.ExchangeCodeFunc != nil {
-		return m.ExchangeCodeFunc(ctx, code, redirectURI)
+		return m.ExchangeCodeFunc(ctx, code, redirectURI, codeVerifier)
 	}
 	return &domain.Grant{
 		ID:          "mock-grant-id",

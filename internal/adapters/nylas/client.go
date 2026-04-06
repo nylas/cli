@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/providers"
@@ -193,9 +194,10 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 
 		// Execute request
 		resp, err := c.httpClient.Do(reqToUse)
-		cancel() // Cancel timeout context
 
 		if err != nil {
+			cancel()
+
 			// Don't retry if the parent context is done
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -221,6 +223,11 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 			return nil, lastErr
 		}
 
+		resp.Body = &cancelOnCloseBody{
+			ReadCloser: resp.Body,
+			cancel:     cancel,
+		}
+
 		// Check if we should retry based on status code
 		if c.shouldRetryStatus(resp.StatusCode) && attempt < c.maxRetries {
 			lastResp = resp
@@ -243,6 +250,26 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 		return lastResp, nil
 	}
 	return nil, lastErr
+}
+
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (b *cancelOnCloseBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if errors.Is(err, io.EOF) {
+		b.once.Do(b.cancel)
+	}
+	return n, err
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.cancel)
+	return err
 }
 
 // shouldRetryStatus determines if a status code is retryable

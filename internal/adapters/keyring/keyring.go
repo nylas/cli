@@ -2,6 +2,7 @@
 package keyring
 
 import (
+	"errors"
 	"os"
 
 	"github.com/nylas/cli/internal/domain"
@@ -89,8 +90,11 @@ func NewSecretStore(configDir string) (ports.SecretStore, error) {
 	// Check if file store has credentials
 	apiKey, err := fileStore.Get(ports.KeyAPIKey)
 	if err != nil {
-		// No credentials in file store either, use keyring for fresh setup
-		return kr, nil
+		if errors.Is(err, domain.ErrSecretNotFound) {
+			// No credentials in file store either, use keyring for fresh setup
+			return kr, nil
+		}
+		return nil, err
 	}
 
 	// Migrate credentials from file store to keyring

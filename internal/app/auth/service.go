@@ -3,6 +3,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -42,20 +45,39 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 	}
 	defer func() { _ = s.server.Stop() }()
 
+	state, err := generateOAuthState()
+	if err != nil {
+		return nil, err
+	}
+	codeVerifier, codeChallenge, err := generatePKCEPair()
+	if err != nil {
+		return nil, err
+	}
+
+	redirectURI := s.server.GetRedirectURI()
+	callbackCh := make(chan oauthCallbackResult, 1)
+	waitCtx, waitCancel := context.WithCancel(ctx)
+	defer waitCancel()
+
+	go func() {
+		code, waitErr := s.server.WaitForCallback(waitCtx, state)
+		callbackCh <- oauthCallbackResult{code: code, err: waitErr}
+	}()
+
 	// Build auth URL and open browser
-	authURL := s.client.BuildAuthURL(provider, s.server.GetRedirectURI())
+	authURL := s.client.BuildAuthURL(provider, redirectURI, state, codeChallenge)
 	if err := s.browser.Open(authURL); err != nil {
 		return nil, err
 	}
 
 	// Wait for callback
-	code, err := s.server.WaitForCallback(ctx)
-	if err != nil {
-		return nil, err
+	callback := <-callbackCh
+	if callback.err != nil {
+		return nil, callback.err
 	}
 
 	// Exchange code for tokens
-	grant, err := s.client.ExchangeCode(ctx, code, s.server.GetRedirectURI())
+	grant, err := s.client.ExchangeCode(ctx, callback.code, redirectURI, codeVerifier)
 	if err != nil {
 		return nil, err
 	}
@@ -70,20 +92,11 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 		return nil, err
 	}
 
-	// Set as default if no default exists or this is the first grant
-	isFirstGrant := false
+	// Set as default if no default exists.
 	if _, err := s.grantStore.GetDefaultGrant(); err == domain.ErrNoDefaultGrant {
 		_ = s.grantStore.SetDefaultGrant(grant.ID)
-		isFirstGrant = true
 	}
-
-	// Update config with grant (only update default if this is the first grant)
-	cfg, _ := s.config.Load()
-	cfg.Grants = append(cfg.Grants, grantInfo)
-	if isFirstGrant {
-		cfg.DefaultGrant = grant.ID
-	}
-	_ = s.config.Save(cfg)
+	s.syncConfigWithGrantStore()
 
 	return grant, nil
 }
@@ -130,6 +143,26 @@ func (s *Service) LogoutGrant(ctx context.Context, grantID string) error {
 	// Auto-switch to another grant if we deleted the default
 	if isDefault {
 		s.autoSwitchDefault()
+	} else {
+		s.syncConfigWithGrantStore()
+	}
+
+	return nil
+}
+
+// RemoveLocalGrant removes a grant from local storage without revoking it on Nylas.
+func (s *Service) RemoveLocalGrant(grantID string) error {
+	defaultID, _ := s.grantStore.GetDefaultGrant()
+	isDefault := grantID == defaultID
+
+	if err := s.grantStore.DeleteGrant(grantID); err != nil {
+		return err
+	}
+
+	if isDefault {
+		s.autoSwitchDefault()
+	} else {
+		s.syncConfigWithGrantStore()
 	}
 
 	return nil
@@ -138,11 +171,70 @@ func (s *Service) LogoutGrant(ctx context.Context, grantID string) error {
 // autoSwitchDefault sets a new default grant from remaining grants.
 func (s *Service) autoSwitchDefault() {
 	grants, err := s.grantStore.ListGrants()
-	if err != nil || len(grants) == 0 {
+	if err != nil {
+		return
+	}
+	if len(grants) == 0 {
 		// No remaining grants - clear the default
 		_ = s.grantStore.ClearGrants()
+		s.syncConfigWithGrantStore()
 		return
 	}
 	// Set the first remaining grant as default
-	_ = s.grantStore.SetDefaultGrant(grants[0].ID)
+	if err := s.grantStore.SetDefaultGrant(grants[0].ID); err != nil {
+		return
+	}
+	s.syncConfigWithGrantStore()
+}
+
+func (s *Service) syncConfigWithGrantStore() {
+	grants, err := s.grantStore.ListGrants()
+	if err != nil {
+		return
+	}
+
+	defaultGrant, err := s.grantStore.GetDefaultGrant()
+	if err == domain.ErrNoDefaultGrant {
+		defaultGrant = ""
+	} else if err != nil {
+		return
+	}
+
+	cfg, err := s.config.Load()
+	if err != nil {
+		return
+	}
+
+	cfg.Grants = append([]domain.GrantInfo(nil), grants...)
+	cfg.DefaultGrant = defaultGrant
+	_ = s.config.Save(cfg)
+}
+
+func generateOAuthState() (string, error) {
+	return generateOAuthToken(32)
+}
+
+func generatePKCEPair() (string, string, error) {
+	verifier, err := generateOAuthToken(32)
+	if err != nil {
+		return "", "", err
+	}
+
+	hash := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(hash[:])
+
+	return verifier, challenge, nil
+}
+
+func generateOAuthToken(size int) (string, error) {
+	token := make([]byte, size)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(token), nil
+}
+
+type oauthCallbackResult struct {
+	code string
+	err  error
 }

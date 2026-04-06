@@ -15,6 +15,7 @@ type MockClient struct {
 	APIKey       string
 
 	// Call tracking
+	BuildAuthURLCalled          bool
 	ExchangeCodeCalled          bool
 	ListGrantsCalled            bool
 	GetGrantCalled              bool
@@ -44,6 +45,10 @@ type MockClient struct {
 	GetAttachmentCalled         bool
 	DownloadAttachmentCalled    bool
 	LastGrantID                 string
+	LastRedirectURI             string
+	LastAuthState               string
+	LastCodeChallenge           string
+	LastCodeVerifier            string
 	LastMessageID               string
 	LastThreadID                string
 	LastDraftID                 string
@@ -51,7 +56,8 @@ type MockClient struct {
 	LastAttachmentID            string
 
 	// Custom functions
-	ExchangeCodeFunc          func(ctx context.Context, code, redirectURI string) (*domain.Grant, error)
+	BuildAuthURLFunc          func(provider domain.Provider, redirectURI, state, codeChallenge string) string
+	ExchangeCodeFunc          func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error)
 	ListGrantsFunc            func(ctx context.Context) ([]domain.Grant, error)
 	GetGrantFunc              func(ctx context.Context, grantID string) (*domain.Grant, error)
 	RevokeGrantFunc           func(ctx context.Context, grantID string) error
@@ -111,6 +117,13 @@ func (m *MockClient) SetCredentials(clientID, clientSecret, apiKey string) {
 }
 
 // BuildAuthURL returns a mock auth URL.
-func (m *MockClient) BuildAuthURL(provider domain.Provider, redirectURI string) string {
+func (m *MockClient) BuildAuthURL(provider domain.Provider, redirectURI, state, codeChallenge string) string {
+	m.BuildAuthURLCalled = true
+	m.LastRedirectURI = redirectURI
+	m.LastAuthState = state
+	m.LastCodeChallenge = codeChallenge
+	if m.BuildAuthURLFunc != nil {
+		return m.BuildAuthURLFunc(provider, redirectURI, state, codeChallenge)
+	}
 	return "https://mock.nylas.com/auth"
 }
