@@ -185,6 +185,7 @@ func TestSyncStoreMarkSynced(t *testing.T) {
 	}
 	if state == nil {
 		t.Fatal("State should exist")
+		return
 	}
 	if time.Since(state.LastSync) > time.Second {
 		t.Error("LastSync should be recent")
@@ -199,6 +200,7 @@ func TestSyncStoreMarkSynced(t *testing.T) {
 	// Verify state2 exists and LastSync is within last second
 	if state2 == nil {
 		t.Fatal("State should still exist after second MarkSynced")
+		return
 	}
 	if time.Since(state2.LastSync) > time.Second {
 		t.Error("LastSync should be recent after update")

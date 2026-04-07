@@ -16,6 +16,7 @@ func TestNewFolderPanel(t *testing.T) {
 
 	if panel == nil {
 		t.Fatal("NewFolderPanel returned nil")
+		return
 	}
 
 	if panel.list == nil {
@@ -174,6 +175,7 @@ func TestFolderPanelGetSelectedFolder(t *testing.T) {
 	folder := panel.GetSelectedFolder()
 	if folder == nil {
 		t.Fatal("GetSelectedFolder returned nil")
+		return
 	}
 	if folder.ID != "folder-1" {
 		t.Errorf("GetSelectedFolder().ID = %q, want 'folder-1'", folder.ID)
@@ -195,6 +197,7 @@ func TestFolderPanelGetFolderBySystemName(t *testing.T) {
 	inbox := panel.GetFolderBySystemName(domain.FolderInbox)
 	if inbox == nil {
 		t.Fatal("GetFolderBySystemName(FolderInbox) returned nil")
+		return
 	}
 	if inbox.ID != "inbox-id" {
 		t.Errorf("inbox.ID = %q, want 'inbox-id'", inbox.ID)
@@ -204,6 +207,7 @@ func TestFolderPanelGetFolderBySystemName(t *testing.T) {
 	sent := panel.GetFolderBySystemName(domain.FolderSent)
 	if sent == nil {
 		t.Fatal("GetFolderBySystemName(FolderSent) returned nil")
+		return
 	}
 	if sent.ID != "sent-id" {
 		t.Errorf("sent.ID = %q, want 'sent-id'", sent.ID)
@@ -245,6 +249,7 @@ func TestMessagesViewFolderIntegration(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewMessagesView returned nil")
+		return
 	}
 
 	if view.folderPanel == nil {

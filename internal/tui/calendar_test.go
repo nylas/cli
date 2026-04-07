@@ -15,6 +15,7 @@ func TestNewCalendarView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewCalendarView returned nil")
+		return
 	}
 
 	if view.viewMode != CalendarMonthView {
@@ -280,6 +281,7 @@ func TestCalendarView_GetCurrentCalendar(t *testing.T) {
 	cal = view.GetCurrentCalendar()
 	if cal == nil {
 		t.Fatal("GetCurrentCalendar() returned nil")
+		return
 	}
 	if cal.ID != "cal-2" {
 		t.Errorf("GetCurrentCalendar().ID = %q, want %q", cal.ID, "cal-2")

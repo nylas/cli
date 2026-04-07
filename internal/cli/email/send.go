@@ -37,6 +37,7 @@ func newSendCmd() *cobra.Command {
 	var listGPGKeys bool
 	var encrypt bool
 	var recipientKey string
+	var templateOpts hostedTemplateSendOptions
 
 	cmd := &cobra.Command{
 		Use:   "send [grant-id]",
@@ -65,9 +66,21 @@ Supports email tracking:
 - --track-label: Add a label to identify tracked emails
 
 Supports custom metadata:
-- --metadata key=value: Add custom key-value metadata (can be repeated)`,
+- --metadata key=value: Add custom key-value metadata (can be repeated)
+
+Supports hosted templates:
+- --template-id <id>: Render and send a Nylas-hosted template
+- --template-data <json>: Provide template variables as inline JSON
+- --template-data-file <path>: Load template variables from a JSON file
+- --render-only: Preview the rendered template without sending`,
 		Example: `  # Send immediately
   nylas email send --to user@example.com --subject "Hello" --body "Hi there!"
+
+  # Send using a hosted template
+  nylas email send --to user@example.com --template-id tpl_123 --template-data '{"user":{"name":"Ada"}}'
+
+  # Preview a hosted template render without sending
+  nylas email send --template-id tpl_123 --template-data-file data.json --render-only
 
   # Send with GPG signature (uses default key from git config)
   nylas email send --to user@example.com --subject "Secure" --body "Signed email" --sign
@@ -117,23 +130,23 @@ Supports custom metadata:
 				}
 			}
 
-			// Interactive mode (runs before WithClient)
-			if interactive || (len(to) == 0 && subject == "" && body == "") {
+			// Interactive mode (runs before client setup).
+			if interactive || (templateOpts.TemplateID == "" && len(to) == 0 && subject == "" && body == "") {
 				reader := bufio.NewReader(os.Stdin)
 
-				if len(to) == 0 {
+				if len(to) == 0 && !templateOpts.RenderOnly {
 					fmt.Print("To (comma-separated): ")
 					input, _ := reader.ReadString('\n')
 					to = parseEmails(strings.TrimSpace(input))
 				}
 
-				if subject == "" {
+				if templateOpts.TemplateID == "" && subject == "" {
 					fmt.Print("Subject: ")
 					subject, _ = reader.ReadString('\n')
 					subject = strings.TrimSpace(subject)
 				}
 
-				if body == "" {
+				if templateOpts.TemplateID == "" && body == "" {
 					fmt.Println("Body (end with a line containing only '.'):")
 					var bodyLines []string
 					for {
@@ -148,64 +161,42 @@ Supports custom metadata:
 				}
 			}
 
-			if len(to) == 0 {
+			if err := validateHostedTemplateSendOptions(templateOpts, subject, body); err != nil {
+				return err
+			}
+
+			if len(to) == 0 && !templateOpts.RenderOnly {
 				return common.NewUserError("at least one recipient is required", "Use --to to specify recipient email addresses")
 			}
 
-			if subject == "" {
+			if templateOpts.TemplateID == "" && subject == "" {
 				return common.NewUserError("subject is required", "Use --subject to specify the email subject")
 			}
 
-			// Parse and validate recipients
-			toContacts, err := parseContacts(to)
-			if err != nil {
-				return common.WrapRecipientError("to", err)
-			}
+			var toContacts []domain.EmailParticipant
+			var ccContacts []domain.EmailParticipant
+			var bccContacts []domain.EmailParticipant
 
-			// Build request
-			req := &domain.SendMessageRequest{
-				Subject: subject,
-				Body:    body,
-				To:      toContacts,
+			// Parse and validate recipients.
+			if len(to) > 0 {
+				var err error
+				toContacts, err = parseContacts(to)
+				if err != nil {
+					return common.WrapRecipientError("to", err)
+				}
 			}
-
 			if len(cc) > 0 {
-				ccContacts, err := parseContacts(cc)
+				var err error
+				ccContacts, err = parseContacts(cc)
 				if err != nil {
 					return common.WrapRecipientError("cc", err)
 				}
-				req.Cc = ccContacts
 			}
 			if len(bcc) > 0 {
-				bccContacts, err := parseContacts(bcc)
+				var err error
+				bccContacts, err = parseContacts(bcc)
 				if err != nil {
 					return common.WrapRecipientError("bcc", err)
-				}
-				req.Bcc = bccContacts
-			}
-			if replyTo != "" {
-				req.ReplyToMsgID = replyTo
-			}
-
-			// Add tracking options if specified
-			if trackOpens || trackLinks || trackLabel != "" {
-				req.TrackingOpts = &domain.TrackingOptions{
-					Opens: trackOpens,
-					Links: trackLinks,
-					Label: trackLabel,
-				}
-			}
-
-			// Parse metadata key=value pairs
-			if len(metadata) > 0 {
-				req.Metadata = make(map[string]string)
-				for _, m := range metadata {
-					parts := strings.SplitN(m, "=", 2)
-					if len(parts) == 2 {
-						req.Metadata[parts[0]] = parts[1]
-					} else {
-						return common.NewInputError(fmt.Sprintf("invalid metadata format: %s (expected key=value)", m))
-					}
 				}
 			}
 
@@ -217,85 +208,135 @@ Supports custom metadata:
 				if parseErr != nil {
 					return parseErr // parseScheduleTime already returns CLIError
 				}
-				req.SendAt = scheduledTime.Unix()
 			}
 
-			// Confirmation
-			fmt.Println("\nEmail preview:")
-			fmt.Printf("  To:      %s\n", strings.Join(to, ", "))
-			if len(cc) > 0 {
-				fmt.Printf("  Cc:      %s\n", strings.Join(cc, ", "))
+			sendNeedsGrant, err := hostedTemplateSendNeedsGrant(templateOpts)
+			if err != nil {
+				return err
 			}
-			if len(bcc) > 0 {
-				fmt.Printf("  Bcc:     %s\n", strings.Join(bcc, ", "))
-			}
-			fmt.Printf("  Subject: %s\n", subject)
-			if body != "" {
-				fmt.Printf("  Body:    %s\n", common.Truncate(body, 50))
-			}
-			if !scheduledTime.IsZero() {
-				fmt.Printf("  %s %s\n", common.Yellow.Sprint("Scheduled:"), scheduledTime.Format(common.DisplayWeekdayFullWithTZ))
-			}
-			if trackOpens || trackLinks {
-				tracking := []string{}
-				if trackOpens {
-					tracking = append(tracking, "opens")
-				}
-				if trackLinks {
-					tracking = append(tracking, "links")
-				}
-				fmt.Printf("  %s %s\n", common.Cyan.Sprint("Tracking:"), strings.Join(tracking, ", "))
-			}
-			if len(metadata) > 0 {
-				fmt.Printf("  %s %s\n", common.Cyan.Sprint("Metadata:"), strings.Join(metadata, ", "))
-			}
-			if sign {
-				var signingInfo string
-				if gpgKeyID != "" {
-					// Explicit key ID provided
-					signingInfo = fmt.Sprintf("key %s", gpgKeyID)
-				} else {
-					// Auto-detect from From address
-					fromEmail := ""
-					if len(toContacts) > 0 && len(req.From) > 0 {
-						fromEmail = req.From[0].Email
+
+			sendWithClient := func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				activeSubject := subject
+				activeBody := body
+				var templatePreviewLabel string
+
+				if templateOpts.TemplateID != "" {
+					rendered, err := renderHostedTemplateForSend(ctx, client, grantID, templateOpts)
+					if err != nil {
+						return struct{}{}, err
 					}
-					if fromEmail != "" {
-						signingInfo = fmt.Sprintf("as %s", fromEmail)
+
+					activeSubject = rendered.Subject
+					activeBody = rendered.Body
+					templatePreviewLabel = templateOpts.TemplateID
+
+					if templateOpts.RenderOnly {
+						if jsonOutput {
+							return struct{}{}, common.PrintJSON(rendered.Result)
+						}
+						printHostedTemplatePreview(templateOpts.TemplateID, rendered.Subject, rendered.Body, to, cc, bcc)
+						return struct{}{}, nil
+					}
+				}
+
+				req := &domain.SendMessageRequest{
+					Subject: activeSubject,
+					Body:    activeBody,
+					To:      toContacts,
+					Cc:      ccContacts,
+					Bcc:     bccContacts,
+				}
+				if replyTo != "" {
+					req.ReplyToMsgID = replyTo
+				}
+				if trackOpens || trackLinks || trackLabel != "" {
+					req.TrackingOpts = &domain.TrackingOptions{
+						Opens: trackOpens,
+						Links: trackLinks,
+						Label: trackLabel,
+					}
+				}
+				if len(metadata) > 0 {
+					req.Metadata = make(map[string]string)
+					for _, m := range metadata {
+						parts := strings.SplitN(m, "=", 2)
+						if len(parts) == 2 {
+							req.Metadata[parts[0]] = parts[1]
+							continue
+						}
+						return struct{}{}, common.NewInputError(fmt.Sprintf("invalid metadata format: %s (expected key=value)", m))
+					}
+				}
+				if !scheduledTime.IsZero() {
+					req.SendAt = scheduledTime.Unix()
+				}
+
+				fmt.Println("\nEmail preview:")
+				if templatePreviewLabel != "" {
+					fmt.Printf("  Template: %s\n", templatePreviewLabel)
+				}
+				if len(to) > 0 {
+					fmt.Printf("  To:      %s\n", strings.Join(to, ", "))
+				}
+				if len(cc) > 0 {
+					fmt.Printf("  Cc:      %s\n", strings.Join(cc, ", "))
+				}
+				if len(bcc) > 0 {
+					fmt.Printf("  Bcc:     %s\n", strings.Join(bcc, ", "))
+				}
+				fmt.Printf("  Subject: %s\n", activeSubject)
+				if activeBody != "" {
+					fmt.Printf("  Body:    %s\n", common.Truncate(activeBody, 50))
+				}
+				if !scheduledTime.IsZero() {
+					fmt.Printf("  %s %s\n", common.Yellow.Sprint("Scheduled:"), scheduledTime.Format(common.DisplayWeekdayFullWithTZ))
+				}
+				if trackOpens || trackLinks {
+					tracking := []string{}
+					if trackOpens {
+						tracking = append(tracking, "opens")
+					}
+					if trackLinks {
+						tracking = append(tracking, "links")
+					}
+					fmt.Printf("  %s %s\n", common.Cyan.Sprint("Tracking:"), strings.Join(tracking, ", "))
+				}
+				if len(metadata) > 0 {
+					fmt.Printf("  %s %s\n", common.Cyan.Sprint("Metadata:"), strings.Join(metadata, ", "))
+				}
+				if sign {
+					signingInfo := "default key from git config"
+					if gpgKeyID != "" {
+						signingInfo = fmt.Sprintf("key %s", gpgKeyID)
+					}
+					fmt.Printf("  %s %s\n", common.Green.Sprint("GPG Signed:"), signingInfo)
+				}
+				if encrypt {
+					var encryptInfo string
+					if recipientKey != "" {
+						encryptInfo = fmt.Sprintf("with key %s", recipientKey)
 					} else {
-						signingInfo = "default key from git config"
+						encryptInfo = fmt.Sprintf("for %s (auto-fetch)", strings.Join(to, ", "))
+					}
+					fmt.Printf("  %s %s\n", common.Blue.Sprint("GPG Encrypted:"), encryptInfo)
+				}
+
+				if !noConfirm {
+					if scheduledTime.IsZero() {
+						fmt.Print("\nSend this email? [y/N]: ")
+					} else {
+						fmt.Print("\nSchedule this email? [y/N]: ")
+					}
+
+					reader := bufio.NewReader(os.Stdin)
+					confirm, _ := reader.ReadString('\n')
+					confirm = strings.ToLower(strings.TrimSpace(confirm))
+					if confirm != "y" && confirm != "yes" {
+						fmt.Println("Cancelled.")
+						return struct{}{}, nil
 					}
 				}
-				fmt.Printf("  %s %s\n", common.Green.Sprint("GPG Signed:"), signingInfo)
-			}
-			if encrypt {
-				var encryptInfo string
-				if recipientKey != "" {
-					encryptInfo = fmt.Sprintf("with key %s", recipientKey)
-				} else {
-					encryptInfo = fmt.Sprintf("for %s (auto-fetch)", strings.Join(to, ", "))
-				}
-				fmt.Printf("  %s %s\n", common.Blue.Sprint("GPG Encrypted:"), encryptInfo)
-			}
 
-			if !noConfirm {
-				if scheduledTime.IsZero() {
-					fmt.Print("\nSend this email? [y/N]: ")
-				} else {
-					fmt.Print("\nSchedule this email? [y/N]: ")
-				}
-
-				reader := bufio.NewReader(os.Stdin)
-				confirm, _ := reader.ReadString('\n')
-				confirm = strings.ToLower(strings.TrimSpace(confirm))
-				if confirm != "y" && confirm != "yes" {
-					fmt.Println("Cancelled.")
-					return nil
-				}
-			}
-
-			// Send
-			_, sendErr := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				var msg *domain.Message
 				var err error
 
@@ -311,7 +352,7 @@ Supports custom metadata:
 					}
 
 					// GPG signing and/or encryption flow
-					msg, err = sendSecureEmail(ctx, client, grantID, req, gpgKeyID, recipientKey, toContacts, subject, body, sign, encrypt)
+					msg, err = sendSecureEmail(ctx, client, grantID, req, gpgKeyID, recipientKey, toContacts, activeSubject, activeBody, sign, encrypt)
 				} else {
 					// Standard flow
 					var sendMsg string
@@ -368,6 +409,15 @@ Supports custom metadata:
 					}
 				}
 				return struct{}{}, nil
+			}
+
+			if sendNeedsGrant {
+				_, sendErr := common.WithClient(args, sendWithClient)
+				return sendErr
+			}
+
+			_, sendErr := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				return sendWithClient(ctx, client, "")
 			})
 			return sendErr
 		},
@@ -392,6 +442,13 @@ Supports custom metadata:
 	cmd.Flags().BoolVar(&listGPGKeys, "list-gpg-keys", false, "List available GPG signing keys and exit")
 	cmd.Flags().BoolVar(&encrypt, "encrypt", false, "Encrypt email with recipient's GPG public key")
 	cmd.Flags().StringVar(&recipientKey, "recipient-key", "", "Specific GPG key ID for encryption (auto-detected from recipient email if not specified)")
+	cmd.Flags().StringVar(&templateOpts.TemplateID, "template-id", "", "Hosted template ID to render and send")
+	cmd.Flags().StringVar(&templateOpts.TemplateScope, "template-scope", string(domain.ScopeApplication), "Hosted template scope: app or grant")
+	cmd.Flags().StringVar(&templateOpts.TemplateGrantID, "template-grant-id", "", "Grant ID or email for grant-scoped hosted templates")
+	cmd.Flags().StringVar(&templateOpts.TemplateData, "template-data", "", "Inline JSON object with hosted template variables")
+	cmd.Flags().StringVar(&templateOpts.TemplateDataFile, "template-data-file", "", "Path to a JSON file with hosted template variables")
+	cmd.Flags().BoolVar(&templateOpts.RenderOnly, "render-only", false, "Render a hosted template preview without sending")
+	cmd.Flags().BoolVar(&templateOpts.Strict, "template-strict", true, "Fail if a hosted template references missing variables")
 
 	return cmd
 }

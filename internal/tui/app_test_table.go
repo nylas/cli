@@ -62,6 +62,7 @@ func TestTableSelection(t *testing.T) {
 	meta := table.SelectedMeta()
 	if meta == nil {
 		t.Fatal("SelectedMeta() returned nil")
+		return
 	}
 	if meta.ID != "1" {
 		t.Errorf("SelectedMeta().ID = %q, want %q", meta.ID, "1")
@@ -84,6 +85,7 @@ func TestTable_SelectedMeta(t *testing.T) {
 	meta := table.SelectedMeta()
 	if meta == nil {
 		t.Fatal("SelectedMeta() returned nil")
+		return
 	}
 	if meta.ID != "id-1" {
 		t.Errorf("SelectedMeta().ID = %q, want %q", meta.ID, "id-1")

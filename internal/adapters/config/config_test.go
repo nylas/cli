@@ -278,6 +278,7 @@ func TestMockConfigStore_LoadSave(t *testing.T) {
 	}
 	if config == nil {
 		t.Fatal("Load() returned nil config")
+		return
 	}
 
 	// Modify and save
@@ -310,6 +311,7 @@ func TestMockConfigStore_LoadWithNilConfig(t *testing.T) {
 	}
 	if config == nil {
 		t.Fatal("Load() returned nil, expected default config")
+		return
 	}
 
 	// Should return default config

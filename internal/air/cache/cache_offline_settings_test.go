@@ -58,6 +58,7 @@ func TestOfflineQueue(t *testing.T) {
 	}
 	if peeked == nil {
 		t.Fatal("Peek returned nil")
+		return
 	}
 	if peeked.Type != ActionMarkRead {
 		t.Errorf("Peeked Type = %s, want %s", peeked.Type, ActionMarkRead)
@@ -88,6 +89,7 @@ func TestOfflineQueue(t *testing.T) {
 	}
 	if dequeued == nil {
 		t.Fatal("Dequeue returned nil")
+		return
 	}
 	if dequeued.Type != ActionMarkRead {
 		t.Errorf("Dequeued Type = %s, want %s", dequeued.Type, ActionMarkRead)

@@ -114,6 +114,7 @@ func TestClient_ExchangeCode(t *testing.T) {
 			if !tt.wantErr {
 				if grant == nil {
 					t.Fatal("expected non-nil grant")
+					return
 				}
 				if grant.ID != "demo-grant-id" {
 					t.Errorf("expected ID 'demo-grant-id', got %q", grant.ID)

@@ -96,6 +96,13 @@ nylas email send --to "to@example.com" --subject "Newsletter" --body "..." \
 # Send with custom metadata
 nylas email send --to "to@example.com" --subject "Order Confirmation" --body "..." \
   --metadata "order_id=12345" --metadata "customer_id=cust_abc"
+
+# Send using a hosted template
+nylas email send --to "to@example.com" --template-id tpl_123 \
+  --template-data '{"user":{"name":"Ada"}}'
+
+# Preview a hosted template render without sending
+nylas email send --template-id tpl_123 --template-data-file ./data.json --render-only
 ```
 
 **Tracking Options:**
@@ -103,6 +110,15 @@ nylas email send --to "to@example.com" --subject "Order Confirmation" --body "..
 - `--track-links` - Track when recipients click links in the email
 - `--track-label` - Label for grouping tracked emails (for analytics)
 - `--metadata` - Custom key=value metadata pairs (can be specified multiple times)
+
+**Hosted template options:**
+- `--template-id` - Render and send a Nylas-hosted template
+- `--template-scope` - Hosted template scope: `app` or `grant`
+- `--template-grant-id` - Override the grant used for grant-scoped hosted templates
+- `--template-data` - Inline JSON variables for hosted template rendering
+- `--template-data-file` - JSON file containing hosted template variables
+- `--render-only` - Preview the rendered hosted template without sending
+- `--template-strict` - Fail if the hosted template references missing variables (default: true)
 
 **Example output (scheduled):**
 ```bash
@@ -117,6 +133,35 @@ Email preview:
 ✓ Email scheduled successfully! Message ID: msg_scheduled_123
 Scheduled to send: Mon Dec 16, 2024 4:30 PM PST
 ```
+
+### Hosted Templates
+
+Use top-level hosted templates with `nylas email send` when you want a shared, API-backed template instead of a local file-backed template.
+
+```bash
+# Application-level hosted template
+nylas email send \
+  --to "to@example.com" \
+  --template-id tpl_123 \
+  --template-scope app \
+  --template-data '{"user":{"name":"Ada"}}'
+
+# Grant-level hosted template
+nylas email send \
+  --to "to@example.com" \
+  --template-id tpl_456 \
+  --template-scope grant \
+  --template-grant-id <grant-id> \
+  --template-data-file ./data.json
+
+# Preview the final rendered subject/body without sending
+nylas email send \
+  --template-id tpl_123 \
+  --template-data '{"user":{"name":"Ada"}}' \
+  --render-only
+```
+
+For hosted template CRUD and standalone rendering, see `nylas template ...`.
 
 ### GPG Signing and Encryption
 
@@ -469,4 +514,3 @@ fi
 - [Send email from the command line](https://cli.nylas.com/guides/send-email-from-terminal) — full guide with examples for Gmail, Outlook, Exchange, Yahoo, iCloud, and IMAP
 - [Give your AI coding agent an email address](https://cli.nylas.com/guides/give-ai-agent-email-address) — connect Claude Code, Cursor, or Codex CLI to your inbox
 - [Email deliverability from the CLI](https://cli.nylas.com/guides/email-deliverability-cli) — debug SPF, DKIM, and DMARC
-

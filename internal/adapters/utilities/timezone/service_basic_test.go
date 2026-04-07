@@ -177,6 +177,7 @@ func TestService_FindMeetingTime(t *testing.T) {
 
 			if result == nil {
 				t.Fatal("result is nil")
+				return
 			}
 
 			if len(result.TimeZones) != len(tt.req.TimeZones) {

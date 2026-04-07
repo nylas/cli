@@ -52,6 +52,7 @@ var (
 	ErrWebhookNotFound     = errors.New("webhook not found")
 	ErrNotetakerNotFound   = errors.New("notetaker not found")
 	ErrTemplateNotFound    = errors.New("template not found")
+	ErrWorkflowNotFound    = errors.New("workflow not found")
 	ErrApplicationNotFound = errors.New("application not found")
 	ErrCallbackURINotFound = errors.New("callback URI not found")
 	ErrConnectorNotFound   = errors.New("connector not found")

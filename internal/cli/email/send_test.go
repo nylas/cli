@@ -165,6 +165,13 @@ func TestSendCmd_FlagDefinitions(t *testing.T) {
 		{name: "list-gpg-keys", shorthand: "", flagType: "bool"},
 		{name: "interactive", shorthand: "i", flagType: "bool"},
 		{name: "yes", shorthand: "y", flagType: "bool"},
+		{name: "template-id", shorthand: "", flagType: "string"},
+		{name: "template-scope", shorthand: "", flagType: "string"},
+		{name: "template-grant-id", shorthand: "", flagType: "string"},
+		{name: "template-data", shorthand: "", flagType: "string"},
+		{name: "template-data-file", shorthand: "", flagType: "string"},
+		{name: "render-only", shorthand: "", flagType: "bool"},
+		{name: "template-strict", shorthand: "", flagType: "bool"},
 	}
 
 	for _, expected := range expectedFlags {
@@ -213,11 +220,20 @@ func TestSendCmd_UsageText(t *testing.T) {
 	if !strings.Contains(usage, "--list-gpg-keys") {
 		t.Error("Usage text should mention --list-gpg-keys flag")
 	}
+	if !strings.Contains(usage, "--template-id") {
+		t.Error("Usage text should mention --template-id flag")
+	}
+	if !strings.Contains(usage, "--render-only") {
+		t.Error("Usage text should mention --render-only flag")
+	}
 
 	// Validate examples include GPG
 	example := cmd.Example
 	if !strings.Contains(example, "gpg") && !strings.Contains(example, "sign") {
 		t.Error("Examples should include GPG signing usage")
+	}
+	if !strings.Contains(example, "--template-id") {
+		t.Error("Examples should include hosted template usage")
 	}
 }
 

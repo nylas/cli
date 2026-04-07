@@ -60,6 +60,7 @@ func TestService_GetTimeZoneInfo(t *testing.T) {
 
 			if result == nil {
 				t.Fatal("result is nil")
+				return
 			}
 
 			if result.Name != tt.zone {

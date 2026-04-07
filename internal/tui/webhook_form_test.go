@@ -13,6 +13,7 @@ func TestNewWebhookFormCreate(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewWebhookForm returned nil")
+		return
 	}
 
 	if form.mode != WebhookFormCreate {
@@ -45,6 +46,7 @@ func TestNewWebhookFormEdit(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewWebhookForm returned nil")
+		return
 	}
 
 	if form.mode != WebhookFormEdit {

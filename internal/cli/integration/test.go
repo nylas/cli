@@ -66,6 +66,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/domain"
 	"golang.org/x/time/rate"
@@ -229,6 +230,12 @@ func runCLIWithOverrides(timeout time.Duration, envOverrides map[string]string, 
 	return stdout.String(), stderr.String(), err
 }
 
+func runCLIWithOverridesAndRateLimit(t *testing.T, timeout time.Duration, envOverrides map[string]string, args ...string) (string, string, error) {
+	t.Helper()
+	acquireRateLimit(t)
+	return runCLIWithOverrides(timeout, envOverrides, args...)
+}
+
 // runCLIWithRateLimit executes a CLI command with rate limiting.
 // Use this for commands that make API calls when running tests with t.Parallel().
 // For offline commands (timezone, ai config, help), use runCLI directly.
@@ -382,6 +389,78 @@ func getTestEmail() string {
 		return testEmail
 	}
 	return getEnvOrDefault("NYLAS_TEST_EMAIL", "")
+}
+
+// getGrantEmail resolves the mailbox email for the active integration grant.
+func getGrantEmail(t *testing.T) string {
+	t.Helper()
+	skipIfMissingCreds(t)
+	acquireRateLimit(t)
+
+	client := getTestClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	grant, err := client.GetGrant(ctx, testGrantID)
+	if err != nil {
+		t.Fatalf("failed to resolve grant email: %v", err)
+		return ""
+	}
+	if grant == nil || strings.TrimSpace(grant.Email) == "" {
+		t.Fatal("active grant does not expose an email address")
+		return ""
+	}
+
+	return strings.TrimSpace(grant.Email)
+}
+
+// getSendTargetEmail returns the configured test email or falls back to the grant mailbox.
+func getSendTargetEmail(t *testing.T) string {
+	t.Helper()
+
+	if email := strings.TrimSpace(getTestEmail()); email != "" {
+		return email
+	}
+
+	return getGrantEmail(t)
+}
+
+func newSeededGrantStoreEnv(t *testing.T, grant domain.GrantInfo) map[string]string {
+	t.Helper()
+
+	configHome := t.TempDir()
+	configDir := filepath.Join(configHome, "nylas")
+	passphrase := "integration-test-file-store-passphrase"
+
+	originalPassphrase, hadOriginalPassphrase := os.LookupEnv("NYLAS_FILE_STORE_PASSPHRASE")
+	if err := os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", passphrase); err != nil {
+		t.Fatalf("failed to set seeded grant-store passphrase: %v", err)
+	}
+	defer func() {
+		if hadOriginalPassphrase {
+			_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", originalPassphrase)
+			return
+		}
+		_ = os.Unsetenv("NYLAS_FILE_STORE_PASSPHRASE")
+	}()
+
+	store, err := keyring.NewEncryptedFileStore(configDir)
+	if err != nil {
+		t.Fatalf("failed to create seeded grant store: %v", err)
+	}
+
+	grantStore := keyring.NewGrantStore(store)
+	if err := grantStore.SaveGrant(grant); err != nil {
+		t.Fatalf("failed to seed grant store: %v", err)
+	}
+
+	return map[string]string{
+		"NYLAS_GRANT_ID":              "",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": passphrase,
+		"XDG_CONFIG_HOME":             configHome,
+		"HOME":                        configHome,
+	}
 }
 
 // extractEventID extracts event ID from CLI output

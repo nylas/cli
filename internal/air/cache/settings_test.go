@@ -22,6 +22,7 @@ func TestLoadSettings_NewFile(t *testing.T) {
 
 	if settings == nil {
 		t.Fatal("LoadSettings() returned nil")
+		return
 	}
 
 	// Should have default values

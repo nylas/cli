@@ -60,6 +60,7 @@ func TestNewApp(t *testing.T) {
 
 	if app == nil {
 		t.Fatal("NewApp() returned nil")
+		return
 	}
 
 	if app.Application == nil {
@@ -97,6 +98,7 @@ func TestNewAppWithThemes(t *testing.T) {
 			app := NewApp(config)
 			if app == nil {
 				t.Fatalf("NewApp() with theme %q returned nil", theme)
+				return
 			}
 
 			if app.styles == nil {
@@ -127,6 +129,7 @@ func TestAppStyles(t *testing.T) {
 
 	if styles == nil {
 		t.Fatal("Styles() returned nil")
+		return
 	}
 
 	// Verify styles are properly set

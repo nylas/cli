@@ -82,6 +82,7 @@ func TestPointerHelpers(t *testing.T) {
 	strPtr := testutil.StringPtr(str)
 	if strPtr == nil {
 		t.Fatal("StringPtr returned nil")
+		return
 	}
 	if *strPtr != str {
 		t.Errorf("Expected %q, got %q", str, *strPtr)
@@ -92,6 +93,7 @@ func TestPointerHelpers(t *testing.T) {
 	boolPtr := testutil.BoolPtr(boolVal)
 	if boolPtr == nil {
 		t.Fatal("BoolPtr returned nil")
+		return
 	}
 	if *boolPtr != boolVal {
 		t.Errorf("Expected %v, got %v", boolVal, *boolPtr)
@@ -102,6 +104,7 @@ func TestPointerHelpers(t *testing.T) {
 	intPtr := testutil.IntPtr(intVal)
 	if intPtr == nil {
 		t.Fatal("IntPtr returned nil")
+		return
 	}
 	if *intPtr != intVal {
 		t.Errorf("Expected %d, got %d", intVal, *intPtr)

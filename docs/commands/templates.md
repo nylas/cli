@@ -4,6 +4,19 @@ Manage locally-stored email templates for composing messages with variable subst
 
 Templates are stored in `~/.config/nylas/templates.json` and support `{{variable}}` syntax for placeholders. Variables are automatically extracted from the subject and body when templates are created or updated.
 
+For API-backed hosted templates shared across an application or grant, use the top-level `nylas template ...` commands.
+
+---
+
+### Hosted Templates Quick Reference
+
+```bash
+nylas template list
+nylas template create --name "Welcome" --subject "Hello {{user.name}}" --body "<p>Hello {{user.name}}</p>"
+nylas template render <template-id> --data '{"user":{"name":"Ada"}}'
+nylas email send --to user@example.com --template-id <template-id> --template-data '{"user":{"name":"Ada"}}'
+```
+
 ---
 
 ### List Templates

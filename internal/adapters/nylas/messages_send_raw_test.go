@@ -78,6 +78,7 @@ func TestSendRawMessage_Success(t *testing.T) {
 
 	if msg == nil {
 		t.Fatal("SendRawMessage() returned nil message")
+		return
 	}
 	if msg.ID != "msg-123" {
 		t.Errorf("Expected message ID msg-123, got %s", msg.ID)

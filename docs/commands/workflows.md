@@ -1,3 +1,26 @@
+## Hosted Workflows
+
+Manage API-backed workflows that connect booking events to hosted templates.
+
+```bash
+nylas workflow list
+nylas workflow create --name "Booking Confirmation" --template-id tpl_123 --trigger-event booking.created
+nylas workflow show <workflow-id>
+nylas workflow update <workflow-id> --disabled
+nylas workflow delete <workflow-id> --yes
+```
+
+**Scopes:**
+- `--scope app` for application-level workflows
+- `--scope grant --grant-id <id>` for grant-level workflows
+
+**Typical flow:**
+1. Create a hosted template with `nylas template create`
+2. Create a workflow that points at that template with `nylas workflow create`
+3. Verify the rendered email with `nylas email send --template-id ... --render-only`
+
+---
+
 ## Advanced Automation Workflows
 
 Complex automation workflows and integration patterns that span multiple Nylas CLI commands.
@@ -621,4 +644,3 @@ def call_api():
 - **API Reference:** https://developer.nylas.com/docs/api/v3/
 
 ---
-

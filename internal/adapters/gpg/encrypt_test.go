@@ -139,6 +139,7 @@ func TestEncryptData_Integration(t *testing.T) {
 
 	if result == nil {
 		t.Fatal("EncryptData() returned nil result")
+		return
 	}
 
 	// Validate ciphertext
@@ -201,6 +202,7 @@ func TestSignAndEncryptData_Integration(t *testing.T) {
 
 	if result == nil {
 		t.Fatal("SignAndEncryptData() returned nil result")
+		return
 	}
 
 	// Validate ciphertext
