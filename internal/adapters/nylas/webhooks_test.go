@@ -249,6 +249,100 @@ func TestHTTPClient_DeleteWebhook_EmptyID(t *testing.T) {
 	assert.Contains(t, err.Error(), "webhook ID")
 }
 
+func TestHTTPClient_RotateWebhookSecret(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/webhooks/rotate-secret/webhook-789", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+
+		response := map[string]any{
+			"data": map[string]any{
+				"id":             "webhook-789",
+				"webhook_secret": "rotated-secret-123",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	rotated, err := client.RotateWebhookSecret(ctx, "webhook-789")
+
+	require.NoError(t, err)
+	require.NotNil(t, rotated)
+	assert.Equal(t, "webhook-789", rotated.ID)
+	assert.Equal(t, "rotated-secret-123", rotated.WebhookSecret)
+}
+
+func TestHTTPClient_RotateWebhookSecret_RootLevelSecretFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/webhooks/rotate-secret/webhook-789", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+
+		response := map[string]any{
+			"webhook_secret": "root-secret-123",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	rotated, err := client.RotateWebhookSecret(ctx, "webhook-789")
+
+	require.NoError(t, err)
+	require.NotNil(t, rotated)
+	assert.Equal(t, "webhook-789", rotated.ID)
+	assert.Equal(t, "root-secret-123", rotated.WebhookSecret)
+}
+
+func TestHTTPClient_RotateWebhookSecret_EmptyID(t *testing.T) {
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+
+	ctx := context.Background()
+	rotated, err := client.RotateWebhookSecret(ctx, "")
+
+	require.Error(t, err)
+	assert.Nil(t, rotated)
+	assert.Contains(t, err.Error(), "webhook ID")
+}
+
+func TestHTTPClient_RotateWebhookSecret_MissingSecret(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/webhooks/rotate-secret/webhook-789", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+
+		response := map[string]any{
+			"data": map[string]any{
+				"id": "webhook-789",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	rotated, err := client.RotateWebhookSecret(ctx, "webhook-789")
+
+	require.Error(t, err)
+	assert.Nil(t, rotated)
+	assert.Contains(t, err.Error(), "missing webhook_secret")
+}
+
 func TestHTTPClient_SendWebhookTestEvent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/webhooks/send-test-event", r.URL.Path)

@@ -69,6 +69,14 @@ func (d *DemoClient) DeleteWebhook(ctx context.Context, webhookID string) error 
 	return nil
 }
 
+// RotateWebhookSecret simulates rotating a webhook secret.
+func (d *DemoClient) RotateWebhookSecret(ctx context.Context, webhookID string) (*domain.RotateWebhookSecretResponse, error) {
+	return &domain.RotateWebhookSecretResponse{
+		ID:            webhookID,
+		WebhookSecret: "whsec_demo_rotated_987654321",
+	}, nil
+}
+
 // SendWebhookTestEvent simulates sending a test event.
 func (d *DemoClient) SendWebhookTestEvent(ctx context.Context, webhookURL string) error {
 	return nil

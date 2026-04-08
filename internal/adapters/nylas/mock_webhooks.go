@@ -7,6 +7,10 @@ import (
 )
 
 func (m *MockClient) ListWebhooks(ctx context.Context) ([]domain.Webhook, error) {
+	m.ListWebhooksCalled = true
+	if m.ListWebhooksFunc != nil {
+		return m.ListWebhooksFunc(ctx)
+	}
 	return []domain.Webhook{
 		{
 			ID:           "webhook-1",
@@ -20,6 +24,11 @@ func (m *MockClient) ListWebhooks(ctx context.Context) ([]domain.Webhook, error)
 
 // GetWebhook retrieves a single webhook.
 func (m *MockClient) GetWebhook(ctx context.Context, webhookID string) (*domain.Webhook, error) {
+	m.GetWebhookCalled = true
+	m.LastWebhookID = webhookID
+	if m.GetWebhookFunc != nil {
+		return m.GetWebhookFunc(ctx, webhookID)
+	}
 	return &domain.Webhook{
 		ID:           webhookID,
 		Description:  "Test Webhook",
@@ -31,6 +40,10 @@ func (m *MockClient) GetWebhook(ctx context.Context, webhookID string) (*domain.
 
 // CreateWebhook creates a new webhook.
 func (m *MockClient) CreateWebhook(ctx context.Context, req *domain.CreateWebhookRequest) (*domain.Webhook, error) {
+	m.CreateWebhookCalled = true
+	if m.CreateWebhookFunc != nil {
+		return m.CreateWebhookFunc(ctx, req)
+	}
 	return &domain.Webhook{
 		ID:            "new-webhook-id",
 		Description:   req.Description,
@@ -43,6 +56,11 @@ func (m *MockClient) CreateWebhook(ctx context.Context, req *domain.CreateWebhoo
 
 // UpdateWebhook updates an existing webhook.
 func (m *MockClient) UpdateWebhook(ctx context.Context, webhookID string, req *domain.UpdateWebhookRequest) (*domain.Webhook, error) {
+	m.UpdateWebhookCalled = true
+	m.LastWebhookID = webhookID
+	if m.UpdateWebhookFunc != nil {
+		return m.UpdateWebhookFunc(ctx, webhookID, req)
+	}
 	webhook := &domain.Webhook{
 		ID:     webhookID,
 		Status: "active",
@@ -64,16 +82,42 @@ func (m *MockClient) UpdateWebhook(ctx context.Context, webhookID string, req *d
 
 // DeleteWebhook deletes a webhook.
 func (m *MockClient) DeleteWebhook(ctx context.Context, webhookID string) error {
+	m.DeleteWebhookCalled = true
+	m.LastWebhookID = webhookID
+	if m.DeleteWebhookFunc != nil {
+		return m.DeleteWebhookFunc(ctx, webhookID)
+	}
 	return nil
+}
+
+// RotateWebhookSecret rotates a webhook secret.
+func (m *MockClient) RotateWebhookSecret(ctx context.Context, webhookID string) (*domain.RotateWebhookSecretResponse, error) {
+	m.RotateWebhookSecretCalled = true
+	m.LastWebhookID = webhookID
+	if m.RotateWebhookSecretFunc != nil {
+		return m.RotateWebhookSecretFunc(ctx, webhookID)
+	}
+	return &domain.RotateWebhookSecretResponse{
+		ID:            webhookID,
+		WebhookSecret: "rotated-mock-secret-67890",
+	}, nil
 }
 
 // SendWebhookTestEvent sends a test event to a webhook URL.
 func (m *MockClient) SendWebhookTestEvent(ctx context.Context, webhookURL string) error {
+	m.SendWebhookTestEventCalled = true
+	if m.SendWebhookTestEventFunc != nil {
+		return m.SendWebhookTestEventFunc(ctx, webhookURL)
+	}
 	return nil
 }
 
 // GetWebhookMockPayload returns a mock payload for a trigger type.
 func (m *MockClient) GetWebhookMockPayload(ctx context.Context, triggerType string) (map[string]any, error) {
+	m.GetWebhookMockPayloadCalled = true
+	if m.GetWebhookMockPayloadFunc != nil {
+		return m.GetWebhookMockPayloadFunc(ctx, triggerType)
+	}
 	return map[string]any{
 		"specversion": "1.0",
 		"type":        triggerType,

@@ -44,6 +44,19 @@ type MockClient struct {
 	ListAttachmentsCalled       bool
 	GetAttachmentCalled         bool
 	DownloadAttachmentCalled    bool
+	ListWebhooksCalled          bool
+	GetWebhookCalled            bool
+	CreateWebhookCalled         bool
+	UpdateWebhookCalled         bool
+	DeleteWebhookCalled         bool
+	ListPubSubChannelsCalled    bool
+	GetPubSubChannelCalled      bool
+	CreatePubSubChannelCalled   bool
+	UpdatePubSubChannelCalled   bool
+	DeletePubSubChannelCalled   bool
+	RotateWebhookSecretCalled   bool
+	SendWebhookTestEventCalled  bool
+	GetWebhookMockPayloadCalled bool
 	ListRemoteTemplatesCalled   bool
 	GetRemoteTemplateCalled     bool
 	CreateRemoteTemplateCalled  bool
@@ -66,6 +79,8 @@ type MockClient struct {
 	LastDraftID                 string
 	LastFolderID                string
 	LastAttachmentID            string
+	LastWebhookID               string
+	LastPubSubChannelID         string
 	LastTemplateID              string
 	LastWorkflowID              string
 
@@ -100,6 +115,19 @@ type MockClient struct {
 	ListAttachmentsFunc       func(ctx context.Context, grantID, messageID string) ([]domain.Attachment, error)
 	GetAttachmentFunc         func(ctx context.Context, grantID, messageID, attachmentID string) (*domain.Attachment, error)
 	DownloadAttachmentFunc    func(ctx context.Context, grantID, messageID, attachmentID string) (io.ReadCloser, error)
+	ListWebhooksFunc          func(ctx context.Context) ([]domain.Webhook, error)
+	GetWebhookFunc            func(ctx context.Context, webhookID string) (*domain.Webhook, error)
+	CreateWebhookFunc         func(ctx context.Context, req *domain.CreateWebhookRequest) (*domain.Webhook, error)
+	UpdateWebhookFunc         func(ctx context.Context, webhookID string, req *domain.UpdateWebhookRequest) (*domain.Webhook, error)
+	DeleteWebhookFunc         func(ctx context.Context, webhookID string) error
+	RotateWebhookSecretFunc   func(ctx context.Context, webhookID string) (*domain.RotateWebhookSecretResponse, error)
+	SendWebhookTestEventFunc  func(ctx context.Context, webhookURL string) error
+	GetWebhookMockPayloadFunc func(ctx context.Context, triggerType string) (map[string]any, error)
+	ListPubSubChannelsFunc    func(ctx context.Context) (*domain.PubSubChannelListResponse, error)
+	GetPubSubChannelFunc      func(ctx context.Context, channelID string) (*domain.PubSubChannel, error)
+	CreatePubSubChannelFunc   func(ctx context.Context, req *domain.CreatePubSubChannelRequest) (*domain.PubSubChannel, error)
+	UpdatePubSubChannelFunc   func(ctx context.Context, channelID string, req *domain.UpdatePubSubChannelRequest) (*domain.PubSubChannel, error)
+	DeletePubSubChannelFunc   func(ctx context.Context, channelID string) error
 	ListRemoteTemplatesFunc   func(ctx context.Context, scope domain.RemoteScope, grantID string, params *domain.CursorListParams) (*domain.RemoteTemplateListResponse, error)
 	GetRemoteTemplateFunc     func(ctx context.Context, scope domain.RemoteScope, grantID, templateID string) (*domain.RemoteTemplate, error)
 	CreateRemoteTemplateFunc  func(ctx context.Context, scope domain.RemoteScope, grantID string, req *domain.CreateRemoteTemplateRequest) (*domain.RemoteTemplate, error)
