@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,8 +41,10 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestServer_StartStop(t *testing.T) {
+	port := reserveTCPPort(t)
+
 	server := NewServer(ports.WebhookServerConfig{
-		Port: 0, // Let OS pick a port
+		Port: port,
 		Path: "/webhook",
 	})
 
@@ -57,6 +61,22 @@ func TestServer_StartStop(t *testing.T) {
 	// Stop the server
 	err = server.Stop()
 	require.NoError(t, err)
+}
+
+func reserveTCPPort(t *testing.T) int {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	require.True(t, ok, fmt.Sprintf("listener addr %T is not *net.TCPAddr", listener.Addr()))
+	require.NotZero(t, addr.Port)
+
+	return addr.Port
 }
 
 func TestServer_GetStats(t *testing.T) {

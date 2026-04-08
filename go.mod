@@ -2,6 +2,8 @@ module github.com/nylas/cli
 
 go 1.26.0
 
+toolchain go1.26.2
+
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/fatih/color v1.18.0

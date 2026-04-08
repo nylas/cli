@@ -42,6 +42,20 @@ func validateHostedTemplateSendOptions(opts hostedTemplateSendOptions, subject, 
 		return nil
 	}
 
+	if strings.TrimSpace(opts.TemplateGrantID) != "" {
+		scope := domain.ScopeApplication
+		if opts.TemplateScope != "" {
+			parsedScope, err := domain.ParseRemoteScope(opts.TemplateScope)
+			if err != nil {
+				return common.NewUserError("invalid `--template-scope` value", "Use --template-scope app or --template-scope grant")
+			}
+			scope = parsedScope
+		}
+		if scope != domain.ScopeGrant {
+			return common.NewUserError("`--template-grant-id` requires `--template-scope grant`", "Use --template-scope grant when rendering a grant-scoped hosted template")
+		}
+	}
+
 	if subject != "" || body != "" {
 		return common.NewUserError(
 			"`--template-id` cannot be combined with `--subject` or `--body`",

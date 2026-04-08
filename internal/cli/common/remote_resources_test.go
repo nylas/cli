@@ -83,3 +83,47 @@ func TestResolveScopeGrantID_GrantScopeUsesGrantLookup(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "grant-456", grantID)
 }
+
+func TestResolveScopeGrantID_AuditGrantHook(t *testing.T) {
+	originalHook := AuditGrantHook
+	t.Cleanup(func() {
+		AuditGrantHook = originalHook
+	})
+
+	var hookedGrantID string
+	AuditGrantHook = func(grantID string) {
+		hookedGrantID = grantID
+	}
+
+	grantID, err := ResolveScopeGrantID(domain.ScopeGrant, "grant-789")
+
+	require.NoError(t, err)
+	assert.Equal(t, "grant-789", grantID)
+	assert.Equal(t, "grant-789", hookedGrantID)
+}
+
+func TestResolveScopeGrantID_AppScopeSkipsAuditGrantHook(t *testing.T) {
+	originalHook := AuditGrantHook
+	t.Cleanup(func() {
+		AuditGrantHook = originalHook
+	})
+
+	called := false
+	AuditGrantHook = func(string) {
+		called = true
+	}
+
+	grantID, err := ResolveScopeGrantID(domain.ScopeApplication, "")
+
+	require.NoError(t, err)
+	assert.Empty(t, grantID)
+	assert.False(t, called)
+}
+
+func TestResolveScopeGrantID_AppScopeRejectsGrantID(t *testing.T) {
+	grantID, err := ResolveScopeGrantID(domain.ScopeApplication, "grant-789")
+
+	require.Error(t, err)
+	assert.Empty(t, grantID)
+	assert.Contains(t, err.Error(), "`--grant-id` requires `--scope grant`")
+}

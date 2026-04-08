@@ -41,6 +41,11 @@ func TestValidateHostedTemplateSendOptions(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "template grant id requires grant scope",
+			opts:    hostedTemplateSendOptions{TemplateID: "tpl-123", TemplateGrantID: "grant-123"},
+			wantErr: true,
+		},
+		{
 			name:    "grant scope without template id is rejected",
 			opts:    hostedTemplateSendOptions{TemplateScope: string(domain.ScopeGrant)},
 			wantErr: true,

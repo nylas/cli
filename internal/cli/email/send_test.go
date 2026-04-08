@@ -103,6 +103,69 @@ func TestSendCmd_ListGPGKeysFlag(t *testing.T) {
 	}
 }
 
+func TestShouldUseInteractiveSendMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		interactive  bool
+		to           []string
+		subject      string
+		body         string
+		templateOpts hostedTemplateSendOptions
+		want         bool
+	}{
+		{
+			name:        "explicit interactive flag always prompts",
+			interactive: true,
+			want:        true,
+		},
+		{
+			name:    "raw send with no content auto prompts",
+			want:    true,
+			subject: "",
+			body:    "",
+		},
+		{
+			name:    "raw send with recipient does not auto prompt",
+			to:      []string{"user@example.com"},
+			subject: "",
+			body:    "",
+			want:    false,
+		},
+		{
+			name: "hosted template send without recipients auto prompts",
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+			},
+			want: true,
+		},
+		{
+			name: "hosted template render-only does not prompt",
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+				RenderOnly: true,
+			},
+			want: false,
+		},
+		{
+			name: "hosted template send with recipients does not prompt",
+			to:   []string{"user@example.com"},
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldUseInteractiveSendMode(tt.interactive, tt.to, tt.subject, tt.body, tt.templateOpts)
+			if got != tt.want {
+				t.Fatalf("shouldUseInteractiveSendMode() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSendCmd_AutoSignConfig(t *testing.T) {
 	// Create temp config directory
 	tmpDir := t.TempDir()

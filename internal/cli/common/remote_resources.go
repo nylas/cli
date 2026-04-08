@@ -41,12 +41,29 @@ func ResolveGrantIdentifier(identifier string) (string, error) {
 // ResolveScopeGrantID resolves the grant ID when a command targets grant-scoped resources.
 func ResolveScopeGrantID(scope domain.RemoteScope, grantID string) (string, error) {
 	if scope != domain.ScopeGrant {
+		if strings.TrimSpace(grantID) != "" {
+			return "", NewUserError("`--grant-id` requires `--scope grant`", "Use --scope grant when targeting grant-scoped resources")
+		}
 		return "", nil
 	}
 	if grantID == "" {
-		return GetGrantID(nil)
+		resolvedGrantID, err := GetGrantID(nil)
+		if err != nil {
+			return "", err
+		}
+		if AuditGrantHook != nil {
+			AuditGrantHook(resolvedGrantID)
+		}
+		return resolvedGrantID, nil
 	}
-	return ResolveGrantIdentifier(grantID)
+	resolvedGrantID, err := ResolveGrantIdentifier(grantID)
+	if err != nil {
+		return "", err
+	}
+	if AuditGrantHook != nil {
+		AuditGrantHook(resolvedGrantID)
+	}
+	return resolvedGrantID, nil
 }
 
 // LoadJSONFile decodes a JSON file into target.

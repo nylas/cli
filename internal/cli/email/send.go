@@ -131,7 +131,7 @@ Supports hosted templates:
 			}
 
 			// Interactive mode (runs before client setup).
-			if interactive || (templateOpts.TemplateID == "" && len(to) == 0 && subject == "" && body == "") {
+			if shouldUseInteractiveSendMode(interactive, to, subject, body, templateOpts) {
 				reader := bufio.NewReader(os.Stdin)
 
 				if len(to) == 0 && !templateOpts.RenderOnly {
@@ -451,6 +451,21 @@ Supports hosted templates:
 	cmd.Flags().BoolVar(&templateOpts.Strict, "template-strict", true, "Fail if a hosted template references missing variables")
 
 	return cmd
+}
+
+func shouldUseInteractiveSendMode(
+	interactive bool,
+	to []string,
+	subject, body string,
+	templateOpts hostedTemplateSendOptions,
+) bool {
+	if interactive {
+		return true
+	}
+	if templateOpts.TemplateID != "" {
+		return len(to) == 0 && !templateOpts.RenderOnly
+	}
+	return len(to) == 0 && subject == "" && body == ""
 }
 
 // parseEmails parses a comma-separated list of emails.
