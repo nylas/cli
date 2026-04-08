@@ -114,6 +114,8 @@ secrets.yml
 *secrets*
 *secret*
 !internal/ports/secrets.go
+!internal/cli/webhook/rotate_secret.go
+!internal/cli/webhook/verify_rotate_test.go
 
 # OAuth tokens
 oauth_token*
