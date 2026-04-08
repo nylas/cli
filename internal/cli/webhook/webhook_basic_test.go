@@ -36,12 +36,13 @@ func TestNewWebhookCmd(t *testing.T) {
 
 	t.Run("has_short_description", func(t *testing.T) {
 		assert.NotEmpty(t, cmd.Short)
-		assert.Contains(t, cmd.Short, "webhook")
+		assert.Contains(t, cmd.Short, "notification")
 	})
 
 	t.Run("has_long_description", func(t *testing.T) {
 		assert.NotEmpty(t, cmd.Long)
-		assert.Contains(t, cmd.Long, "Nylas webhooks")
+		assert.Contains(t, cmd.Long, "webhooks")
+		assert.Contains(t, cmd.Long, "Pub/Sub")
 	})
 
 	t.Run("has_subcommands", func(t *testing.T) {
@@ -50,7 +51,10 @@ func TestNewWebhookCmd(t *testing.T) {
 	})
 
 	t.Run("has_required_subcommands", func(t *testing.T) {
-		expectedCmds := []string{"list", "show", "create", "update", "delete", "test", "triggers", "server"}
+		expectedCmds := []string{
+			"list", "show", "create", "update", "delete",
+			"rotate-secret", "verify", "pubsub", "test", "triggers", "server",
+		}
 
 		cmdMap := make(map[string]bool)
 		for _, sub := range cmd.Commands() {

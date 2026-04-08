@@ -49,6 +49,12 @@ type WebhookListResponse struct {
 	Pagination Pagination `json:"pagination,omitempty"`
 }
 
+// RotateWebhookSecretResponse contains the result of a webhook secret rotation.
+type RotateWebhookSecretResponse struct {
+	ID            string `json:"id,omitempty"`
+	WebhookSecret string `json:"webhook_secret"`
+}
+
 // Common webhook trigger types.
 const (
 	// Grant triggers

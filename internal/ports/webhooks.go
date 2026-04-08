@@ -23,6 +23,9 @@ type WebhookClient interface {
 	// DeleteWebhook deletes a webhook.
 	DeleteWebhook(ctx context.Context, webhookID string) error
 
+	// RotateWebhookSecret rotates and returns the secret for a webhook.
+	RotateWebhookSecret(ctx context.Context, webhookID string) (*domain.RotateWebhookSecretResponse, error)
+
 	// SendWebhookTestEvent sends a test event to a webhook URL.
 	SendWebhookTestEvent(ctx context.Context, webhookURL string) error
 

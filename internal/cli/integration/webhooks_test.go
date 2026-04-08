@@ -38,6 +38,9 @@ func TestCLI_WebhookHelp(t *testing.T) {
 	if !strings.Contains(stdout, "triggers") || !strings.Contains(stdout, "test") {
 		t.Errorf("Expected triggers and test subcommands in help, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, "rotate-secret") || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, "pubsub") {
+		t.Errorf("Expected rotate-secret, verify, and pubsub subcommands in help, got: %s", stdout)
+	}
 
 	t.Logf("webhook --help output:\n%s", stdout)
 }

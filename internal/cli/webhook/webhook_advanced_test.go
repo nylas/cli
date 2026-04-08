@@ -107,6 +107,9 @@ func TestWebhookCommandHelp(t *testing.T) {
 		"create",
 		"update",
 		"delete",
+		"rotate-secret",
+		"verify",
+		"pubsub",
 		"test",
 		"triggers",
 	}

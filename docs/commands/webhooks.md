@@ -1,6 +1,21 @@
 ## Webhook Management
 
-Create and manage webhooks for real-time event notifications.
+Create and manage Nylas notification destinations for real-time event delivery.
+
+### Quick Reference
+
+```bash
+nylas webhook list
+nylas webhook create --url https://example.com/webhook --triggers message.created
+nylas webhook rotate-secret <webhook-id> --yes
+nylas webhook verify --payload-file body.json --signature <sig> --secret <secret>
+
+nylas webhook pubsub list
+nylas webhook pubsub create --topic projects/PROJ/topics/TOPIC --triggers message.created
+nylas webhook pubsub show <channel-id>
+nylas webhook pubsub update <channel-id> --status inactive
+nylas webhook pubsub delete <channel-id> --yes
+```
 
 ### Built-in Webhook Server
 
@@ -127,6 +142,46 @@ Important: Save your webhook secret - it won't be shown again:
 
 Use this secret to verify webhook signatures.
 ```
+
+### Rotate Webhook Secret
+
+```bash
+nylas webhook rotate-secret <webhook-id> --yes
+```
+
+Rotate the signing secret for a webhook and print the new value. Update your
+receiving service to use the new secret before processing future deliveries.
+
+### Verify Webhook Signature
+
+```bash
+nylas webhook verify \
+  --payload-file ./body.json \
+  --signature <x-nylas-signature> \
+  --secret <webhook-secret>
+```
+
+This verifies the exact raw body against the `x-nylas-signature` or
+`X-Nylas-Signature` header value using HMAC-SHA256.
+
+### Pub/Sub Notification Channels
+
+Manage Google Cloud Pub/Sub notification channels under the existing webhook
+namespace:
+
+```bash
+nylas webhook pubsub list
+nylas webhook pubsub show <channel-id>
+nylas webhook pubsub create \
+  --topic projects/PROJ/topics/TOPIC \
+  --triggers message.created,event.created
+nylas webhook pubsub update <channel-id> --status inactive
+nylas webhook pubsub delete <channel-id> --yes
+```
+
+Use Pub/Sub channels when you want queue-based delivery for higher-volume
+notification processing or when webhook delivery latency and retries are a
+concern.
 
 ### Update Webhook
 
@@ -470,4 +525,3 @@ nylas webhook test <webhook-id>
 ```
 
 ---
-

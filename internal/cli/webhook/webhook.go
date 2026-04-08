@@ -10,13 +10,13 @@ func NewWebhookCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "webhook",
 		Aliases: []string{"webhooks", "wh"},
-		Short:   "Manage webhooks",
-		Long: `Manage Nylas webhooks for event notifications.
+		Short:   "Manage notification destinations",
+		Long: `Manage Nylas notification destinations, including webhooks and Pub/Sub channels.
 
-Webhooks allow you to receive real-time notifications when events occur,
-such as new messages, calendar events, or contact changes.
+Use webhooks for direct HTTPS push delivery, or Pub/Sub channels for
+high-volume queue-based notification delivery.
 
-Note: Webhook management requires an API key (admin-level access).`,
+Note: Notification destination management requires an API key (admin-level access).`,
 	}
 
 	cmd.AddCommand(newListCmd())
@@ -24,6 +24,9 @@ Note: Webhook management requires an API key (admin-level access).`,
 	cmd.AddCommand(newCreateCmd())
 	cmd.AddCommand(newUpdateCmd())
 	cmd.AddCommand(newDeleteCmd())
+	cmd.AddCommand(newRotateSecretCmd())
+	cmd.AddCommand(newVerifyCmd())
+	cmd.AddCommand(newPubSubCmd())
 	cmd.AddCommand(newTestCmd())
 	cmd.AddCommand(newTriggersCmd())
 	cmd.AddCommand(newServerCmd())

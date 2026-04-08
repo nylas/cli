@@ -110,6 +110,50 @@ func (c *HTTPClient) DeleteWebhook(ctx context.Context, webhookID string) error 
 	return c.doDelete(ctx, queryURL)
 }
 
+// RotateWebhookSecret rotates the secret for a webhook.
+func (c *HTTPClient) RotateWebhookSecret(
+	ctx context.Context,
+	webhookID string,
+) (*domain.RotateWebhookSecretResponse, error) {
+	if err := validateRequired("webhook ID", webhookID); err != nil {
+		return nil, err
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/webhooks/rotate-secret/%s", c.baseURL, webhookID)
+
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data struct {
+			ID            string `json:"id"`
+			WebhookSecret string `json:"webhook_secret"`
+		} `json:"data"`
+		WebhookSecret string `json:"webhook_secret"`
+	}
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	rotated := &domain.RotateWebhookSecretResponse{
+		ID:            webhookID,
+		WebhookSecret: result.Data.WebhookSecret,
+	}
+	if result.Data.ID != "" {
+		rotated.ID = result.Data.ID
+	}
+	if rotated.WebhookSecret == "" {
+		rotated.WebhookSecret = result.WebhookSecret
+	}
+	if rotated.WebhookSecret == "" {
+		return nil, fmt.Errorf("%w: rotate webhook secret response missing webhook_secret", domain.ErrAPIError)
+	}
+
+	return rotated, nil
+}
+
 // SendWebhookTestEvent sends a test event to a webhook URL.
 func (c *HTTPClient) SendWebhookTestEvent(ctx context.Context, webhookURL string) error {
 	if err := validateRequired("webhook URL", webhookURL); err != nil {

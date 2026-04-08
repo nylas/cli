@@ -398,7 +398,18 @@ nylas webhook show <webhook-id>                       # Show webhook details
 nylas webhook create --url URL --triggers "event.created,event.updated"
 nylas webhook update <webhook-id> --url NEW_URL       # Update webhook
 nylas webhook delete <webhook-id>                     # Delete webhook
+nylas webhook rotate-secret <webhook-id> --yes        # Rotate webhook signing secret
+nylas webhook verify --payload-file body.json --signature SIG --secret SECRET
 nylas webhook triggers                                # List available triggers
+```
+
+**Pub/Sub channels:**
+```bash
+nylas webhook pubsub list
+nylas webhook pubsub show <channel-id>
+nylas webhook pubsub create --topic projects/PROJ/topics/TOPIC --triggers "message.created"
+nylas webhook pubsub update <channel-id> --status inactive
+nylas webhook pubsub delete <channel-id> --yes
 ```
 
 **Testing & development:**

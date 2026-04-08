@@ -3,9 +3,6 @@ package webhookserver
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -356,8 +353,5 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 // verifySignature verifies the webhook signature using HMAC-SHA256.
 func (s *Server) verifySignature(payload []byte, signature string) bool {
-	mac := hmac.New(sha256.New, []byte(s.config.WebhookSecret))
-	mac.Write(payload)
-	expected := hex.EncodeToString(mac.Sum(nil))
-	return hmac.Equal([]byte(signature), []byte(expected))
+	return VerifySignature(payload, signature, s.config.WebhookSecret)
 }

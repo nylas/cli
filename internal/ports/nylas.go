@@ -15,6 +15,7 @@ type NylasClient interface {
 	CalendarClient
 	ContactClient
 	WebhookClient
+	PubSubClient
 	NotetakerClient
 	InboundClient
 	SchedulerClient
