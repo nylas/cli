@@ -261,6 +261,7 @@ func TestSignData_Integration(t *testing.T) {
 
 	if result == nil {
 		t.Fatal("SignData() returned nil result")
+		return
 	}
 
 	// Validate signature
@@ -535,6 +536,7 @@ func TestFindKeyByEmail_Integration(t *testing.T) {
 
 	if foundKey == nil {
 		t.Fatal("FindKeyByEmail() returned nil")
+		return
 	}
 
 	if foundKey.KeyID == "" {

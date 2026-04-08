@@ -387,6 +387,7 @@ func TestFocusOptimizer_AdaptSchedule(t *testing.T) {
 
 	if change == nil {
 		t.Fatal("Expected adaptive schedule change, got nil")
+		return
 	}
 
 	if change.Trigger != domain.TriggerMeetingOverload {
@@ -436,6 +437,7 @@ func TestFocusOptimizer_OptimizeMeetingDuration(t *testing.T) {
 
 	if optimization == nil {
 		t.Fatal("Expected optimization, got nil")
+		return
 	}
 
 	if optimization.EventID != "event-123" {

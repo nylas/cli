@@ -15,6 +15,7 @@ func TestNewEventFormCreate(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewEventForm returned nil")
+		return
 	}
 
 	if form.mode != EventFormCreate {
@@ -56,6 +57,7 @@ func TestNewEventFormEdit(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewEventForm returned nil")
+		return
 	}
 
 	if form.mode != EventFormEdit {

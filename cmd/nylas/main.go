@@ -25,9 +25,11 @@ import (
 	"github.com/nylas/cli/internal/cli/scheduler"
 	"github.com/nylas/cli/internal/cli/setup"
 	"github.com/nylas/cli/internal/cli/slack"
+	templatecmd "github.com/nylas/cli/internal/cli/templatecmd"
 	"github.com/nylas/cli/internal/cli/timezone"
 	"github.com/nylas/cli/internal/cli/update"
 	"github.com/nylas/cli/internal/cli/webhook"
+	"github.com/nylas/cli/internal/cli/workflow"
 	"github.com/nylas/cli/internal/ui"
 )
 
@@ -55,12 +57,14 @@ func main() {
 	rootCmd.AddCommand(timezone.NewTimezoneCmd())
 	rootCmd.AddCommand(mcp.NewMCPCmd())
 	rootCmd.AddCommand(slack.NewSlackCmd())
+	rootCmd.AddCommand(templatecmd.NewTemplateCmd())
 	rootCmd.AddCommand(demo.NewDemoCmd())
 	rootCmd.AddCommand(cli.NewTUICmd())
 	rootCmd.AddCommand(ui.NewUICmd())
 	rootCmd.AddCommand(air.NewAirCmd())
 	rootCmd.AddCommand(chat.NewChatCmd())
 	rootCmd.AddCommand(update.NewUpdateCmd())
+	rootCmd.AddCommand(workflow.NewWorkflowCmd())
 
 	if err := cli.Execute(); err != nil {
 		cli.LogAuditError(err)

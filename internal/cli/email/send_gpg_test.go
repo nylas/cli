@@ -87,6 +87,7 @@ func TestSendSignedEmail_MockClient(t *testing.T) {
 	// If we got here, GPG is configured and signing worked
 	if msg == nil {
 		t.Fatal("sendSignedEmail() returned nil message")
+		return
 	}
 	if msg.ID != "test-msg-id" {
 		t.Errorf("sendSignedEmail() message ID = %v, want test-msg-id", msg.ID)

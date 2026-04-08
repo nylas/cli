@@ -192,6 +192,8 @@ nylas email send ... --sign                                    # Send GPG-signed
 nylas email send ... --encrypt                                 # Send GPG-encrypted email
 nylas email send ... --sign --encrypt                          # Sign AND encrypt (recommended)
 nylas email send --list-gpg-keys                               # List available GPG signing keys
+nylas email send --to EMAIL --template-id TPL --template-data '{}'  # Send using a hosted template
+nylas email send --template-id TPL --template-data-file data.json --render-only
 nylas email search --query "QUERY"                             # Search emails
 nylas email delete <message-id>                                # Delete email
 nylas email mark read <message-id>                             # Mark as read
@@ -226,7 +228,7 @@ nylas email smart-compose --prompt "..."  # AI-powered email generation
 
 ---
 
-## Email Templates
+## Local Email Templates
 
 ```bash
 nylas email templates list                           # List all templates
@@ -240,6 +242,40 @@ nylas email templates use <template-id> --to EMAIL   # Send using template
 **Variable syntax:** Use `{{variable}}` in subject/body for placeholders.
 
 **Details:** `docs/commands/templates.md`
+
+---
+
+## Hosted Templates
+
+```bash
+nylas template list
+nylas template create --name NAME --subject SUBJECT --body BODY
+nylas template show <template-id>
+nylas template update <template-id> [flags]
+nylas template delete <template-id> --yes
+nylas template render <template-id> --data '{}'
+nylas template render-html --body "<p>{{x}}</p>" --engine mustache --data '{}'
+```
+
+**Scopes:** `--scope app` for application templates, `--scope grant --grant-id <id>` for grant-level templates.
+
+**Details:** `docs/commands/templates.md`
+
+---
+
+## Hosted Workflows
+
+```bash
+nylas workflow list
+nylas workflow create --name NAME --template-id TPL --trigger-event booking.created
+nylas workflow show <workflow-id>
+nylas workflow update <workflow-id> [flags]
+nylas workflow delete <workflow-id> --yes
+```
+
+**Scopes:** `--scope app` for application workflows, `--scope grant --grant-id <id>` for grant-level workflows.
+
+**Details:** `docs/commands/workflows.md`
 
 ---
 

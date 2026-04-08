@@ -24,6 +24,7 @@ func TestNewOllamaClient(t *testing.T) {
 
 		if client == nil {
 			t.Fatal("expected non-nil client")
+			return
 		}
 
 		if client.baseURL != "http://custom:8080" {

@@ -9,6 +9,7 @@ func TestNewCommandRegistry(t *testing.T) {
 
 	if registry == nil {
 		t.Fatal("NewCommandRegistry() returned nil")
+		return
 	}
 
 	// Verify commands were registered

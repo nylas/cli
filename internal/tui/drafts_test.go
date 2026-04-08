@@ -15,6 +15,7 @@ func TestNewDraftsView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewDraftsView returned nil")
+		return
 	}
 
 	if view.BaseTableView == nil {

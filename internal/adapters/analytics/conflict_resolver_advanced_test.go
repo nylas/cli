@@ -237,6 +237,7 @@ func TestConflictResolver_GenerateRecommendations(t *testing.T) {
 	// Verify the analysis structure is present
 	if analysis == nil {
 		t.Fatal("Expected analysis, got nil")
+		return
 	}
 
 	// Should have soft conflicts detected

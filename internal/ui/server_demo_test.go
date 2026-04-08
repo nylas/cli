@@ -287,6 +287,7 @@ func TestNewDemoServer(t *testing.T) {
 
 	if server == nil {
 		t.Fatal("NewDemoServer returned nil")
+		return
 	}
 	if server.addr != ":8080" {
 		t.Errorf("Expected addr ':8080', got %q", server.addr)

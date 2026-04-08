@@ -14,6 +14,7 @@ func TestNewComposeView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewComposeView returned nil")
+		return
 	}
 
 	if view.mode != ComposeModeNew {
@@ -53,6 +54,7 @@ func TestNewComposeViewForDraft(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewComposeViewForDraft returned nil")
+		return
 	}
 
 	if view.mode != ComposeModeDraft {
@@ -86,6 +88,7 @@ func TestComposeViewReplyMode(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewComposeView returned nil for reply mode")
+		return
 	}
 
 	if view.mode != ComposeModeReply {
@@ -118,6 +121,7 @@ func TestComposeViewReplyAllMode(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewComposeView returned nil for reply all mode")
+		return
 	}
 
 	if view.mode != ComposeModeReplyAll {
@@ -138,6 +142,7 @@ func TestComposeViewForwardMode(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewComposeView returned nil for forward mode")
+		return
 	}
 
 	if view.mode != ComposeModeForward {

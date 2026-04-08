@@ -126,6 +126,7 @@ func TestCreateCommand(t *testing.T) {
 
 			if cmd == nil {
 				t.Fatal("createCommand() returned nil")
+				return
 			}
 
 			// Verify the command was created (we can't test execution)

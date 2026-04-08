@@ -46,6 +46,7 @@ func TestStyles_DefaultStyles(t *testing.T) {
 
 	if styles == nil {
 		t.Fatal("DefaultStyles() returned nil")
+		return
 	}
 
 	// Verify some key colors are set
@@ -158,6 +159,7 @@ func TestContactsView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewContactsView() returned nil")
+		return
 	}
 
 	if view.Name() != "contacts" {
@@ -189,6 +191,7 @@ func TestWebhooksView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewWebhooksView() returned nil")
+		return
 	}
 
 	if view.Name() != "webhooks" {
@@ -244,6 +247,7 @@ func TestDraftsView(t *testing.T) {
 
 	if view == nil {
 		t.Fatal("NewDraftsView() returned nil")
+		return
 	}
 
 	if view.Name() != "drafts" {

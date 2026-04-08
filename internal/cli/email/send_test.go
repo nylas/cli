@@ -103,6 +103,69 @@ func TestSendCmd_ListGPGKeysFlag(t *testing.T) {
 	}
 }
 
+func TestShouldUseInteractiveSendMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		interactive  bool
+		to           []string
+		subject      string
+		body         string
+		templateOpts hostedTemplateSendOptions
+		want         bool
+	}{
+		{
+			name:        "explicit interactive flag always prompts",
+			interactive: true,
+			want:        true,
+		},
+		{
+			name:    "raw send with no content auto prompts",
+			want:    true,
+			subject: "",
+			body:    "",
+		},
+		{
+			name:    "raw send with recipient does not auto prompt",
+			to:      []string{"user@example.com"},
+			subject: "",
+			body:    "",
+			want:    false,
+		},
+		{
+			name: "hosted template send without recipients auto prompts",
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+			},
+			want: true,
+		},
+		{
+			name: "hosted template render-only does not prompt",
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+				RenderOnly: true,
+			},
+			want: false,
+		},
+		{
+			name: "hosted template send with recipients does not prompt",
+			to:   []string{"user@example.com"},
+			templateOpts: hostedTemplateSendOptions{
+				TemplateID: "tpl-123",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldUseInteractiveSendMode(tt.interactive, tt.to, tt.subject, tt.body, tt.templateOpts)
+			if got != tt.want {
+				t.Fatalf("shouldUseInteractiveSendMode() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSendCmd_AutoSignConfig(t *testing.T) {
 	// Create temp config directory
 	tmpDir := t.TempDir()
@@ -165,6 +228,13 @@ func TestSendCmd_FlagDefinitions(t *testing.T) {
 		{name: "list-gpg-keys", shorthand: "", flagType: "bool"},
 		{name: "interactive", shorthand: "i", flagType: "bool"},
 		{name: "yes", shorthand: "y", flagType: "bool"},
+		{name: "template-id", shorthand: "", flagType: "string"},
+		{name: "template-scope", shorthand: "", flagType: "string"},
+		{name: "template-grant-id", shorthand: "", flagType: "string"},
+		{name: "template-data", shorthand: "", flagType: "string"},
+		{name: "template-data-file", shorthand: "", flagType: "string"},
+		{name: "render-only", shorthand: "", flagType: "bool"},
+		{name: "template-strict", shorthand: "", flagType: "bool"},
 	}
 
 	for _, expected := range expectedFlags {
@@ -213,11 +283,20 @@ func TestSendCmd_UsageText(t *testing.T) {
 	if !strings.Contains(usage, "--list-gpg-keys") {
 		t.Error("Usage text should mention --list-gpg-keys flag")
 	}
+	if !strings.Contains(usage, "--template-id") {
+		t.Error("Usage text should mention --template-id flag")
+	}
+	if !strings.Contains(usage, "--render-only") {
+		t.Error("Usage text should mention --render-only flag")
+	}
 
 	// Validate examples include GPG
 	example := cmd.Example
 	if !strings.Contains(example, "gpg") && !strings.Contains(example, "sign") {
 		t.Error("Examples should include GPG signing usage")
+	}
+	if !strings.Contains(example, "--template-id") {
+		t.Error("Examples should include hosted template usage")
 	}
 }
 

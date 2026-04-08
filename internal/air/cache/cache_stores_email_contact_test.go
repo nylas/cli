@@ -131,6 +131,7 @@ func TestContactStoreGetByEmail(t *testing.T) {
 	}
 	if contact == nil {
 		t.Fatal("GetByEmail returned nil")
+		return
 	}
 	if contact.DisplayName != "Alice" {
 		t.Errorf("DisplayName = %s, want Alice", contact.DisplayName)

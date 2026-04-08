@@ -220,6 +220,7 @@ func TestDefaultAIConfig(t *testing.T) {
 
 	if config == nil {
 		t.Fatal("DefaultAIConfig() returned nil")
+		return
 	}
 
 	if config.DefaultProvider != "ollama" {

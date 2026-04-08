@@ -3,9 +3,15 @@
 package integration
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 // =============================================================================
@@ -18,10 +24,7 @@ func TestCLI_EmailSend(t *testing.T) {
 	}
 	skipIfMissingCreds(t)
 
-	email := testEmail
-	if email == "" {
-		email = "test@example.com"
-	}
+	email := getSendTargetEmail(t)
 
 	stdout, stderr, err := runCLI("email", "send",
 		"--to", email,
@@ -171,6 +174,12 @@ func TestCLI_EmailSendHelp_Schedule(t *testing.T) {
 	if !strings.Contains(stdout, "--schedule") {
 		t.Errorf("Expected '--schedule' in send help, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, "--template-id") {
+		t.Errorf("Expected '--template-id' in send help, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "--render-only") {
+		t.Errorf("Expected '--render-only' in send help, got: %s", stdout)
+	}
 
 	t.Logf("email send help output:\n%s", stdout)
 }
@@ -202,10 +211,7 @@ func TestCLI_EmailSend_Scheduled(t *testing.T) {
 	}
 	skipIfMissingCreds(t)
 
-	email := testEmail
-	if email == "" {
-		email = "test@example.com"
-	}
+	email := getSendTargetEmail(t)
 
 	// Schedule for 1 hour from now using duration format
 	stdout, stderr, err := runCLI("email", "send",
@@ -225,6 +231,281 @@ func TestCLI_EmailSend_Scheduled(t *testing.T) {
 	}
 
 	t.Logf("email send scheduled output:\n%s", stdout)
+}
+
+func TestCLI_EmailSend_RenderOnlyHostedTemplate(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	createStdout, createStderr, createErr := runCLIWithRateLimit(t,
+		"template", "create",
+		"--name", "Send Preview Integration Template",
+		"--subject", "Hosted Hello {{user.name}}",
+		"--body", "<p>Hello {{user.name}}</p>",
+		"--engine", "mustache",
+		"--json",
+	)
+	if createErr != nil {
+		t.Fatalf("template create failed: %v\nstderr: %s", createErr, createStderr)
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(createStdout)), &created); err != nil {
+		t.Fatalf("failed to parse template create output: %v\noutput: %s", err, createStdout)
+	}
+	if created.ID == "" {
+		t.Fatalf("template create did not return an id: %s", createStdout)
+	}
+
+	t.Cleanup(func() {
+		if created.ID != "" {
+			_, _, _ = runCLI("template", "delete", created.ID, "--yes")
+		}
+	})
+
+	isolatedHome := t.TempDir()
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, map[string]string{
+		"NYLAS_GRANT_ID":        "",
+		"XDG_CONFIG_HOME":       isolatedHome,
+		"HOME":                  isolatedHome,
+		"NYLAS_DISABLE_KEYRING": "true",
+	},
+		"email", "send",
+		"--template-id", created.ID,
+		"--template-data", `{"user":{"name":"Integration"}}`,
+		"--render-only",
+	)
+	if err != nil {
+		t.Fatalf("email send --render-only failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "Hosted Hello Integration") {
+		t.Fatalf("expected rendered subject in preview, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "<p>Hello Integration</p>") {
+		t.Fatalf("expected rendered body in preview, got: %s", stdout)
+	}
+}
+
+func TestCLI_EmailSend_HostedTemplate(t *testing.T) {
+	if os.Getenv("NYLAS_TEST_SEND_EMAIL") != "true" {
+		t.Skip("Skipping send test - set NYLAS_TEST_SEND_EMAIL=true to enable")
+	}
+	skipIfMissingCreds(t)
+
+	email := getSendTargetEmail(t)
+
+	createStdout, createStderr, createErr := runCLIWithRateLimit(t,
+		"template", "create",
+		"--name", "Send Integration Template",
+		"--subject", "Hosted Send {{user.name}}",
+		"--body", "<p>Hello {{user.name}}, this message was sent from a hosted template.</p>",
+		"--engine", "mustache",
+		"--json",
+	)
+	if createErr != nil {
+		t.Fatalf("template create failed: %v\nstderr: %s", createErr, createStderr)
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(createStdout)), &created); err != nil {
+		t.Fatalf("failed to parse template create output: %v\noutput: %s", err, createStdout)
+	}
+	if created.ID == "" {
+		t.Fatalf("template create did not return an id: %s", createStdout)
+	}
+
+	t.Cleanup(func() {
+		if created.ID != "" {
+			_, _, _ = runCLI("template", "delete", created.ID, "--yes")
+		}
+	})
+
+	stdout, stderr, err := runCLIWithRateLimit(t,
+		"email", "send",
+		"--to", email,
+		"--template-id", created.ID,
+		"--template-data", `{"user":{"name":"Integration"}}`,
+		"--yes",
+		testGrantID,
+	)
+	if err != nil {
+		t.Fatalf("email send with hosted template failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "sent") && !strings.Contains(stdout, "Message") && !strings.Contains(stdout, "✓") {
+		t.Fatalf("expected send confirmation in output, got: %s", stdout)
+	}
+}
+
+func TestCLI_EmailSend_HostedTemplate_SelfRoundTrip(t *testing.T) {
+	if os.Getenv("NYLAS_TEST_SEND_EMAIL") != "true" {
+		t.Skip("Skipping self-send round-trip test - set NYLAS_TEST_SEND_EMAIL=true to enable")
+	}
+	skipIfMissingCreds(t)
+
+	selfEmail := getGrantEmail(t)
+	token := fmt.Sprintf("self-check-%d", time.Now().UnixNano())
+	renderedAt := time.Now().Format(time.RFC3339)
+
+	createStdout, createStderr, createErr := runCLIWithRateLimit(t,
+		"template", "create",
+		"--name", "Hosted Self Round Trip "+token,
+		"--subject", "[CLI Self Check] {{token}} for {{name}}",
+		"--body", "<p>Hello {{name}},</p><p>This is a hosted-template self-check.</p><p>Token: {{token}}</p><p>Rendered at: {{ts}}</p>",
+		"--engine", "mustache",
+		"--json",
+	)
+	if createErr != nil {
+		t.Fatalf("template create failed: %v\nstderr: %s", createErr, createStderr)
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(createStdout)), &created); err != nil {
+		t.Fatalf("failed to parse template create output: %v\noutput: %s", err, createStdout)
+	}
+	if created.ID == "" {
+		t.Fatalf("template create did not return an id: %s", createStdout)
+	}
+
+	t.Cleanup(func() {
+		if created.ID != "" {
+			_, _, _ = runCLI("template", "delete", created.ID, "--yes")
+		}
+	})
+
+	sendStdout, sendStderr, sendErr := runCLIWithRateLimit(t,
+		"email", "send",
+		"--to", selfEmail,
+		"--template-id", created.ID,
+		"--template-data", fmt.Sprintf(`{"name":"Qasim","token":"%s","ts":"%s"}`, token, renderedAt),
+		"--yes",
+		testGrantID,
+	)
+	if sendErr != nil {
+		t.Fatalf("email send with hosted template failed: %v\nstderr: %s", sendErr, sendStderr)
+	}
+
+	messageID := extractMessageID(sendStdout)
+	if messageID == "" {
+		t.Fatalf("failed to extract message ID from send output: %s", sendStdout)
+	}
+
+	t.Cleanup(func() {
+		_, _, _ = runCLI("email", "delete", messageID, "--yes", testGrantID)
+	})
+
+	var delivered struct {
+		ID      string `json:"id"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+		Snippet string `json:"snippet"`
+	}
+
+	var lastStdout string
+	var lastStderr string
+	var found bool
+
+	for attempt := 1; attempt <= 10; attempt++ {
+		readStdout, readStderr, readErr := runCLIWithRateLimit(t, "email", "read", messageID, testGrantID, "--json")
+		lastStdout = readStdout
+		lastStderr = readStderr
+
+		if readErr == nil {
+			if err := json.Unmarshal([]byte(strings.TrimSpace(readStdout)), &delivered); err != nil {
+				t.Fatalf("failed to parse email read output: %v\noutput: %s", err, readStdout)
+			}
+
+			if strings.Contains(delivered.Subject, token) &&
+				strings.Contains(delivered.Body, token) &&
+				strings.Contains(delivered.Body, "hosted-template self-check") {
+				found = true
+				break
+			}
+		}
+
+		time.Sleep(3 * time.Second)
+	}
+
+	if !found {
+		t.Fatalf("self-send round trip did not verify rendered content\nlast stdout: %s\nlast stderr: %s", lastStdout, lastStderr)
+	}
+
+	if delivered.ID != messageID {
+		t.Fatalf("read message ID = %q, want %q", delivered.ID, messageID)
+	}
+}
+
+func TestCLI_EmailSend_RenderOnlyHostedTemplateGrantScopedFlags(t *testing.T) {
+	skipIfMissingCreds(t)
+	grantIdentifier := getGrantEmail(t)
+	envOverrides := newSeededGrantStoreEnv(t, domain.GrantInfo{ID: testGrantID, Email: grantIdentifier})
+
+	createStdout, createStderr, createErr := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, envOverrides,
+		"template", "create",
+		"--scope", "grant",
+		"--grant-id", grantIdentifier,
+		"--name", "Grant Hosted Send Preview Template",
+		"--subject", "Grant scoped preview",
+		"--body", "<p>Hello {{user.name}}</p>",
+		"--engine", "mustache",
+		"--json",
+	)
+	if createErr != nil {
+		t.Fatalf("grant-scoped template create failed: %v\nstderr: %s", createErr, createStderr)
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(createStdout)), &created); err != nil {
+		t.Fatalf("failed to parse template create output: %v\noutput: %s", err, createStdout)
+	}
+	if created.ID == "" {
+		t.Fatalf("template create did not return an id: %s", createStdout)
+	}
+
+	t.Cleanup(func() {
+		if created.ID != "" {
+			_, _, _ = runCLIWithOverrides(2*time.Minute, envOverrides,
+				"template", "delete", created.ID,
+				"--scope", "grant",
+				"--grant-id", grantIdentifier,
+				"--yes",
+			)
+		}
+	})
+
+	tempDir := t.TempDir()
+	dataPath := filepath.Join(tempDir, "send-template-data.json")
+	if err := os.WriteFile(dataPath, []byte(`{"user":{"name":"Grant Preview"}}`), 0o600); err != nil {
+		t.Fatalf("failed to write template data file: %v", err)
+	}
+
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, envOverrides,
+		"email", "send",
+		"--template-id", created.ID,
+		"--template-scope", "grant",
+		"--template-grant-id", grantIdentifier,
+		"--template-data-file", dataPath,
+		"--template-strict=false",
+		"--render-only",
+	)
+	if err != nil {
+		t.Fatalf("grant-scoped email send --render-only failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "Grant scoped preview") {
+		t.Fatalf("expected rendered subject in preview, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "<p>Hello Grant Preview</p>") {
+		t.Fatalf("expected rendered body in preview, got: %s", stdout)
+	}
 }
 
 // =============================================================================

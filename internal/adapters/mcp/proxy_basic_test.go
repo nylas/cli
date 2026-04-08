@@ -38,6 +38,7 @@ func TestNewProxy(t *testing.T) {
 		proxy := NewProxy("test-api-key", "us")
 		if proxy == nil {
 			t.Fatal("NewProxy returned nil")
+			return
 		}
 		if proxy.apiKey != "test-api-key" {
 			t.Errorf("expected apiKey 'test-api-key', got '%s'", proxy.apiKey)

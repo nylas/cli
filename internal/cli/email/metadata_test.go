@@ -9,6 +9,7 @@ func TestMetadataCommands(t *testing.T) {
 		cmd := newMetadataCmd()
 		if cmd == nil {
 			t.Fatal("expected metadata command to exist")
+			return
 		}
 		if cmd.Use != "metadata" {
 			t.Errorf("expected Use to be 'metadata', got %s", cmd.Use)
@@ -19,6 +20,7 @@ func TestMetadataCommands(t *testing.T) {
 		cmd := newMetadataShowCmd()
 		if cmd == nil {
 			t.Fatal("expected metadata show command to exist")
+			return
 		}
 		if cmd.Use != "show <message-id> [grant-id]" {
 			t.Errorf("expected Use to be 'show <message-id> [grant-id]', got %s", cmd.Use)
@@ -29,6 +31,7 @@ func TestMetadataCommands(t *testing.T) {
 		cmd := newMetadataInfoCmd()
 		if cmd == nil {
 			t.Fatal("expected metadata info command to exist")
+			return
 		}
 		if cmd.Use != "info" {
 			t.Errorf("expected Use to be 'info', got %s", cmd.Use)

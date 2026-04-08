@@ -13,6 +13,7 @@ func TestNewContactFormCreate(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewContactForm returned nil")
+		return
 	}
 
 	if form.mode != ContactFormCreate {
@@ -51,6 +52,7 @@ func TestNewContactFormEdit(t *testing.T) {
 
 	if form == nil {
 		t.Fatal("NewContactForm returned nil")
+		return
 	}
 
 	if form.mode != ContactFormEdit {

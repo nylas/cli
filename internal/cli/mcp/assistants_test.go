@@ -33,6 +33,7 @@ func TestGetAssistantByID(t *testing.T) {
 			}
 			if a == nil {
 				t.Fatal("expected assistant, got nil")
+				return
 			}
 			if a.Name != tt.wantName {
 				t.Errorf("expected name %s, got %s", tt.wantName, a.Name)
@@ -89,6 +90,7 @@ func TestAssistant_IsProjectConfig(t *testing.T) {
 			a := GetAssistantByID(tt.id)
 			if a == nil {
 				t.Fatalf("assistant %s not found", tt.id)
+				return
 			}
 			if a.IsProjectConfig() != tt.isProj {
 				t.Errorf("IsProjectConfig() = %v, want %v", a.IsProjectConfig(), tt.isProj)

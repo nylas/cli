@@ -56,6 +56,7 @@ func TestFocusOptimizer_AnalyzeFocusTimePatterns(t *testing.T) {
 
 	if analysis == nil {
 		t.Fatal("Expected analysis, got nil")
+		return
 	}
 
 	if analysis.UserEmail != "grant-123" {

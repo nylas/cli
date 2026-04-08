@@ -203,6 +203,7 @@ func TestDefaultStyles(t *testing.T) {
 
 	if styles == nil {
 		t.Fatal("DefaultStyles() returned nil")
+		return
 	}
 
 	// Verify base colors are set
@@ -250,6 +251,7 @@ func TestThemeConfigToStyles(t *testing.T) {
 
 	if styles == nil {
 		t.Fatal("ToStyles() returned nil")
+		return
 	}
 
 	// Verify colors were applied

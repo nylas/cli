@@ -13,6 +13,7 @@ func TestNewBundleStore(t *testing.T) {
 
 	if store == nil {
 		t.Fatal("expected non-nil store")
+		return
 	}
 
 	if len(store.bundles) == 0 {

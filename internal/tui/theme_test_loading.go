@@ -81,6 +81,7 @@ k9s:
 	styles := config.ToStyles()
 	if styles == nil {
 		t.Fatal("ToStyles() returned nil")
+		return
 	}
 
 	// Verify colors were applied correctly
@@ -198,6 +199,7 @@ func TestGetThemeStylesWithCustomTheme(t *testing.T) {
 	unknownStyles := GetThemeStyles("nonexistent-theme-xyz")
 	if unknownStyles == nil {
 		t.Fatal("GetThemeStyles(nonexistent) returned nil")
+		return
 	}
 
 	// The unknown theme should fall back to default styles
@@ -227,6 +229,7 @@ func TestGetThemeStylesLoadsCustomTheme(t *testing.T) {
 	customStyles := GetThemeStyles("testcustom")
 	if customStyles == nil {
 		t.Fatal("GetThemeStyles(testcustom) returned nil")
+		return
 	}
 
 	// The testcustom theme should have the Tokyo Night colors

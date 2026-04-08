@@ -44,6 +44,18 @@ type MockClient struct {
 	ListAttachmentsCalled       bool
 	GetAttachmentCalled         bool
 	DownloadAttachmentCalled    bool
+	ListRemoteTemplatesCalled   bool
+	GetRemoteTemplateCalled     bool
+	CreateRemoteTemplateCalled  bool
+	UpdateRemoteTemplateCalled  bool
+	DeleteRemoteTemplateCalled  bool
+	RenderRemoteTemplateCalled  bool
+	RenderTemplateHTMLCalled    bool
+	ListWorkflowsCalled         bool
+	GetWorkflowCalled           bool
+	CreateWorkflowCalled        bool
+	UpdateWorkflowCalled        bool
+	DeleteWorkflowCalled        bool
 	LastGrantID                 string
 	LastRedirectURI             string
 	LastAuthState               string
@@ -54,6 +66,8 @@ type MockClient struct {
 	LastDraftID                 string
 	LastFolderID                string
 	LastAttachmentID            string
+	LastTemplateID              string
+	LastWorkflowID              string
 
 	// Custom functions
 	BuildAuthURLFunc          func(provider domain.Provider, redirectURI, state, codeChallenge string) string
@@ -86,6 +100,18 @@ type MockClient struct {
 	ListAttachmentsFunc       func(ctx context.Context, grantID, messageID string) ([]domain.Attachment, error)
 	GetAttachmentFunc         func(ctx context.Context, grantID, messageID, attachmentID string) (*domain.Attachment, error)
 	DownloadAttachmentFunc    func(ctx context.Context, grantID, messageID, attachmentID string) (io.ReadCloser, error)
+	ListRemoteTemplatesFunc   func(ctx context.Context, scope domain.RemoteScope, grantID string, params *domain.CursorListParams) (*domain.RemoteTemplateListResponse, error)
+	GetRemoteTemplateFunc     func(ctx context.Context, scope domain.RemoteScope, grantID, templateID string) (*domain.RemoteTemplate, error)
+	CreateRemoteTemplateFunc  func(ctx context.Context, scope domain.RemoteScope, grantID string, req *domain.CreateRemoteTemplateRequest) (*domain.RemoteTemplate, error)
+	UpdateRemoteTemplateFunc  func(ctx context.Context, scope domain.RemoteScope, grantID, templateID string, req *domain.UpdateRemoteTemplateRequest) (*domain.RemoteTemplate, error)
+	DeleteRemoteTemplateFunc  func(ctx context.Context, scope domain.RemoteScope, grantID, templateID string) error
+	RenderRemoteTemplateFunc  func(ctx context.Context, scope domain.RemoteScope, grantID, templateID string, req *domain.TemplateRenderRequest) (domain.TemplateRenderResult, error)
+	RenderTemplateHTMLFunc    func(ctx context.Context, scope domain.RemoteScope, grantID string, req *domain.TemplateRenderHTMLRequest) (domain.TemplateRenderResult, error)
+	ListWorkflowsFunc         func(ctx context.Context, scope domain.RemoteScope, grantID string, params *domain.CursorListParams) (*domain.RemoteWorkflowListResponse, error)
+	GetWorkflowFunc           func(ctx context.Context, scope domain.RemoteScope, grantID, workflowID string) (*domain.RemoteWorkflow, error)
+	CreateWorkflowFunc        func(ctx context.Context, scope domain.RemoteScope, grantID string, req *domain.CreateRemoteWorkflowRequest) (*domain.RemoteWorkflow, error)
+	UpdateWorkflowFunc        func(ctx context.Context, scope domain.RemoteScope, grantID, workflowID string, req *domain.UpdateRemoteWorkflowRequest) (*domain.RemoteWorkflow, error)
+	DeleteWorkflowFunc        func(ctx context.Context, scope domain.RemoteScope, grantID, workflowID string) error
 
 	// Calendar functions
 	GetCalendarsFunc func(ctx context.Context, grantID string) ([]domain.Calendar, error)
