@@ -39,7 +39,7 @@ func TestNewEmailCmd(t *testing.T) {
 	})
 
 	t.Run("has_required_subcommands", func(t *testing.T) {
-		expectedCmds := []string{"list", "read", "send", "search", "mark", "delete", "folders", "threads", "drafts"}
+		expectedCmds := []string{"list", "read", "send", "search", "mark", "delete", "folders", "threads", "drafts", "signatures"}
 
 		cmdMap := make(map[string]bool)
 		for _, sub := range cmd.Commands() {

@@ -34,6 +34,21 @@ type MessageClient interface {
 	// SendRawMessage sends a raw RFC 822 MIME message.
 	SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error)
 
+	// GetSignatures retrieves all signatures for a grant.
+	GetSignatures(ctx context.Context, grantID string) ([]domain.Signature, error)
+
+	// GetSignature retrieves a specific signature.
+	GetSignature(ctx context.Context, grantID, signatureID string) (*domain.Signature, error)
+
+	// CreateSignature creates a new signature.
+	CreateSignature(ctx context.Context, grantID string, req *domain.CreateSignatureRequest) (*domain.Signature, error)
+
+	// UpdateSignature updates an existing signature.
+	UpdateSignature(ctx context.Context, grantID, signatureID string, req *domain.UpdateSignatureRequest) (*domain.Signature, error)
+
+	// DeleteSignature deletes a signature.
+	DeleteSignature(ctx context.Context, grantID, signatureID string) error
+
 	// UpdateMessage updates an existing message.
 	UpdateMessage(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
 
@@ -99,7 +114,7 @@ type MessageClient interface {
 	DeleteDraft(ctx context.Context, grantID, draftID string) error
 
 	// SendDraft sends a draft as a message.
-	SendDraft(ctx context.Context, grantID, draftID string) (*domain.Message, error)
+	SendDraft(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error)
 
 	// ================================
 	// FOLDER OPERATIONS

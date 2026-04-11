@@ -135,6 +135,7 @@ func TestHTTPClient_SendDraft(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants/grant-123/drafts/draft-send", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		response := map[string]any{
 			"data": map[string]any{
@@ -156,10 +157,45 @@ func TestHTTPClient_SendDraft(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	message, err := client.SendDraft(ctx, "grant-123", "draft-send")
+	message, err := client.SendDraft(ctx, "grant-123", "draft-send", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "msg-sent-123", message.ID)
 	assert.Equal(t, "Sent Draft", message.Subject)
 	assert.Equal(t, "This was sent", message.Body)
+}
+
+func TestHTTPClient_SendDraft_WithSignatureID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/grants/grant-123/drafts/draft-send", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]string
+		err := json.NewDecoder(r.Body).Decode(&body)
+		require.NoError(t, err)
+		assert.Equal(t, "sig-123", body["signature_id"])
+
+		response := map[string]any{
+			"data": map[string]any{
+				"id":       "msg-sent-456",
+				"grant_id": "grant-123",
+				"subject":  "Signed Draft",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	message, err := client.SendDraft(ctx, "grant-123", "draft-send", &domain.SendDraftRequest{SignatureID: "sig-123"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "msg-sent-456", message.ID)
+	assert.Equal(t, "Signed Draft", message.Subject)
 }

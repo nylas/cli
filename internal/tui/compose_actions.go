@@ -141,7 +141,7 @@ func (c *ComposeView) send() {
 				return
 			}
 			// Then send the draft
-			_, err = c.app.config.Client.SendDraft(ctx, c.app.config.GrantID, c.draft.ID)
+			_, err = c.app.config.Client.SendDraft(ctx, c.app.config.GrantID, c.draft.ID, nil)
 		} else {
 			// Normal send flow
 			req := &domain.SendMessageRequest{

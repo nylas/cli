@@ -99,7 +99,7 @@ func TestIntegration_SendDraft(t *testing.T) {
 	t.Logf("Created draft: %s", draft.ID)
 
 	// Send the draft
-	msg, err := client.SendDraft(ctx, grantID, draft.ID)
+	msg, err := client.SendDraft(ctx, grantID, draft.ID, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, msg.ID)
 	t.Logf("Sent draft as message: %s", msg.ID)

@@ -215,7 +215,7 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request, draftID
 	ctx, cancel := s.withTimeout(r)
 	defer cancel()
 
-	msg, err := s.nylasClient.SendDraft(ctx, grantID, draftID)
+	msg, err := s.nylasClient.SendDraft(ctx, grantID, draftID, nil)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, SendMessageResponse{
 			Success: false,

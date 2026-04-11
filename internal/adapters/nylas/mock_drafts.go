@@ -102,12 +102,12 @@ func (m *MockClient) DeleteDraft(ctx context.Context, grantID, draftID string) e
 }
 
 // SendDraft sends a draft.
-func (m *MockClient) SendDraft(ctx context.Context, grantID, draftID string) (*domain.Message, error) {
+func (m *MockClient) SendDraft(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error) {
 	m.SendDraftCalled = true
 	m.LastGrantID = grantID
 	m.LastDraftID = draftID
 	if m.SendDraftFunc != nil {
-		return m.SendDraftFunc(ctx, grantID, draftID)
+		return m.SendDraftFunc(ctx, grantID, draftID, req)
 	}
 	return &domain.Message{
 		ID:      "sent-from-draft-id",

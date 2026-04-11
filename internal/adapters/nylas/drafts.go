@@ -98,7 +98,7 @@ func (c *HTTPClient) CreateDraft(ctx context.Context, grantID string, req *domai
 
 // buildDraftPayload builds the common payload for draft creation requests.
 // This consolidates the repeated payload building logic across draft creation methods.
-func buildDraftPayload(req *domain.CreateDraftRequest) map[string]any {
+func buildDraftPayload(req *domain.CreateDraftRequest, includeSignature bool) map[string]any {
 	payload := map[string]any{
 		"subject": req.Subject,
 		"body":    req.Body,
@@ -118,6 +118,9 @@ func buildDraftPayload(req *domain.CreateDraftRequest) map[string]any {
 	if req.ReplyToMsgID != "" {
 		payload["reply_to_message_id"] = req.ReplyToMsgID
 	}
+	if includeSignature && req.SignatureID != "" {
+		payload["signature_id"] = req.SignatureID
+	}
 	if len(req.Metadata) > 0 {
 		payload["metadata"] = req.Metadata
 	}
@@ -128,7 +131,7 @@ func buildDraftPayload(req *domain.CreateDraftRequest) map[string]any {
 func (c *HTTPClient) createDraftWithJSON(ctx context.Context, grantID string, req *domain.CreateDraftRequest) (*domain.Draft, error) {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
 
-	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildDraftPayload(req))
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildDraftPayload(req, true))
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +156,7 @@ func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID strin
 	writer := multipart.NewWriter(&buf)
 
 	// Add message as JSON field
-	messageJSON, err := json.Marshal(buildDraftPayload(req))
+	messageJSON, err := json.Marshal(buildDraftPayload(req, true))
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -221,7 +224,7 @@ func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID strin
 // This is useful for large attachments or streaming file uploads.
 func (c *HTTPClient) CreateDraftWithAttachmentFromReader(ctx context.Context, grantID string, req *domain.CreateDraftRequest, filename string, contentType string, reader io.Reader) (*domain.Draft, error) {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
-	payload := buildDraftPayload(req)
+	payload := buildDraftPayload(req, true)
 
 	// Use pipe to stream multipart data
 	pr, pw := io.Pipe()
@@ -306,17 +309,26 @@ func (c *HTTPClient) DeleteDraft(ctx context.Context, grantID, draftID string) e
 }
 
 // SendDraft sends a draft.
-func (c *HTTPClient) SendDraft(ctx context.Context, grantID, draftID string) (*domain.Message, error) {
+func (c *HTTPClient) SendDraft(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error) {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", queryURL, nil)
+	var bodyReader io.Reader
+	if req != nil && req.SignatureID != "" {
+		body, err := json.Marshal(map[string]string{"signature_id": req.SignatureID})
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal send draft request: %w", err)
+		}
+		bodyReader = bytes.NewReader(body)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", queryURL, bodyReader)
 	if err != nil {
 		return nil, err
 	}
-	c.setAuthHeader(req)
-	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(httpReq)
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.doRequest(ctx, req)
+	resp, err := c.doRequest(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}

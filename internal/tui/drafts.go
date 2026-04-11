@@ -203,7 +203,7 @@ func (v *DraftsView) sendDraft(draft *domain.Draft) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		_, err := v.app.config.Client.SendDraft(ctx, v.app.config.GrantID, draft.ID)
+		_, err := v.app.config.Client.SendDraft(ctx, v.app.config.GrantID, draft.ID, nil)
 		if err != nil {
 			v.app.Flash(FlashError, "Failed to send draft: %v", err)
 			return

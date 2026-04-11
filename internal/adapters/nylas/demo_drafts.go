@@ -43,6 +43,6 @@ func (d *DemoClient) DeleteDraft(ctx context.Context, grantID, draftID string) e
 }
 
 // SendDraft simulates sending a draft.
-func (d *DemoClient) SendDraft(ctx context.Context, grantID, draftID string) (*domain.Message, error) {
+func (d *DemoClient) SendDraft(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error) {
 	return &domain.Message{ID: "sent-from-draft", Subject: "Sent Draft"}, nil
 }

@@ -124,6 +124,18 @@ func TestHTTPClient_SendMessage(t *testing.T) {
 			statusCode:     http.StatusOK,
 			wantErr:        false,
 		},
+		{
+			name: "sends message with signature id",
+			request: &domain.SendMessageRequest{
+				Subject:     "With Signature",
+				Body:        "Body",
+				To:          []domain.EmailParticipant{{Email: "to@example.com"}},
+				SignatureID: "sig-123",
+			},
+			expectedFields: []string{"subject", "body", "to", "signature_id"},
+			statusCode:     http.StatusOK,
+			wantErr:        false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -139,6 +151,9 @@ func TestHTTPClient_SendMessage(t *testing.T) {
 
 				for _, field := range tt.expectedFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
+				}
+				if tt.request.SignatureID != "" {
+					assert.Equal(t, tt.request.SignatureID, body["signature_id"])
 				}
 
 				response := map[string]any{

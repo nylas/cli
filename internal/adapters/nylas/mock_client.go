@@ -24,6 +24,11 @@ type MockClient struct {
 	GetMessagesWithParamsCalled bool
 	GetMessageCalled            bool
 	SendMessageCalled           bool
+	GetSignaturesCalled         bool
+	GetSignatureCalled          bool
+	CreateSignatureCalled       bool
+	UpdateSignatureCalled       bool
+	DeleteSignatureCalled       bool
 	UpdateMessageCalled         bool
 	DeleteMessageCalled         bool
 	GetThreadsCalled            bool
@@ -75,6 +80,7 @@ type MockClient struct {
 	LastCodeChallenge           string
 	LastCodeVerifier            string
 	LastMessageID               string
+	LastSignatureID             string
 	LastThreadID                string
 	LastDraftID                 string
 	LastFolderID                string
@@ -95,6 +101,11 @@ type MockClient struct {
 	GetMessageFunc            func(ctx context.Context, grantID, messageID string) (*domain.Message, error)
 	SendMessageFunc           func(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error)
 	SendRawMessageFunc        func(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error)
+	GetSignaturesFunc         func(ctx context.Context, grantID string) ([]domain.Signature, error)
+	GetSignatureFunc          func(ctx context.Context, grantID, signatureID string) (*domain.Signature, error)
+	CreateSignatureFunc       func(ctx context.Context, grantID string, req *domain.CreateSignatureRequest) (*domain.Signature, error)
+	UpdateSignatureFunc       func(ctx context.Context, grantID, signatureID string, req *domain.UpdateSignatureRequest) (*domain.Signature, error)
+	DeleteSignatureFunc       func(ctx context.Context, grantID, signatureID string) error
 	UpdateMessageFunc         func(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
 	DeleteMessageFunc         func(ctx context.Context, grantID, messageID string) error
 	GetThreadsFunc            func(ctx context.Context, grantID string, params *domain.ThreadQueryParams) ([]domain.Thread, error)
@@ -106,7 +117,7 @@ type MockClient struct {
 	CreateDraftFunc           func(ctx context.Context, grantID string, req *domain.CreateDraftRequest) (*domain.Draft, error)
 	UpdateDraftFunc           func(ctx context.Context, grantID, draftID string, req *domain.CreateDraftRequest) (*domain.Draft, error)
 	DeleteDraftFunc           func(ctx context.Context, grantID, draftID string) error
-	SendDraftFunc             func(ctx context.Context, grantID, draftID string) (*domain.Message, error)
+	SendDraftFunc             func(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error)
 	GetFoldersFunc            func(ctx context.Context, grantID string) ([]domain.Folder, error)
 	GetFolderFunc             func(ctx context.Context, grantID, folderID string) (*domain.Folder, error)
 	CreateFolderFunc          func(ctx context.Context, grantID string, req *domain.CreateFolderRequest) (*domain.Folder, error)
