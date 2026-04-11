@@ -103,6 +103,10 @@ nylas email send --to "to@example.com" --template-id tpl_123 \
 
 # Preview a hosted template render without sending
 nylas email send --template-id tpl_123 --template-data-file ./data.json --render-only
+
+# Send with a stored signature
+nylas email send --to "to@example.com" --subject "Subject" --body "Body" \
+  --signature-id sig_123
 ```
 
 **Tracking Options:**
@@ -119,6 +123,7 @@ nylas email send --template-id tpl_123 --template-data-file ./data.json --render
 - `--template-data-file` - JSON file containing hosted template variables
 - `--render-only` - Preview the rendered hosted template without sending
 - `--template-strict` - Fail if the hosted template references missing variables (default: true)
+- `--signature-id` - Append a stored signature when sending, creating a draft, or sending a draft
 
 **Example output (scheduled):**
 ```bash
@@ -179,6 +184,39 @@ nylas email send --to "to@example.com" --subject "Secure" --body "..." --sign --
 
 # List available GPG keys
 nylas email send --list-gpg-keys
+```
+
+`--signature-id` can't be combined with `--sign` or `--encrypt`, because stored signatures are only supported on the standard JSON send and draft endpoints.
+
+### Signatures
+
+Manage stored signatures on a grant and reuse them from send and draft commands:
+
+```bash
+# List signatures for a grant
+nylas email signatures list [grant-id]
+
+# Show a specific signature
+nylas email signatures show <signature-id> [grant-id]
+
+# Create a signature
+nylas email signatures create [grant-id] --name "Work" --body-file ./signature.html
+
+# Update a signature
+nylas email signatures update <signature-id> [grant-id] --name "Work Updated" --body "<p>Updated</p>"
+
+# Delete a signature
+nylas email signatures delete <signature-id> [grant-id] --yes
+
+# Create a draft with a stored signature
+nylas email drafts create --to "to@example.com" --subject "Draft" --body "Body" \
+  --signature-id sig_123
+
+# Send a draft with a stored signature
+nylas email drafts send <draft-id> --signature-id sig_123
+
+# Use a local template and append a stored signature
+nylas email templates use <template-id> --to "to@example.com" --signature-id sig_123
 ```
 
 **Reading encrypted/signed emails:**

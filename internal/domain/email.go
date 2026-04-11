@@ -40,6 +40,15 @@ type Draft struct {
 	UpdatedAt    time.Time          `json:"updated_at"`
 }
 
+// Signature represents a stored email signature.
+type Signature struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Folder represents an email folder/label.
 type Folder struct {
 	ID              string   `json:"id"`
@@ -91,6 +100,7 @@ type SendMessageRequest struct {
 	TrackingOpts *TrackingOptions   `json:"tracking_options,omitempty"`
 	Attachments  []Attachment       `json:"attachments,omitempty"`
 	SendAt       int64              `json:"send_at,omitempty"` // Unix timestamp for scheduled sending
+	SignatureID  string             `json:"signature_id,omitempty"`
 	Metadata     map[string]string  `json:"metadata,omitempty"`
 
 	// GPG Signature options (not sent to API, used internally for signing)
@@ -181,7 +191,25 @@ type CreateDraftRequest struct {
 	ReplyTo      []EmailParticipant `json:"reply_to,omitempty"`
 	ReplyToMsgID string             `json:"reply_to_message_id,omitempty"`
 	Attachments  []Attachment       `json:"attachments,omitempty"`
+	SignatureID  string             `json:"signature_id,omitempty"`
 	Metadata     map[string]string  `json:"metadata,omitempty"`
+}
+
+// SendDraftRequest for sending a draft.
+type SendDraftRequest struct {
+	SignatureID string `json:"signature_id,omitempty"`
+}
+
+// CreateSignatureRequest for creating a new signature.
+type CreateSignatureRequest struct {
+	Name string `json:"name"`
+	Body string `json:"body"`
+}
+
+// UpdateSignatureRequest for updating an existing signature.
+type UpdateSignatureRequest struct {
+	Name *string `json:"name,omitempty"`
+	Body *string `json:"body,omitempty"`
 }
 
 // CreateFolderRequest for creating a new folder.

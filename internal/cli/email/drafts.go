@@ -107,6 +107,7 @@ func newDraftsCreateCmd() *cobra.Command {
 	var body string
 	var replyTo string
 	var attachFiles []string
+	var signatureID string
 
 	cmd := &cobra.Command{
 		Use:   "create [grant-id]",
@@ -146,11 +147,16 @@ func newDraftsCreateCmd() *cobra.Command {
 					return struct{}{}, common.WrapRecipientError("to", err)
 				}
 
+				if _, err := validateSignatureSelection(ctx, client, grantID, signatureID, nil); err != nil {
+					return struct{}{}, err
+				}
+
 				req := &domain.CreateDraftRequest{
 					Subject:      subject,
 					Body:         body,
 					To:           toContacts,
 					ReplyToMsgID: replyTo,
+					SignatureID:  signatureID,
 				}
 
 				if len(cc) > 0 {
@@ -191,6 +197,7 @@ func newDraftsCreateCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&subject, "subject", "s", "", "Email subject")
 	cmd.Flags().StringVarP(&body, "body", "b", "", "Email body")
 	cmd.Flags().StringVar(&replyTo, "reply-to", "", "Message ID to reply to")
+	cmd.Flags().StringVar(&signatureID, "signature-id", "", "Stored signature ID to append when creating the draft")
 	cmd.Flags().StringSliceVarP(&attachFiles, "attach", "a", nil, "File paths to attach")
 
 	return cmd
@@ -326,6 +333,7 @@ func newDraftsShowCmd() *cobra.Command {
 
 func newDraftsSendCmd() *cobra.Command {
 	var force bool
+	var signatureID string
 
 	cmd := &cobra.Command{
 		Use:   "send <draft-id> [grant-id]",
@@ -342,11 +350,18 @@ func newDraftsSendCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("draft", err)
 				}
 
+				if err := validateDraftSendSignatureSelection(ctx, client, grantID, draft, signatureID); err != nil {
+					return struct{}{}, err
+				}
+
 				// Confirmation
 				if !force {
 					fmt.Println("Send this draft?")
 					fmt.Printf("  To:      %s\n", common.FormatParticipants(draft.To))
 					fmt.Printf("  Subject: %s\n", draft.Subject)
+					if signatureID != "" {
+						fmt.Printf("  Signature: %s\n", signatureID)
+					}
 					fmt.Print("\n[y/N]: ")
 
 					var confirm string
@@ -357,7 +372,7 @@ func newDraftsSendCmd() *cobra.Command {
 					}
 				}
 
-				msg, err := client.SendDraft(ctx, grantID, draftID)
+				msg, err := client.SendDraft(ctx, grantID, draftID, sendDraftRequest(signatureID))
 				if err != nil {
 					return struct{}{}, common.WrapSendError("draft", err)
 				}
@@ -370,6 +385,7 @@ func newDraftsSendCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation")
+	cmd.Flags().StringVar(&signatureID, "signature-id", "", "Stored signature ID to append when sending a draft created without a stored signature")
 
 	return cmd
 }

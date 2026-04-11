@@ -44,6 +44,9 @@ func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domai
 	if req.SendAt > 0 {
 		payload["send_at"] = req.SendAt
 	}
+	if req.SignatureID != "" {
+		payload["signature_id"] = req.SignatureID
+	}
 	if len(req.Metadata) > 0 {
 		payload["metadata"] = req.Metadata
 	}

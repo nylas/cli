@@ -194,6 +194,7 @@ nylas email send ... --sign --encrypt                          # Sign AND encryp
 nylas email send --list-gpg-keys                               # List available GPG signing keys
 nylas email send --to EMAIL --template-id TPL --template-data '{}'  # Send using a hosted template
 nylas email send --template-id TPL --template-data-file data.json --render-only
+nylas email send --to EMAIL --subject SUBJECT --body BODY --signature-id SIG  # Send with stored signature
 nylas email search --query "QUERY"                             # Search emails
 nylas email delete <message-id>                                # Delete email
 nylas email mark read <message-id>                             # Mark as read
@@ -237,6 +238,7 @@ nylas email templates show <template-id>             # Show template details
 nylas email templates update <template-id> [flags]   # Update template
 nylas email templates delete <template-id>           # Delete template
 nylas email templates use <template-id> --to EMAIL   # Send using template
+nylas email templates use <template-id> --to EMAIL --signature-id SIG  # Send using template + stored signature
 ```
 
 **Variable syntax:** Use `{{variable}}` in subject/body for placeholders.
@@ -305,11 +307,26 @@ nylas email threads delete <thread-id>             # Delete thread
 nylas email drafts list                           # List drafts
 nylas email drafts show <draft-id>                # Show draft details
 nylas email drafts create --to EMAIL --subject S  # Create draft
+nylas email drafts create --to EMAIL --subject S --signature-id SIG  # Create draft with stored signature
 nylas email drafts send <draft-id>                # Send draft
+nylas email drafts send <draft-id> --signature-id SIG  # Send draft with stored signature
 nylas email drafts delete <draft-id>              # Delete draft
 ```
 
-**Flags:** `--to`, `--cc`, `--bcc`, `--subject`, `--body`, `--reply-to`, `--attach`
+**Flags:** `--to`, `--cc`, `--bcc`, `--subject`, `--body`, `--reply-to`, `--attach`, `--signature-id`
+
+---
+
+## Signatures
+
+```bash
+nylas email signatures list [grant-id]                         # List stored signatures
+nylas email signatures show <signature-id> [grant-id]          # Show signature details
+nylas email signatures create [grant-id] --name NAME --body BODY  # Create signature
+nylas email signatures create [grant-id] --name NAME --body-file FILE
+nylas email signatures update <signature-id> [grant-id] [flags]    # Update signature
+nylas email signatures delete <signature-id> [grant-id] --yes      # Delete signature
+```
 
 ---
 

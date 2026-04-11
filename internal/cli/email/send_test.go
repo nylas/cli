@@ -226,6 +226,7 @@ func TestSendCmd_FlagDefinitions(t *testing.T) {
 		{name: "sign", shorthand: "", flagType: "bool"},
 		{name: "gpg-key", shorthand: "", flagType: "string"},
 		{name: "list-gpg-keys", shorthand: "", flagType: "bool"},
+		{name: "signature-id", shorthand: "", flagType: "string"},
 		{name: "interactive", shorthand: "i", flagType: "bool"},
 		{name: "yes", shorthand: "y", flagType: "bool"},
 		{name: "template-id", shorthand: "", flagType: "string"},

@@ -47,6 +47,7 @@ var (
 	ErrMessageNotFound       = errors.New("message not found")
 	ErrFolderNotFound        = errors.New("folder not found")
 	ErrDraftNotFound         = errors.New("draft not found")
+	ErrSignatureNotFound     = errors.New("signature not found")
 	ErrThreadNotFound        = errors.New("thread not found")
 	ErrAttachmentNotFound    = errors.New("attachment not found")
 	ErrWebhookNotFound       = errors.New("webhook not found")

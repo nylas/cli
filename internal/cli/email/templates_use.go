@@ -22,6 +22,7 @@ func newTemplatesUseCmd() *cobra.Command {
 	var preview bool
 	var noConfirm bool
 	var jsonOutput bool
+	var signatureID string
 
 	cmd := &cobra.Command{
 		Use:   "use <template-id>",
@@ -121,9 +122,10 @@ Use --preview to see the expanded template without sending.`,
 
 			// Build request
 			req := &domain.SendMessageRequest{
-				Subject: expandedSubject,
-				Body:    expandedBody,
-				To:      toContacts,
+				Subject:     expandedSubject,
+				Body:        expandedBody,
+				To:          toContacts,
+				SignatureID: signatureID,
 			}
 
 			if len(cc) > 0 {
@@ -143,6 +145,10 @@ Use --preview to see the expanded template without sending.`,
 
 			// Send email
 			_, sendErr := common.WithClient(nil, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				if _, err := validateSignatureSelection(ctx, client, grantID, signatureID, nil); err != nil {
+					return struct{}{}, err
+				}
+
 				spinner := common.NewSpinner("Sending email...")
 				spinner.Start()
 
@@ -177,6 +183,7 @@ Use --preview to see the expanded template without sending.`,
 	cmd.Flags().BoolVarP(&preview, "preview", "p", false, "Preview the expanded template without sending")
 	cmd.Flags().BoolVarP(&noConfirm, "yes", "y", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+	cmd.Flags().StringVar(&signatureID, "signature-id", "", "Stored signature ID to append when sending")
 
 	return cmd
 }

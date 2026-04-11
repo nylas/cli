@@ -62,6 +62,49 @@ func TestHTTPClient_CreateDraft_WithoutAttachments(t *testing.T) {
 	assert.Equal(t, "Test Subject", draft.Subject)
 }
 
+func TestHTTPClient_CreateDraft_WithSignatureID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/grants/grant-123/drafts", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		err := json.NewDecoder(r.Body).Decode(&body)
+		require.NoError(t, err)
+
+		assert.Equal(t, "sig-123", body["signature_id"])
+
+		response := map[string]any{
+			"data": map[string]any{
+				"id":       "draft-sig-001",
+				"grant_id": "grant-123",
+				"subject":  "Test Subject",
+				"body":     "Test Body",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	req := &domain.CreateDraftRequest{
+		Subject:     "Test Subject",
+		Body:        "Test Body",
+		To:          []domain.EmailParticipant{{Email: "test@example.com"}},
+		SignatureID: "sig-123",
+	}
+
+	draft, err := client.CreateDraft(ctx, "grant-123", req)
+
+	require.NoError(t, err)
+	assert.Equal(t, "draft-sig-001", draft.ID)
+}
+
 func TestHTTPClient_CreateDraft_WithAttachments(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants/grant-123/drafts", r.URL.Path)
@@ -76,6 +119,7 @@ func TestHTTPClient_CreateDraft_WithAttachments(t *testing.T) {
 		message := r.FormValue("message")
 		assert.Contains(t, message, "Test Subject")
 		assert.Contains(t, message, "Test Body")
+		assert.Contains(t, message, "\"signature_id\":\"sig-123\"")
 
 		// Check for file field
 		_, fileHeader, err := r.FormFile("file0")
@@ -110,9 +154,10 @@ func TestHTTPClient_CreateDraft_WithAttachments(t *testing.T) {
 
 	ctx := context.Background()
 	req := &domain.CreateDraftRequest{
-		Subject: "Test Subject",
-		Body:    "Test Body",
-		To:      []domain.EmailParticipant{{Email: "test@example.com"}},
+		Subject:     "Test Subject",
+		Body:        "Test Body",
+		To:          []domain.EmailParticipant{{Email: "test@example.com"}},
+		SignatureID: "sig-123",
 		Attachments: []domain.Attachment{
 			{
 				Filename:    "test.txt",
@@ -261,6 +306,9 @@ func TestHTTPClient_CreateDraftWithAttachmentFromReader(t *testing.T) {
 		err := r.ParseMultipartForm(10 << 20)
 		require.NoError(t, err)
 
+		message := r.FormValue("message")
+		assert.Contains(t, message, "\"signature_id\":\"sig-stream\"")
+
 		// Verify file was uploaded
 		file, header, err := r.FormFile("file")
 		require.NoError(t, err)
@@ -293,8 +341,9 @@ func TestHTTPClient_CreateDraftWithAttachmentFromReader(t *testing.T) {
 
 	ctx := context.Background()
 	req := &domain.CreateDraftRequest{
-		Subject: "Stream Test",
-		Body:    "Body",
+		Subject:     "Stream Test",
+		Body:        "Body",
+		SignatureID: "sig-stream",
 	}
 
 	reader := strings.NewReader("streamed content")

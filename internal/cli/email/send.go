@@ -37,6 +37,7 @@ func newSendCmd() *cobra.Command {
 	var listGPGKeys bool
 	var encrypt bool
 	var recipientKey string
+	var signatureID string
 	var templateOpts hostedTemplateSendOptions
 
 	cmd := &cobra.Command{
@@ -240,11 +241,12 @@ Supports hosted templates:
 				}
 
 				req := &domain.SendMessageRequest{
-					Subject: activeSubject,
-					Body:    activeBody,
-					To:      toContacts,
-					Cc:      ccContacts,
-					Bcc:     bccContacts,
+					Subject:     activeSubject,
+					Body:        activeBody,
+					To:          toContacts,
+					Cc:          ccContacts,
+					Bcc:         bccContacts,
+					SignatureID: signatureID,
 				}
 				if replyTo != "" {
 					req.ReplyToMsgID = replyTo
@@ -320,6 +322,9 @@ Supports hosted templates:
 					}
 					fmt.Printf("  %s %s\n", common.Blue.Sprint("GPG Encrypted:"), encryptInfo)
 				}
+				if signatureID != "" {
+					fmt.Printf("  %s %s\n", common.Cyan.Sprint("Signature:"), signatureID)
+				}
 
 				if !noConfirm {
 					if scheduledTime.IsZero() {
@@ -342,6 +347,17 @@ Supports hosted templates:
 
 				// Get grant info to determine provider and email
 				grant, grantErr := client.GetGrant(ctx, grantID)
+				if signatureID != "" {
+					if grantErr != nil {
+						return struct{}{}, common.WrapGetError("grant", grantErr)
+					}
+					if err := validateSendSignatureSupport(signatureID, sign, encrypt, grant); err != nil {
+						return struct{}{}, err
+					}
+					if _, err := validateSignatureSelection(ctx, client, grantID, signatureID, grant); err != nil {
+						return struct{}{}, err
+					}
+				}
 
 				if sign || encrypt {
 					if grantErr == nil && grant != nil && grant.Email != "" {
@@ -442,6 +458,7 @@ Supports hosted templates:
 	cmd.Flags().BoolVar(&listGPGKeys, "list-gpg-keys", false, "List available GPG signing keys and exit")
 	cmd.Flags().BoolVar(&encrypt, "encrypt", false, "Encrypt email with recipient's GPG public key")
 	cmd.Flags().StringVar(&recipientKey, "recipient-key", "", "Specific GPG key ID for encryption (auto-detected from recipient email if not specified)")
+	cmd.Flags().StringVar(&signatureID, "signature-id", "", "Stored signature ID to append when sending")
 	cmd.Flags().StringVar(&templateOpts.TemplateID, "template-id", "", "Hosted template ID to render and send")
 	cmd.Flags().StringVar(&templateOpts.TemplateScope, "template-scope", string(domain.ScopeApplication), "Hosted template scope: app or grant")
 	cmd.Flags().StringVar(&templateOpts.TemplateGrantID, "template-grant-id", "", "Grant ID or email for grant-scoped hosted templates")

@@ -195,7 +195,7 @@ func TestMockClient_Drafts(t *testing.T) {
 	})
 
 	t.Run("SendDraft", func(t *testing.T) {
-		msg, err := mock.SendDraft(ctx, "grant-123", "draft-456")
+		msg, err := mock.SendDraft(ctx, "grant-123", "draft-456", nil)
 		require.NoError(t, err)
 		assert.NotEmpty(t, msg.ID)
 		assert.True(t, mock.SendDraftCalled)

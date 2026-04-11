@@ -29,6 +29,7 @@ func NewEmailCmd() *cobra.Command {
 	cmd.AddCommand(newMetadataCmd())
 	cmd.AddCommand(newAICmd())
 	cmd.AddCommand(newTemplatesCmd())
+	cmd.AddCommand(newSignaturesCmd())
 
 	return cmd
 }

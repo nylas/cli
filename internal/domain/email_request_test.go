@@ -208,8 +208,9 @@ func TestUpdateMessageRequest_Creation(t *testing.T) {
 
 func TestCreateDraftRequest_Creation(t *testing.T) {
 	req := CreateDraftRequest{
-		Subject: "Draft Email",
-		Body:    "<p>Draft content</p>",
+		Subject:     "Draft Email",
+		Body:        "<p>Draft content</p>",
+		SignatureID: "sig-123",
 		To: []EmailParticipant{
 			{Email: "to@example.com"},
 		},
@@ -234,6 +235,63 @@ func TestCreateDraftRequest_Creation(t *testing.T) {
 	if req.ReplyToMsgID != "orig-msg-123" {
 		t.Errorf("CreateDraftRequest.ReplyToMsgID = %q, want %q", req.ReplyToMsgID, "orig-msg-123")
 	}
+	if req.SignatureID != "sig-123" {
+		t.Errorf("CreateDraftRequest.SignatureID = %q, want %q", req.SignatureID, "sig-123")
+	}
+}
+
+func TestSignatureRequestTypes(t *testing.T) {
+	t.Run("send draft request", func(t *testing.T) {
+		req := SendDraftRequest{SignatureID: "sig-send"}
+		if req.SignatureID != "sig-send" {
+			t.Errorf("SendDraftRequest.SignatureID = %q, want %q", req.SignatureID, "sig-send")
+		}
+	})
+
+	t.Run("create signature request", func(t *testing.T) {
+		req := CreateSignatureRequest{
+			Name: "Work",
+			Body: "<p>Best regards</p>",
+		}
+		if req.Name != "Work" {
+			t.Errorf("CreateSignatureRequest.Name = %q, want %q", req.Name, "Work")
+		}
+		if req.Body != "<p>Best regards</p>" {
+			t.Errorf("CreateSignatureRequest.Body = %q, want %q", req.Body, "<p>Best regards</p>")
+		}
+	})
+
+	t.Run("update signature request", func(t *testing.T) {
+		name := "Updated"
+		body := "<p>Updated</p>"
+		req := UpdateSignatureRequest{
+			Name: &name,
+			Body: &body,
+		}
+		if req.Name == nil || *req.Name != "Updated" {
+			t.Fatalf("UpdateSignatureRequest.Name = %v, want %q", req.Name, "Updated")
+		}
+		if req.Body == nil || *req.Body != "<p>Updated</p>" {
+			t.Fatalf("UpdateSignatureRequest.Body = %v, want %q", req.Body, "<p>Updated</p>")
+		}
+	})
+
+	t.Run("signature model", func(t *testing.T) {
+		now := time.Now()
+		signature := Signature{
+			ID:        "sig-123",
+			Name:      "Work",
+			Body:      "<p>Best regards</p>",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if signature.ID != "sig-123" {
+			t.Errorf("Signature.ID = %q, want %q", signature.ID, "sig-123")
+		}
+		if signature.Name != "Work" {
+			t.Errorf("Signature.Name = %q, want %q", signature.Name, "Work")
+		}
+	})
 }
 
 // =============================================================================

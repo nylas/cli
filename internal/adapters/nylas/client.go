@@ -252,6 +252,38 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 	return nil, lastErr
 }
 
+func (c *HTTPClient) doRequestNoRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", version.UserAgent())
+
+	// Apply rate limiting - wait for permission to proceed
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limiter: %w", err)
+	}
+
+	// Ensure context has timeout
+	ctxWithTimeout, cancel := c.ensureContext(ctx)
+
+	// Execute request
+	resp, err := c.httpClient.Do(req.WithContext(ctxWithTimeout))
+	if err != nil {
+		cancel()
+
+		// Don't mask parent context cancellation.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
+	}
+
+	resp.Body = &cancelOnCloseBody{
+		ReadCloser: resp.Body,
+		cancel:     cancel,
+	}
+
+	return resp, nil
+}
+
 type cancelOnCloseBody struct {
 	io.ReadCloser
 	cancel context.CancelFunc
@@ -328,6 +360,17 @@ func (c *HTTPClient) doJSONRequestInternal(
 	withAuth bool,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, withAuth, true, acceptedStatuses...)
+}
+
+func (c *HTTPClient) doJSONRequestInternalWithRetry(
+	ctx context.Context,
+	method, url string,
+	body any,
+	withAuth bool,
+	retry bool,
+	acceptedStatuses ...int,
+) (*http.Response, error) {
 	// Default accepted statuses
 	if len(acceptedStatuses) == 0 {
 		acceptedStatuses = []int{http.StatusOK, http.StatusCreated}
@@ -358,8 +401,13 @@ func (c *HTTPClient) doJSONRequestInternal(
 		c.setAuthHeader(req)
 	}
 
-	// Execute request with rate limiting
-	resp, err := c.doRequest(ctx, req)
+	// Execute request with the configured retry policy.
+	var resp *http.Response
+	if retry {
+		resp, err = c.doRequest(ctx, req)
+	} else {
+		resp, err = c.doRequestNoRetry(ctx, req)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -411,6 +459,15 @@ func (c *HTTPClient) doJSONRequest(
 	return c.doJSONRequestInternal(ctx, method, url, body, true, acceptedStatuses...)
 }
 
+func (c *HTTPClient) doJSONRequestNoRetry(
+	ctx context.Context,
+	method, url string,
+	body any,
+	acceptedStatuses ...int,
+) (*http.Response, error) {
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, true, false, acceptedStatuses...)
+}
+
 // decodeJSONResponse decodes a JSON response body into the provided struct.
 // It properly closes the response body after reading.
 //
@@ -440,7 +497,7 @@ func (c *HTTPClient) doJSONRequestNoAuth(
 	body any,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
-	return c.doJSONRequestInternal(ctx, method, url, body, false, acceptedStatuses...)
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, false, true, acceptedStatuses...)
 }
 
 // validateRequired validates that a required field is not empty.
