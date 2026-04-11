@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -93,30 +92,7 @@ func newConfigShowCmd() *cobra.Command {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(config)
 				}
 
-				_, _ = common.Bold.Printf("Configuration: %s\n", config.Name)
-				fmt.Printf("  ID: %s\n", common.Cyan.Sprint(config.ID))
-				fmt.Printf("  Slug: %s\n", common.Green.Sprint(config.Slug))
-				fmt.Printf("  Duration: %d minutes\n", config.Availability.DurationMinutes)
-
-				if len(config.Participants) > 0 {
-					fmt.Printf("\nParticipants (%d):\n", len(config.Participants))
-					for i, p := range config.Participants {
-						fmt.Printf("  %d. %s <%s>", i+1, p.Name, p.Email)
-						if p.IsOrganizer {
-							fmt.Printf(" %s", common.Green.Sprint("(Organizer)"))
-						}
-						fmt.Println()
-					}
-				}
-
-				fmt.Printf("\nEvent Booking:\n")
-				fmt.Printf("  Title: %s\n", config.EventBooking.Title)
-				if config.EventBooking.Description != "" {
-					fmt.Printf("  Description: %s\n", config.EventBooking.Description)
-				}
-				if config.EventBooking.Location != "" {
-					fmt.Printf("  Location: %s\n", config.EventBooking.Location)
-				}
+				formatConfigDetails(cmd.OutOrStdout(), config)
 
 				return struct{}{}, nil
 			})
@@ -139,47 +115,56 @@ func newConfigCreateCmd() *cobra.Command {
 		location     string
 		jsonOutput   bool
 	)
+	flags := &configFlags{}
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a scheduler configuration",
-		Long:  "Create a new scheduler configuration (meeting type).",
+		Long: `Create a new scheduler configuration (meeting type).
+
+Use flags for common settings, or --file for full JSON config input.
+When both are provided, flags override file values.`,
+		Example: `  # Simple inline creation
+  nylas scheduler configs create --name "Quick Chat" --title "Quick Chat" \
+    --participants alice@co.com --duration 15
+
+  # With availability settings
+  nylas scheduler configs create --name "Product Demo" --title "Demo" \
+    --participants alice@co.com --duration 30 --interval 15 \
+    --buffer-before 5 --buffer-after 10 --conferencing-provider "Google Meet"
+
+  # From a JSON file
+  nylas scheduler configs create --file config.json
+
+  # File as base, override specific values
+  nylas scheduler configs create --file config.json --duration 60`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Validate participants
-			if len(participants) == 0 {
-				return common.NewUserError("at least one participant email is required", "Use --participant to specify email addresses")
-			}
-			for i, p := range participants {
-				p = strings.TrimSpace(p)
-				if p == "" {
-					return fmt.Errorf("participant email at position %d cannot be empty", i+1)
-				}
-				participants[i] = p
+			if err := validateConfigFlags(flags); err != nil {
+				return err
 			}
 
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				// Build participants list
-				var participantsList []domain.ConfigurationParticipant
-				for i, email := range participants {
-					participantsList = append(participantsList, domain.ConfigurationParticipant{
-						Email:       email,
-						IsOrganizer: i == 0, // First participant is organizer
-					})
+			if flags.file == "" {
+				if len(participants) == 0 {
+					return common.NewUserError("at least one participant email is required", "Use --participants to specify email addresses")
 				}
-
-				req := &domain.CreateSchedulerConfigurationRequest{
-					Name:         name,
-					Participants: participantsList,
-					Availability: domain.AvailabilityRules{
-						DurationMinutes: duration,
-					},
-					EventBooking: domain.EventBooking{
-						Title:       title,
-						Description: description,
-						Location:    location,
-					},
+				for i, p := range participants {
+					p = strings.TrimSpace(p)
+					if p == "" {
+						return fmt.Errorf("participant email at position %d cannot be empty", i+1)
+					}
+					participants[i] = p
 				}
+			}
 
+			req, err := buildCreateRequest(cmd, flags, name, participants, duration, title, description, location)
+			if err != nil {
+				return err
+			}
+			if err := validateCreateRequest(req); err != nil {
+				return err
+			}
+
+			_, err = common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				config, err := client.CreateSchedulerConfiguration(ctx, req)
 				if err != nil {
 					return struct{}{}, common.WrapCreateError("configuration", err)
@@ -201,18 +186,15 @@ func newConfigCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&name, "name", "", "Configuration name (required)")
+	cmd.Flags().StringVar(&name, "name", "", "Configuration name")
 	cmd.Flags().StringSliceVar(&participants, "participants", []string{}, "Participant emails (comma-separated, first is organizer)")
 	cmd.Flags().IntVar(&duration, "duration", 30, "Meeting duration in minutes")
-	cmd.Flags().StringVar(&title, "title", "", "Event title (required)")
+	cmd.Flags().StringVar(&title, "title", "", "Event title")
 	cmd.Flags().StringVar(&description, "description", "", "Event description")
 	cmd.Flags().StringVar(&location, "location", "", "Event location")
-
-	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("participants")
-	_ = cmd.MarkFlagRequired("title")
-
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+
+	registerConfigFlags(cmd, flags)
 
 	return cmd
 }
@@ -225,38 +207,42 @@ func newConfigUpdateCmd() *cobra.Command {
 		description string
 		jsonOutput  bool
 	)
+	flags := &configFlags{}
 
 	cmd := &cobra.Command{
 		Use:   "update <config-id>",
 		Short: "Update a scheduler configuration",
-		Long:  "Update an existing scheduler configuration.",
-		Args:  cobra.ExactArgs(1),
+		Long: `Update an existing scheduler configuration.
+
+Use flags to set specific fields, or --file for full JSON update.
+When both are provided, flags override file values.`,
+		Example: `  # Update specific fields
+  nylas scheduler configs update abc123 --name "Updated Name" --duration 60
+
+  # Add buffer times
+  nylas scheduler configs update abc123 --buffer-before 5 --buffer-after 10
+
+  # From a JSON file
+  nylas scheduler configs update abc123 --file update.json
+
+  # File as base, override specific values
+  nylas scheduler configs update abc123 --file update.json --duration 45`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateConfigFlags(flags); err != nil {
+				return err
+			}
+
 			configID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				req := &domain.UpdateSchedulerConfigurationRequest{}
+			req, err := buildUpdateRequest(cmd, flags, name, duration, title, description)
+			if err != nil {
+				return err
+			}
+			if err := validateUpdateRequest(req); err != nil {
+				return err
+			}
 
-				if name != "" {
-					req.Name = &name
-				}
-
-				if cmd.Flags().Changed("duration") {
-					req.Availability = &domain.AvailabilityRules{
-						DurationMinutes: duration,
-					}
-				}
-
-				if cmd.Flags().Changed("title") || cmd.Flags().Changed("description") {
-					eventBooking := &domain.EventBooking{}
-					if cmd.Flags().Changed("title") {
-						eventBooking.Title = title
-					}
-					if cmd.Flags().Changed("description") {
-						eventBooking.Description = description
-					}
-					req.EventBooking = eventBooking
-				}
-
+			_, err = common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				config, err := client.UpdateSchedulerConfiguration(ctx, configID, req)
 				if err != nil {
 					return struct{}{}, common.WrapUpdateError("configuration", err)
@@ -279,6 +265,8 @@ func newConfigUpdateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&title, "title", "", "Event title")
 	cmd.Flags().StringVar(&description, "description", "", "Event description")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+
+	registerConfigFlags(cmd, flags)
 
 	return cmd
 }

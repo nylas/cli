@@ -24,27 +24,94 @@ nylas scheduler configurations list --json
 nylas scheduler configurations show <config-id>
 nylas scheduler configs show <config-id>
 
-# Create a new configuration
-nylas scheduler configurations create \\
-  --name "30 Min Meeting" \\
-  --duration 30 \\
-  --interval 15
+# Create a simple configuration
+nylas scheduler configurations create \
+  --name "30 Min Meeting" \
+  --title "30 Min Meeting" \
+  --participants alice@co.com \
+  --duration 30
+
+# Create with availability settings
+nylas scheduler configurations create \
+  --name "Product Demo" \
+  --title "Product Demo" \
+  --participants alice@co.com \
+  --duration 30 \
+  --interval 15 \
+  --buffer-before 5 \
+  --buffer-after 10 \
+  --conferencing-provider "Google Meet" \
+  --min-booking-notice 120 \
+  --available-days-in-future 30
+
+# Create from a JSON file
+nylas scheduler configurations create --file config.json
+
+# Create from file with flag overrides
+nylas scheduler configurations create --file config.json --duration 60
 
 # Update a configuration
-nylas scheduler configurations update <config-id> \\
-  --name "Updated Name" \\
-  --duration 60
+nylas scheduler configurations update <config-id> \
+  --name "Updated Name" \
+  --duration 60 \
+  --buffer-before 10
+
+# Update from a JSON file
+nylas scheduler configurations update <config-id> --file update.json
 
 # Delete a configuration
 nylas scheduler configurations delete <config-id>
-nylas scheduler configs delete <config-id> -f    # Skip confirmation
+nylas scheduler configs delete <config-id> -y    # Skip confirmation
 ```
+
+**Configuration Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--name` | string | Configuration name |
+| `--participants` | strings | Participant emails (comma-separated, first is organizer) |
+| `--duration` | int | Meeting duration in minutes (default: 30) |
+| `--title` | string | Event title |
+| `--description` | string | Event description |
+| `--location` | string | Event location |
+| `--interval` | int | Slot interval in minutes |
+| `--round-to` | int | Round start times to nearest N minutes |
+| `--availability-method` | string | `max-fairness` or `max-availability` |
+| `--buffer-before` | int | Buffer minutes before meetings |
+| `--buffer-after` | int | Buffer minutes after meetings |
+| `--timezone` | string | Event timezone (e.g., `America/New_York`) |
+| `--booking-type` | string | `booking` or `organizer-confirmation` |
+| `--conferencing-provider` | string | `Google Meet`, `Zoom`, or `Microsoft Teams` |
+| `--disable-emails` | bool | Disable email notifications |
+| `--reminder-minutes` | ints | Reminder minutes (e.g., `10,60`) |
+| `--min-booking-notice` | int | Minimum minutes before booking |
+| `--min-cancellation-notice` | int | Minimum minutes before cancellation |
+| `--confirmation-method` | string | `automatic` or `manual` |
+| `--available-days-in-future` | int | Days in advance bookings are available |
+| `--cancellation-policy` | string | Cancellation policy text |
+| `--file` | string | JSON config file (flags override file values) |
+| `--json` | bool | Output as JSON |
+
+**File Input:**
+
+The `--file` flag accepts a JSON file matching the API request structure. You can export an existing configuration with `--json`, edit it, and re-import:
+
+```bash
+# Export → edit → recreate
+nylas scheduler configs show abc123 --json > meeting.json
+# Edit meeting.json...
+nylas scheduler configs create --file meeting.json
+```
+
+When both `--file` and flags are provided, flags take precedence over file values.
 
 **Configuration Features:**
 - Duration and interval settings
 - Availability rules and windows
 - Buffer times before/after meetings
+- Conferencing auto-creation (Google Meet, Zoom, Teams)
 - Booking limits and restrictions
+- Reminder notifications
 - Custom event settings
 
 ### Scheduler Sessions

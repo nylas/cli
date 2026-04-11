@@ -108,13 +108,9 @@ func TestConfigCreateCmd(t *testing.T) {
 		assert.Equal(t, "create", cmd.Use)
 	})
 
-	t.Run("has_required_flags", func(t *testing.T) {
+	t.Run("has_base_flags", func(t *testing.T) {
 		assert.NotNil(t, cmd.Flags().Lookup("name"))
 		assert.NotNil(t, cmd.Flags().Lookup("participants"))
-		assert.NotNil(t, cmd.Flags().Lookup("title"))
-	})
-
-	t.Run("has_event_flags", func(t *testing.T) {
 		assert.NotNil(t, cmd.Flags().Lookup("title"))
 		assert.NotNil(t, cmd.Flags().Lookup("description"))
 		assert.NotNil(t, cmd.Flags().Lookup("location"))
@@ -125,6 +121,38 @@ func TestConfigCreateCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 		assert.Equal(t, "30", flag.DefValue)
 	})
+
+	t.Run("has_availability_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("interval"))
+		assert.NotNil(t, cmd.Flags().Lookup("round-to"))
+		assert.NotNil(t, cmd.Flags().Lookup("availability-method"))
+		assert.NotNil(t, cmd.Flags().Lookup("buffer-before"))
+		assert.NotNil(t, cmd.Flags().Lookup("buffer-after"))
+	})
+
+	t.Run("has_event_booking_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("timezone"))
+		assert.NotNil(t, cmd.Flags().Lookup("booking-type"))
+		assert.NotNil(t, cmd.Flags().Lookup("conferencing-provider"))
+		assert.NotNil(t, cmd.Flags().Lookup("disable-emails"))
+		assert.NotNil(t, cmd.Flags().Lookup("reminder-minutes"))
+	})
+
+	t.Run("has_scheduler_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("min-booking-notice"))
+		assert.NotNil(t, cmd.Flags().Lookup("min-cancellation-notice"))
+		assert.NotNil(t, cmd.Flags().Lookup("confirmation-method"))
+		assert.NotNil(t, cmd.Flags().Lookup("available-days-in-future"))
+		assert.NotNil(t, cmd.Flags().Lookup("cancellation-policy"))
+	})
+
+	t.Run("has_file_flag", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("file"))
+	})
+
+	t.Run("has_examples", func(t *testing.T) {
+		assert.NotEmpty(t, cmd.Example)
+	})
 }
 
 func TestConfigUpdateCmd(t *testing.T) {
@@ -134,11 +162,43 @@ func TestConfigUpdateCmd(t *testing.T) {
 		assert.Equal(t, "update <config-id>", cmd.Use)
 	})
 
-	t.Run("has_update_flags", func(t *testing.T) {
+	t.Run("has_base_flags", func(t *testing.T) {
 		assert.NotNil(t, cmd.Flags().Lookup("name"))
 		assert.NotNil(t, cmd.Flags().Lookup("duration"))
 		assert.NotNil(t, cmd.Flags().Lookup("title"))
 		assert.NotNil(t, cmd.Flags().Lookup("description"))
+	})
+
+	t.Run("has_availability_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("interval"))
+		assert.NotNil(t, cmd.Flags().Lookup("round-to"))
+		assert.NotNil(t, cmd.Flags().Lookup("availability-method"))
+		assert.NotNil(t, cmd.Flags().Lookup("buffer-before"))
+		assert.NotNil(t, cmd.Flags().Lookup("buffer-after"))
+	})
+
+	t.Run("has_event_booking_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("timezone"))
+		assert.NotNil(t, cmd.Flags().Lookup("booking-type"))
+		assert.NotNil(t, cmd.Flags().Lookup("conferencing-provider"))
+		assert.NotNil(t, cmd.Flags().Lookup("disable-emails"))
+		assert.NotNil(t, cmd.Flags().Lookup("reminder-minutes"))
+	})
+
+	t.Run("has_scheduler_flags", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("min-booking-notice"))
+		assert.NotNil(t, cmd.Flags().Lookup("min-cancellation-notice"))
+		assert.NotNil(t, cmd.Flags().Lookup("confirmation-method"))
+		assert.NotNil(t, cmd.Flags().Lookup("available-days-in-future"))
+		assert.NotNil(t, cmd.Flags().Lookup("cancellation-policy"))
+	})
+
+	t.Run("has_file_flag", func(t *testing.T) {
+		assert.NotNil(t, cmd.Flags().Lookup("file"))
+	})
+
+	t.Run("has_examples", func(t *testing.T) {
+		assert.NotEmpty(t, cmd.Example)
 	})
 }
 
