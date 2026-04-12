@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const keyserverFetchTimeout = 5 * time.Second
+
 // ListPublicKeys lists all public keys in the keyring.
 func (s *service) ListPublicKeys(ctx context.Context) ([]KeyInfo, error) {
 	cmd := exec.CommandContext(ctx, "gpg", "--list-keys", "--with-colons", "--with-fingerprint")
@@ -47,6 +49,12 @@ func (s *service) FindPublicKeyByEmail(ctx context.Context, email string) (*KeyI
 		}
 	}
 
+	// Reserved domains are never expected to resolve through public key infrastructure.
+	// Avoid network-dependent lookups for test-only addresses so CI stays deterministic.
+	if isReservedLookupEmail(email) {
+		return nil, fmt.Errorf("no public key found for %s (checked local keyring only; skipped remote lookup for reserved domain)", email)
+	}
+
 	// Step 2: Not found locally - try to fetch from key servers
 	if fetchErr := s.fetchKeyByEmail(ctx, email); fetchErr != nil {
 		return nil, fmt.Errorf("no public key found for %s (checked local keyring and %d key servers): %w",
@@ -71,27 +79,57 @@ func (s *service) FindPublicKeyByEmail(ctx context.Context, email string) (*KeyI
 // fetchKeyByEmail tries to fetch a public key by email from key servers.
 func (s *service) fetchKeyByEmail(ctx context.Context, email string) error {
 	// Validate email format
-	if _, err := mail.ParseAddress(email); err != nil {
+	parsed, err := mail.ParseAddress(email)
+	if err != nil {
 		return fmt.Errorf("invalid email format: %q", email)
 	}
+	email = strings.ToLower(parsed.Address)
 
 	var lastErr error
 	for _, server := range KeyServers {
+		serverCtx, cancel := context.WithTimeout(ctx, keyserverFetchTimeout)
 		// Use --auto-key-locate with WKD (Web Key Directory) and keyserver fallback
 		// #nosec G204 - email is validated by mail.ParseAddress above
-		cmd := exec.CommandContext(ctx, "gpg", "--auto-key-locate", "wkd,keyserver", "--keyserver", server, "--locate-keys", email)
+		cmd := exec.CommandContext(serverCtx, "gpg", "--auto-key-locate", "wkd,keyserver", "--keyserver", server, "--locate-keys", email)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 
 		if err := cmd.Run(); err != nil {
+			cancel()
 			lastErr = fmt.Errorf("failed to fetch from %s: %w", server, err)
 			continue
 		}
+		cancel()
 		// Success
 		return nil
 	}
 
 	return fmt.Errorf("failed to fetch key for %s from any server: %w", email, lastErr)
+}
+
+func isReservedLookupEmail(email string) bool {
+	parsed, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+
+	addr := strings.ToLower(parsed.Address)
+	at := strings.LastIndex(addr, "@")
+	if at == -1 || at == len(addr)-1 {
+		return false
+	}
+
+	return isReservedLookupDomain(addr[at+1:])
+}
+
+func isReservedLookupDomain(domain string) bool {
+	domain = strings.Trim(strings.ToLower(domain), ".")
+	for _, suffix := range []string{"test", "example", "invalid", "localhost"} {
+		if domain == suffix || strings.HasSuffix(domain, "."+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // keyMatchesEmail checks if a key contains the given email in its UIDs.

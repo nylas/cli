@@ -325,15 +325,18 @@ func (s *service) fetchKeyFromServer(ctx context.Context, keyID string) error {
 	var lastErr error
 
 	for _, server := range KeyServers {
+		serverCtx, cancel := context.WithTimeout(ctx, keyserverFetchTimeout)
 		// #nosec G204 - keyID is validated by gpgKeyIDPattern.MatchString before this function is called
-		cmd := exec.CommandContext(ctx, "gpg", "--keyserver", server, "--recv-keys", keyID)
+		cmd := exec.CommandContext(serverCtx, "gpg", "--keyserver", server, "--recv-keys", keyID)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 
 		if err := cmd.Run(); err != nil {
+			cancel()
 			lastErr = fmt.Errorf("failed to fetch from %s: %w", server, err)
 			continue
 		}
+		cancel()
 		// Success
 		return nil
 	}
