@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEncryptData_Validation(t *testing.T) {
@@ -88,7 +89,8 @@ func TestFindPublicKeyByEmail_NotFound(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	svc := NewService()
 
 	// Check if GPG is available
@@ -105,6 +107,29 @@ func TestFindPublicKeyByEmail_NotFound(t *testing.T) {
 	// Should mention that key was not found
 	if !strings.Contains(err.Error(), "no public key found") {
 		t.Errorf("Error should mention 'no public key found', got: %v", err)
+	}
+}
+
+func TestIsReservedLookupDomain(t *testing.T) {
+	tests := []struct {
+		name   string
+		domain string
+		want   bool
+	}{
+		{name: "test TLD", domain: "ci.test", want: true},
+		{name: "example TLD", domain: "docs.example", want: true},
+		{name: "invalid TLD", domain: "bad.invalid", want: true},
+		{name: "localhost", domain: "svc.localhost", want: true},
+		{name: "real domain", domain: "nylas.com", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isReservedLookupDomain(tt.domain)
+			if got != tt.want {
+				t.Fatalf("isReservedLookupDomain(%q) = %v, want %v", tt.domain, got, tt.want)
+			}
+		})
 	}
 }
 
