@@ -3,25 +3,16 @@
 package slack
 
 import (
-	"bytes"
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
 // executeCommand executes a command and captures its output.
 func executeCommand(root *cobra.Command, args ...string) (string, string, error) {
-	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
-
-	root.SetOut(stdout)
-	root.SetErr(stderr)
-	root.SetArgs(args)
-
-	err := root.Execute()
-
-	return stdout.String(), stderr.String(), err
+	return testutil.ExecuteCommand(root, args...)
 }
 
 func TestNewSlackCmd(t *testing.T) {

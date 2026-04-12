@@ -3,6 +3,7 @@ package calendar
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/ai"
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -205,34 +207,89 @@ func displayScheduleOptions(response *ai.ScheduleResponse, userTZ string) error 
 }
 
 // createMeetingFromOption creates a calendar event from a selected option.
-func createMeetingFromOption(cmd *cobra.Command, option ai.ScheduleOption, grantID string, client any) error {
+func createMeetingFromOption(cmd *cobra.Command, option ai.ScheduleOption, grantID string, client ports.NylasClient) error {
+	if client == nil {
+		return fmt.Errorf("calendar client is not configured")
+	}
+	if grantID == "" {
+		return fmt.Errorf("grant ID is required")
+	}
+
 	fmt.Println("\nCreating event...")
 
-	// Extract title from option or use default
 	title := "Meeting"
-	if len(option.Participants) > 0 {
-		participantNames := make([]string, 0, len(option.Participants))
-		for _, p := range option.Participants {
-			// Extract name from email
-			name := strings.Split(p.Email, "@")[0]
-			participantNames = append(participantNames, name)
+	participants := sortedParticipantEmails(option.Participants)
+	if len(participants) > 0 {
+		names := make([]string, 0, len(participants))
+		for _, email := range participants {
+			names = append(names, strings.Split(email, "@")[0])
 		}
-		title = fmt.Sprintf("Meeting with %s", strings.Join(participantNames, ", "))
+		title = fmt.Sprintf("Meeting with %s", strings.Join(names, ", "))
+	}
+
+	eventTimezone := option.Timezone
+	if eventTimezone == "" {
+		eventTimezone = option.StartTime.Location().String()
+	}
+	if eventTimezone == "" || eventTimezone == "Local" {
+		eventTimezone = getLocalTimeZone()
+	}
+
+	createReq := &domain.CreateEventRequest{
+		Title:       title,
+		Description: strings.TrimSpace(option.Reasoning),
+		Busy:        true,
+		When: domain.EventWhen{
+			StartTime:     option.StartTime.Unix(),
+			EndTime:       option.EndTime.Unix(),
+			StartTimezone: eventTimezone,
+			EndTimezone:   eventTimezone,
+			Object:        "timespan",
+		},
+	}
+
+	for _, email := range participants {
+		createReq.Participants = append(createReq.Participants, domain.Participant{
+			Person: domain.Person{Email: email},
+		})
+	}
+
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+
+	calendarID, err := GetDefaultCalendarID(ctx, client, grantID, "", true)
+	if err != nil {
+		return err
+	}
+
+	event, err := client.CreateEvent(ctx, grantID, calendarID, createReq)
+	if err != nil {
+		return common.WrapCreateError("event", err)
 	}
 
 	fmt.Printf("✓ Event created\n")
-	fmt.Printf("  Title: %s\n", title)
-	fmt.Printf("  When: %s\n", option.StartTime.Format("Monday, Jan 2, 2006, 3:04 PM MST"))
-
-	if len(option.Participants) > 0 {
-		emails := make([]string, 0, len(option.Participants))
-		for _, p := range option.Participants {
-			emails = append(emails, p.Email)
-		}
-		fmt.Printf("  Participants: %s\n", strings.Join(emails, ", "))
+	fmt.Printf("  Title: %s\n", event.Title)
+	fmt.Printf("  When: %s\n", option.StartTime.In(option.StartTime.Location()).Format("Monday, Jan 2, 2006, 3:04 PM MST"))
+	fmt.Printf("  Calendar: %s\n", calendarID)
+	fmt.Printf("  Event ID: %s\n", event.ID)
+	if len(participants) > 0 {
+		fmt.Printf("  Participants: %s\n", strings.Join(participants, ", "))
 	}
 
 	return nil
+}
+
+func sortedParticipantEmails(participants map[string]ai.ParticipantTime) []string {
+	emails := make([]string, 0, len(participants))
+	for email, participant := range participants {
+		if participant.Email != "" {
+			emails = append(emails, participant.Email)
+			continue
+		}
+		emails = append(emails, email)
+	}
+	sort.Strings(emails)
+	return emails
 }
 
 // Helper functions

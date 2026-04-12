@@ -9,12 +9,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/adapters/utilities/scheduling"
+	timezonesvc "github.com/nylas/cli/internal/adapters/utilities/timezone"
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 )
 
 func newFindTimeCmd() *cobra.Command {
 	var (
 		participants    []string
+		participantTZs  []string
 		duration        string
 		workingStart    string
 		workingEnd      string
@@ -71,13 +74,24 @@ Analyzes participant timezones and suggests meeting times with a 100-point scori
 					"Use formats like: 30m, 1h, 1h30m, 7d",
 				)
 			}
+			workStart, err := parseWorkingTime(workingStart)
+			if err != nil {
+				return common.NewUserError(
+					fmt.Sprintf("invalid working hours start: %s", workingStart),
+					"Use format HH:MM (e.g., 09:00)",
+				)
+			}
+			workEnd, err := parseWorkingTime(workingEnd)
+			if err != nil {
+				return common.NewUserError(
+					fmt.Sprintf("invalid working hours end: %s", workingEnd),
+					"Use format HH:MM (e.g., 17:00)",
+				)
+			}
 
-			// TODO: Get participant timezones from contacts or config
-			// For now, use placeholder timezones
-			timezones := []string{
-				"America/Los_Angeles", // You
-				"America/New_York",    // Alice
-				"Europe/London",       // Bob
+			timezones, usedFallback, err := resolveParticipantTimezones(participants, participantTZs)
+			if err != nil {
+				return err
 			}
 
 			ctx, cancel := common.CreateContext()
@@ -90,13 +104,14 @@ Analyzes participant timezones and suggests meeting times with a 100-point scori
 			}
 
 			// Display results
-			displayFindTimeResults(participants, timezones, slots)
+			displayFindTimeResults(participants, timezones, slots, usedFallback, workStart, workEnd)
 
 			return nil
 		},
 	}
 
 	cmd.Flags().StringSliceVarP(&participants, "participants", "p", nil, "Participant email addresses (comma-separated)")
+	cmd.Flags().StringSliceVar(&participantTZs, "timezones", nil, "Participant IANA timezones, aligned with --participants order")
 	cmd.Flags().StringVarP(&duration, "duration", "d", "1h", "Meeting duration (e.g., 30m, 1h, 1h30m)")
 	cmd.Flags().StringVar(&workingStart, "working-start", "09:00", "Working hours start (HH:MM)")
 	cmd.Flags().StringVar(&workingEnd, "working-end", "17:00", "Working hours end (HH:MM)")
@@ -117,7 +132,6 @@ func findMeetingSlots(
 	days int,
 	excludeWeekends bool,
 ) ([]scheduling.TimeSlot, error) {
-	// Load all timezones
 	locations := make([]*time.Location, len(timezones))
 	for i, tz := range timezones {
 		loc, err := time.LoadLocation(tz)
@@ -130,7 +144,6 @@ func findMeetingSlots(
 		locations[i] = loc
 	}
 
-	// Parse working hours
 	workStart, err := parseWorkingTime(workingStart)
 	if err != nil {
 		return nil, common.NewUserError(
@@ -147,80 +160,51 @@ func findMeetingSlots(
 		)
 	}
 
-	// Generate candidate time slots
-	var slots []scheduling.TimeSlot
-
-	// Start from tomorrow
 	now := time.Now()
 	startDate := now.Add(24 * time.Hour)
+	endDate := startDate.AddDate(0, 0, max(days-1, 0))
 
-	for d := 0; d < days; d++ {
-		currentDate := startDate.Add(time.Duration(d) * 24 * time.Hour)
-
-		// Skip weekends if requested
-		if excludeWeekends && (currentDate.Weekday() == time.Saturday || currentDate.Weekday() == time.Sunday) {
-			continue
-		}
-
-		// Try each hour of the working day in the first timezone
-		for hour := workStart; hour < workEnd; hour++ {
-			// Create start time in first timezone
-			startTime := time.Date(
-				currentDate.Year(),
-				currentDate.Month(),
-				currentDate.Day(),
-				hour, 0, 0, 0,
-				locations[0],
-			)
-
-			endTime := startTime.Add(duration)
-
-			// Check if this time works for all participants
-			participants := make([]scheduling.ParticipantTime, len(timezones))
-			allWorking := true
-
-			for i, loc := range locations {
-				localTime := startTime.In(loc)
-				localHour := localTime.Hour()
-
-				// Check if within working hours
-				isWorking := localHour >= workStart && localHour < workEnd
-
-				if !isWorking {
-					allWorking = false
-				}
-
-				quality, icon := scheduling.GetQualityLabel(localTime, isWorking)
-
-				participants[i] = scheduling.ParticipantTime{
-					TimeZone:    timezones[i],
-					LocalTime:   localTime,
-					IsWorking:   isWorking,
-					Quality:     quality,
-					QualityIcon: icon,
-				}
-			}
-
-			// Only include slots where all participants are in working hours
-			if allWorking {
-				breakdown := scheduling.ScoreTimeSlot(startTime, endTime, participants)
-
-				slot := scheduling.TimeSlot{
-					StartTime: startTime,
-					EndTime:   endTime,
-					Score:     breakdown.Total,
-					Breakdown: breakdown,
-				}
-
-				slots = append(slots, slot)
-			}
-		}
+	result, err := timezonesvc.NewService().FindMeetingTime(ctx, &domain.MeetingFinderRequest{
+		TimeZones:         timezones,
+		Duration:          duration,
+		WorkingHoursStart: workingStart,
+		WorkingHoursEnd:   workingEnd,
+		DateRange: domain.DateRange{
+			Start: startDate,
+			End:   endDate,
+		},
+		ExcludeWeekends: excludeWeekends,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("find meeting slots: %w", err)
 	}
 
-	// Sort slots by score (highest first)
-	sortSlotsByScore(slots)
+	slots := make([]scheduling.TimeSlot, 0, len(result.Slots))
+	for _, slot := range result.Slots {
+		participants := make([]scheduling.ParticipantTime, len(timezones))
+		for i, loc := range locations {
+			localTime := slot.StartTime.In(loc)
+			localMinutes := localTime.Hour()*60 + localTime.Minute()
+			isWorking := localMinutes >= workStart && localMinutes < workEnd
+			quality, icon := scheduling.GetQualityLabel(localTime, isWorking)
+			participants[i] = scheduling.ParticipantTime{
+				TimeZone:    timezones[i],
+				LocalTime:   localTime,
+				IsWorking:   isWorking,
+				Quality:     quality,
+				QualityIcon: icon,
+			}
+		}
 
-	// Return top 5 slots
+		breakdown := scheduling.ScoreTimeSlot(slot.StartTime, slot.EndTime, participants)
+		slots = append(slots, scheduling.TimeSlot{
+			StartTime: slot.StartTime,
+			EndTime:   slot.EndTime,
+			Score:     breakdown.Total,
+			Breakdown: breakdown,
+		})
+	}
+
 	if len(slots) > 5 {
 		slots = slots[:5]
 	}
@@ -228,19 +212,8 @@ func findMeetingSlots(
 	return slots, nil
 }
 
-// sortSlotsByScore sorts slots by score in descending order.
-func sortSlotsByScore(slots []scheduling.TimeSlot) {
-	for i := 0; i < len(slots); i++ {
-		for j := i + 1; j < len(slots); j++ {
-			if slots[j].Score > slots[i].Score {
-				slots[i], slots[j] = slots[j], slots[i]
-			}
-		}
-	}
-}
-
 // displayFindTimeResults displays the found meeting times.
-func displayFindTimeResults(participants []string, timezones []string, slots []scheduling.TimeSlot) {
+func displayFindTimeResults(participants []string, timezones []string, slots []scheduling.TimeSlot, usedFallback bool, workStart, workEnd int) {
 	fmt.Println("\n🌍 Multi-Timezone Meeting Finder")
 	fmt.Println()
 
@@ -250,6 +223,10 @@ func displayFindTimeResults(participants []string, timezones []string, slots []s
 		if i < len(timezones) {
 			fmt.Printf("  • %s: %s\n", email, timezones[i])
 		}
+	}
+	if usedFallback {
+		fmt.Printf("\nℹ️  No participant timezones were provided. Using %s for all participants.\n", timezones[0])
+		fmt.Println("    Pass --timezones with one IANA timezone per participant for accurate local-time views.")
 	}
 	fmt.Println()
 
@@ -278,8 +255,8 @@ func displayFindTimeResults(participants []string, timezones []string, slots []s
 			endTime := slot.EndTime.In(loc)
 
 			var quality, icon string
-			hour := localTime.Hour()
-			isWorking := hour >= 9 && hour < 17
+			localMinutes := localTime.Hour()*60 + localTime.Minute()
+			isWorking := localMinutes >= workStart && localMinutes < workEnd
 			quality, icon = scheduling.GetQualityLabel(localTime, isWorking)
 
 			email := "Participant"
@@ -317,6 +294,35 @@ func displayFindTimeResults(participants []string, timezones []string, slots []s
 	}
 }
 
+func resolveParticipantTimezones(participants, provided []string) ([]string, bool, error) {
+	if len(provided) > 0 && len(provided) != len(participants) {
+		return nil, false, common.NewUserError(
+			fmt.Sprintf("got %d timezones for %d participants", len(provided), len(participants)),
+			"Provide one timezone per participant, in the same order as --participants",
+		)
+	}
+
+	if len(provided) == 0 {
+		localTZ := getLocalTimeZone()
+		timezones := make([]string, len(participants))
+		for i := range participants {
+			timezones[i] = localTZ
+		}
+		return timezones, true, nil
+	}
+
+	timezones := make([]string, len(provided))
+	for i, tz := range provided {
+		tz = strings.TrimSpace(tz)
+		if err := validateTimeZone(tz); err != nil {
+			return nil, false, err
+		}
+		timezones[i] = tz
+	}
+
+	return timezones, false, nil
+}
+
 // getCheckMark returns a checkmark or x based on condition.
 func getCheckMark(condition bool) string {
 	if condition {
@@ -335,5 +341,15 @@ func parseWorkingTime(s string) (int, error) {
 	if hour < 0 || hour > 23 {
 		return 0, fmt.Errorf("hour must be 0-23, got %d from input %q", hour, s)
 	}
-	return hour, nil
+	if minute < 0 || minute > 59 {
+		return 0, fmt.Errorf("minute must be 0-59, got %d from input %q", minute, s)
+	}
+	return hour*60 + minute, nil
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

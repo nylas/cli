@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nylas/cli/internal/adapters/utilities/scheduling"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -44,6 +45,10 @@ func (s *Service) FindMeetingTime(ctx context.Context, req *domain.MeetingFinder
 		return nil, fmt.Errorf("at least one time zone required")
 	}
 
+	if req.Duration <= 0 {
+		return nil, fmt.Errorf("meeting duration must be greater than zero")
+	}
+
 	// Parse working hours
 	startHour, err := parseTime(req.WorkingHoursStart)
 	if err != nil {
@@ -55,6 +60,12 @@ func (s *Service) FindMeetingTime(ctx context.Context, req *domain.MeetingFinder
 		return nil, fmt.Errorf("invalid working hours end: %w", err)
 	}
 
+	if !endHour.After(startHour) {
+		return nil, fmt.Errorf("working hours end must be after start")
+	}
+	startMinutes := startHour.Hour()*60 + startHour.Minute()
+	endMinutes := endHour.Hour()*60 + endHour.Minute()
+
 	// Load all time zones
 	locations := make([]*time.Location, len(req.TimeZones))
 	for i, tz := range req.TimeZones {
@@ -65,27 +76,83 @@ func (s *Service) FindMeetingTime(ctx context.Context, req *domain.MeetingFinder
 		locations[i] = loc
 	}
 
-	// TODO: Implement actual meeting time finding logic
-	// This would iterate through the date range, find working hours in each zone,
-	// and identify overlapping slots across all zones
-
-	result := &domain.MeetingTimeSlots{
-		Slots:      []domain.MeetingSlot{},
-		TimeZones:  req.TimeZones,
-		TotalSlots: 0,
+	searchStart := normalizeDate(req.DateRange.Start)
+	if searchStart.IsZero() {
+		searchStart = normalizeDate(time.Now())
 	}
 
-	// Placeholder: Return empty result for now
-	// Real implementation would:
-	// 1. Iterate through each day in DateRange
-	// 2. For each day, find working hours in each time zone
-	// 3. Calculate overlapping time slots
-	// 4. Score each slot based on quality (middle of day = higher score)
-	// 5. Filter by duration requirement
+	searchEnd := normalizeDate(req.DateRange.End)
+	if searchEnd.IsZero() {
+		searchEnd = searchStart.AddDate(0, 0, 7)
+	}
+	if searchEnd.Before(searchStart) {
+		return nil, fmt.Errorf("date range end must not be before start")
+	}
 
-	_ = startHour
-	_ = endHour
-	_ = locations
+	slotStep := 30 * time.Minute
+	if req.Duration < slotStep {
+		slotStep = req.Duration
+	}
+
+	slots := make([]domain.MeetingSlot, 0)
+	for day := searchStart; !day.After(searchEnd); day = day.AddDate(0, 0, 1) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		if req.ExcludeWeekends && isWeekend(day) {
+			continue
+		}
+
+		overlapStart, overlapEnd, ok := dailyWorkingOverlap(day, locations, startHour, endHour)
+		if !ok {
+			continue
+		}
+
+		for slotStart := overlapStart; !slotStart.Add(req.Duration).After(overlapEnd); slotStart = slotStart.Add(slotStep) {
+			slotEnd := slotStart.Add(req.Duration)
+			times := make(map[string]time.Time, len(req.TimeZones))
+			participants := make([]scheduling.ParticipantTime, len(req.TimeZones))
+			for i, tz := range req.TimeZones {
+				localTime := slotStart.In(locations[i])
+				times[tz] = localTime
+				localMinutes := localTime.Hour()*60 + localTime.Minute()
+				isWorking := localMinutes >= startMinutes && localMinutes < endMinutes
+				quality, icon := scheduling.GetQualityLabel(localTime, isWorking)
+				participants[i] = scheduling.ParticipantTime{
+					TimeZone:    tz,
+					LocalTime:   localTime,
+					IsWorking:   isWorking,
+					Quality:     quality,
+					QualityIcon: icon,
+				}
+			}
+
+			breakdown := scheduling.ScoreTimeSlot(slotStart, slotEnd, participants)
+
+			slots = append(slots, domain.MeetingSlot{
+				StartTime: slotStart,
+				EndTime:   slotEnd,
+				Times:     times,
+				Score:     breakdown.Total / 100.0,
+			})
+		}
+	}
+
+	sort.Slice(slots, func(i, j int) bool {
+		if slots[i].Score == slots[j].Score {
+			return slots[i].StartTime.Before(slots[j].StartTime)
+		}
+		return slots[i].Score > slots[j].Score
+	})
+
+	result := &domain.MeetingTimeSlots{
+		Slots:      slots,
+		TimeZones:  req.TimeZones,
+		TotalSlots: len(slots),
+	}
 
 	return result, nil
 }
@@ -215,6 +282,43 @@ func parseTime(s string) (time.Time, error) {
 func getOffset(t time.Time) int {
 	_, offset := t.Zone()
 	return offset
+}
+
+func normalizeDate(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Time{}
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func isWeekend(t time.Time) bool {
+	return t.Weekday() == time.Saturday || t.Weekday() == time.Sunday
+}
+
+func dailyWorkingOverlap(day time.Time, locations []*time.Location, startHour, endHour time.Time) (time.Time, time.Time, bool) {
+	var overlapStart time.Time
+	var overlapEnd time.Time
+
+	for i, loc := range locations {
+		localStart := time.Date(day.Year(), day.Month(), day.Day(), startHour.Hour(), startHour.Minute(), 0, 0, loc)
+		localEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour.Hour(), endHour.Minute(), 0, 0, loc)
+
+		startUTC := localStart.UTC()
+		endUTC := localEnd.UTC()
+
+		if i == 0 || startUTC.After(overlapStart) {
+			overlapStart = startUTC
+		}
+		if i == 0 || endUTC.Before(overlapEnd) {
+			overlapEnd = endUTC
+		}
+	}
+
+	if !overlapEnd.After(overlapStart) {
+		return time.Time{}, time.Time{}, false
+	}
+
+	return overlapStart, overlapEnd, true
 }
 
 // isDST determines if the given time is during daylight saving time.

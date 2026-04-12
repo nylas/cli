@@ -25,55 +25,15 @@ func (c *HTTPClient) UpdateDraft(ctx context.Context, grantID, draftID string, r
 func (c *HTTPClient) updateDraftWithJSON(ctx context.Context, grantID, draftID string, req *domain.CreateDraftRequest) (*domain.Draft, error) {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
 
-	payload := map[string]any{
-		"subject": req.Subject,
-		"body":    req.Body,
-	}
-
-	if len(req.To) > 0 {
-		payload["to"] = convertContactsToAPI(req.To)
-	}
-	if len(req.Cc) > 0 {
-		payload["cc"] = convertContactsToAPI(req.Cc)
-	}
-	if len(req.Bcc) > 0 {
-		payload["bcc"] = convertContactsToAPI(req.Bcc)
-	}
-	if len(req.ReplyTo) > 0 {
-		payload["reply_to"] = convertContactsToAPI(req.ReplyTo)
-	}
-	if req.ReplyToMsgID != "" {
-		payload["reply_to_message_id"] = req.ReplyToMsgID
-	}
-	if len(req.Metadata) > 0 {
-		payload["metadata"] = req.Metadata
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "PUT", queryURL, bytes.NewReader(body))
+	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, buildDraftPayload(req, false), http.StatusOK)
 	if err != nil {
 		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	c.setAuthHeader(httpReq)
-
-	resp, err := c.doRequest(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data draftResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -86,28 +46,7 @@ func (c *HTTPClient) updateDraftWithMultipart(ctx context.Context, grantID, draf
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
 
 	// Build the message JSON
-	message := map[string]any{
-		"subject": req.Subject,
-		"body":    req.Body,
-	}
-	if len(req.To) > 0 {
-		message["to"] = convertContactsToAPI(req.To)
-	}
-	if len(req.Cc) > 0 {
-		message["cc"] = convertContactsToAPI(req.Cc)
-	}
-	if len(req.Bcc) > 0 {
-		message["bcc"] = convertContactsToAPI(req.Bcc)
-	}
-	if len(req.ReplyTo) > 0 {
-		message["reply_to"] = convertContactsToAPI(req.ReplyTo)
-	}
-	if req.ReplyToMsgID != "" {
-		message["reply_to_message_id"] = req.ReplyToMsgID
-	}
-	if len(req.Metadata) > 0 {
-		message["metadata"] = req.Metadata
-	}
+	message := buildDraftPayload(req, false)
 
 	// Create multipart form
 	var buf bytes.Buffer

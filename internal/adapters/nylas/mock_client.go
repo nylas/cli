@@ -153,12 +153,14 @@ type MockClient struct {
 	DeleteWorkflowFunc        func(ctx context.Context, scope domain.RemoteScope, grantID, workflowID string) error
 
 	// Calendar functions
-	GetCalendarsFunc func(ctx context.Context, grantID string) ([]domain.Calendar, error)
-	GetEventsFunc    func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) ([]domain.Event, error)
-	GetEventFunc     func(ctx context.Context, grantID, calendarID, eventID string) (*domain.Event, error)
-	CreateEventFunc  func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error)
-	UpdateEventFunc  func(ctx context.Context, grantID, calendarID, eventID string, req *domain.UpdateEventRequest) (*domain.Event, error)
-	DeleteEventFunc  func(ctx context.Context, grantID, calendarID, eventID string) error
+	GetCalendarsFunc    func(ctx context.Context, grantID string) ([]domain.Calendar, error)
+	GetEventsFunc       func(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) ([]domain.Event, error)
+	GetEventFunc        func(ctx context.Context, grantID, calendarID, eventID string) (*domain.Event, error)
+	CreateEventFunc     func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error)
+	UpdateEventFunc     func(ctx context.Context, grantID, calendarID, eventID string, req *domain.UpdateEventRequest) (*domain.Event, error)
+	DeleteEventFunc     func(ctx context.Context, grantID, calendarID, eventID string) error
+	GetFreeBusyFunc     func(ctx context.Context, grantID string, req *domain.FreeBusyRequest) (*domain.FreeBusyResponse, error)
+	GetAvailabilityFunc func(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error)
 
 	// Contact functions
 	GetContactsFunc func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error)

@@ -171,16 +171,38 @@ func runFindMeeting(zonesStr, durationStr, startHour, endHour,
 
 	fmt.Printf("✅ Found %d potential time slot(s):\n\n", len(result.Slots))
 
-	// NOTE: The service implementation currently returns empty slots
-	// This output formatting is ready for when the logic is implemented
+	maxSlots := min(5, len(result.Slots))
+	for i := 0; i < maxSlots; i++ {
+		slot := result.Slots[i]
+		fmt.Printf("%d. %s - %s (score: %.0f%%)\n",
+			i+1,
+			slot.StartTime.UTC().Format("Mon Jan 2 15:04 UTC"),
+			slot.EndTime.UTC().Format("15:04 UTC"),
+			slot.Score*100,
+		)
 
-	fmt.Println("⚠️  NOTE: Meeting time finder logic is not yet fully implemented.")
-	fmt.Println("          The service will return available slots once the algorithm is complete.")
-	fmt.Println("\nPlanned features:")
-	fmt.Println("  • Identify overlapping working hours across all zones")
-	fmt.Println("  • Calculate quality scores (middle of day = higher score)")
-	fmt.Println("  • Filter by meeting duration")
-	fmt.Println("  • Respect weekend exclusions")
+		for _, zone := range result.TimeZones {
+			localStart, ok := slot.Times[zone]
+			if !ok {
+				continue
+			}
+
+			localEnd := slot.EndTime.In(localStart.Location())
+			fmt.Printf("   • %s: %s - %s\n",
+				zone,
+				localStart.Format("Mon Jan 2 3:04 PM MST"),
+				localEnd.Format("3:04 PM MST"),
+			)
+		}
+		fmt.Println()
+	}
 
 	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
