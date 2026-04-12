@@ -97,34 +97,81 @@ func TestService_ConvertTime(t *testing.T) {
 func TestService_FindMeetingTime(t *testing.T) {
 	service := NewService()
 	ctx := context.Background()
+	startDate := time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 0, 2)
 
 	tests := []struct {
-		name    string
-		req     *domain.MeetingFinderRequest
-		wantErr bool
+		name         string
+		req          *domain.MeetingFinderRequest
+		wantErr      bool
+		minSlots     int
+		expectNoSlot bool
 	}{
 		{
 			name: "valid request single zone",
 			req: &domain.MeetingFinderRequest{
 				TimeZones:         []string{"America/New_York"},
+				Duration:          time.Hour,
 				WorkingHoursStart: "09:00",
 				WorkingHoursEnd:   "17:00",
+				DateRange: domain.DateRange{
+					Start: startDate,
+					End:   endDate,
+				},
 			},
-			wantErr: false,
+			wantErr:  false,
+			minSlots: 1,
 		},
 		{
-			name: "valid request multiple zones",
+			name: "valid request overlapping zones",
 			req: &domain.MeetingFinderRequest{
-				TimeZones:         []string{"America/New_York", "Europe/London", "Asia/Tokyo"},
+				TimeZones:         []string{"America/New_York", "Europe/London"},
+				Duration:          time.Hour,
 				WorkingHoursStart: "09:00",
 				WorkingHoursEnd:   "17:00",
+				DateRange: domain.DateRange{
+					Start: startDate,
+					End:   endDate,
+				},
 			},
-			wantErr: false,
+			wantErr:  false,
+			minSlots: 1,
+		},
+		{
+			name: "single zone with longer duration",
+			req: &domain.MeetingFinderRequest{
+				TimeZones:         []string{"America/New_York"},
+				Duration:          2 * time.Hour,
+				WorkingHoursStart: "09:00",
+				WorkingHoursEnd:   "17:00",
+				DateRange: domain.DateRange{
+					Start: startDate,
+					End:   startDate,
+				},
+			},
+			wantErr:  false,
+			minSlots: 1,
+		},
+		{
+			name: "no overlap across distant zones",
+			req: &domain.MeetingFinderRequest{
+				TimeZones:         []string{"America/Los_Angeles", "Asia/Tokyo"},
+				Duration:          2 * time.Hour,
+				WorkingHoursStart: "09:00",
+				WorkingHoursEnd:   "17:00",
+				DateRange: domain.DateRange{
+					Start: startDate,
+					End:   startDate,
+				},
+			},
+			wantErr:      false,
+			expectNoSlot: true,
 		},
 		{
 			name: "no timezones",
 			req: &domain.MeetingFinderRequest{
 				TimeZones:         []string{},
+				Duration:          time.Hour,
 				WorkingHoursStart: "09:00",
 				WorkingHoursEnd:   "17:00",
 			},
@@ -134,6 +181,7 @@ func TestService_FindMeetingTime(t *testing.T) {
 			name: "invalid working hours start",
 			req: &domain.MeetingFinderRequest{
 				TimeZones:         []string{"UTC"},
+				Duration:          time.Hour,
 				WorkingHoursStart: "invalid",
 				WorkingHoursEnd:   "17:00",
 			},
@@ -143,6 +191,7 @@ func TestService_FindMeetingTime(t *testing.T) {
 			name: "invalid working hours end",
 			req: &domain.MeetingFinderRequest{
 				TimeZones:         []string{"UTC"},
+				Duration:          time.Hour,
 				WorkingHoursStart: "09:00",
 				WorkingHoursEnd:   "invalid",
 			},
@@ -152,6 +201,17 @@ func TestService_FindMeetingTime(t *testing.T) {
 			name: "invalid timezone",
 			req: &domain.MeetingFinderRequest{
 				TimeZones:         []string{"Invalid/Zone"},
+				Duration:          time.Hour,
+				WorkingHoursStart: "09:00",
+				WorkingHoursEnd:   "17:00",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid duration",
+			req: &domain.MeetingFinderRequest{
+				TimeZones:         []string{"UTC"},
+				Duration:          0,
 				WorkingHoursStart: "09:00",
 				WorkingHoursEnd:   "17:00",
 			},
@@ -183,7 +243,59 @@ func TestService_FindMeetingTime(t *testing.T) {
 			if len(result.TimeZones) != len(tt.req.TimeZones) {
 				t.Errorf("TimeZones count = %d, want %d", len(result.TimeZones), len(tt.req.TimeZones))
 			}
+
+			if tt.expectNoSlot {
+				if len(result.Slots) != 0 {
+					t.Fatalf("expected no slots, got %d", len(result.Slots))
+				}
+				return
+			}
+
+			if len(result.Slots) < tt.minSlots {
+				t.Fatalf("expected at least %d slot(s), got %d", tt.minSlots, len(result.Slots))
+			}
+
+			for _, slot := range result.Slots {
+				if !slot.EndTime.After(slot.StartTime) {
+					t.Fatalf("slot end %v must be after start %v", slot.EndTime, slot.StartTime)
+				}
+				if len(slot.Times) != len(tt.req.TimeZones) {
+					t.Fatalf("slot times count = %d, want %d", len(slot.Times), len(tt.req.TimeZones))
+				}
+			}
 		})
+	}
+}
+
+func TestService_FindMeetingTime_RespectsWorkingHourMinutes(t *testing.T) {
+	service := NewService()
+	ctx := context.Background()
+
+	req := &domain.MeetingFinderRequest{
+		TimeZones:         []string{"America/New_York"},
+		Duration:          30 * time.Minute,
+		WorkingHoursStart: "09:30",
+		WorkingHoursEnd:   "10:30",
+		DateRange: domain.DateRange{
+			Start: time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC),
+			End:   time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	result, err := service.FindMeetingTime(ctx, req)
+	if err != nil {
+		t.Fatalf("FindMeetingTime() error = %v", err)
+	}
+	if len(result.Slots) == 0 {
+		t.Fatal("expected at least one slot")
+	}
+
+	for _, slot := range result.Slots {
+		local := slot.StartTime.In(mustLoadLocation(t, "America/New_York"))
+		minutes := local.Hour()*60 + local.Minute()
+		if minutes < 9*60+30 || minutes >= 10*60+30 {
+			t.Fatalf("slot %v falls outside 09:30-10:30 working window", local)
+		}
 	}
 }
 
@@ -317,4 +429,15 @@ func TestService_ListTimeZones(t *testing.T) {
 			break
 		}
 	}
+}
+
+func mustLoadLocation(t *testing.T, zone string) *time.Location {
+	t.Helper()
+
+	loc, err := time.LoadLocation(zone)
+	if err != nil {
+		t.Fatalf("LoadLocation(%q) error = %v", zone, err)
+	}
+
+	return loc
 }

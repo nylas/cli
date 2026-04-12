@@ -72,6 +72,9 @@ func (m *MockClient) SendRSVP(ctx context.Context, grantID, calendarID, eventID 
 
 // GetFreeBusy retrieves free/busy information.
 func (m *MockClient) GetFreeBusy(ctx context.Context, grantID string, req *domain.FreeBusyRequest) (*domain.FreeBusyResponse, error) {
+	if m.GetFreeBusyFunc != nil {
+		return m.GetFreeBusyFunc(ctx, grantID, req)
+	}
 	now := req.StartTime
 	result := &domain.FreeBusyResponse{
 		Data: make([]domain.FreeBusyCalendar, len(req.Emails)),
@@ -93,6 +96,9 @@ func (m *MockClient) GetFreeBusy(ctx context.Context, grantID string, req *domai
 
 // GetAvailability finds available meeting times.
 func (m *MockClient) GetAvailability(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error) {
+	if m.GetAvailabilityFunc != nil {
+		return m.GetAvailabilityFunc(ctx, req)
+	}
 	duration := int64(req.DurationMinutes * 60)
 	result := &domain.AvailabilityResponse{
 		Data: domain.AvailabilityData{

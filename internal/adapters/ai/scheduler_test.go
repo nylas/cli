@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nylas/cli/internal/adapters/nylas"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -229,17 +231,40 @@ func TestCreateFallbackOptions(t *testing.T) {
 func TestExecuteTool_FindMeetingTime(t *testing.T) {
 	t.Parallel()
 
-	scheduler := NewAIScheduler(nil, nil, "")
-	req := &ScheduleRequest{GrantID: "grant-123"}
+	client := nylas.NewMockClient()
+	client.GetAvailabilityFunc = func(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error) {
+		return &domain.AvailabilityResponse{
+			Data: domain.AvailabilityData{
+				TimeSlots: []domain.AvailableSlot{
+					{
+						StartTime: time.Date(2024, 1, 15, 14, 0, 0, 0, time.UTC).Unix(),
+						EndTime:   time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC).Unix(),
+						Emails:    []string{"alice@example.com"},
+					},
+				},
+			},
+		}, nil
+	}
+	scheduler := NewAIScheduler(nil, client, "")
+	req := &ScheduleRequest{GrantID: "grant-123", UserTimezone: "UTC"}
 
 	result, err := scheduler.executeTool(context.Background(), "findMeetingTime", map[string]any{
 		"participants": []string{"alice@example.com"},
 		"duration":     30,
+		"dateRange": map[string]any{
+			"start": "2024-01-15",
+			"end":   "2024-01-15",
+		},
 	}, req)
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "slots")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	slots, ok := payload["slots"].([]any)
+	require.True(t, ok)
+	require.Len(t, slots, 1)
 }
 
 func TestExecuteTool_CheckDST(t *testing.T) {
@@ -253,8 +278,13 @@ func TestExecuteTool_CheckDST(t *testing.T) {
 	}, nil)
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "isDST")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	assert.Equal(t, "America/New_York", payload["timezone"])
+	_, hasDST := payload["isDST"]
+	assert.True(t, hasDST)
 }
 
 func TestExecuteTool_ValidateWorkingHours(t *testing.T) {
@@ -263,48 +293,86 @@ func TestExecuteTool_ValidateWorkingHours(t *testing.T) {
 	scheduler := NewAIScheduler(nil, nil, "")
 
 	result, err := scheduler.executeTool(context.Background(), "validateWorkingHours", map[string]any{
-		"time":     "2024-01-15T10:00:00",
+		"time":     "2024-01-15T19:00:00",
 		"timezone": "America/New_York",
 	}, nil)
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "isValid")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	assert.Equal(t, false, payload["isValid"])
 }
 
 func TestExecuteTool_CreateEvent(t *testing.T) {
 	t.Parallel()
 
-	scheduler := NewAIScheduler(nil, nil, "")
-	req := &ScheduleRequest{GrantID: "grant-123"}
+	client := nylas.NewMockClient()
+	client.GetCalendarsFunc = func(ctx context.Context, grantID string) ([]domain.Calendar, error) {
+		return []domain.Calendar{{ID: "primary", IsPrimary: true}}, nil
+	}
+	client.CreateEventFunc = func(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error) {
+		assert.Equal(t, "grant-123", grantID)
+		assert.Equal(t, "primary", calendarID)
+		assert.Equal(t, "Team Standup", req.Title)
+		assert.Equal(t, "UTC", req.When.StartTimezone)
+		return &domain.Event{ID: "event-123", CalendarID: calendarID, Title: req.Title}, nil
+	}
+	scheduler := NewAIScheduler(nil, client, "")
+	req := &ScheduleRequest{GrantID: "grant-123", UserTimezone: "UTC"}
 
 	result, err := scheduler.executeTool(context.Background(), "createEvent", map[string]any{
 		"title":     "Team Standup",
 		"startTime": "2024-01-15T10:00:00Z",
 		"endTime":   "2024-01-15T10:30:00Z",
+		"timezone":  "UTC",
 	}, req)
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "eventID")
-	assert.Contains(t, result, "Team Standup")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	assert.Equal(t, "event-123", payload["eventID"])
+	assert.Equal(t, "Team Standup", payload["title"])
 }
 
 func TestExecuteTool_GetAvailability(t *testing.T) {
 	t.Parallel()
 
-	scheduler := NewAIScheduler(nil, nil, "")
-	req := &ScheduleRequest{GrantID: "grant-123"}
+	client := nylas.NewMockClient()
+	client.GetAvailabilityFunc = func(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error) {
+		return &domain.AvailabilityResponse{
+			Data: domain.AvailabilityData{
+				TimeSlots: []domain.AvailableSlot{
+					{
+						StartTime: time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC).Unix(),
+						EndTime:   time.Date(2024, 1, 15, 16, 30, 0, 0, time.UTC).Unix(),
+						Emails:    []string{"alice@example.com"},
+					},
+				},
+			},
+		}, nil
+	}
+	scheduler := NewAIScheduler(nil, client, "")
+	req := &ScheduleRequest{GrantID: "grant-123", UserTimezone: "UTC"}
 
 	result, err := scheduler.executeTool(context.Background(), "getAvailability", map[string]any{
 		"participants": []string{"alice@example.com"},
 		"startTime":    "2024-01-15T00:00:00Z",
 		"endTime":      "2024-01-15T23:59:59Z",
+		"duration":     30,
 	}, req)
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "availableSlots")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	slots, ok := payload["availableSlots"].([]any)
+	require.True(t, ok)
+	require.Len(t, slots, 1)
 }
 
 func TestExecuteTool_GetTimezoneInfo(t *testing.T) {
@@ -313,13 +381,17 @@ func TestExecuteTool_GetTimezoneInfo(t *testing.T) {
 	scheduler := NewAIScheduler(nil, nil, "")
 
 	result, err := scheduler.executeTool(context.Background(), "getTimezoneInfo", map[string]any{
-		"email": "alice@example.com",
-	}, nil)
+		"email":    "alice@example.com",
+		"timezone": "Europe/London",
+	}, &ScheduleRequest{UserTimezone: "UTC"})
 
 	require.NoError(t, err)
-	assert.Contains(t, result, "success")
-	assert.Contains(t, result, "timezone")
-	assert.Contains(t, result, "alice@example.com")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(result), &payload))
+	assert.Equal(t, "success", payload["status"])
+	assert.Equal(t, "Europe/London", payload["timezone"])
+	assert.Equal(t, "alice@example.com", payload["email"])
 }
 
 func TestExecuteTool_UnknownFunction(t *testing.T) {

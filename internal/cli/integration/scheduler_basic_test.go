@@ -61,8 +61,8 @@ func TestCLI_SchedulerConfigurationsList(t *testing.T) {
 		t.Fatalf("scheduler configurations list failed: %v\nstderr: %s", err, stderr)
 	}
 
-	// Should show configurations list or "No scheduler configurations found"
-	if !strings.Contains(stdout, "Found") && !strings.Contains(stdout, "No scheduler configurations found") {
+	// The CLI uses the shared empty-state helper, which prints "No configurations found."
+	if !strings.Contains(stdout, "Found") && !strings.Contains(stdout, "No configurations found") {
 		t.Errorf("Expected configurations list output, got: %s", stdout)
 	}
 

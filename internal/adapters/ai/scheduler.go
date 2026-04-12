@@ -235,7 +235,7 @@ func (s *AIScheduler) executeTool(ctx context.Context, function string, args map
 	case "getAvailability":
 		return s.getAvailability(ctx, args, req)
 	case "getTimezoneInfo":
-		return s.getTimezoneInfo(ctx, args)
+		return s.getTimezoneInfo(ctx, args, req)
 	default:
 		return "", fmt.Errorf("unknown function: %s", function)
 	}
@@ -244,105 +244,27 @@ func (s *AIScheduler) executeTool(ctx context.Context, function string, args map
 // Tool implementation methods
 
 func (s *AIScheduler) findMeetingTime(ctx context.Context, args map[string]any, req *ScheduleRequest) (string, error) {
-	// Simplified implementation - in production would use smart meeting finder
-	result := map[string]any{
-		"status":  "success",
-		"message": "Found 3 available time slots",
-		"slots": []map[string]any{
-			{
-				"start": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-				"score": 95,
-			},
-		},
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+	return s.runFindMeetingTime(ctx, args, req)
 }
 
 func (s *AIScheduler) checkDST(ctx context.Context, args map[string]any) (string, error) {
-	timeStr, _ := args["time"].(string)
-	tz, _ := args["timezone"].(string)
-
-	result := map[string]any{
-		"status":   "success",
-		"time":     timeStr,
-		"timezone": tz,
-		"isDST":    false,
-		"warning":  "",
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+	return s.runCheckDST(ctx, args)
 }
 
 func (s *AIScheduler) validateWorkingHours(ctx context.Context, args map[string]any) (string, error) {
-	result := map[string]any{
-		"status":     "success",
-		"isValid":    true,
-		"violations": []string{},
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+	return s.runValidateWorkingHours(ctx, args)
 }
 
 func (s *AIScheduler) createEvent(ctx context.Context, args map[string]any, req *ScheduleRequest) (string, error) {
-	title, _ := args["title"].(string)
-
-	result := map[string]any{
-		"status":  "success",
-		"eventID": "event-" + time.Now().Format("20060102150405"),
-		"title":   title,
-		"message": "Event created successfully",
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+	return s.runCreateEvent(ctx, args, req)
 }
 
 func (s *AIScheduler) getAvailability(ctx context.Context, args map[string]any, req *ScheduleRequest) (string, error) {
-	result := map[string]any{
-		"status":         "success",
-		"availableSlots": []string{},
-		"busySlots":      []string{},
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+	return s.runGetAvailability(ctx, args, req)
 }
 
-func (s *AIScheduler) getTimezoneInfo(ctx context.Context, args map[string]any) (string, error) {
-	email, _ := args["email"].(string)
-
-	result := map[string]any{
-		"status":   "success",
-		"email":    email,
-		"timezone": "America/New_York",
-		"offset":   "-05:00",
-		"isDST":    false,
-	}
-
-	bytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
-	}
-	return string(bytes), nil
+func (s *AIScheduler) getTimezoneInfo(ctx context.Context, args map[string]any, req *ScheduleRequest) (string, error) {
+	return s.runGetTimezoneInfo(ctx, args, req)
 }
 
 // parseScheduleOptions parses the AI response into structured options.

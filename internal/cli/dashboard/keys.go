@@ -88,8 +88,11 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 			}
 
 			if len(keys) == 0 {
+				createCmd := "nylas dashboard apps " +
+					"apikeys create --app " + appID +
+					" --region " + region
 				fmt.Println("No API keys found.")
-				fmt.Printf("\nCreate one with: nylas dashboard apps apikeys create --app %s --region %s\n", appID, region)
+				fmt.Printf("\nCreate one with:\n  %s\n", createCmd)
 				return nil
 			}
 

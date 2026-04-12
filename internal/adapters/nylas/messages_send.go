@@ -13,10 +13,7 @@ import (
 	"github.com/nylas/cli/internal/util"
 )
 
-// SendMessage sends an email.
-func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send", c.baseURL, grantID)
-
+func buildSendMessagePayload(req *domain.SendMessageRequest, includeSignature bool) map[string]any {
 	payload := map[string]any{
 		"subject": req.Subject,
 		"body":    req.Body,
@@ -44,38 +41,29 @@ func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domai
 	if req.SendAt > 0 {
 		payload["send_at"] = req.SendAt
 	}
-	if req.SignatureID != "" {
+	if includeSignature && req.SignatureID != "" {
 		payload["signature_id"] = req.SignatureID
 	}
 	if len(req.Metadata) > 0 {
 		payload["metadata"] = req.Metadata
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", queryURL, bytes.NewReader(body))
+	return payload
+}
+
+// SendMessage sends an email.
+func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send", c.baseURL, grantID)
+
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildSendMessagePayload(req, true), http.StatusOK, http.StatusCreated, http.StatusAccepted)
 	if err != nil {
 		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	c.setAuthHeader(httpReq)
-
-	resp, err := c.doRequest(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
-		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data messageResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 

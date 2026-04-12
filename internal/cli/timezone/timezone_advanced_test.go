@@ -316,7 +316,7 @@ func TestListCmd_EmptyFilter(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if !strings.Contains(stdout, "No time zones found") {
+	if !strings.Contains(stdout, "No zones found") {
 		t.Error("Expected output to indicate no zones found")
 	}
 }

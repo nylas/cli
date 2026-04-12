@@ -1,39 +1,16 @@
 package timezone
 
 import (
-	"bytes"
-	"os"
 	"strings"
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/spf13/cobra"
 )
 
 // executeCommand executes a command and captures output
 func executeCommand(cmd *cobra.Command, args ...string) (stdout string, stderr string, err error) {
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-
-	rOut, wOut, _ := os.Pipe()
-	rErr, wErr, _ := os.Pipe()
-
-	os.Stdout = wOut
-	os.Stderr = wErr
-
-	cmd.SetArgs(args)
-	err = cmd.Execute()
-
-	_ = wOut.Close() // test cleanup, errors don't affect test validity
-	_ = wErr.Close() // test cleanup, errors don't affect test validity
-
-	var bufOut, bufErr bytes.Buffer
-	_, _ = bufOut.ReadFrom(rOut)
-	_, _ = bufErr.ReadFrom(rErr)
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return bufOut.String(), bufErr.String(), err
+	return testutil.ExecuteCommand(cmd, args...)
 }
 
 func TestNewTimezoneCmd(t *testing.T) {
