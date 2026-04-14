@@ -409,8 +409,7 @@ func TestGrantStore_MultipleGrants(t *testing.T) {
 }
 
 // TestGrantStore_DefaultGrantBehavior tests the behavior of default grants
-// when grants are deleted. Note: DeleteGrant does NOT automatically clear
-// the default_grant key - that's the caller's responsibility (auth service).
+// when grants are deleted or local grant storage needs repair.
 func TestGrantStore_DefaultGrantBehavior(t *testing.T) {
 	secrets := keyring.NewMockSecretStore()
 	store := keyring.NewGrantStore(secrets)
@@ -421,28 +420,40 @@ func TestGrantStore_DefaultGrantBehavior(t *testing.T) {
 		Provider: domain.ProviderGoogle,
 	}
 
-	t.Run("delete default grant leaves stale reference", func(t *testing.T) {
-		// Save a grant and set it as default
+	grant2 := domain.GrantInfo{
+		ID:       "grant-2",
+		Email:    "user2@gmail.com",
+		Provider: domain.ProviderGoogle,
+	}
+
+	t.Run("delete default grant switches to another stored grant", func(t *testing.T) {
+		require.NoError(t, store.SaveGrant(grant1))
+		require.NoError(t, store.SaveGrant(grant2))
+		require.NoError(t, store.SetDefaultGrant(grant1.ID))
+
+		require.NoError(t, store.DeleteGrant(grant1.ID))
+
+		_, err := store.GetGrant(grant1.ID)
+		assert.ErrorIs(t, err, domain.ErrGrantNotFound)
+
+		defaultID, err := store.GetDefaultGrant()
+		require.NoError(t, err)
+		assert.Equal(t, "grant-2", defaultID)
+	})
+
+	t.Run("delete last remaining default grant clears default", func(t *testing.T) {
+		require.NoError(t, store.ClearGrants())
+
 		require.NoError(t, store.SaveGrant(grant1))
 		require.NoError(t, store.SetDefaultGrant(grant1.ID))
 
-		// Verify it's the default
-		defaultID, err := store.GetDefaultGrant()
-		require.NoError(t, err)
-		assert.Equal(t, "grant-1", defaultID)
-
-		// Delete the grant
 		require.NoError(t, store.DeleteGrant(grant1.ID))
 
-		// Verify grant is deleted
-		_, err = store.GetGrant(grant1.ID)
+		_, err := store.GetGrant(grant1.ID)
 		assert.ErrorIs(t, err, domain.ErrGrantNotFound)
 
-		// IMPORTANT: The default_grant key still contains the old ID
-		// This is by design - the caller (auth service) must handle this
-		defaultID, err = store.GetDefaultGrant()
-		require.NoError(t, err, "GetDefaultGrant should NOT return error - key still exists")
-		assert.Equal(t, "grant-1", defaultID, "Default still points to deleted grant")
+		_, err = store.GetDefaultGrant()
+		assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
 	})
 
 	t.Run("clear grants clears default", func(t *testing.T) {
@@ -456,5 +467,19 @@ func TestGrantStore_DefaultGrantBehavior(t *testing.T) {
 		// Now default should be cleared
 		_, err := store.GetDefaultGrant()
 		assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
+	})
+
+	t.Run("list grants repairs malformed local entries and stale default", func(t *testing.T) {
+		require.NoError(t, secrets.Set("grants", `[{"id":"","email":"","provider":"nylas"},{"id":"grant-2","email":"user2@gmail.com","provider":"google"}]`))
+		require.NoError(t, store.SetDefaultGrant("missing-grant"))
+
+		grants, err := store.ListGrants()
+		require.NoError(t, err)
+		require.Len(t, grants, 1)
+		assert.Equal(t, "grant-2", grants[0].ID)
+
+		defaultID, err := store.GetDefaultGrant()
+		require.NoError(t, err)
+		assert.Equal(t, "grant-2", defaultID)
 	})
 }

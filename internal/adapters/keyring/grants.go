@@ -24,6 +24,10 @@ func NewGrantStore(secrets ports.SecretStore) *GrantStore {
 
 // SaveGrant saves grant info to storage.
 func (g *GrantStore) SaveGrant(info domain.GrantInfo) error {
+	if info.ID == "" || info.Email == "" {
+		return domain.ErrInvalidInput
+	}
+
 	grants, err := g.ListGrants()
 	if err != nil && err != domain.ErrSecretNotFound {
 		return err
@@ -80,6 +84,9 @@ func (g *GrantStore) ListGrants() ([]domain.GrantInfo, error) {
 	data, err := g.secrets.Get(grantsKey)
 	if err != nil {
 		if err == domain.ErrSecretNotFound {
+			if err := g.repairDefaultGrant(nil); err != nil {
+				return nil, err
+			}
 			return []domain.GrantInfo{}, nil
 		}
 		return nil, err
@@ -89,7 +96,18 @@ func (g *GrantStore) ListGrants() ([]domain.GrantInfo, error) {
 	if err := json.Unmarshal([]byte(data), &grants); err != nil {
 		return nil, err
 	}
-	return grants, nil
+
+	sanitized, changed := sanitizeGrants(grants)
+	if changed {
+		if err := g.saveGrants(sanitized); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.repairDefaultGrant(sanitized); err != nil {
+		return nil, err
+	}
+
+	return sanitized, nil
 }
 
 // DeleteGrant removes a grant from storage.
@@ -109,7 +127,11 @@ func (g *GrantStore) DeleteGrant(grantID string) error {
 	// Also delete the grant's token if it exists
 	_ = g.secrets.Delete(ports.GrantTokenKey(grantID))
 
-	return g.saveGrants(newGrants)
+	if err := g.saveGrants(newGrants); err != nil {
+		return err
+	}
+
+	return g.repairDefaultGrant(newGrants)
 }
 
 // SetDefaultGrant sets the default grant ID.
@@ -119,6 +141,11 @@ func (g *GrantStore) SetDefaultGrant(grantID string) error {
 
 // GetDefaultGrant returns the default grant ID.
 func (g *GrantStore) GetDefaultGrant() (string, error) {
+	_, err := g.ListGrants()
+	if err != nil {
+		return "", err
+	}
+
 	grantID, err := g.secrets.Get(defaultGrantKey)
 	if err != nil {
 		if err == domain.ErrSecretNotFound {
@@ -126,6 +153,7 @@ func (g *GrantStore) GetDefaultGrant() (string, error) {
 		}
 		return "", err
 	}
+
 	return grantID, nil
 }
 
@@ -142,4 +170,43 @@ func (g *GrantStore) saveGrants(grants []domain.GrantInfo) error {
 		return err
 	}
 	return g.secrets.Set(grantsKey, string(data))
+}
+
+func sanitizeGrants(grants []domain.GrantInfo) ([]domain.GrantInfo, bool) {
+	sanitized := make([]domain.GrantInfo, 0, len(grants))
+	changed := false
+	for _, grant := range grants {
+		if grant.ID == "" || grant.Email == "" {
+			changed = true
+			continue
+		}
+		sanitized = append(sanitized, grant)
+	}
+	return sanitized, changed
+}
+
+func (g *GrantStore) repairDefaultGrant(grants []domain.GrantInfo) error {
+	defaultID, err := g.secrets.Get(defaultGrantKey)
+	if err != nil {
+		if err != domain.ErrSecretNotFound {
+			return err
+		}
+		if len(grants) == 0 {
+			return nil
+		}
+		return g.secrets.Set(defaultGrantKey, grants[0].ID)
+	}
+
+	for _, grant := range grants {
+		if grant.ID == defaultID {
+			return nil
+		}
+	}
+
+	if len(grants) == 0 {
+		_ = g.secrets.Delete(defaultGrantKey)
+		return nil
+	}
+
+	return g.secrets.Set(defaultGrantKey, grants[0].ID)
 }
