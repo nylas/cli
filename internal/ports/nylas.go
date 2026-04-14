@@ -18,6 +18,7 @@ type NylasClient interface {
 	PubSubClient
 	NotetakerClient
 	InboundClient
+	AgentClient
 	SchedulerClient
 	AdminClient
 	TransactionalClient

@@ -49,6 +49,7 @@ func TestIntegration_ListGrants_ValidatesProvider(t *testing.T) {
 		"icloud":           true,
 		"ews":              true,
 		"inbox":            true, // Nylas Native Auth
+		"nylas":            true, // Nylas-managed agent account provider
 		"virtual":          true,
 		"virtual-calendar": true, // Virtual calendar provider
 	}

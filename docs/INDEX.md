@@ -72,6 +72,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **Calendar** → [commands/calendar.md](commands/calendar.md)
 - **Contacts** → [commands/contacts.md](commands/contacts.md)
 - **Webhooks** → [commands/webhooks.md](commands/webhooks.md)
+- **Agent accounts** → [commands/agent.md](commands/agent.md)
 - **Inbound email** → [commands/inbound.md](commands/inbound.md)
 - **Scheduler** → [commands/scheduler.md](commands/scheduler.md)
 - **Admin** → [commands/admin.md](commands/admin.md)

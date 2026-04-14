@@ -15,6 +15,7 @@ func TestProvider(t *testing.T) {
 			{ProviderMicrosoft, "Microsoft"},
 			{ProviderIMAP, "IMAP"},
 			{ProviderVirtual, "Virtual"},
+			{ProviderNylas, "Nylas"},
 			{Provider("unknown"), "unknown"},
 		}
 
@@ -35,6 +36,7 @@ func TestProvider(t *testing.T) {
 			{ProviderMicrosoft, true},
 			{ProviderIMAP, true},
 			{ProviderVirtual, true},
+			{ProviderNylas, true},
 			{Provider("unknown"), false},
 			{Provider(""), false},
 			{Provider("GOOGLE"), false}, // Case sensitive
@@ -58,6 +60,7 @@ func TestProvider(t *testing.T) {
 			{ProviderIMAP, false},
 			{ProviderVirtual, false},
 			{ProviderInbox, false},
+			{ProviderNylas, false},
 			{Provider("unknown"), false},
 		}
 
@@ -79,6 +82,7 @@ func TestProvider(t *testing.T) {
 			{"microsoft", ProviderMicrosoft, false},
 			{"imap", ProviderIMAP, false},
 			{"virtual", ProviderVirtual, false},
+			{"nylas", ProviderNylas, false},
 			{"unknown", "", true},
 			{"", "", true},
 			{"GOOGLE", "", true}, // Case sensitive

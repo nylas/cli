@@ -141,7 +141,25 @@ func TestValidateSignatureSelection(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, signatures)
-		assert.ErrorContains(t, err, "`--signature-id` is not supported for Inbox transactional sends")
+		assert.ErrorContains(t, err, "`--signature-id` is not supported for managed transactional sends")
+		assert.False(t, mock.GetGrantCalled)
+		assert.False(t, mock.GetSignaturesCalled)
+	})
+
+	t.Run("rejects nylas grants before listing signatures", func(t *testing.T) {
+		mock := nylas.NewMockClient()
+
+		signatures, err := validateSignatureSelection(
+			ctx,
+			mock,
+			"grant-123",
+			"sig-123",
+			&domain.Grant{Provider: domain.ProviderNylas},
+		)
+
+		require.Error(t, err)
+		assert.Nil(t, signatures)
+		assert.ErrorContains(t, err, "`--signature-id` is not supported for managed transactional sends")
 		assert.False(t, mock.GetGrantCalled)
 		assert.False(t, mock.GetSignaturesCalled)
 	})

@@ -11,6 +11,7 @@ const (
 	ProviderIMAP      Provider = "imap"
 	ProviderVirtual   Provider = "virtual"
 	ProviderInbox     Provider = "inbox" // Nylas Native Auth
+	ProviderNylas     Provider = "nylas"
 )
 
 // SupportedAirProviders lists providers supported by the Air web UI.
@@ -29,6 +30,8 @@ func (p Provider) DisplayName() string {
 		return "Virtual"
 	case ProviderInbox:
 		return "Inbox"
+	case ProviderNylas:
+		return "Nylas"
 	default:
 		return string(p)
 	}
@@ -37,7 +40,7 @@ func (p Provider) DisplayName() string {
 // IsValid checks if the provider is a known type.
 func (p Provider) IsValid() bool {
 	switch p {
-	case ProviderGoogle, ProviderMicrosoft, ProviderIMAP, ProviderVirtual, ProviderInbox:
+	case ProviderGoogle, ProviderMicrosoft, ProviderIMAP, ProviderVirtual, ProviderInbox, ProviderNylas:
 		return true
 	default:
 		return false

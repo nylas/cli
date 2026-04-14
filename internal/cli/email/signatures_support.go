@@ -10,6 +10,10 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
+func isManagedTransactionalGrant(grant *domain.Grant) bool {
+	return grant != nil && (grant.Provider == domain.ProviderInbox || grant.Provider == domain.ProviderNylas)
+}
+
 func validateSendSignatureSupport(signatureID string, sign, encrypt bool, grant *domain.Grant) error {
 	if signatureID == "" {
 		return nil
@@ -20,13 +24,26 @@ func validateSendSignatureSupport(signatureID string, sign, encrypt bool, grant 
 			"Use standard JSON send mode without --sign/--encrypt, or add the signature HTML directly to the message body",
 		)
 	}
-	if grant != nil && grant.Provider == domain.ProviderInbox {
+	if isManagedTransactionalGrant(grant) {
 		return common.NewUserError(
-			"`--signature-id` is not supported for Inbox transactional sends",
-			"Inbox grants use the domain-based transactional send endpoint, which does not accept signature_id",
+			"`--signature-id` is not supported for managed transactional sends",
+			"Managed Nylas grants use the domain-based transactional send endpoint, which does not accept signature_id",
 		)
 	}
 	return nil
+}
+
+func validateManagedSecureSendSupport(sign, encrypt bool, grant *domain.Grant) error {
+	if !sign && !encrypt {
+		return nil
+	}
+	if !isManagedTransactionalGrant(grant) {
+		return nil
+	}
+	return common.NewUserError(
+		"`--sign` and `--encrypt` are not supported for managed transactional sends",
+		"Managed Nylas grants use the domain-based transactional send endpoint, which does not support raw MIME GPG send",
+	)
 }
 
 func validateSignatureSelection(

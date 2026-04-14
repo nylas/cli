@@ -5,8 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 )
@@ -72,38 +70,17 @@ func printInboxDetails(inbox domain.InboundInbox) {
 
 // formatStatus formats the grant status with color.
 func formatStatus(status string) string {
-	switch status {
-	case "valid":
-		return common.Green.Sprint("active")
-	case "invalid":
-		return common.Red.Sprint("invalid")
-	default:
-		return common.Yellow.Sprint(status)
-	}
+	return common.FormatGrantStatus(status)
 }
 
 // saveGrantLocally saves the inbound inbox grant to the local keyring store.
 func saveGrantLocally(grantID, email string) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-	if err != nil {
-		return
-	}
-	grantStore := keyring.NewGrantStore(secretStore)
-	_ = grantStore.SaveGrant(domain.GrantInfo{
-		ID:       grantID,
-		Email:    email,
-		Provider: domain.ProviderInbox,
-	})
+	common.SaveGrantLocally(grantID, email, domain.ProviderInbox)
 }
 
 // removeGrantLocally removes the inbound inbox grant from the local keyring store.
 func removeGrantLocally(grantID string) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
-	if err != nil {
-		return
-	}
-	grantStore := keyring.NewGrantStore(secretStore)
-	_ = grantStore.DeleteGrant(grantID)
+	common.RemoveGrantLocally(grantID)
 }
 
 // printInboundMessageSummary prints an inbound message summary.

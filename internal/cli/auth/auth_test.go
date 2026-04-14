@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nylas/cli/internal/cli/testutil"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -145,6 +146,39 @@ func TestLoginCommand(t *testing.T) {
 			t.Error("Expected -p shorthand for --provider")
 		}
 	})
+}
+
+func TestParseLoginProvider(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    domain.Provider
+		wantErr bool
+	}{
+		{name: "google", input: "google", want: domain.ProviderGoogle},
+		{name: "microsoft", input: "microsoft", want: domain.ProviderMicrosoft},
+		{name: "mixed case", input: "Google", want: domain.ProviderGoogle},
+		{name: "reject nylas", input: "nylas", wantErr: true},
+		{name: "reject inbox", input: "inbox", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseLoginProvider(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseLoginProvider(%q) expected error", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseLoginProvider(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseLoginProvider(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
 }
 
 // TestLogoutCommand tests the logout subcommand.

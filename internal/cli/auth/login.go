@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -29,10 +30,9 @@ Supported providers:
   # Login with Microsoft/Outlook
   nylas auth login --provider microsoft`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Validate provider
-			p, err := domain.ParseProvider(provider)
+			p, err := parseLoginProvider(provider)
 			if err != nil {
-				return common.NewUserError(fmt.Sprintf("invalid provider: %s", provider), "use 'google' or 'microsoft'")
+				return err
 			}
 
 			// Check if configured
@@ -74,4 +74,15 @@ Supported providers:
 	cmd.Flags().StringVarP(&provider, "provider", "p", "google", "Email provider (google, microsoft)")
 
 	return cmd
+}
+
+func parseLoginProvider(provider string) (domain.Provider, error) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case string(domain.ProviderGoogle):
+		return domain.ProviderGoogle, nil
+	case string(domain.ProviderMicrosoft):
+		return domain.ProviderMicrosoft, nil
+	default:
+		return "", common.NewUserError(fmt.Sprintf("invalid provider: %s", provider), "use 'google' or 'microsoft'")
+	}
 }
