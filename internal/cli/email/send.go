@@ -346,11 +346,11 @@ Supports hosted templates:
 				var err error
 
 				// Get grant info to determine provider and email
-				grant, grantErr := client.GetGrant(ctx, grantID)
+				grant, err := getGrantForSend(ctx, client, grantID)
+				if err != nil {
+					return struct{}{}, err
+				}
 				if signatureID != "" {
-					if grantErr != nil {
-						return struct{}{}, common.WrapGetError("grant", grantErr)
-					}
 					if err := validateSendSignatureSupport(signatureID, sign, encrypt, grant); err != nil {
 						return struct{}{}, err
 					}
@@ -360,7 +360,10 @@ Supports hosted templates:
 				}
 
 				if sign || encrypt {
-					if grantErr == nil && grant != nil && grant.Email != "" {
+					if err := validateManagedSecureSendSupport(sign, encrypt, grant); err != nil {
+						return struct{}{}, err
+					}
+					if grant.Email != "" {
 						// Populate From field with grant's email address
 						req.From = []domain.EmailParticipant{
 							{Email: grant.Email},
@@ -381,24 +384,7 @@ Supports hosted templates:
 					spinner := common.NewSpinner(sendMsg)
 					spinner.Start()
 
-					// Auto-detect inbox provider and use transactional endpoint
-					if grantErr == nil && grant != nil && grant.Provider == domain.ProviderInbox {
-						// Inbox provider - use domain-based transactional send
-						emailDomain := common.ExtractDomain(grant.Email)
-						if emailDomain == "" {
-							spinner.Stop()
-							return struct{}{}, common.NewUserError(
-								"could not extract domain from grant email",
-								"Ensure the grant has a valid email address",
-							)
-						}
-						// Set From field for transactional send (required)
-						req.From = []domain.EmailParticipant{{Email: grant.Email}}
-						msg, err = client.SendTransactionalMessage(ctx, emailDomain, req)
-					} else {
-						// Standard provider (Google/Microsoft/IMAP) - use grant-based send
-						msg, err = client.SendMessage(ctx, grantID, req)
-					}
+					msg, err = sendMessageForGrant(ctx, client, grantID, grant, req)
 					spinner.Stop()
 				}
 
@@ -468,6 +454,36 @@ Supports hosted templates:
 	cmd.Flags().BoolVar(&templateOpts.Strict, "template-strict", true, "Fail if a hosted template references missing variables")
 
 	return cmd
+}
+
+func getGrantForSend(ctx context.Context, client ports.NylasClient, grantID string) (*domain.Grant, error) {
+	grant, err := client.GetGrant(ctx, grantID)
+	if err != nil {
+		return nil, common.WrapGetError("grant", err)
+	}
+	return grant, nil
+}
+
+func sendMessageForGrant(
+	ctx context.Context,
+	client ports.NylasClient,
+	grantID string,
+	grant *domain.Grant,
+	req *domain.SendMessageRequest,
+) (*domain.Message, error) {
+	if isManagedTransactionalGrant(grant) {
+		emailDomain := common.ExtractDomain(grant.Email)
+		if emailDomain == "" {
+			return nil, common.NewUserError(
+				"could not extract domain from grant email",
+				"Ensure the grant has a valid email address",
+			)
+		}
+		req.From = []domain.EmailParticipant{{Email: grant.Email}}
+		return client.SendTransactionalMessage(ctx, emailDomain, req)
+	}
+
+	return client.SendMessage(ctx, grantID, req)
 }
 
 func shouldUseInteractiveSendMode(

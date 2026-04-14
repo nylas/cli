@@ -188,6 +188,7 @@ nylas email read <message-id> --decrypt                        # Decrypt PGP/MIM
 nylas email read <message-id> --verify                         # Verify GPG signature
 nylas email read <message-id> --decrypt --verify               # Decrypt and verify signature
 nylas email send --to EMAIL --subject SUBJECT --body BODY      # Send email
+nylas email send --to EMAIL --subject SUBJECT --body BODY --yes  # Skip confirmation
 nylas email send ... --sign                                    # Send GPG-signed email
 nylas email send ... --encrypt                                 # Send GPG-encrypted email
 nylas email send ... --sign --encrypt                          # Sign AND encrypt (recommended)
@@ -215,6 +216,11 @@ nylas email send --to EMAIL --subject S --body B --sign --encrypt  # Both (recom
 nylas email read <message-id> --decrypt                        # Decrypt encrypted email
 nylas email read <message-id> --decrypt --verify               # Decrypt + verify signature
 ```
+
+**Managed send behavior:**
+- Grants with provider `inbox` and `nylas` use the managed transactional send path automatically.
+- The sender address comes from the active grant email for those managed providers.
+- GPG signing/encryption and `--signature-id` are not supported for managed transactional sends.
 
 **AI features:**
 ```bash
@@ -438,6 +444,23 @@ nylas webhook server --port 8080 --tunnel cloudflared # With public tunnel
 ```
 
 **Details:** `docs/commands/webhooks.md`
+
+---
+
+## Agent Accounts
+
+Create and manage Nylas-managed agent accounts backed by provider `nylas`.
+
+```bash
+nylas agent list                               # List agent accounts
+nylas agent create <email>                     # Create agent account
+nylas agent create <email> --app-password PW   # Create account with IMAP/SMTP app password
+nylas agent delete <agent-id|email>            # Delete/revoke agent account
+nylas agent delete <agent-id|email> --yes      # Skip confirmation
+nylas agent status                             # Check connector + account status
+```
+
+**Details:** `docs/commands/agent.md`
 
 ---
 

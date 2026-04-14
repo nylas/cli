@@ -114,6 +114,11 @@ func TestHTTPClient_SendTransactionalMessage(t *testing.T) {
 				for _, field := range tt.expectedFields {
 					assert.Contains(t, body, field, "Missing field: %s", field)
 				}
+				if from, ok := body["from"]; ok {
+					fromMap, ok := from.(map[string]any)
+					require.True(t, ok, "transactional from must be an object")
+					assert.Equal(t, tt.request.From[0].Email, fromMap["email"])
+				}
 
 				response := map[string]any{
 					"data": map[string]any{
