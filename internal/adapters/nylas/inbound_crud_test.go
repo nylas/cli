@@ -29,9 +29,12 @@ func TestListInboundInboxes(t *testing.T) {
 			response := map[string]any{
 				"data": []map[string]any{
 					{
-						"id":           "inbox-001",
-						"email":        "support@app.nylas.email",
-						"provider":     "inbox",
+						"id":       "inbox-001",
+						"email":    "support@app.nylas.email",
+						"provider": "inbox",
+						"settings": map[string]any{
+							"policy_id": "policy-001",
+						},
 						"grant_status": "valid",
 						"created_at":   time.Now().Add(-24 * time.Hour).Unix(),
 						"updated_at":   time.Now().Unix(),
@@ -62,6 +65,7 @@ func TestListInboundInboxes(t *testing.T) {
 		assert.Len(t, inboxes, 2)
 		assert.Equal(t, "inbox-001", inboxes[0].ID)
 		assert.Equal(t, "support@app.nylas.email", inboxes[0].Email)
+		assert.Equal(t, "policy-001", inboxes[0].PolicyID)
 		assert.Equal(t, "valid", inboxes[0].GrantStatus)
 		assert.Equal(t, "inbox-002", inboxes[1].ID)
 	})

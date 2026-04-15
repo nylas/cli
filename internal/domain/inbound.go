@@ -3,8 +3,9 @@ package domain
 // InboundInbox represents a Nylas Inbound inbox (a grant with provider=inbox).
 // Inbound inboxes receive emails at managed addresses without OAuth.
 type InboundInbox struct {
-	ID          string   `json:"id"`           // Grant ID
-	Email       string   `json:"email"`        // Full email address (e.g., info@app.nylas.email)
+	ID          string   `json:"id"`    // Grant ID
+	Email       string   `json:"email"` // Full email address (e.g., info@app.nylas.email)
+	PolicyID    string   `json:"policy_id,omitempty"`
 	GrantStatus string   `json:"grant_status"` // Status of the inbox
 	CreatedAt   UnixTime `json:"created_at"`
 	UpdatedAt   UnixTime `json:"updated_at"`

@@ -13,6 +13,9 @@ func (m *MockClient) ListAgentAccounts(ctx context.Context) ([]domain.AgentAccou
 			Provider:    domain.ProviderNylas,
 			Email:       "agent@example.com",
 			GrantStatus: "valid",
+			Settings: domain.AgentAccountSettings{
+				PolicyID: "policy-1",
+			},
 		},
 	}, nil
 }
@@ -23,15 +26,21 @@ func (m *MockClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 		Provider:    domain.ProviderNylas,
 		Email:       "agent@example.com",
 		GrantStatus: "valid",
+		Settings: domain.AgentAccountSettings{
+			PolicyID: "policy-1",
+		},
 	}, nil
 }
 
-func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword string) (*domain.AgentAccount, error) {
+func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
 	return &domain.AgentAccount{
 		ID:          "agent-new",
 		Provider:    domain.ProviderNylas,
 		Email:       email,
 		GrantStatus: "valid",
+		Settings: domain.AgentAccountSettings{
+			PolicyID: policyID,
+		},
 	}, nil
 }
 

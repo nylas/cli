@@ -19,8 +19,12 @@ func TestContextTimeouts(t *testing.T) {
 	t.Run("enforces_context_timeout", func(t *testing.T) {
 		// Server that delays response beyond the context timeout
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(10 * time.Second) // Longer than our test timeout
-			w.WriteHeader(http.StatusOK)
+			select {
+			case <-time.After(10 * time.Second): // Longer than our test timeout
+				w.WriteHeader(http.StatusOK)
+			case <-r.Context().Done():
+				return
+			}
 		}))
 		defer server.Close()
 
@@ -45,8 +49,12 @@ func TestContextTimeouts(t *testing.T) {
 	t.Run("respects_existing_context_timeout", func(t *testing.T) {
 		// Server that delays briefly
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(3 * time.Second)
-			w.WriteHeader(http.StatusOK)
+			select {
+			case <-time.After(3 * time.Second):
+				w.WriteHeader(http.StatusOK)
+			case <-r.Context().Done():
+				return
+			}
 		}))
 		defer server.Close()
 

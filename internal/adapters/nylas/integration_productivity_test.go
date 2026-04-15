@@ -45,7 +45,7 @@ func TestIntegration_GetScheduledMessage_NotFound(t *testing.T) {
 
 func TestIntegration_ListNotetakers(t *testing.T) {
 	client, grantID := getTestClient(t)
-	ctx, cancel := createTestContext()
+	ctx, cancel := createLongTestContext()
 	defer cancel()
 
 	notetakers, err := client.ListNotetakers(ctx, grantID, nil)
@@ -61,7 +61,7 @@ func TestIntegration_ListNotetakers(t *testing.T) {
 
 func TestIntegration_ListNotetakers_WithParams(t *testing.T) {
 	client, grantID := getTestClient(t)
-	ctx, cancel := createTestContext()
+	ctx, cancel := createLongTestContext()
 	defer cancel()
 
 	// Test with limit
@@ -79,14 +79,15 @@ func TestIntegration_ListNotetakers_WithParams(t *testing.T) {
 
 func TestIntegration_ListNotetakers_ByState(t *testing.T) {
 	client, grantID := getTestClient(t)
-	ctx, cancel := createTestContext()
-	defer cancel()
 
 	// Only test with states known to be valid in the API
 	states := []string{"scheduled", "attending", "media_processing"}
 
 	for _, state := range states {
 		t.Run("State_"+state, func(t *testing.T) {
+			ctx, cancel := createLongTestContext()
+			defer cancel()
+
 			params := &domain.NotetakerQueryParams{
 				Limit: 10,
 				State: state,

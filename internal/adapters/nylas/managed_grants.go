@@ -117,6 +117,7 @@ func convertManagedGrantToInboundInbox(grant managedGrantResponse) domain.Inboun
 	return domain.InboundInbox{
 		ID:          grant.ID,
 		Email:       grant.Email,
+		PolicyID:    grant.Settings.PolicyID,
 		GrantStatus: grant.GrantStatus,
 		CreatedAt:   grant.CreatedAt,
 		UpdatedAt:   grant.UpdatedAt,

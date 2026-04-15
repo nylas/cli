@@ -41,7 +41,7 @@ func (c *HTTPClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 }
 
 // CreateAgentAccount creates a new managed agent account grant.
-func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword string) (*domain.AgentAccount, error) {
+func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
 	queryURL := fmt.Sprintf("%s/v3/connect/custom", c.baseURL)
 
 	settings := map[string]any{
@@ -49,6 +49,9 @@ func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword 
 	}
 	if appPassword != "" {
 		settings["app_password"] = appPassword
+	}
+	if policyID != "" {
+		settings["policy_id"] = policyID
 	}
 
 	payload := map[string]any{
@@ -67,6 +70,9 @@ func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword 
 	}
 
 	account := convertManagedGrantToAgentAccount(*grant)
+	if policyID != "" && account.Settings.PolicyID == "" {
+		account.Settings.PolicyID = policyID
+	}
 	return &account, nil
 }
 

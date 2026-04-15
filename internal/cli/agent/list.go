@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -21,8 +20,8 @@ func newListCmd() *cobra.Command {
 This command only shows grants created with provider=nylas.
 
 Examples:
-  nylas agent list
-  nylas agent list --json`,
+  nylas agent account list
+  nylas agent account list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(jsonOutput)
 		},
@@ -41,13 +40,11 @@ func runList(jsonOutput bool) error {
 		}
 
 		if jsonOutput {
-			data, _ := json.MarshalIndent(accounts, "", "  ")
-			fmt.Println(string(data))
-			return struct{}{}, nil
+			return struct{}{}, common.PrintJSON(accounts)
 		}
 
 		if len(accounts) == 0 {
-			common.PrintEmptyStateWithHint("agent accounts", "Create one with: nylas agent create <email>")
+			common.PrintEmptyStateWithHint("agent accounts", "Create one with: nylas agent account create <email>")
 			return struct{}{}, nil
 		}
 

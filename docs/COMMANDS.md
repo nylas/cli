@@ -452,15 +452,32 @@ nylas webhook server --port 8080 --tunnel cloudflared # With public tunnel
 Create and manage Nylas-managed agent accounts backed by provider `nylas`.
 
 ```bash
-nylas agent list                               # List agent accounts
-nylas agent create <email>                     # Create agent account
-nylas agent create <email> --app-password PW   # Create account with IMAP/SMTP app password
-nylas agent delete <agent-id|email>            # Delete/revoke agent account
-nylas agent delete <agent-id|email> --yes      # Skip confirmation
+nylas agent account list                       # List agent accounts
+nylas agent account create <email>             # Create agent account
+nylas agent account create <email> --app-password PW  # Create account with IMAP/SMTP app password
+nylas agent account create <email> --policy-id <policy-id>  # Create account attached to a policy
+nylas agent account get <agent-id|email>       # Show one agent account
+nylas agent account delete <agent-id|email>    # Delete/revoke agent account
+nylas agent account delete <agent-id|email> --yes  # Skip confirmation
+nylas agent policy list                        # List policy for default agent account
+nylas agent policy list --all                  # List all policies attached to agent accounts
+nylas agent policy create --name NAME          # Create a policy
+nylas agent policy get <policy-id>             # Show one policy
+nylas agent policy read <policy-id>            # Read one policy
+nylas agent policy update <policy-id> --name NAME  # Update a policy
+nylas agent policy delete <policy-id> --yes    # Delete an unattached policy
+nylas agent rule list                          # List rules for default agent policy
+nylas agent rule list --all                    # List all rules attached to agent policies
+nylas agent rule read <rule-id>                # Read one rule
+nylas agent rule get <rule-id>                 # Show one rule
+nylas agent rule create --name NAME --condition from.domain,is,example.com --action mark_as_spam  # Create a rule from common flags
+nylas agent rule create --data-file rule.json  # Create a rule from full JSON
+nylas agent rule update <rule-id> --name NAME --description TEXT  # Update a rule
+nylas agent rule delete <rule-id> --yes        # Delete a rule
 nylas agent status                             # Check connector + account status
 ```
 
-**Details:** `docs/commands/agent.md`
+**Details:** `docs/commands/agent.md`, `docs/commands/agent-policy.md`, `docs/commands/agent-rule.md`
 
 ---
 
