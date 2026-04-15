@@ -164,6 +164,32 @@ func (c *HTTPClient) ensureContext(ctx context.Context) (context.Context, contex
 	return context.WithTimeout(ctx, c.requestTimeout)
 }
 
+// cloneRequestForAttempt creates a fresh request instance for a retry attempt.
+// When the request has a body, retries must reopen it via GetBody so the payload
+// is replayed instead of sending an empty request after the first attempt.
+func cloneRequestForAttempt(req *http.Request, ctx context.Context, attempt int) (*http.Request, error) {
+	reqToUse := req.Clone(ctx)
+	if req.Body == nil {
+		return reqToUse, nil
+	}
+
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			return nil, fmt.Errorf("failed to replay request body: %w", err)
+		}
+		reqToUse.Body = body
+		return reqToUse, nil
+	}
+
+	if attempt == 0 {
+		reqToUse.Body = req.Body
+		return reqToUse, nil
+	}
+
+	return nil, fmt.Errorf("request body cannot be retried safely")
+}
+
 // doRequest executes an HTTP request with rate limiting and timeout.
 // This method applies rate limiting before making the request and ensures
 // the context has a timeout to prevent hanging requests.
@@ -183,13 +209,10 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 		// Ensure context has timeout
 		ctxWithTimeout, cancel := c.ensureContext(ctx)
 
-		// Optimize: on first attempt, use WithContext to avoid allocation.
-		// On retries, we must clone since the original request was already used.
-		var reqToUse *http.Request
-		if attempt == 0 {
-			reqToUse = req.WithContext(ctxWithTimeout)
-		} else {
-			reqToUse = req.Clone(ctxWithTimeout)
+		reqToUse, err := cloneRequestForAttempt(req, ctxWithTimeout, attempt)
+		if err != nil {
+			cancel()
+			return nil, err
 		}
 
 		// Execute request

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -24,6 +25,13 @@ const binaryName = "nylas"
 // maxBinarySize is the maximum allowed size for the extracted binary (100MB).
 // This prevents decompression bomb attacks (G110).
 const maxBinarySize = 100 * 1024 * 1024
+
+var startDetachedUpdateCommand = func(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	return cmd.Start()
+}
 
 // getAssetName returns the expected asset name for the current platform.
 func getAssetName(version string) string {
@@ -286,10 +294,18 @@ func isHomebrewInstall() bool {
 
 // installBinary replaces the current binary with the new one.
 func installBinary(newBinaryPath, targetPath string) error {
+	return installBinaryForOS(newBinaryPath, targetPath, runtime.GOOS)
+}
+
+func installBinaryForOS(newBinaryPath, targetPath, goos string) error {
 	// Check if we can write to the target directory
 	targetDir := filepath.Dir(targetPath)
 	if err := checkWritePermission(targetDir); err != nil {
 		return fmt.Errorf("insufficient permissions for %s: %w\nTry running with sudo", targetDir, err)
+	}
+
+	if goos == "windows" {
+		return stageWindowsBinary(newBinaryPath, targetPath)
 	}
 
 	// Create backup
@@ -322,6 +338,98 @@ func installBinary(newBinaryPath, targetPath string) error {
 	_ = os.Remove(backupPath)
 
 	return nil
+}
+
+func stageWindowsBinary(newBinaryPath, targetPath string) error {
+	stagedPath := targetPath + ".new"
+	backupPath := targetPath + ".bak"
+
+	if err := os.Remove(stagedPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove previous staged binary: %w", err)
+	}
+
+	if err := copyFile(newBinaryPath, stagedPath); err != nil {
+		return fmt.Errorf("stage replacement binary: %w", err)
+	}
+
+	scriptPath, err := createWindowsUpdateScript(targetPath, stagedPath, backupPath)
+	if err != nil {
+		_ = os.Remove(stagedPath)
+		return err
+	}
+
+	if err := startDetachedUpdateCommand("cmd", "/C", scriptPath); err != nil {
+		_ = os.Remove(scriptPath)
+		_ = os.Remove(stagedPath)
+		return fmt.Errorf("launch deferred updater: %w", err)
+	}
+
+	return nil
+}
+
+func createWindowsUpdateScript(targetPath, stagedPath, backupPath string) (string, error) {
+	scriptFile, err := os.CreateTemp(filepath.Dir(targetPath), "nylas-update-*.cmd")
+	if err != nil {
+		return "", common.WrapCreateError("update script", err)
+	}
+
+	script := buildWindowsUpdateScript(targetPath, stagedPath, backupPath)
+	if _, err := scriptFile.WriteString(script); err != nil {
+		_ = scriptFile.Close()
+		_ = os.Remove(scriptFile.Name())
+		return "", fmt.Errorf("write update script: %w", err)
+	}
+	if err := scriptFile.Close(); err != nil {
+		_ = os.Remove(scriptFile.Name())
+		return "", fmt.Errorf("close update script: %w", err)
+	}
+
+	return scriptFile.Name(), nil
+}
+
+func buildWindowsUpdateScript(targetPath, stagedPath, backupPath string) string {
+	targetPath = escapeBatchValue(targetPath)
+	stagedPath = escapeBatchValue(stagedPath)
+	backupPath = escapeBatchValue(backupPath)
+
+	return fmt.Sprintf(`@echo off
+setlocal
+set "TARGET=%s"
+set "STAGED=%s"
+set "BACKUP=%s"
+set "REPLACED=0"
+
+:wait
+if not exist "%%TARGET%%" goto replace
+move /y "%%TARGET%%" "%%BACKUP%%" >nul 2>&1
+if errorlevel 1 (
+  ping -n 2 127.0.0.1 >nul
+  goto wait
+)
+
+:replace
+move /y "%%STAGED%%" "%%TARGET%%" >nul 2>&1
+if not errorlevel 1 set "REPLACED=1"
+if errorlevel 1 (
+  copy /y "%%STAGED%%" "%%TARGET%%" >nul 2>&1
+  if not errorlevel 1 set "REPLACED=1"
+)
+if "%%REPLACED%%"=="1" goto cleanup
+if not exist "%%BACKUP%%" goto end
+move /y "%%BACKUP%%" "%%TARGET%%" >nul 2>&1
+goto end
+
+:cleanup
+if exist "%%BACKUP%%" del /f /q "%%BACKUP%%" >nul 2>&1
+if exist "%%STAGED%%" del /f /q "%%STAGED%%" >nul 2>&1
+
+:end
+del /f /q "%%~f0" >nul 2>&1
+`, targetPath, stagedPath, backupPath)
+}
+
+func escapeBatchValue(value string) string {
+	return strings.ReplaceAll(value, "%", "%%")
 }
 
 // copyFile copies a file from src to dst.

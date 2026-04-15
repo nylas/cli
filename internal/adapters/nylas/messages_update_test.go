@@ -6,6 +6,7 @@ package nylas_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -103,6 +104,56 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 			assert.Equal(t, "msg-456", message.ID)
 		})
 	}
+}
+
+func TestHTTPClient_UpdateMessage_RetriesReplayBody(t *testing.T) {
+	t.Parallel()
+
+	var requestBodies []string
+	attempts := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		requestBodies = append(requestBodies, string(body))
+
+		w.Header().Set("Content-Type", "application/json")
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]string{"message": "Rate limit exceeded"},
+			})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"id":       "msg-456",
+				"grant_id": "grant-123",
+				"subject":  "Updated",
+				"date":     1704067200,
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+	client.SetMaxRetries(1)
+
+	unread := false
+	message, err := client.UpdateMessage(context.Background(), "grant-123", "msg-456", &domain.UpdateMessageRequest{
+		Unread: &unread,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, message)
+	require.Len(t, requestBodies, 2)
+	assert.NotEmpty(t, requestBodies[0])
+	assert.Equal(t, requestBodies[0], requestBodies[1], "retried request should replay the original JSON body")
 }
 
 func TestHTTPClient_DeleteMessage(t *testing.T) {
