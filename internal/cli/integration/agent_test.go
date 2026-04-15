@@ -38,7 +38,7 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		}
 	})
 
-	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "create", email, "--app-password", appPassword, "--json")
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "create", email, "--app-password", appPassword, "--json")
 	if err != nil {
 		t.Fatalf("agent create failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
@@ -62,7 +62,7 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		t.Fatalf("created agent account %q did not appear in list", email)
 	}
 
-	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "list", "--json")
+	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "list", "--json")
 	if err != nil {
 		t.Fatalf("agent list failed: %v\nstdout: %s\nstderr: %s", err, listStdout, listStderr)
 	}
@@ -85,7 +85,7 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		t.Fatalf("agent list did not include created account %q\noutput: %s", email, listStdout)
 	}
 
-	deleteStdout, deleteStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "delete", email, "--yes")
+	deleteStdout, deleteStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "delete", email, "--yes")
 	if err != nil {
 		t.Fatalf("agent delete by email failed: %v\nstdout: %s\nstderr: %s", err, deleteStdout, deleteStderr)
 	}
@@ -97,6 +97,67 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		t.Fatalf("agent account %q still exists after delete", email)
 	}
 	created = nil
+}
+
+func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	email := newAgentTestEmail(t, "policy-create")
+	policyName := newPolicyTestName("account-create")
+	client := getTestClient()
+
+	var createdPolicy *domain.Policy
+	var created *domain.AgentAccount
+	t.Cleanup(func() {
+		if created != nil {
+			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
+				acquireRateLimit(t)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = client.DeleteAgentAccount(ctx, account.ID)
+			}
+		}
+		if createdPolicy != nil {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeletePolicy(ctx, createdPolicy.ID)
+		}
+	})
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	policy, err := client.CreatePolicy(ctx, map[string]any{"name": policyName})
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create policy for agent account test: %v", err)
+	}
+	createdPolicy = policy
+
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "create", email, "--policy-id", policy.ID, "--json")
+	if err != nil {
+		t.Fatalf("agent create with policy failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	var account domain.AgentAccount
+	if err := json.Unmarshal([]byte(stdout), &account); err != nil {
+		t.Fatalf("failed to parse agent create with policy JSON: %v\noutput: %s", err, stdout)
+	}
+	if account.Email != email {
+		t.Fatalf("created email = %q, want %q", account.Email, email)
+	}
+	if account.Settings.PolicyID != policy.ID {
+		t.Fatalf("created policy_id = %q, want %q", account.Settings.PolicyID, policy.ID)
+	}
+	created = &account
+
+	if exists, listed := waitForAgentByEmail(t, client, email, true); !exists {
+		t.Fatalf("created agent account %q did not appear in list", email)
+	} else if listed.Settings.PolicyID != policy.ID {
+		t.Fatalf("listed policy_id = %q, want %q", listed.Settings.PolicyID, policy.ID)
+	}
 }
 
 func TestCLI_AgentDelete_ByID(t *testing.T) {
@@ -117,7 +178,7 @@ func TestCLI_AgentDelete_ByID(t *testing.T) {
 		}
 	})
 
-	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "delete", account.ID, "--yes")
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "delete", account.ID, "--yes")
 	if err != nil {
 		t.Fatalf("agent delete by ID failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
@@ -146,7 +207,7 @@ func TestCLI_AgentDelete_CancelKeepsAccount(t *testing.T) {
 	})
 
 	acquireRateLimit(t)
-	stdout, stderr, err := runCLIWithInputAndOverrides(2*time.Minute, "n\n", env, "agent", "delete", account.Email)
+	stdout, stderr, err := runCLIWithInputAndOverrides(2*time.Minute, "n\n", env, "agent", "account", "delete", account.Email)
 	if err != nil {
 		t.Fatalf("agent delete cancel flow failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
@@ -159,10 +220,55 @@ func TestCLI_AgentDelete_CancelKeepsAccount(t *testing.T) {
 	}
 }
 
+func TestCLI_AgentGet_ByEmailAndID(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	client := getTestClient()
+	email := newAgentTestEmail(t, "get")
+	account := createAgentForTest(t, client, email)
+
+	t.Cleanup(func() {
+		if exists, listed := waitForAgentByEmail(t, client, email, true); exists {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeleteAgentAccount(ctx, listed.ID)
+		}
+	})
+
+	byEmailStdout, byEmailStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "get", email, "--json")
+	if err != nil {
+		t.Fatalf("agent get by email failed: %v\nstdout: %s\nstderr: %s", err, byEmailStdout, byEmailStderr)
+	}
+
+	var byEmail domain.AgentAccount
+	if err := json.Unmarshal([]byte(byEmailStdout), &byEmail); err != nil {
+		t.Fatalf("failed to parse agent get by email JSON: %v\noutput: %s", err, byEmailStdout)
+	}
+	if byEmail.ID != account.ID {
+		t.Fatalf("agent get by email returned ID %q, want %q", byEmail.ID, account.ID)
+	}
+
+	byIDStdout, byIDStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "get", account.ID, "--json")
+	if err != nil {
+		t.Fatalf("agent get by ID failed: %v\nstdout: %s\nstderr: %s", err, byIDStdout, byIDStderr)
+	}
+
+	var byID domain.AgentAccount
+	if err := json.Unmarshal([]byte(byIDStdout), &byID); err != nil {
+		t.Fatalf("failed to parse agent get by ID JSON: %v\noutput: %s", err, byIDStdout)
+	}
+	if byID.Email != email {
+		t.Fatalf("agent get by ID returned email %q, want %q", byID.Email, email)
+	}
+}
+
 func TestCLI_AgentCreate_RequiresEmail(t *testing.T) {
 	skipIfMissingCreds(t)
 
-	stdout, stderr, err := runCLI("agent", "create")
+	stdout, stderr, err := runCLI("agent", "account", "create")
 	if err == nil {
 		t.Fatalf("expected agent create without email to fail\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
@@ -176,7 +282,7 @@ func TestCLI_AgentCreate_InvalidEmailWithSpaces(t *testing.T) {
 	skipIfMissingAgentDomain(t)
 
 	env := newAgentSandboxEnv(t)
-	stdout, stderr, err := runCLIWithOverrides(30*time.Second, env, "agent", "create", "bad email")
+	stdout, stderr, err := runCLIWithOverrides(30*time.Second, env, "agent", "account", "create", "bad email")
 	if err == nil {
 		t.Fatalf("expected invalid email with spaces to fail\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
@@ -185,11 +291,24 @@ func TestCLI_AgentCreate_InvalidEmailWithSpaces(t *testing.T) {
 	}
 }
 
+func TestCLI_AgentGet_InvalidIdentifier(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	env := newAgentSandboxEnv(t)
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 30*time.Second, env, "agent", "account", "get", "invalid-agent-id", "--json")
+	if err == nil {
+		t.Fatalf("expected invalid agent get to fail\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+	if !strings.Contains(strings.ToLower(stderr), "not found") && !strings.Contains(strings.ToLower(stderr), "failed to get agent account") {
+		t.Fatalf("expected not found error, got stderr: %s", stderr)
+	}
+}
+
 func TestCLI_AgentDelete_InvalidIdentifier(t *testing.T) {
 	skipIfMissingCreds(t)
 
 	env := newAgentSandboxEnv(t)
-	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 30*time.Second, env, "agent", "delete", "invalid-agent-id", "--yes")
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 30*time.Second, env, "agent", "account", "delete", "invalid-agent-id", "--yes")
 	if err == nil {
 		t.Fatalf("expected invalid agent delete to fail\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
@@ -230,14 +349,14 @@ func newAgentTestEmail(t *testing.T, prefix string) string {
 }
 
 func createAgentForTest(t *testing.T, client interface {
-	CreateAgentAccount(context.Context, string, string) (*domain.AgentAccount, error)
+	CreateAgentAccount(context.Context, string, string, string) (*domain.AgentAccount, error)
 }, email string) *domain.AgentAccount {
 	t.Helper()
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	account, err := client.CreateAgentAccount(ctx, email, "")
+	account, err := client.CreateAgentAccount(ctx, email, "", "")
 	if err != nil {
 		t.Fatalf("failed to create agent account %q for test setup: %v", email, err)
 	}

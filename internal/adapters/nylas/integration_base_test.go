@@ -64,8 +64,10 @@ func createTestContext() (context.Context, context.CancelFunc) {
 }
 
 // createLongTestContext creates a context with extended timeout for slower operations.
+// Keep this aligned with the client default so live integration tests don't fail
+// simply because the test context expires before an otherwise valid slow API call.
 func createLongTestContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 60*time.Second)
+	return context.WithTimeout(context.Background(), domain.TimeoutAPI)
 }
 
 // rateLimitDelay adds a delay between API calls to avoid rate limiting.

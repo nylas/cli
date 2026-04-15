@@ -24,8 +24,8 @@ func newDeleteCmd() *cobra.Command {
 This permanently revokes the provider=nylas grant.
 
 Examples:
-  nylas agent delete 123456
-  nylas agent delete me@yourapp.nylas.email --yes`,
+  nylas agent account delete 123456
+  nylas agent account delete me@yourapp.nylas.email --yes`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			identifier, err := getAgentIdentifier(args)

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -63,9 +62,7 @@ func runStatus(jsonOutput bool) error {
 		}
 
 		if jsonOutput {
-			data, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Println(string(data))
-			return struct{}{}, nil
+			return struct{}{}, common.PrintJSON(result)
 		}
 
 		_, _ = common.BoldWhite.Println("Agent Status")

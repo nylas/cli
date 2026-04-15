@@ -16,10 +16,11 @@ func TestNotetaker_Integration(t *testing.T) {
 	skipIfMissingCreds(t)
 
 	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	t.Run("ListNotetakers", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		notetakers, err := client.ListNotetakers(ctx, testGrantID, nil)
 		if err != nil {
 			t.Fatalf("ListNotetakers() error = %v", err)
@@ -29,6 +30,9 @@ func TestNotetaker_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateAndDeleteNotetaker", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		// Create notetaker
 		req := &domain.CreateNotetakerRequest{
 			MeetingLink: "https://zoom.us/j/123456789",
@@ -81,10 +85,11 @@ func TestNotetaker_ValidationErrors(t *testing.T) {
 	skipIfMissingCreds(t)
 
 	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	t.Run("CreateNotetaker_MissingRequired", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		// Missing required fields
 		req := &domain.CreateNotetakerRequest{}
 
@@ -95,6 +100,9 @@ func TestNotetaker_ValidationErrors(t *testing.T) {
 	})
 
 	t.Run("GetNotetaker_InvalidID", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		_, err := client.GetNotetaker(ctx, testGrantID, "invalid-notetaker-id")
 		if err == nil {
 			t.Error("GetNotetaker() with invalid ID should return error")
@@ -102,6 +110,9 @@ func TestNotetaker_ValidationErrors(t *testing.T) {
 	})
 
 	t.Run("DeleteNotetaker_InvalidID", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		err := client.DeleteNotetaker(ctx, testGrantID, "invalid-notetaker-id")
 		if err == nil {
 			t.Error("DeleteNotetaker() with invalid ID should return error")

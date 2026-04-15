@@ -56,6 +56,8 @@ var (
 	ErrTemplateNotFound      = errors.New("template not found")
 	ErrWorkflowNotFound      = errors.New("workflow not found")
 	ErrApplicationNotFound   = errors.New("application not found")
+	ErrPolicyNotFound        = errors.New("policy not found")
+	ErrRuleNotFound          = errors.New("rule not found")
 	ErrCallbackURINotFound   = errors.New("callback URI not found")
 	ErrConnectorNotFound     = errors.New("connector not found")
 	ErrCredentialNotFound    = errors.New("credential not found")

@@ -7,30 +7,36 @@ func NewAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "agent",
 		Aliases: []string{"agents"},
-		Short:   "Manage Nylas agent accounts",
-		Long: `Manage Nylas agent accounts.
+		Short:   "Manage Nylas agent resources",
+		Long: `Manage Nylas agent resources.
 
-Agent accounts are managed email identities backed by the Nylas provider.
-This command always uses provider=nylas and keeps the connector setup out of
-the user's path.
+Agent account operations live under the account subcommand. Top-level status
+reports the readiness of the nylas connector and the currently configured
+managed accounts.
 
 Examples:
   # Create a new agent account
-  nylas agent create me@yourapp.nylas.email
+  nylas agent account create me@yourapp.nylas.email
 
   # List agent accounts
-  nylas agent list
+  nylas agent account list
+
+  # List policies
+  nylas agent policy list
+
+  # List rules
+  nylas agent rule list
 
   # Check connector and account status
   nylas agent status
 
-  # Delete an agent account
-  nylas agent delete <agent-id>`,
+  # Show an agent account
+  nylas agent account get <agent-id|email>`,
 	}
 
-	cmd.AddCommand(newCreateCmd())
-	cmd.AddCommand(newListCmd())
-	cmd.AddCommand(newDeleteCmd())
+	cmd.AddCommand(newAccountCmd())
+	cmd.AddCommand(newPolicyCmd())
+	cmd.AddCommand(newRuleCmd())
 	cmd.AddCommand(newStatusCmd())
 
 	return cmd

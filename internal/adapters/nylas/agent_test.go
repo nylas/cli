@@ -119,6 +119,7 @@ func TestCreateAgentAccount(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "agent@example.com", settings["email"])
 		assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
+		assert.Equal(t, "policy-123", settings["policy_id"])
 
 		response := map[string]any{
 			"data": map[string]any{
@@ -139,10 +140,11 @@ func TestCreateAgentAccount(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "ValidAgentPass123ABC!")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "ValidAgentPass123ABC!", "policy-123")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-new", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
+	assert.Equal(t, "policy-123", account.Settings.PolicyID)
 }
 
 func TestCreateAgentAccount_DirectResponseFallback(t *testing.T) {
@@ -164,7 +166,7 @@ func TestCreateAgentAccount_DirectResponseFallback(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-direct", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
