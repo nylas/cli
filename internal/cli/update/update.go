@@ -169,6 +169,12 @@ func runUpdate(ctx context.Context, checkOnly, force, yes bool) error {
 		return fmt.Errorf("installation failed: %w", err)
 	}
 
+	if runtime.GOOS == "windows" {
+		fmt.Printf("\nUpdate to %s has been staged.\n", latestVersion)
+		fmt.Println("Close this process and reopen Nylas CLI to complete the replacement.")
+		return nil
+	}
+
 	fmt.Printf("\nSuccessfully updated to %s!\n", latestVersion)
 	fmt.Println("Run 'nylas version' to verify.")
 

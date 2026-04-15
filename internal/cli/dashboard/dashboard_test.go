@@ -1,14 +1,44 @@
 package dashboard
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dashboardadapter "github.com/nylas/cli/internal/adapters/dashboard"
+	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/ports"
 )
+
+type memSecretStore struct {
+	data map[string]string
+}
+
+func newMemSecretStore() *memSecretStore {
+	return &memSecretStore{data: make(map[string]string)}
+}
+
+func (m *memSecretStore) Set(key, value string) error {
+	m.data[key] = value
+	return nil
+}
+
+func (m *memSecretStore) Get(key string) (string, error) {
+	return m.data[key], nil
+}
+
+func (m *memSecretStore) Delete(key string) error {
+	delete(m.data, key)
+	return nil
+}
+
+func (m *memSecretStore) IsAvailable() bool { return true }
+
+func (m *memSecretStore) Name() string { return "mem" }
 
 func TestResolveAuthMethod(t *testing.T) {
 	t.Parallel()
@@ -195,4 +225,40 @@ func TestToAppRows(t *testing.T) {
 		Environment:   "sandbox",
 		Name:          "",
 	}, rows[1])
+}
+
+func TestPersistActiveOrgSwitchesServerSession(t *testing.T) {
+	t.Parallel()
+
+	store := newMemSecretStore()
+	require.NoError(t, store.Set(ports.KeyDashboardUserToken, "user-token"))
+	require.NoError(t, store.Set(ports.KeyDashboardOrgToken, "org-token"))
+
+	var switchedOrg string
+	authSvc := dashboardapp.NewAuthService(&dashboardadapter.MockAccountClient{
+		SwitchOrgFn: func(_ context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error) {
+			switchedOrg = orgPublicID
+			assert.Equal(t, "user-token", userToken)
+			assert.Equal(t, "org-token", orgToken)
+			return &domain.DashboardSwitchOrgResponse{
+				OrgToken: "new-org-token",
+				Org:      domain.DashboardSwitchOrgOrg{PublicID: orgPublicID},
+			}, nil
+		},
+	}, store)
+
+	err := persistActiveOrg(authSvc, &domain.DashboardAuthResponse{
+		Organizations: []domain.DashboardOrganization{
+			{PublicID: "org-1", Name: "Org One"},
+			{PublicID: "org-2", Name: "Org Two"},
+		},
+	}, "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "org-1", switchedOrg, "non-interactive selection should fall back to the first org")
+
+	storedOrgID, _ := store.Get(ports.KeyDashboardOrgPublicID)
+	assert.Equal(t, "org-1", storedOrgID)
+	storedOrgToken, _ := store.Get(ports.KeyDashboardOrgToken)
+	assert.Equal(t, "new-org-token", storedOrgToken)
 }

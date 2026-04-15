@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockDPoP implements ports.DPoP for testing.
@@ -245,4 +248,40 @@ func TestDoPostAndGet_Integration(t *testing.T) {
 			t.Errorf("result[name] = %q, want %q", result["name"], "Test App")
 		}
 	})
+}
+
+func TestDoPost_PreservesNestedDataField(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]any{
+			"request_id": "test-456",
+			"success":    true,
+			"data": map[string]any{
+				"id": "app-1",
+				"data": map[string]string{
+					"inner": "value",
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &AccountClient{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+		dpop:       &mockDPoP{proof: "test-proof"},
+	}
+
+	var result struct {
+		ID   string            `json:"id"`
+		Data map[string]string `json:"data"`
+	}
+
+	err := client.doPost(context.Background(), "/test", nil, nil, "token", &result)
+	require.NoError(t, err)
+	assert.Equal(t, "app-1", result.ID)
+	assert.Equal(t, map[string]string{"inner": "value"}, result.Data)
 }

@@ -186,8 +186,14 @@ func persistActiveOrg(authSvc *dashboardapp.AuthService, auth *domain.DashboardA
 	if selectedOrgID == "" {
 		return nil
 	}
-	if err := authSvc.SetActiveOrg(selectedOrgID); err != nil {
-		return fmt.Errorf("failed to store selected organization: %w", err)
+
+	// Apply the selection to the server-side dashboard session so follow-up
+	// commands use the same org the user chose during login.
+	switchCtx, switchCancel := common.CreateContext()
+	defer switchCancel()
+
+	if _, err := authSvc.SwitchOrg(switchCtx, selectedOrgID); err != nil {
+		return fmt.Errorf("failed to switch organization: %w", err)
 	}
 	return nil
 }

@@ -24,10 +24,9 @@ func newNonRedirectClient() *http.Client {
 	}
 }
 
-// doPost sends a JSON POST request and decodes the response into result.
-// The server wraps responses in {"request_id","success","data":{...}}.
-// This method unwraps the data field before decoding into result.
-// If result is nil, the response body is discarded.
+// doPost sends a JSON POST request and decodes the already-unwrapped payload
+// returned by doPostRaw into result. If result is nil, the response body is
+// discarded.
 func (c *AccountClient) doPost(ctx context.Context, path string, body any, extraHeaders map[string]string, accessToken string, result any) error {
 	raw, err := c.doPostRaw(ctx, path, body, extraHeaders, accessToken)
 	if err != nil {
@@ -35,11 +34,7 @@ func (c *AccountClient) doPost(ctx context.Context, path string, body any, extra
 	}
 
 	if result != nil {
-		data, unwrapErr := unwrapEnvelope(raw)
-		if unwrapErr != nil {
-			return unwrapErr
-		}
-		if err := json.Unmarshal(data, result); err != nil {
+		if err := json.Unmarshal(raw, result); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}
