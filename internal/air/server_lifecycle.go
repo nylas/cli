@@ -93,34 +93,10 @@ func (s *Server) initCacheRuntime() {
 		return
 	}
 
-	cacheCfg = s.cacheSettings.ToConfig(cacheCfg.BasePath)
-
-	cacheManager, err := cache.NewManager(cacheCfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize cache manager: %v\n", err)
+	if err := s.reconfigureCacheRuntime(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize cache runtime: %v\n", err)
 		return
 	}
-	s.cacheManager = cacheManager
-
-	photoDB, err := cache.OpenSharedDB(cacheCfg.BasePath, "photos.db")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to open photo database: %v\n", err)
-		return
-	}
-
-	photoStore, err := cache.NewPhotoStore(photoDB, cacheCfg.BasePath, cache.DefaultPhotoTTL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize photo store: %v\n", err)
-		return
-	}
-	s.photoStore = photoStore
-
-	// Prune expired photos asynchronously after startup.
-	go func() {
-		if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
-			fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
-		}
-	}()
 }
 
 // NewDemoServer creates an Air server in demo mode with sample data.

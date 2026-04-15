@@ -29,14 +29,15 @@ type Server struct {
 	hasAPIKey   bool // True if API key is configured (from env vars or keyring)
 
 	// Cache components
-	cacheManager  *cache.Manager
-	cacheSettings *cache.Settings
-	photoStore    *cache.PhotoStore              // Contact photo cache
-	offlineQueues map[string]*cache.OfflineQueue // Per-email offline queues
-	syncStopCh    chan struct{}                  // Channel to stop background sync
-	syncWg        sync.WaitGroup                 // Wait group for sync goroutines
-	isOnline      bool                           // Online status
-	onlineMu      sync.RWMutex                   // Protects isOnline
+	cacheManager    cacheRuntimeManager
+	cacheSettings   *cache.Settings
+	photoStore      *cache.PhotoStore              // Contact photo cache
+	offlineQueues   map[string]*cache.OfflineQueue // Per-email offline queues
+	offlineQueuesMu sync.RWMutex                   // Protects offlineQueues
+	syncStopCh      chan struct{}                  // Channel to stop background sync
+	syncWg          sync.WaitGroup                 // Wait group for sync goroutines
+	isOnline        bool                           // Online status
+	onlineMu        sync.RWMutex                   // Protects isOnline
 
 	// Productivity features (Phase 6)
 	splitInboxConfig *SplitInboxConfig        // Split inbox configuration

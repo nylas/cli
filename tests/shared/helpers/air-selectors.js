@@ -17,6 +17,8 @@ exports.nav = {
   settingsBtn: '.settings-btn',
   accountSwitcher: '[data-testid="account-switcher"]',
   accountDropdown: '#accountDropdown',
+  currentAccountEmail: '[data-testid="current-account-email"]',
+  accountDropdownEmail: '[data-testid="account-dropdown-email"]',
 };
 
 // Views

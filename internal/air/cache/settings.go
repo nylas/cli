@@ -234,6 +234,14 @@ func (s *Settings) ToEncryptionConfig() EncryptionConfig {
 	}
 }
 
+// BasePath returns the directory containing the settings file.
+func (s *Settings) BasePath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return filepath.Dir(s.filePath)
+}
+
 // Validate checks if settings are valid.
 func (s *Settings) Validate() error {
 	s.mu.RLock()

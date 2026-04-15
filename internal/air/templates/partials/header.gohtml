@@ -39,7 +39,7 @@
             <div class="account-switcher" tabindex="0" role="button" onclick="toggleAccountDropdown()" aria-haspopup="true" aria-expanded="false">
                 <div class="account-avatar" style="background: var(--gradient-{{if eq .Provider "google"}}1{{else if eq .Provider "microsoft"}}3{{else}}2{{end}})">{{.UserAvatar}}</div>
                 <div class="account-info">
-                    <div class="account-name">{{.UserEmail}}</div>
+                    <div class="account-name" data-testid="current-account-email">{{.UserEmail}}</div>
                     <div class="account-provider">
                         {{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else}}{{.Provider}}{{end}}
                         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left: 4px;">
@@ -58,7 +58,7 @@
                         {{if eq .Provider "google"}}G{{else if eq .Provider "microsoft"}}M{{else}}E{{end}}
                     </div>
                     <div class="account-dropdown-info">
-                        <div class="account-dropdown-email">{{.Email}}</div>
+                        <div class="account-dropdown-email" data-testid="account-dropdown-email">{{.Email}}</div>
                         <div class="account-dropdown-provider">{{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else}}{{.Provider}}{{end}}</div>
                     </div>
                     {{if .IsDefault}}<span class="account-default-badge">Default</span>{{end}}

@@ -59,7 +59,7 @@ func (s *Server) buildPageData() PageData {
 		data.HasAPIKey = s.hasAPIKey || status.HasAPIKey
 	}
 
-	// Get real grants (filter to supported providers: Google, Microsoft)
+	// Get real grants filtered to providers supported by Air.
 	// Also used to determine if configured (need API key AND at least one grant)
 	grants, err := s.grantStore.ListGrants()
 	hasGrants := err == nil && len(grants) > 0

@@ -80,3 +80,74 @@ func (s *Server) getSyncStore(email string) (*cache.SyncStore, error) {
 	}
 	return cache.NewSyncStore(db), nil
 }
+
+// getOfflineQueue returns the offline queue for the given email account.
+func (s *Server) getOfflineQueue(email string) (*cache.OfflineQueue, error) {
+	if s.cacheManager == nil {
+		return nil, fmt.Errorf("cache not initialized")
+	}
+
+	s.offlineQueuesMu.RLock()
+	queue, exists := s.offlineQueues[email]
+	s.offlineQueuesMu.RUnlock()
+	if exists && queue != nil {
+		return queue, nil
+	}
+
+	db, err := s.cacheManager.GetDB(email)
+	if err != nil {
+		return nil, err
+	}
+
+	queue, err = cache.NewOfflineQueue(db)
+	if err != nil {
+		return nil, err
+	}
+
+	s.offlineQueuesMu.Lock()
+	defer s.offlineQueuesMu.Unlock()
+
+	if existing := s.offlineQueues[email]; existing != nil {
+		return existing, nil
+	}
+
+	s.offlineQueues[email] = queue
+	return queue, nil
+}
+
+func (s *Server) initializeOfflineQueues() error {
+	if s.cacheManager == nil {
+		return nil
+	}
+
+	accounts, err := s.cacheManager.ListCachedAccounts()
+	if err != nil {
+		return err
+	}
+
+	s.clearOfflineQueues()
+	for _, email := range accounts {
+		if _, err := s.getOfflineQueue(email); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) clearOfflineQueues() {
+	s.offlineQueuesMu.Lock()
+	s.offlineQueues = make(map[string]*cache.OfflineQueue)
+	s.offlineQueuesMu.Unlock()
+}
+
+func (s *Server) offlineQueuesSnapshot() map[string]*cache.OfflineQueue {
+	s.offlineQueuesMu.RLock()
+	defer s.offlineQueuesMu.RUnlock()
+
+	snapshot := make(map[string]*cache.OfflineQueue, len(s.offlineQueues))
+	for email, queue := range s.offlineQueues {
+		snapshot[email] = queue
+	}
+	return snapshot
+}

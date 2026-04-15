@@ -268,6 +268,40 @@ func initSchema(db *sql.DB) error {
 		return fmt.Errorf("create sync_state table: %w", err)
 	}
 
+	// Create attachments metadata table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS attachments (
+			id TEXT PRIMARY KEY,
+			email_id TEXT NOT NULL,
+			filename TEXT NOT NULL,
+			content_type TEXT,
+			size INTEGER NOT NULL,
+			hash TEXT NOT NULL,
+			local_path TEXT NOT NULL,
+			cached_at INTEGER NOT NULL,
+			accessed_at INTEGER NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("create attachments table: %w", err)
+	}
+
+	// Create offline action queue table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS offline_queue (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT NOT NULL,
+			resource_id TEXT NOT NULL,
+			payload TEXT,
+			created_at INTEGER NOT NULL,
+			attempts INTEGER DEFAULT 0,
+			last_error TEXT
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("create offline_queue table: %w", err)
+	}
+
 	// Create indexes for common queries
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_emails_folder ON emails(folder_id)",
@@ -278,6 +312,10 @@ func initSchema(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_events_calendar ON events(calendar_id)",
 		"CREATE INDEX IF NOT EXISTS idx_events_time ON events(start_time, end_time)",
 		"CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email)",
+		"CREATE INDEX IF NOT EXISTS idx_attachments_email ON attachments(email_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attachments_hash ON attachments(hash)",
+		"CREATE INDEX IF NOT EXISTS idx_attachments_accessed ON attachments(accessed_at)",
+		"CREATE INDEX IF NOT EXISTS idx_offline_queue_created ON offline_queue(created_at)",
 	}
 	for _, idx := range indexes {
 		if _, err = tx.Exec(idx); err != nil {

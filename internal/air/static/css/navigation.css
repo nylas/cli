@@ -108,6 +108,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    min-width: 0;
 }
 
 /* Search Trigger */
@@ -125,6 +126,7 @@
     cursor: pointer;
     transition: all var(--duration-normal) var(--ease-out);
     min-width: 220px;
+    flex: 0 1 320px;
 }
 
 .search-trigger:hover {
@@ -159,6 +161,9 @@
     border-radius: var(--radius-lg);
     cursor: pointer;
     transition: all var(--duration-normal) var(--ease-out);
+    min-width: 280px;
+    max-width: min(42vw, 360px);
+    flex: 0 0 auto;
 }
 
 .account-switcher:hover {
@@ -184,6 +189,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-0-5);
+    min-width: 0;
+    flex: 1;
 }
 
 .account-name {
@@ -191,6 +198,7 @@
     font-size: var(--text-xs);
     font-weight: var(--font-medium);
     color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .account-email {

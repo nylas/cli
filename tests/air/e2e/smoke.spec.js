@@ -61,6 +61,27 @@ test.describe('Smoke Tests', () => {
     await expect(page.locator(selectors.nav.settingsBtn)).toBeVisible();
   });
 
+  test('current account email is fully visible', async ({ page }) => {
+    const currentEmail = page.locator(selectors.nav.currentAccountEmail);
+    await expect(currentEmail).toBeVisible();
+    await expect(currentEmail).toContainText('@');
+
+    const currentFits = await currentEmail.evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1
+    );
+    expect(currentFits).toBeTruthy();
+
+    await page.locator(selectors.nav.accountSwitcher).click();
+
+    const dropdownEmail = page.locator(selectors.nav.accountDropdownEmail).first();
+    await expect(dropdownEmail).toBeVisible();
+
+    const dropdownFits = await dropdownEmail.evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1
+    );
+    expect(dropdownFits).toBeTruthy();
+  });
+
   test('email view is the default active view', async ({ page }) => {
     // Email view should be visible and active
     const emailView = page.locator(selectors.views.email);

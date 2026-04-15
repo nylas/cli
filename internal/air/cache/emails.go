@@ -273,6 +273,15 @@ func (s *EmailStore) UpdateFlags(id string, unread, starred *bool) error {
 		return nil
 	}
 
+	return s.UpdateMessage(id, unread, starred, nil)
+}
+
+// UpdateMessage updates cached message flags and folder placement.
+func (s *EmailStore) UpdateMessage(id string, unread, starred *bool, folders []string) error {
+	if unread == nil && starred == nil && folders == nil {
+		return nil
+	}
+
 	// Use strings.Builder to avoid string concatenation in loop
 	var query strings.Builder
 	query.WriteString("UPDATE emails SET")
@@ -290,6 +299,18 @@ func (s *EmailStore) UpdateFlags(id string, unread, starred *bool) error {
 		}
 		query.WriteString(" starred = ?")
 		args = append(args, boolToInt(*starred))
+		needComma = true
+	}
+	if folders != nil {
+		if needComma {
+			query.WriteString(",")
+		}
+		folderID := ""
+		if len(folders) > 0 {
+			folderID = folders[0]
+		}
+		query.WriteString(" folder_id = ?")
+		args = append(args, folderID)
 	}
 
 	query.WriteString(" WHERE id = ?")

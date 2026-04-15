@@ -1,6 +1,7 @@
 package air
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -133,7 +134,7 @@ func (s *Server) handleCacheStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Count pending actions across all queues
-	for _, queue := range s.offlineQueues {
+	for _, queue := range s.offlineQueuesSnapshot() {
 		count, _ := queue.Count()
 		response.PendingActions += count
 	}
@@ -195,7 +196,7 @@ func (s *Server) handleCacheSync(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, CacheSyncResponse{
 		Success: true,
-		Message: "Synced " + string(rune('0'+synced)) + " account(s)",
+		Message: fmt.Sprintf("Synced %d account(s)", synced),
 	})
 }
 
@@ -228,7 +229,9 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		s.offlineQueuesMu.Lock()
 		delete(s.offlineQueues, email)
+		s.offlineQueuesMu.Unlock()
 	} else {
 		// Clear all accounts
 		if err := s.cacheManager.ClearAllCaches(); err != nil {
@@ -238,7 +241,7 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		s.offlineQueues = make(map[string]*cache.OfflineQueue)
+		s.clearOfflineQueues()
 	}
 
 	writeJSON(w, http.StatusOK, CacheSyncResponse{
@@ -400,6 +403,8 @@ func (s *Server) updateCacheSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	current := s.cacheSettings.Get()
+
 	// Update settings
 	err := s.cacheSettings.Update(func(s *cache.Settings) {
 		s.Enabled = req.Enabled
@@ -420,6 +425,31 @@ func (s *Server) updateCacheSettings(w http.ResponseWriter, r *http.Request) {
 			"error":   "Failed to save settings: " + err.Error(),
 		})
 		return
+	}
+
+	if current.Enabled != req.Enabled ||
+		current.OfflineQueueEnabled != req.OfflineQueueEnabled ||
+		current.EncryptionEnabled != req.EncryptionEnabled {
+		if err := s.reconfigureCacheRuntime(); err != nil {
+			_ = s.cacheSettings.Update(func(settings *cache.Settings) {
+				settings.Enabled = current.Enabled
+				settings.MaxSizeMB = current.MaxSizeMB
+				settings.TTLDays = current.TTLDays
+				settings.SyncIntervalMinutes = current.SyncIntervalMinutes
+				settings.OfflineQueueEnabled = current.OfflineQueueEnabled
+				settings.EncryptionEnabled = current.EncryptionEnabled
+				settings.Theme = current.Theme
+				settings.DefaultView = current.DefaultView
+				settings.CompactMode = current.CompactMode
+				settings.PreviewPosition = current.PreviewPosition
+			})
+			_ = s.reconfigureCacheRuntime()
+			writeJSON(w, http.StatusOK, map[string]any{
+				"success": false,
+				"error":   "Failed to apply runtime settings: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

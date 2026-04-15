@@ -10,7 +10,7 @@ import (
 
 // processOfflineQueues processes all pending offline actions.
 func (s *Server) processOfflineQueues() {
-	for email, queue := range s.offlineQueues {
+	for email, queue := range s.offlineQueuesSnapshot() {
 		s.processOfflineQueue(email, queue)
 	}
 }
@@ -40,25 +40,40 @@ func (s *Server) processOfflineQueue(email string, queue *cache.OfflineQueue) {
 	ctx := context.Background()
 
 	for {
-		action, err := queue.Dequeue()
+		action, err := queue.Peek()
 		if err != nil || action == nil {
 			break
 		}
 
-		// Process the action
 		err = s.processOfflineAction(ctx, grantID, action)
 		if err != nil {
-			// Mark as failed and re-queue if retries left
-			if action.Attempts < 3 {
-				_ = queue.MarkFailed(action.ID, err)
+			if action.Attempts >= 3 {
+				_ = queue.Remove(action.ID)
+				continue
 			}
+			_ = queue.MarkFailed(action.ID, err)
+			break
 		}
+
+		_ = queue.Remove(action.ID)
 	}
 }
 
 // processOfflineAction processes a single offline action.
 func (s *Server) processOfflineAction(ctx context.Context, grantID string, action *cache.QueuedAction) error {
 	switch action.Type {
+	case cache.ActionUpdateMessage:
+		var payload cache.UpdateMessagePayload
+		if err := action.GetActionData(&payload); err != nil {
+			return err
+		}
+		_, err := s.nylasClient.UpdateMessage(ctx, grantID, payload.EmailID, &domain.UpdateMessageRequest{
+			Unread:  payload.Unread,
+			Starred: payload.Starred,
+			Folders: payload.Folders,
+		})
+		return err
+
 	case cache.ActionMarkRead, cache.ActionMarkUnread:
 		var payload cache.MarkReadPayload
 		if err := action.GetActionData(&payload); err != nil {

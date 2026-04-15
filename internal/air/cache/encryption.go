@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"time"
 
 	// Import for side effects - registers sqlite3 driver and adiantum VFS
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -29,13 +30,20 @@ const (
 // allowedTables is a whitelist of table names that can be used in SQL queries.
 // This prevents SQL injection by ensuring only known table names are used.
 var allowedTables = map[string]bool{
-	"emails":     true,
-	"events":     true,
-	"contacts":   true,
-	"folders":    true,
-	"calendars":  true,
-	"sync_state": true,
+	"emails":        true,
+	"events":        true,
+	"contacts":      true,
+	"folders":       true,
+	"calendars":     true,
+	"sync_state":    true,
+	"attachments":   true,
+	"offline_queue": true,
 }
+
+var (
+	getOrCreateKeyFunc = getOrCreateKey
+	deleteKeyFunc      = deleteKey
+)
 
 // tableNames returns the list of allowed table names for migration operations.
 func tableNames() []string {
@@ -108,8 +116,9 @@ func openEncryptedDB(dbPath string, key []byte) (*sql.DB, error) {
 		return nil, fmt.Errorf("open encrypted database: %w", err)
 	}
 
-	// Verify the key works by running a simple query
-	if _, err := db.Exec("SELECT 1"); err != nil {
+	// Verify the key works by reading the schema, which fails with the wrong key.
+	var schemaObjects int
+	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master").Scan(&schemaObjects); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("verify encryption key: %w", err)
 	}
@@ -161,7 +170,7 @@ func (m *EncryptedManager) GetDB(email string) (*sql.DB, error) {
 	}
 
 	// Get or create encryption key
-	key, err := getOrCreateKey(email)
+	key, err := getOrCreateKeyFunc(email)
 	if err != nil {
 		return nil, fmt.Errorf("get encryption key for %s: %w", email, err)
 	}
@@ -207,7 +216,7 @@ func (m *EncryptedManager) ClearCache(email string) error {
 	// Remove encryption key if encryption is enabled
 	if m.encryption.Enabled {
 		delete(m.keys, email)
-		if err := deleteKey(email); err != nil {
+		if err := deleteKeyFunc(email); err != nil {
 			// Log but don't fail - key might not exist
 			fmt.Fprintf(os.Stderr, "warning: failed to delete encryption key: %v\n", err)
 		}
@@ -233,7 +242,7 @@ func (m *EncryptedManager) MigrateToEncrypted(email string) error {
 	defer func() { _ = unencryptedDB.Close() }()
 
 	// Get or create encryption key
-	key, err := getOrCreateKey(email)
+	key, err := getOrCreateKeyFunc(email)
 	if err != nil {
 		return fmt.Errorf("get encryption key: %w", err)
 	}
@@ -298,7 +307,7 @@ func (m *EncryptedManager) MigrateToUnencrypted(email string) error {
 	key, ok := m.keys[email]
 	if !ok {
 		var err error
-		key, err = getOrCreateKey(email)
+		key, err = getOrCreateKeyFunc(email)
 		if err != nil {
 			return fmt.Errorf("get encryption key: %w", err)
 		}
@@ -352,8 +361,29 @@ func (m *EncryptedManager) MigrateToUnencrypted(email string) error {
 	_ = os.Remove(backupPath)
 	_ = os.Remove(backupPath + "-wal")
 	_ = os.Remove(backupPath + "-shm")
-	_ = deleteKey(email)
+	_ = deleteKeyFunc(email)
 	delete(m.keys, email)
+
+	return nil
+}
+
+// ClearAllCaches removes all encrypted cache databases and associated keys.
+func (m *EncryptedManager) ClearAllCaches() error {
+	accounts, err := m.ListCachedAccounts()
+	if err != nil {
+		return err
+	}
+
+	if err := m.Manager.ClearAllCaches(); err != nil {
+		return err
+	}
+
+	for _, email := range accounts {
+		delete(m.keys, email)
+		if err := deleteKeyFunc(email); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to delete encryption key: %v\n", err)
+		}
+	}
 
 	return nil
 }
@@ -437,12 +467,45 @@ func IsEncrypted(dbPath string) (bool, error) {
 	}
 	defer func() { _ = db.Close() }()
 
-	// Try a simple query - will fail if encrypted
-	_, err = db.Exec("SELECT 1")
+	// Read the schema - this fails when the database is encrypted and opened without a key.
+	var schemaObjects int
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master").Scan(&schemaObjects)
 	if err != nil {
 		// Database exists but can't be read - likely encrypted
 		return true, nil
 	}
 
 	return false, nil
+}
+
+// GetStats returns statistics for an encrypted cache database.
+func (m *EncryptedManager) GetStats(email string) (*CacheStats, error) {
+	db, err := m.GetDB(email)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := &CacheStats{Email: email}
+
+	info, err := os.Stat(m.DBPath(email))
+	if err == nil {
+		stats.SizeBytes = info.Size()
+	}
+
+	row := db.QueryRow("SELECT COUNT(*) FROM emails")
+	_ = row.Scan(&stats.EmailCount)
+
+	row = db.QueryRow("SELECT COUNT(*) FROM events")
+	_ = row.Scan(&stats.EventCount)
+
+	row = db.QueryRow("SELECT COUNT(*) FROM contacts")
+	_ = row.Scan(&stats.ContactCount)
+
+	var lastSync int64
+	row = db.QueryRow("SELECT MAX(last_sync) FROM sync_state")
+	if err := row.Scan(&lastSync); err == nil && lastSync > 0 {
+		stats.LastSync = time.Unix(lastSync, 0)
+	}
+
+	return stats, nil
 }

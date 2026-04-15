@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 // Helper to create demo server for handler tests
@@ -155,6 +157,58 @@ func TestHandleSetDefaultGrant_InvalidJSON(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest && w.Code != http.StatusOK {
 		t.Errorf("expected status 400 or 200, got %d", w.Code)
+	}
+}
+
+func TestHandleListGrants_IncludesNylasProviders(t *testing.T) {
+	t.Parallel()
+
+	server := &Server{
+		grantStore: &testGrantStore{
+			grants: []domain.GrantInfo{
+				{ID: "grant-google", Email: "google@example.com", Provider: domain.ProviderGoogle},
+				{ID: "grant-nylas", Email: "nylas@example.com", Provider: domain.ProviderNylas},
+				{ID: "grant-imap", Email: "imap@example.com", Provider: domain.ProviderIMAP},
+			},
+			defaultGrant: "grant-nylas",
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/grants", nil)
+	w := httptest.NewRecorder()
+
+	server.handleListGrants(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp GrantsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Grants) != 2 {
+		t.Fatalf("expected 2 supported grants, got %d", len(resp.Grants))
+	}
+
+	providers := make(map[string]bool, len(resp.Grants))
+	for _, g := range resp.Grants {
+		providers[g.Provider] = true
+	}
+
+	if !providers[string(domain.ProviderGoogle)] {
+		t.Error("expected google grant to be included")
+	}
+	if !providers[string(domain.ProviderNylas)] {
+		t.Error("expected nylas grant to be included")
+	}
+	if providers[string(domain.ProviderIMAP)] {
+		t.Error("did not expect imap grant to be included")
+	}
+
+	if resp.DefaultGrant != "grant-nylas" {
+		t.Errorf("expected default grant 'grant-nylas', got %s", resp.DefaultGrant)
 	}
 }
 
