@@ -311,6 +311,103 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 	}
 }
 
+func TestCLI_AgentPolicyCommands_RejectNonAgentOnlyPolicy(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	env := newAgentSandboxEnv(t)
+	client := getTestClient()
+	policyID := findNonAgentOnlyPolicyIDForTest(t, client)
+	if policyID == "" {
+		t.Skip("no non-agent-only policy available in this environment")
+	}
+
+	testCases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "get",
+			args: []string{"agent", "policy", "get", policyID, "--json"},
+		},
+		{
+			name: "update",
+			args: []string{"agent", "policy", "update", policyID, "--name", newPolicyTestName("reject"), "--json"},
+		},
+		{
+			name: "delete",
+			args: []string{"agent", "policy", "delete", policyID, "--yes"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, tc.args...)
+			if err == nil {
+				t.Fatalf("expected %s to fail for non-agent-only policy\nstdout: %s\nstderr: %s", tc.name, stdout, stderr)
+			}
+			if !strings.Contains(strings.ToLower(stderr), "outside the nylas agent scope") {
+				t.Fatalf("expected agent scope rejection, got stderr: %s", stderr)
+			}
+		})
+	}
+}
+
+func TestCLI_AgentPolicyCommands_RejectMixedScopePolicyMutation(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	client := getTestClient()
+	policyID := findNonAgentOnlyPolicyIDForTest(t, client)
+	if policyID == "" {
+		t.Skip("no non-agent-only policy available to build mixed scope in this environment")
+	}
+
+	email := newAgentTestEmail(t, "policy-mixed")
+	createdAccount := createAgentWithPolicyForTest(t, email, policyID)
+	t.Cleanup(func() {
+		if createdAccount == nil || createdAccount.ID == "" {
+			return
+		}
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = client.DeleteAgentAccount(ctx, createdAccount.ID)
+	})
+	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
+		t.Fatalf("created agent account %q did not appear in list", email)
+	}
+
+	testCases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "update",
+			args: []string{"agent", "policy", "update", policyID, "--name", newPolicyTestName("mixed-reject"), "--json"},
+			want: "shared with non-agent accounts",
+		},
+		{
+			name: "delete",
+			args: []string{"agent", "policy", "delete", policyID, "--yes"},
+			want: "attached to agent accounts",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, tc.args...)
+			if err == nil {
+				t.Fatalf("expected %s to fail for mixed-scope policy\nstdout: %s\nstderr: %s", tc.name, stdout, stderr)
+			}
+			if !strings.Contains(strings.ToLower(stderr), tc.want) {
+				t.Fatalf("expected %q in stderr, got: %s", tc.want, stderr)
+			}
+		})
+	}
+}
+
 func createAgentWithPolicyForTest(t *testing.T, email, policyID string) *domain.AgentAccount {
 	t.Helper()
 
@@ -324,6 +421,49 @@ func createAgentWithPolicyForTest(t *testing.T, email, policyID string) *domain.
 		t.Fatalf("failed to create agent with policy: %v", err)
 	}
 	return account
+}
+
+func findNonAgentOnlyPolicyIDForTest(t *testing.T, client interface {
+	ListInboundInboxes(context.Context) ([]domain.InboundInbox, error)
+	ListAgentAccounts(context.Context) ([]domain.AgentAccount, error)
+}) string {
+	t.Helper()
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	inboxes, err := client.ListInboundInboxes(ctx)
+	if err != nil {
+		t.Fatalf("failed to list inbound inboxes: %v", err)
+	}
+
+	accounts, err := client.ListAgentAccounts(ctx)
+	if err != nil {
+		t.Fatalf("failed to list agent accounts: %v", err)
+	}
+
+	agentPolicyIDs := make(map[string]struct{}, len(accounts))
+	for _, account := range accounts {
+		policyID := strings.TrimSpace(account.Settings.PolicyID)
+		if policyID == "" {
+			continue
+		}
+		agentPolicyIDs[policyID] = struct{}{}
+	}
+
+	for _, inbox := range inboxes {
+		policyID := strings.TrimSpace(inbox.PolicyID)
+		if policyID == "" {
+			continue
+		}
+		if _, ok := agentPolicyIDs[policyID]; ok {
+			continue
+		}
+		return policyID
+	}
+
+	return ""
 }
 
 func newPolicyTestName(prefix string) string {

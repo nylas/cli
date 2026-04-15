@@ -109,6 +109,22 @@ Examples:
 
 func runPolicyUpdate(policyID string, payload map[string]any, jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+		scope, err := loadAgentPolicyScope(ctx, client)
+		if err != nil {
+			return struct{}{}, err
+		}
+
+		resolved, err := resolvePolicyForAgentOps(scope, policyID)
+		if err != nil {
+			return struct{}{}, err
+		}
+		if resolved.AttachedToAgent && resolved.AttachedToNonAgent {
+			return struct{}{}, common.NewUserError(
+				"policy is shared with non-agent accounts",
+				"Use a policy attached only to provider=nylas accounts, or manage the shared policy outside the agent namespace",
+			)
+		}
+
 		policy, err := client.UpdatePolicy(ctx, policyID, payload)
 		if err != nil {
 			return struct{}{}, common.WrapUpdateError("policy", err)
@@ -153,17 +169,28 @@ Examples:
 
 func runPolicyDelete(policyID string) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		accounts, err := client.ListAgentAccounts(ctx)
+		scope, err := loadAgentPolicyScope(ctx, client)
 		if err != nil {
-			return struct{}{}, common.WrapListError("agent accounts", err)
+			return struct{}{}, err
 		}
 
-		attachedAccounts := buildPolicyAccountRefs(accounts)[policyID]
+		resolved, err := resolvePolicyForAgentOps(scope, policyID)
+		if err != nil {
+			return struct{}{}, err
+		}
+
+		attachedAccounts := resolved.AgentAccounts
 		if len(attachedAccounts) > 0 {
 			accountSummary := formatPolicyAgentAccounts(attachedAccounts)
 			return struct{}{}, common.NewUserError(
 				fmt.Sprintf("policy is attached to agent accounts: %s", accountSummary),
 				fmt.Sprintf("Detach or move the listed accounts to another policy before deleting %q", policyID),
+			)
+		}
+		if resolved.AttachedToNonAgent {
+			return struct{}{}, common.NewUserError(
+				"policy is attached outside the nylas agent scope",
+				fmt.Sprintf("Delete or detach the non-agent attachments before deleting %q from the agent namespace", policyID),
 			)
 		}
 

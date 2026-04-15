@@ -340,6 +340,74 @@ func TestFilterPoliciesWithAgentAccounts(t *testing.T) {
 	}
 }
 
+func TestBuildNonAgentPolicyIDs(t *testing.T) {
+	policyIDs := buildNonAgentPolicyIDs([]domain.InboundInbox{
+		{ID: "inbox-1", Email: "support@example.com", PolicyID: "policy-2"},
+		{ID: "inbox-2", Email: "sales@example.com", PolicyID: "policy-2"},
+		{ID: "inbox-3", Email: "info@example.com", PolicyID: "policy-3"},
+		{ID: "inbox-4", Email: "empty@example.com"},
+	})
+
+	assert.Len(t, policyIDs, 2)
+	_, ok := policyIDs["policy-2"]
+	assert.True(t, ok)
+	_, ok = policyIDs["policy-3"]
+	assert.True(t, ok)
+}
+
+func TestResolvePolicyForAgentOps(t *testing.T) {
+	scope := &agentPolicyScope{
+		AllPolicies: []domain.Policy{
+			{ID: "policy-agent", Name: "Agent"},
+			{ID: "policy-mixed", Name: "Mixed"},
+			{ID: "policy-unattached", Name: "Unattached"},
+			{ID: "policy-inbound", Name: "Inbound"},
+		},
+		PolicyRefsByID: map[string][]policyAgentAccountRef{
+			"policy-agent": {{
+				GrantID: "grant-agent",
+				Email:   "agent@example.com",
+			}},
+			"policy-mixed": {{
+				GrantID: "grant-mixed",
+				Email:   "mixed@example.com",
+			}},
+		},
+		NonAgentPolicyIDs: map[string]struct{}{
+			"policy-mixed":   {},
+			"policy-inbound": {},
+		},
+	}
+
+	resolved, err := resolvePolicyForAgentOps(scope, "policy-agent")
+	if assert.NoError(t, err) {
+		assert.Equal(t, "policy-agent", resolved.Policy.ID)
+		assert.True(t, resolved.AttachedToAgent)
+		assert.False(t, resolved.AttachedToNonAgent)
+	}
+
+	resolved, err = resolvePolicyForAgentOps(scope, "policy-unattached")
+	if assert.NoError(t, err) {
+		assert.Equal(t, "policy-unattached", resolved.Policy.ID)
+		assert.False(t, resolved.AttachedToAgent)
+		assert.False(t, resolved.AttachedToNonAgent)
+	}
+
+	resolved, err = resolvePolicyForAgentOps(scope, "policy-mixed")
+	if assert.NoError(t, err) {
+		assert.Equal(t, "policy-mixed", resolved.Policy.ID)
+		assert.True(t, resolved.AttachedToAgent)
+		assert.True(t, resolved.AttachedToNonAgent)
+		if assert.Len(t, resolved.AgentAccounts, 1) {
+			assert.Equal(t, "mixed@example.com", resolved.AgentAccounts[0].Email)
+		}
+	}
+
+	_, err = resolvePolicyForAgentOps(scope, "policy-inbound")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "outside the nylas agent scope")
+}
+
 func TestBuildRuleRefsByID(t *testing.T) {
 	refsByRuleID := buildRuleRefsByID(
 		[]domain.Policy{
@@ -375,9 +443,24 @@ func TestRuleReferencedOutsideAgentScope(t *testing.T) {
 	agentPolicies := []domain.Policy{
 		{ID: "policy-agent", Rules: []string{"rule-1"}},
 	}
+	nonAgentPolicyIDs := map[string]struct{}{
+		"policy-other": {},
+	}
 
-	assert.True(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-1"))
-	assert.False(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-2"))
+	assert.True(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, nonAgentPolicyIDs, "rule-1"))
+	assert.False(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, nonAgentPolicyIDs, "rule-2"))
+
+	mixedUsePolicies := []domain.Policy{
+		{ID: "policy-mixed", Rules: []string{"rule-3"}},
+	}
+	mixedUseAgentPolicies := []domain.Policy{
+		{ID: "policy-mixed", Rules: []string{"rule-3"}},
+	}
+	mixedUseNonAgentPolicyIDs := map[string]struct{}{
+		"policy-mixed": {},
+	}
+
+	assert.True(t, ruleReferencedOutsideAgentScope(mixedUsePolicies, mixedUseAgentPolicies, mixedUseNonAgentPolicyIDs, "rule-3"))
 }
 
 func TestPoliciesLeftEmptyByRuleRemoval(t *testing.T) {

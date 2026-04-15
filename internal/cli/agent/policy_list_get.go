@@ -171,16 +171,21 @@ Examples:
 
 func runPolicyGet(policyID string, jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		policy, err := client.GetPolicy(ctx, policyID)
+		scope, err := loadAgentPolicyScope(ctx, client)
 		if err != nil {
-			return struct{}{}, common.WrapGetError("policy", err)
+			return struct{}{}, err
+		}
+
+		resolved, err := resolvePolicyForAgentOps(scope, policyID)
+		if err != nil {
+			return struct{}{}, err
 		}
 
 		if jsonOutput {
-			return struct{}{}, common.PrintJSON(policy)
+			return struct{}{}, common.PrintJSON(resolved.Policy)
 		}
 
-		printPolicyDetails(*policy)
+		printPolicyDetails(*resolved.Policy)
 		return struct{}{}, nil
 	})
 

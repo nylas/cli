@@ -326,6 +326,82 @@ func TestCLI_AgentRuleDelete_RejectsLastRuleOnPolicy(t *testing.T) {
 	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
 }
 
+func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	client := getTestClient()
+	sharedPolicyID := findNonAgentOnlyPolicyIDForTest(t, client)
+	if sharedPolicyID == "" {
+		t.Skip("no non-agent-only policy available to build mixed scope in this environment")
+	}
+
+	email := newAgentTestEmail(t, "rule-mixed")
+	createdAccount := createAgentWithPolicyForTest(t, email, sharedPolicyID)
+	createdRule := createRuleForTest(t, client, fmt.Sprintf("it-rule-mixed-%d", time.Now().UnixNano()))
+	attachRuleToPolicyForTest(t, client, sharedPolicyID, createdRule.ID)
+	assertPolicyContainsRuleForTest(t, client, sharedPolicyID, createdRule.ID)
+
+	t.Cleanup(func() {
+		if createdRule != nil && createdRule.ID != "" {
+			removeRuleFromPolicyForTest(t, client, sharedPolicyID, createdRule.ID)
+		}
+		if createdRule != nil && createdRule.ID != "" {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeleteRule(ctx, createdRule.ID)
+		}
+		if createdAccount != nil && createdAccount.ID != "" {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeleteAgentAccount(ctx, createdAccount.ID)
+		}
+	})
+	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
+		t.Fatalf("created agent account %q did not appear in list", email)
+	}
+
+	updateStdout, updateStderr, err := runCLIWithOverridesAndRateLimit(
+		t,
+		2*time.Minute,
+		env,
+		"agent",
+		"rule",
+		"update",
+		createdRule.ID,
+		"--policy-id", sharedPolicyID,
+		"--name", fmt.Sprintf("reject-mixed-%d", time.Now().UnixNano()),
+		"--json",
+	)
+	if err == nil {
+		t.Fatalf("expected rule update to fail for mixed-scope rule\nstdout: %s\nstderr: %s", updateStdout, updateStderr)
+	}
+	if !strings.Contains(strings.ToLower(updateStderr), "shared with a non-agent policy") {
+		t.Fatalf("expected mixed-scope rejection, got stderr: %s", updateStderr)
+	}
+
+	deleteStdout, deleteStderr, err := runCLIWithOverridesAndRateLimit(
+		t,
+		2*time.Minute,
+		env,
+		"agent",
+		"rule",
+		"delete",
+		createdRule.ID,
+		"--policy-id", sharedPolicyID,
+		"--yes",
+	)
+	if err == nil {
+		t.Fatalf("expected rule delete to fail for mixed-scope rule\nstdout: %s\nstderr: %s", deleteStdout, deleteStderr)
+	}
+	if !strings.Contains(strings.ToLower(deleteStderr), "shared with a non-agent policy") {
+		t.Fatalf("expected mixed-scope rejection, got stderr: %s", deleteStderr)
+	}
+}
+
 func assertPolicyContainsRuleForTest(t *testing.T, client interface {
 	GetPolicy(context.Context, string) (*domain.Policy, error)
 }, policyID, ruleID string) {

@@ -16,6 +16,13 @@ type policyAgentAccountRef struct {
 	Email   string `json:"email"`
 }
 
+type resolvedPolicyScope struct {
+	Policy             *domain.Policy
+	AgentAccounts      []policyAgentAccountRef
+	AttachedToNonAgent bool
+	AttachedToAgent    bool
+}
+
 func newPolicyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
@@ -70,6 +77,18 @@ func buildPolicyAccountRefs(accounts []domain.AgentAccount) map[string][]policyA
 	return refsByPolicyID
 }
 
+func buildNonAgentPolicyIDs(inboxes []domain.InboundInbox) map[string]struct{} {
+	policyIDs := make(map[string]struct{}, len(inboxes))
+	for _, inbox := range inboxes {
+		policyID := strings.TrimSpace(inbox.PolicyID)
+		if policyID == "" {
+			continue
+		}
+		policyIDs[policyID] = struct{}{}
+	}
+	return policyIDs
+}
+
 func filterPoliciesWithAgentAccounts(policies []domain.Policy, refsByPolicyID map[string][]policyAgentAccountRef) []domain.Policy {
 	filtered := make([]domain.Policy, 0, len(policies))
 	for _, policy := range policies {
@@ -79,6 +98,34 @@ func filterPoliciesWithAgentAccounts(policies []domain.Policy, refsByPolicyID ma
 		filtered = append(filtered, policy)
 	}
 	return filtered
+}
+
+func resolvePolicyForAgentOps(scope *agentPolicyScope, policyID string) (*resolvedPolicyScope, error) {
+	policyID = strings.TrimSpace(policyID)
+	policy := findPolicyByID(scope.AllPolicies, policyID)
+	if policy == nil {
+		return nil, common.NewUserError(
+			"policy not found",
+			"Use 'nylas agent policy list --all' to inspect provider=nylas policies",
+		)
+	}
+
+	agentAccounts := scope.PolicyRefsByID[policyID]
+	_, attachedToNonAgent := scope.NonAgentPolicyIDs[policyID]
+
+	if len(agentAccounts) == 0 && attachedToNonAgent {
+		return nil, common.NewUserError(
+			"policy is attached outside the nylas agent scope",
+			"Use inbound policy management for provider=inbox policies, or attach this policy to a provider=nylas account first",
+		)
+	}
+
+	return &resolvedPolicyScope{
+		Policy:             policy,
+		AgentAccounts:      agentAccounts,
+		AttachedToNonAgent: attachedToNonAgent,
+		AttachedToAgent:    len(agentAccounts) > 0,
+	}, nil
 }
 
 func formatPolicyAgentAccounts(accounts []policyAgentAccountRef) string {
