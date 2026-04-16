@@ -76,12 +76,6 @@ func (s *Server) withFolderStore(email string, fn func(*cache.FolderStore) error
 	})
 }
 
-func (s *Server) withSyncStore(email string, fn func(*cache.SyncStore) error) error {
-	return s.withAccountDB(email, func(db *sql.DB) error {
-		return fn(cache.NewSyncStore(db))
-	})
-}
-
 func (s *Server) withPhotoStore(fn func(*cache.PhotoStore) error) error {
 	s.runtimeMu.RLock()
 	defer s.runtimeMu.RUnlock()

@@ -25,40 +25,57 @@ func (s *Server) processOfflineQueue(email string) {
 	ctx := context.Background()
 
 	for {
-		var processed bool
-		err := s.withOfflineQueue(email, func(queue *cache.OfflineQueue) error {
-			action, err := queue.Peek()
-			if err != nil {
-				return err
-			}
-			if action == nil {
-				return nil
-			}
+		action, err := s.peekOfflineAction(email)
+		if err != nil || action == nil {
+			return
+		}
 
-			grantID, err := s.resolveQueuedActionGrantID(email, action)
-			if err != nil {
-				if action.Attempts >= 3 {
-					return queue.Remove(action.ID)
-				}
-				return queue.MarkFailed(action.ID, err)
+		grantID, err := s.resolveQueuedActionGrantID(email, action)
+		if err != nil {
+			if action.Attempts >= 3 {
+				_ = s.removeOfflineAction(email, action.ID)
+			} else {
+				_ = s.markOfflineActionFailed(email, action.ID, err)
 			}
+			return
+		}
 
-			processed = true
-			err = s.processOfflineAction(ctx, grantID, action)
-			if err != nil {
-				if action.Attempts >= 3 {
-					return queue.Remove(action.ID)
-				}
-				_ = queue.MarkFailed(action.ID, err)
-				return err
+		err = s.processOfflineAction(ctx, grantID, action)
+		if err != nil {
+			if action.Attempts >= 3 {
+				_ = s.removeOfflineAction(email, action.ID)
+			} else {
+				_ = s.markOfflineActionFailed(email, action.ID, err)
 			}
+			return
+		}
 
-			return queue.Remove(action.ID)
-		})
-		if err != nil || !processed {
+		if err := s.removeOfflineAction(email, action.ID); err != nil {
 			return
 		}
 	}
+}
+
+func (s *Server) peekOfflineAction(email string) (*cache.QueuedAction, error) {
+	var action *cache.QueuedAction
+	err := s.withOfflineQueue(email, func(queue *cache.OfflineQueue) error {
+		var err error
+		action, err = queue.Peek()
+		return err
+	})
+	return action, err
+}
+
+func (s *Server) markOfflineActionFailed(email string, actionID int64, markErr error) error {
+	return s.withOfflineQueue(email, func(queue *cache.OfflineQueue) error {
+		return queue.MarkFailed(actionID, markErr)
+	})
+}
+
+func (s *Server) removeOfflineAction(email string, actionID int64) error {
+	return s.withOfflineQueue(email, func(queue *cache.OfflineQueue) error {
+		return queue.Remove(actionID)
+	})
 }
 
 func (s *Server) resolveQueuedActionGrantID(accountEmail string, action *cache.QueuedAction) (string, error) {

@@ -82,63 +82,67 @@ func (s *Server) reconfigureCacheRuntime() error {
 	cacheCfg = s.cacheSettings.ToConfig(cacheCfg.BasePath)
 	encCfg := s.cacheSettings.ToEncryptionConfig()
 
-	s.runtimeMu.Lock()
+	var photoStore *cache.PhotoStore
+	err := func() error {
+		s.runtimeMu.Lock()
+		defer s.runtimeMu.Unlock()
 
-	if s.photoStore != nil {
-		if err := s.photoStore.Close(); err != nil {
-			return fmt.Errorf("close existing photo store: %w", err)
-		}
-		s.photoStore = nil
-	}
-
-	if s.cacheManager != nil {
-		if err := s.cacheManager.Close(); err != nil {
-			return fmt.Errorf("close existing cache manager: %w", err)
-		}
-		s.cacheManager = nil
-	}
-	s.clearOfflineQueues()
-
-	if !s.cacheSettings.IsCacheEnabled() {
-		s.runtimeMu.Unlock()
-		return nil
-	}
-
-	if err := migrateCacheEncryption(cacheCfg.BasePath, encCfg.Enabled); err != nil {
-		s.runtimeMu.Unlock()
-		return err
-	}
-
-	cacheManager, err := newCacheRuntimeManager(cacheCfg, encCfg)
-	if err != nil {
-		s.runtimeMu.Unlock()
-		return fmt.Errorf("initialize cache manager: %w", err)
-	}
-	s.cacheManager = cacheManager
-
-	photoStore, err := openPhotoStore(cacheCfg.BasePath)
-	if err != nil {
-		_ = cacheManager.Close()
-		s.cacheManager = nil
-		s.runtimeMu.Unlock()
-		return err
-	}
-	s.photoStore = photoStore
-
-	if s.cacheSettings.Get().OfflineQueueEnabled {
-		if err := s.initializeOfflineQueuesLocked(); err != nil {
-			_ = s.photoStore.Close()
+		if s.photoStore != nil {
+			if err := s.photoStore.Close(); err != nil {
+				return fmt.Errorf("close existing photo store: %w", err)
+			}
 			s.photoStore = nil
-			_ = cacheManager.Close()
+		}
+
+		if s.cacheManager != nil {
+			if err := s.cacheManager.Close(); err != nil {
+				return fmt.Errorf("close existing cache manager: %w", err)
+			}
 			s.cacheManager = nil
-			s.runtimeMu.Unlock()
+		}
+		s.clearOfflineQueues()
+
+		if !s.cacheSettings.IsCacheEnabled() {
+			return nil
+		}
+
+		if err := migrateCacheEncryption(cacheCfg.BasePath, encCfg.Enabled); err != nil {
 			return err
 		}
+
+		cacheManager, err := newCacheRuntimeManager(cacheCfg, encCfg)
+		if err != nil {
+			return fmt.Errorf("initialize cache manager: %w", err)
+		}
+		s.cacheManager = cacheManager
+
+		photoStore, err = openPhotoStore(cacheCfg.BasePath)
+		if err != nil {
+			_ = cacheManager.Close()
+			s.cacheManager = nil
+			return err
+		}
+		s.photoStore = photoStore
+
+		if s.cacheSettings.Get().OfflineQueueEnabled {
+			if err := s.initializeOfflineQueuesLocked(); err != nil {
+				_ = s.photoStore.Close()
+				s.photoStore = nil
+				_ = cacheManager.Close()
+				s.cacheManager = nil
+				return err
+			}
+		}
+
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 
-	s.runtimeMu.Unlock()
-
-	go prunePhotoStore(photoStore)
+	if photoStore != nil {
+		go prunePhotoStore(photoStore)
+	}
 	s.startBackgroundSync()
 
 	return nil

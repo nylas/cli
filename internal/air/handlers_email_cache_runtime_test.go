@@ -21,6 +21,18 @@ type testGrantStore struct {
 	defaultGrant string
 }
 
+type failingCacheRuntimeManager struct {
+	closeErr error
+}
+
+func (m *failingCacheRuntimeManager) GetDB(string) (*sql.DB, error)              { return nil, nil }
+func (m *failingCacheRuntimeManager) Close() error                               { return m.closeErr }
+func (m *failingCacheRuntimeManager) ClearCache(string) error                    { return nil }
+func (m *failingCacheRuntimeManager) ClearAllCaches() error                      { return nil }
+func (m *failingCacheRuntimeManager) ListCachedAccounts() ([]string, error)      { return nil, nil }
+func (m *failingCacheRuntimeManager) GetStats(string) (*cache.CacheStats, error) { return nil, nil }
+func (m *failingCacheRuntimeManager) DBPath(string) string                       { return "" }
+
 func (s *testGrantStore) SaveGrant(info domain.GrantInfo) error {
 	s.grants = append(s.grants, info)
 	return nil
@@ -406,48 +418,178 @@ func TestReconfigureCacheRuntime_WaitsForInFlightCacheAccess(t *testing.T) {
 	})
 }
 
+func TestReconfigureCacheRuntime_UnlocksRuntimeMutexOnCloseError(t *testing.T) {
+	t.Parallel()
+
+	settings := cache.DefaultSettings()
+	settings.Enabled = true
+
+	server := &Server{
+		cacheManager:  &failingCacheRuntimeManager{closeErr: errors.New("close failed")},
+		cacheSettings: settings,
+		offlineQueues: make(map[string]*cache.OfflineQueue),
+		syncStopCh:    make(chan struct{}),
+		isOnline:      true,
+	}
+
+	if err := server.reconfigureCacheRuntime(); err == nil {
+		t.Fatal("expected close failure from reconfigure")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_ = server.hasCacheRuntime()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("runtime mutex remained locked after reconfigure error")
+	}
+}
+
+func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
+	server, client, accountEmail := newCachedTestServer(t)
+	server.SetOnline(true)
+	server.grantStore = nil
+
+	fetchStarted := make(chan struct{})
+	releaseFetch := make(chan struct{})
+	client.GetMessagesFunc = func(_ context.Context, _ string, _ int) ([]domain.Message, error) {
+		close(fetchStarted)
+		<-releaseFetch
+		return []domain.Message{}, nil
+	}
+
+	syncDone := make(chan struct{})
+	go func() {
+		server.syncEmails(context.Background(), accountEmail, "grant-123")
+		close(syncDone)
+	}()
+
+	<-fetchStarted
+
+	reconfigureDone := make(chan error, 1)
+	go func() {
+		reconfigureDone <- server.reconfigureCacheRuntime()
+	}()
+
+	select {
+	case err := <-reconfigureDone:
+		if err != nil {
+			t.Fatalf("reconfigure cache runtime: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconfigure blocked on remote fetch while sync was in progress")
+	}
+
+	close(releaseFetch)
+
+	select {
+	case <-syncDone:
+	case <-time.After(time.Second):
+		t.Fatal("syncEmails did not finish after fetch was released")
+	}
+
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+}
+
 func TestProcessOfflineQueues_UsesQueuedGrantID(t *testing.T) {
 	t.Parallel()
 
-	server, client, accountEmail := newCachedTestServer(t)
-	server.SetOnline(false)
-
-	if err := server.enqueueMessageDelete("grant-123", accountEmail, "email-1"); err != nil {
-		t.Fatalf("enqueue delete: %v", err)
-	}
-
-	grantStore := server.grantStore.(*testGrantStore)
-	grantStore.grants = []domain.GrantInfo{
+	tests := []struct {
+		name           string
+		enqueue        func(t *testing.T, server *Server, accountEmail string)
+		assertReplayed func(t *testing.T, client *nylasmock.MockClient)
+	}{
 		{
-			ID:       "grant-other",
-			Email:    accountEmail,
-			Provider: domain.ProviderGoogle,
+			name: "delete action",
+			enqueue: func(t *testing.T, server *Server, accountEmail string) {
+				t.Helper()
+				if err := server.enqueueMessageDelete("grant-123", accountEmail, "email-1"); err != nil {
+					t.Fatalf("enqueue delete: %v", err)
+				}
+			},
+			assertReplayed: func(t *testing.T, client *nylasmock.MockClient) {
+				t.Helper()
+				if !client.DeleteMessageCalled {
+					t.Fatal("expected DeleteMessage to be replayed")
+				}
+				if client.LastMessageID != "email-1" {
+					t.Fatalf("expected delete to target email-1, got %s", client.LastMessageID)
+				}
+			},
 		},
 		{
-			ID:       "grant-123",
-			Email:    accountEmail,
-			Provider: domain.ProviderGoogle,
+			name: "update message action",
+			enqueue: func(t *testing.T, server *Server, accountEmail string) {
+				t.Helper()
+				unread := false
+				starred := true
+				if err := server.enqueueMessageUpdate("grant-123", accountEmail, "email-2", &domain.UpdateMessageRequest{
+					Unread:  &unread,
+					Starred: &starred,
+					Folders: []string{"archive"},
+				}); err != nil {
+					t.Fatalf("enqueue update: %v", err)
+				}
+			},
+			assertReplayed: func(t *testing.T, client *nylasmock.MockClient) {
+				t.Helper()
+				if !client.UpdateMessageCalled {
+					t.Fatal("expected UpdateMessage to be replayed")
+				}
+				if client.LastMessageID != "email-2" {
+					t.Fatalf("expected update to target email-2, got %s", client.LastMessageID)
+				}
+			},
 		},
 	}
 
-	server.SetOnline(true)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if !client.DeleteMessageCalled {
-		t.Fatal("expected DeleteMessage to be replayed")
-	}
-	if client.LastGrantID != "grant-123" {
-		t.Fatalf("expected replay to use queued grant grant-123, got %s", client.LastGrantID)
-	}
+			server, client, accountEmail := newCachedTestServer(t)
+			server.SetOnline(false)
 
-	queue, err := server.getOfflineQueue(accountEmail)
-	if err != nil {
-		t.Fatalf("get offline queue: %v", err)
-	}
-	count, err := queue.Count()
-	if err != nil {
-		t.Fatalf("queue count: %v", err)
-	}
-	if count != 0 {
-		t.Fatalf("expected queue to be drained, got %d pending action(s)", count)
+			tt.enqueue(t, server, accountEmail)
+
+			grantStore := server.grantStore.(*testGrantStore)
+			grantStore.grants = []domain.GrantInfo{
+				{
+					ID:       "grant-other",
+					Email:    accountEmail,
+					Provider: domain.ProviderGoogle,
+				},
+				{
+					ID:       "grant-123",
+					Email:    accountEmail,
+					Provider: domain.ProviderGoogle,
+				},
+			}
+
+			server.SetOnline(true)
+
+			tt.assertReplayed(t, client)
+			if client.LastGrantID != "grant-123" {
+				t.Fatalf("expected replay to use queued grant grant-123, got %s", client.LastGrantID)
+			}
+
+			queue, err := server.getOfflineQueue(accountEmail)
+			if err != nil {
+				t.Fatalf("get offline queue: %v", err)
+			}
+			count, err := queue.Count()
+			if err != nil {
+				t.Fatalf("queue count: %v", err)
+			}
+			if count != 0 {
+				t.Fatalf("expected queue to be drained, got %d pending action(s)", count)
+			}
+		})
 	}
 }

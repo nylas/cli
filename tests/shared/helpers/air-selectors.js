@@ -18,6 +18,7 @@ exports.nav = {
   accountSwitcher: '[data-testid="account-switcher"]',
   accountDropdown: '#accountDropdown',
   currentAccountEmail: '[data-testid="current-account-email"]',
+  currentAccountProvider: '[data-testid="current-account-provider"]',
   accountDropdownEmail: '[data-testid="account-dropdown-email"]',
 };
 

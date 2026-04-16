@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/air/cache"
+	"github.com/nylas/cli/internal/domain"
 )
 
 // startBackgroundSync starts background sync goroutines for all accounts.
@@ -116,31 +117,30 @@ func (s *Server) syncAccount(email, grantID string) {
 
 // syncEmails syncs emails from the API to cache.
 func (s *Server) syncEmails(ctx context.Context, email, grantID string) {
+	if s.nylasClient == nil || !s.hasCacheRuntime() {
+		return
+	}
+
+	messages, err := s.nylasClient.GetMessages(ctx, grantID, 100)
+	if err != nil {
+		s.SetOnline(false)
+		return
+	}
+	s.SetOnline(true)
+
 	_ = s.withAccountDB(email, func(db *sql.DB) error {
 		store := cache.NewEmailStore(db)
 		syncStore := cache.NewSyncStore(db)
 
-		// Get last sync state
-		state, _ := syncStore.Get("emails")
-		if state == nil {
-			state = &cache.SyncState{Resource: "emails"}
-		}
-
-		// Fetch emails from API
-		messages, err := s.nylasClient.GetMessages(ctx, grantID, 100)
-		if err != nil {
-			s.SetOnline(false)
-			return nil
-		}
-		s.SetOnline(true)
-
-		// Cache emails
 		for i := range messages {
 			cached := domainMessageToCached(&messages[i])
 			_ = store.Put(cached)
 		}
 
-		// Update sync state
+		state, _ := syncStore.Get("emails")
+		if state == nil {
+			state = &cache.SyncState{Resource: "emails"}
+		}
 		state.LastSync = time.Now()
 		_ = syncStore.Set(state)
 		return nil
@@ -149,12 +149,16 @@ func (s *Server) syncEmails(ctx context.Context, email, grantID string) {
 
 // syncFolders syncs folders from the API to cache.
 func (s *Server) syncFolders(ctx context.Context, email, grantID string) {
-	_ = s.withFolderStore(email, func(store *cache.FolderStore) error {
-		folders, err := s.nylasClient.GetFolders(ctx, grantID)
-		if err != nil {
-			return nil
-		}
+	if s.nylasClient == nil || !s.hasCacheRuntime() {
+		return
+	}
 
+	folders, err := s.nylasClient.GetFolders(ctx, grantID)
+	if err != nil {
+		return
+	}
+
+	_ = s.withFolderStore(email, func(store *cache.FolderStore) error {
 		for i := range folders {
 			f := &folders[i]
 			cached := &cache.CachedFolder{
@@ -167,44 +171,62 @@ func (s *Server) syncFolders(ctx context.Context, email, grantID string) {
 			}
 			_ = store.Put(cached)
 		}
-
 		return nil
 	})
 }
 
 // syncEvents syncs calendar events from the API to cache.
 func (s *Server) syncEvents(ctx context.Context, email, grantID string) {
-	_ = s.withEventStore(email, func(store *cache.EventStore) error {
-		calendars, err := s.nylasClient.GetCalendars(ctx, grantID)
+	if s.nylasClient == nil || !s.hasCacheRuntime() {
+		return
+	}
+
+	calendars, err := s.nylasClient.GetCalendars(ctx, grantID)
+	if err != nil {
+		return
+	}
+
+	type calendarEvents struct {
+		calendarID string
+		events     []domain.Event
+	}
+	eventGroups := make([]calendarEvents, 0, len(calendars))
+
+	for i := range calendars {
+		cal := &calendars[i]
+		events, err := s.nylasClient.GetEvents(ctx, grantID, cal.ID, nil)
 		if err != nil {
-			return nil
+			continue
 		}
+		eventGroups = append(eventGroups, calendarEvents{
+			calendarID: cal.ID,
+			events:     events,
+		})
+	}
 
-		for i := range calendars {
-			cal := &calendars[i]
-			events, err := s.nylasClient.GetEvents(ctx, grantID, cal.ID, nil)
-			if err != nil {
-				continue
-			}
-
-			for j := range events {
-				cached := domainEventToCached(&events[j], cal.ID)
+	_ = s.withEventStore(email, func(store *cache.EventStore) error {
+		for _, group := range eventGroups {
+			for i := range group.events {
+				cached := domainEventToCached(&group.events[i], group.calendarID)
 				_ = store.Put(cached)
 			}
 		}
-
 		return nil
 	})
 }
 
 // syncContacts syncs contacts from the API to cache.
 func (s *Server) syncContacts(ctx context.Context, email, grantID string) {
-	_ = s.withContactStore(email, func(store *cache.ContactStore) error {
-		contacts, err := s.nylasClient.GetContacts(ctx, grantID, nil)
-		if err != nil {
-			return nil
-		}
+	if s.nylasClient == nil || !s.hasCacheRuntime() {
+		return
+	}
 
+	contacts, err := s.nylasClient.GetContacts(ctx, grantID, nil)
+	if err != nil {
+		return
+	}
+
+	_ = s.withContactStore(email, func(store *cache.ContactStore) error {
 		for i := range contacts {
 			cached := domainContactToCached(&contacts[i])
 			_ = store.Put(cached)
