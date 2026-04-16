@@ -469,15 +469,16 @@ func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 
 	<-fetchStarted
 
-	lockAcquired := make(chan struct{})
+	lockReleased := make(chan struct{})
 	go func() {
 		server.runtimeMu.Lock()
-		close(lockAcquired)
+		_ = server.cacheManager
 		server.runtimeMu.Unlock()
+		close(lockReleased)
 	}()
 
 	select {
-	case <-lockAcquired:
+	case <-lockReleased:
 	case <-time.After(2 * time.Second):
 		t.Fatal("runtime lock remained blocked while remote fetch was in progress")
 	}
