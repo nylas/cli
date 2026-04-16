@@ -72,7 +72,7 @@ func NewServer(addr string) *Server {
 // initCacheRuntime initializes runtime cache components for the server.
 // This is intentionally deferred until Start() so NewServer remains lightweight.
 func (s *Server) initCacheRuntime() {
-	if s.demoMode || s.cacheManager != nil {
+	if s.demoMode || s.hasCacheRuntime() {
 		return
 	}
 
@@ -274,7 +274,7 @@ func (s *Server) Start() error {
 	s.initCacheRuntime()
 
 	// Start background sync if cache is available and enabled.
-	if !s.demoMode && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
+	if !s.demoMode {
 		s.startBackgroundSync()
 	}
 
@@ -301,15 +301,22 @@ func (s *Server) Start() error {
 
 // Stop gracefully stops the server and background processes.
 func (s *Server) Stop() error {
-	// Signal background sync to stop
-	close(s.syncStopCh)
+	s.stopBackgroundSync()
 
-	// Wait for sync goroutines to finish
-	s.syncWg.Wait()
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
 
-	// Close cache manager
+	if s.photoStore != nil {
+		if err := s.photoStore.Close(); err != nil {
+			return err
+		}
+		s.photoStore = nil
+	}
+
 	if s.cacheManager != nil {
-		return s.cacheManager.Close()
+		err := s.cacheManager.Close()
+		s.cacheManager = nil
+		return err
 	}
 
 	return nil
@@ -329,7 +336,7 @@ func (s *Server) SetOnline(online bool) {
 	s.onlineMu.Unlock()
 
 	// If coming back online, process offline queue
-	if online && s.cacheManager != nil {
+	if online && s.hasCacheRuntime() {
 		s.processOfflineQueues()
 	}
 }

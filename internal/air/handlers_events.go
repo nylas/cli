@@ -52,25 +52,28 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	accountEmail := s.getAccountEmail(grantID)
 
 	// Try cache first (only for first page)
-	if cursor == "" && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getEventStore(accountEmail); err == nil {
-			cacheOpts := cache.EventListOptions{
-				CalendarID: calendarID,
-				Start:      time.Unix(params.Start, 0),
-				End:        time.Unix(params.End, 0),
-				Limit:      params.Limit,
+	if cursor == "" && s.cacheAvailable() {
+		cacheOpts := cache.EventListOptions{
+			CalendarID: calendarID,
+			Start:      time.Unix(params.Start, 0),
+			End:        time.Unix(params.End, 0),
+			Limit:      params.Limit,
+		}
+		var cached []*cache.CachedEvent
+		if err := s.withEventStore(accountEmail, func(store *cache.EventStore) error {
+			var err error
+			cached, err = store.List(cacheOpts)
+			return err
+		}); err == nil && len(cached) > 0 {
+			resp := EventsResponse{
+				Events:  make([]EventResponse, 0, len(cached)),
+				HasMore: len(cached) >= params.Limit,
 			}
-			if cached, err := store.List(cacheOpts); err == nil && len(cached) > 0 {
-				resp := EventsResponse{
-					Events:  make([]EventResponse, 0, len(cached)),
-					HasMore: len(cached) >= params.Limit,
-				}
-				for _, e := range cached {
-					resp.Events = append(resp.Events, cachedEventToResponse(e))
-				}
-				writeJSON(w, http.StatusOK, resp)
-				return
+			for _, e := range cached {
+				resp.Events = append(resp.Events, cachedEventToResponse(e))
 			}
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
 	}
 

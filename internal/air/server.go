@@ -34,8 +34,11 @@ type Server struct {
 	photoStore      *cache.PhotoStore              // Contact photo cache
 	offlineQueues   map[string]*cache.OfflineQueue // Per-email offline queues
 	offlineQueuesMu sync.RWMutex                   // Protects offlineQueues
+	runtimeMu       sync.RWMutex                   // Protects runtime cache and photo store swaps
+	syncMu          sync.Mutex                     // Protects background sync lifecycle
 	syncStopCh      chan struct{}                  // Channel to stop background sync
 	syncWg          sync.WaitGroup                 // Wait group for sync goroutines
+	syncRunning     bool                           // Tracks whether background sync workers are running
 	isOnline        bool                           // Online status
 	onlineMu        sync.RWMutex                   // Protects isOnline
 

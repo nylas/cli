@@ -69,12 +69,15 @@ func (s *Server) handleListEmails(w http.ResponseWriter, r *http.Request) {
 	accountEmail := s.getAccountEmail(grantID)
 
 	// Try cache first (only for first page without complex filters)
-	if cursor == "" && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getEmailStore(accountEmail); err == nil {
-			if cached, err := s.queryCachedEmails(store, params, folderID, fromFilter, searchQuery); err == nil && len(cached) > 0 {
-				writeJSON(w, http.StatusOK, cachedEmailsToResponse(cached, params.Limit))
-				return
-			}
+	if cursor == "" && s.cacheAvailable() {
+		var cached []*cache.CachedEmail
+		if err := s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+			var err error
+			cached, err = s.queryCachedEmails(store, params, folderID, fromFilter, searchQuery)
+			return err
+		}); err == nil && len(cached) > 0 {
+			writeJSON(w, http.StatusOK, cachedEmailsToResponse(cached, params.Limit))
+			return
 		}
 	}
 
@@ -85,14 +88,17 @@ func (s *Server) handleListEmails(w http.ResponseWriter, r *http.Request) {
 	result, err := s.nylasClient.GetMessagesWithCursor(ctx, grantID, params)
 	if err != nil {
 		// If offline and cache available, try cache as fallback
-		if s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-			if store, storeErr := s.getEmailStore(accountEmail); storeErr == nil {
-				if cached, cacheErr := s.queryCachedEmails(store, params, folderID, fromFilter, searchQuery); cacheErr == nil && len(cached) > 0 {
-					resp := cachedEmailsToResponse(cached, params.Limit)
-					resp.HasMore = false
-					writeJSON(w, http.StatusOK, resp)
-					return
-				}
+		if s.cacheAvailable() {
+			var cached []*cache.CachedEmail
+			if storeErr := s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+				var cacheErr error
+				cached, cacheErr = s.queryCachedEmails(store, params, folderID, fromFilter, searchQuery)
+				return cacheErr
+			}); storeErr == nil && len(cached) > 0 {
+				resp := cachedEmailsToResponse(cached, params.Limit)
+				resp.HasMore = false
+				writeJSON(w, http.StatusOK, resp)
+				return
 			}
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -102,12 +108,13 @@ func (s *Server) handleListEmails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cache the results
-	if s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getEmailStore(accountEmail); err == nil {
+	if s.cacheAvailable() {
+		_ = s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
 			for i := range result.Data {
 				_ = store.Put(domainMessageToCached(&result.Data[i]))
 			}
-		}
+			return nil
+		})
 	}
 
 	// Convert to response format
@@ -168,14 +175,17 @@ func (s *Server) handleGetEmail(w http.ResponseWriter, r *http.Request, emailID 
 	accountEmail := s.getAccountEmail(grantID)
 
 	// Try cache first
-	if s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getEmailStore(accountEmail); err == nil {
-			if cached, err := store.Get(emailID); err == nil && cached != nil {
-				resp := cachedEmailToResponse(cached)
-				resp.Body = cached.BodyHTML // Include full body
-				writeJSON(w, http.StatusOK, resp)
-				return
-			}
+	if s.cacheAvailable() {
+		var cached *cache.CachedEmail
+		if err := s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+			var err error
+			cached, err = store.Get(emailID)
+			return err
+		}); err == nil && cached != nil {
+			resp := cachedEmailToResponse(cached)
+			resp.Body = cached.BodyHTML // Include full body
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
 	}
 
@@ -186,14 +196,17 @@ func (s *Server) handleGetEmail(w http.ResponseWriter, r *http.Request, emailID 
 	msg, err := s.nylasClient.GetMessage(ctx, grantID, emailID)
 	if err != nil {
 		// Try cache as fallback on error
-		if s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-			if store, storeErr := s.getEmailStore(accountEmail); storeErr == nil {
-				if cached, cacheErr := store.Get(emailID); cacheErr == nil && cached != nil {
-					resp := cachedEmailToResponse(cached)
-					resp.Body = cached.BodyHTML
-					writeJSON(w, http.StatusOK, resp)
-					return
-				}
+		if s.cacheAvailable() {
+			var cached *cache.CachedEmail
+			if storeErr := s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+				var cacheErr error
+				cached, cacheErr = store.Get(emailID)
+				return cacheErr
+			}); storeErr == nil && cached != nil {
+				resp := cachedEmailToResponse(cached)
+				resp.Body = cached.BodyHTML
+				writeJSON(w, http.StatusOK, resp)
+				return
 			}
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -203,10 +216,10 @@ func (s *Server) handleGetEmail(w http.ResponseWriter, r *http.Request, emailID 
 	}
 
 	// Cache the result
-	if s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getEmailStore(accountEmail); err == nil {
-			_ = store.Put(domainMessageToCached(msg))
-		}
+	if s.cacheAvailable() {
+		_ = s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+			return store.Put(domainMessageToCached(msg))
+		})
 	}
 
 	writeJSON(w, http.StatusOK, emailToResponse(*msg, true))
@@ -236,7 +249,7 @@ func (s *Server) handleUpdateEmail(w http.ResponseWriter, r *http.Request, email
 	}
 
 	if !s.IsOnline() {
-		if err := s.enqueueMessageUpdate(accountEmail, emailID, updateReq); err == nil {
+		if err := s.enqueueMessageUpdate(grantID, accountEmail, emailID, updateReq); err == nil {
 			s.updateCachedEmail(accountEmail, emailID, req.Unread, req.Starred, req.Folders)
 			writeJSON(w, http.StatusOK, UpdateEmailResponse{
 				Success: true,
@@ -249,7 +262,7 @@ func (s *Server) handleUpdateEmail(w http.ResponseWriter, r *http.Request, email
 	_, err := s.nylasClient.UpdateMessage(ctx, grantID, emailID, updateReq)
 	if err != nil {
 		if s.shouldQueueEmailAction(err) {
-			if queueErr := s.enqueueMessageUpdate(accountEmail, emailID, updateReq); queueErr == nil {
+			if queueErr := s.enqueueMessageUpdate(grantID, accountEmail, emailID, updateReq); queueErr == nil {
 				s.SetOnline(false)
 				s.updateCachedEmail(accountEmail, emailID, req.Unread, req.Starred, req.Folders)
 				writeJSON(w, http.StatusOK, UpdateEmailResponse{
@@ -287,7 +300,7 @@ func (s *Server) handleDeleteEmail(w http.ResponseWriter, r *http.Request, email
 	defer cancel()
 
 	if !s.IsOnline() {
-		if err := s.enqueueMessageDelete(accountEmail, emailID); err == nil {
+		if err := s.enqueueMessageDelete(grantID, accountEmail, emailID); err == nil {
 			s.deleteCachedEmail(accountEmail, emailID)
 			writeJSON(w, http.StatusOK, UpdateEmailResponse{
 				Success: true,
@@ -300,7 +313,7 @@ func (s *Server) handleDeleteEmail(w http.ResponseWriter, r *http.Request, email
 	err := s.nylasClient.DeleteMessage(ctx, grantID, emailID)
 	if err != nil {
 		if s.shouldQueueEmailAction(err) {
-			if queueErr := s.enqueueMessageDelete(accountEmail, emailID); queueErr == nil {
+			if queueErr := s.enqueueMessageDelete(grantID, accountEmail, emailID); queueErr == nil {
 				s.SetOnline(false)
 				s.deleteCachedEmail(accountEmail, emailID)
 				writeJSON(w, http.StatusOK, UpdateEmailResponse{
@@ -375,66 +388,56 @@ func (s *Server) shouldQueueEmailAction(err error) bool {
 }
 
 func (s *Server) offlineQueueEnabled() bool {
-	return s.cacheManager != nil &&
-		s.cacheSettings != nil &&
-		s.cacheSettings.Get().OfflineQueueEnabled
+	return s.offlineQueueConfigured()
 }
 
-func (s *Server) enqueueMessageUpdate(accountEmail, emailID string, updateReq *domain.UpdateMessageRequest) error {
+func (s *Server) enqueueMessageUpdate(grantID, accountEmail, emailID string, updateReq *domain.UpdateMessageRequest) error {
 	if accountEmail == "" || !s.offlineQueueEnabled() {
 		return errors.New("offline queue unavailable")
 	}
 
-	queue, err := s.getOfflineQueue(accountEmail)
-	if err != nil {
-		return err
-	}
-
-	return queue.Enqueue(cache.ActionUpdateMessage, emailID, cache.UpdateMessagePayload{
-		EmailID: emailID,
-		Unread:  updateReq.Unread,
-		Starred: updateReq.Starred,
-		Folders: updateReq.Folders,
+	return s.withOfflineQueue(accountEmail, func(queue *cache.OfflineQueue) error {
+		return queue.Enqueue(cache.ActionUpdateMessage, emailID, cache.UpdateMessagePayload{
+			GrantID: grantID,
+			EmailID: emailID,
+			Unread:  updateReq.Unread,
+			Starred: updateReq.Starred,
+			Folders: updateReq.Folders,
+		})
 	})
 }
 
-func (s *Server) enqueueMessageDelete(accountEmail, emailID string) error {
+func (s *Server) enqueueMessageDelete(grantID, accountEmail, emailID string) error {
 	if accountEmail == "" || !s.offlineQueueEnabled() {
 		return errors.New("offline queue unavailable")
 	}
 
-	queue, err := s.getOfflineQueue(accountEmail)
-	if err != nil {
-		return err
-	}
-
-	return queue.Enqueue(cache.ActionDelete, emailID, map[string]string{"email_id": emailID})
+	return s.withOfflineQueue(accountEmail, func(queue *cache.OfflineQueue) error {
+		return queue.Enqueue(cache.ActionDelete, emailID, cache.DeleteMessagePayload{
+			GrantID: grantID,
+			EmailID: emailID,
+		})
+	})
 }
 
 func (s *Server) updateCachedEmail(accountEmail, emailID string, unread, starred *bool, folders []string) {
-	if accountEmail == "" || s.cacheManager == nil || s.cacheSettings == nil || !s.cacheSettings.IsCacheEnabled() {
+	if accountEmail == "" || !s.cacheAvailable() {
 		return
 	}
 
-	store, err := s.getEmailStore(accountEmail)
-	if err != nil {
-		return
-	}
-
-	_ = store.UpdateMessage(emailID, unread, starred, folders)
+	_ = s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+		return store.UpdateMessage(emailID, unread, starred, folders)
+	})
 }
 
 func (s *Server) deleteCachedEmail(accountEmail, emailID string) {
-	if accountEmail == "" || s.cacheManager == nil || s.cacheSettings == nil || !s.cacheSettings.IsCacheEnabled() {
+	if accountEmail == "" || !s.cacheAvailable() {
 		return
 	}
 
-	store, err := s.getEmailStore(accountEmail)
-	if err != nil {
-		return
-	}
-
-	_ = store.Delete(emailID)
+	_ = s.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+		return store.Delete(emailID)
+	})
 }
 
 // emailToResponse converts a domain message to an API response.

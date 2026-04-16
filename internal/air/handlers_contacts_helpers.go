@@ -37,8 +37,16 @@ func (s *Server) handleContactPhoto(w http.ResponseWriter, r *http.Request, cont
 	}
 
 	// Try to serve from cache first
-	if s.photoStore != nil {
-		if imageData, contentType, err := s.photoStore.Get(contactID); err == nil && imageData != nil {
+	if s.hasPhotoStore() {
+		var (
+			imageData   []byte
+			contentType string
+		)
+		if err := s.withPhotoStore(func(store *cache.PhotoStore) error {
+			var err error
+			imageData, contentType, err = store.Get(contactID)
+			return err
+		}); err == nil && imageData != nil {
 			w.Header().Set("Content-Type", contentType)
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 			w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
@@ -106,8 +114,10 @@ func (s *Server) handleContactPhoto(w http.ResponseWriter, r *http.Request, cont
 	}
 
 	// Cache the photo for future requests (30 days)
-	if s.photoStore != nil {
-		_ = s.photoStore.Put(contactID, contentType, imageData)
+	if s.hasPhotoStore() {
+		_ = s.withPhotoStore(func(store *cache.PhotoStore) error {
+			return store.Put(contactID, contentType, imageData)
+		})
 	}
 
 	// Set headers and write image

@@ -351,3 +351,103 @@ func TestInitCacheRuntime_UsesEncryptedManagerWhenEnabled(t *testing.T) {
 		t.Fatalf("expected encrypted cache manager, got %T", server.cacheManager)
 	}
 }
+
+func TestReconfigureCacheRuntime_WaitsForInFlightCacheAccess(t *testing.T) {
+	t.Parallel()
+
+	server, _, accountEmail := newCachedTestServer(t)
+	server.nylasClient = nil
+	server.SetOnline(false)
+	putCachedEmail(t, server, accountEmail, &cache.CachedEmail{
+		ID:        "email-1",
+		FolderID:  "inbox",
+		Subject:   "Hello",
+		FromEmail: "sender@example.com",
+		Date:      time.Now(),
+		CachedAt:  time.Now(),
+	})
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	accessDone := make(chan error, 1)
+	go func() {
+		accessDone <- server.withEmailStore(accountEmail, func(store *cache.EmailStore) error {
+			close(entered)
+			<-release
+			_, err := store.Get("email-1")
+			return err
+		})
+	}()
+
+	<-entered
+
+	reconfigureDone := make(chan error, 1)
+	go func() {
+		reconfigureDone <- server.reconfigureCacheRuntime()
+	}()
+
+	select {
+	case err := <-reconfigureDone:
+		t.Fatalf("reconfigure returned before in-flight access completed: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+
+	if err := <-accessDone; err != nil {
+		t.Fatalf("in-flight cache access failed: %v", err)
+	}
+	if err := <-reconfigureDone; err != nil {
+		t.Fatalf("reconfigure cache runtime: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+}
+
+func TestProcessOfflineQueues_UsesQueuedGrantID(t *testing.T) {
+	t.Parallel()
+
+	server, client, accountEmail := newCachedTestServer(t)
+	server.SetOnline(false)
+
+	if err := server.enqueueMessageDelete("grant-123", accountEmail, "email-1"); err != nil {
+		t.Fatalf("enqueue delete: %v", err)
+	}
+
+	grantStore := server.grantStore.(*testGrantStore)
+	grantStore.grants = []domain.GrantInfo{
+		{
+			ID:       "grant-other",
+			Email:    accountEmail,
+			Provider: domain.ProviderGoogle,
+		},
+		{
+			ID:       "grant-123",
+			Email:    accountEmail,
+			Provider: domain.ProviderGoogle,
+		},
+	}
+
+	server.SetOnline(true)
+
+	if !client.DeleteMessageCalled {
+		t.Fatal("expected DeleteMessage to be replayed")
+	}
+	if client.LastGrantID != "grant-123" {
+		t.Fatalf("expected replay to use queued grant grant-123, got %s", client.LastGrantID)
+	}
+
+	queue, err := server.getOfflineQueue(accountEmail)
+	if err != nil {
+		t.Fatalf("get offline queue: %v", err)
+	}
+	count, err := queue.Count()
+	if err != nil {
+		t.Fatalf("queue count: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected queue to be drained, got %d pending action(s)", count)
+	}
+}

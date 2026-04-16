@@ -73,6 +73,8 @@ func (s *Server) reconfigureCacheRuntime() error {
 		return nil
 	}
 
+	s.stopBackgroundSync()
+
 	cacheCfg := cache.DefaultConfig()
 	if basePath := s.cacheSettings.BasePath(); basePath != "" {
 		cacheCfg.BasePath = basePath
@@ -80,66 +82,85 @@ func (s *Server) reconfigureCacheRuntime() error {
 	cacheCfg = s.cacheSettings.ToConfig(cacheCfg.BasePath)
 	encCfg := s.cacheSettings.ToEncryptionConfig()
 
+	s.runtimeMu.Lock()
+
+	if s.photoStore != nil {
+		if err := s.photoStore.Close(); err != nil {
+			return fmt.Errorf("close existing photo store: %w", err)
+		}
+		s.photoStore = nil
+	}
+
 	if s.cacheManager != nil {
 		if err := s.cacheManager.Close(); err != nil {
 			return fmt.Errorf("close existing cache manager: %w", err)
 		}
 		s.cacheManager = nil
 	}
+	s.clearOfflineQueues()
 
 	if !s.cacheSettings.IsCacheEnabled() {
-		s.clearOfflineQueues()
+		s.runtimeMu.Unlock()
 		return nil
 	}
 
 	if err := migrateCacheEncryption(cacheCfg.BasePath, encCfg.Enabled); err != nil {
+		s.runtimeMu.Unlock()
 		return err
 	}
 
 	cacheManager, err := newCacheRuntimeManager(cacheCfg, encCfg)
 	if err != nil {
+		s.runtimeMu.Unlock()
 		return fmt.Errorf("initialize cache manager: %w", err)
 	}
 	s.cacheManager = cacheManager
 
-	if err := s.ensurePhotoStore(cacheCfg.BasePath); err != nil {
+	photoStore, err := openPhotoStore(cacheCfg.BasePath)
+	if err != nil {
+		_ = cacheManager.Close()
+		s.cacheManager = nil
+		s.runtimeMu.Unlock()
 		return err
 	}
+	s.photoStore = photoStore
 
 	if s.cacheSettings.Get().OfflineQueueEnabled {
-		if err := s.initializeOfflineQueues(); err != nil {
+		if err := s.initializeOfflineQueuesLocked(); err != nil {
+			_ = s.photoStore.Close()
+			s.photoStore = nil
+			_ = cacheManager.Close()
+			s.cacheManager = nil
+			s.runtimeMu.Unlock()
 			return err
 		}
-	} else {
-		s.clearOfflineQueues()
 	}
+
+	s.runtimeMu.Unlock()
+
+	go prunePhotoStore(photoStore)
+	s.startBackgroundSync()
 
 	return nil
 }
 
-func (s *Server) ensurePhotoStore(basePath string) error {
-	if s.photoStore != nil {
-		return nil
-	}
-
+func openPhotoStore(basePath string) (*cache.PhotoStore, error) {
 	photoDB, err := cache.OpenSharedDB(basePath, "photos.db")
 	if err != nil {
-		return fmt.Errorf("open photo database: %w", err)
+		return nil, fmt.Errorf("open photo database: %w", err)
 	}
 
 	photoStore, err := cache.NewPhotoStore(photoDB, basePath, cache.DefaultPhotoTTL)
 	if err != nil {
 		_ = photoDB.Close()
-		return fmt.Errorf("initialize photo store: %w", err)
+		return nil, fmt.Errorf("initialize photo store: %w", err)
 	}
-	s.photoStore = photoStore
 
-	// Prune expired photos asynchronously after startup.
-	go func() {
-		if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
-			fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
-		}
-	}()
+	return photoStore, nil
+}
 
-	return nil
+func prunePhotoStore(photoStore *cache.PhotoStore) {
+	if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
+	}
 }

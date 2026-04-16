@@ -52,23 +52,26 @@ func (s *Server) handleListContacts(w http.ResponseWriter, r *http.Request) {
 	accountEmail := s.getAccountEmail(grantID)
 
 	// Try cache first (only for first page without complex filters)
-	if cursor == "" && params.Email == "" && params.Source == "" && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getContactStore(accountEmail); err == nil {
-			cacheOpts := cache.ContactListOptions{
-				Group: group,
-				Limit: params.Limit,
+	if cursor == "" && params.Email == "" && params.Source == "" && s.cacheAvailable() {
+		cacheOpts := cache.ContactListOptions{
+			Group: group,
+			Limit: params.Limit,
+		}
+		var cached []*cache.CachedContact
+		if err := s.withContactStore(accountEmail, func(store *cache.ContactStore) error {
+			var err error
+			cached, err = store.List(cacheOpts)
+			return err
+		}); err == nil && len(cached) > 0 {
+			resp := ContactsResponse{
+				Contacts: make([]ContactResponse, 0, len(cached)),
+				HasMore:  len(cached) >= params.Limit,
 			}
-			if cached, err := store.List(cacheOpts); err == nil && len(cached) > 0 {
-				resp := ContactsResponse{
-					Contacts: make([]ContactResponse, 0, len(cached)),
-					HasMore:  len(cached) >= params.Limit,
-				}
-				for _, c := range cached {
-					resp.Contacts = append(resp.Contacts, cachedContactToResponse(c))
-				}
-				writeJSON(w, http.StatusOK, resp)
-				return
+			for _, c := range cached {
+				resp.Contacts = append(resp.Contacts, cachedContactToResponse(c))
 			}
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
 	}
 

@@ -1,11 +1,15 @@
 package air
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/nylas/cli/internal/air/cache"
+	"github.com/nylas/cli/internal/domain"
 )
 
 // ================================
@@ -312,5 +316,122 @@ func TestHandleCacheClear_WithEmail(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestUpdateCacheSettings_EnableCacheStartsBackgroundSync(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	settings, err := cache.LoadSettings(tmpDir)
+	if err != nil {
+		t.Fatalf("load settings: %v", err)
+	}
+	if err := settings.Update(func(cfg *cache.Settings) {
+		cfg.Enabled = false
+		cfg.SyncIntervalMinutes = 5
+	}); err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	server := &Server{
+		cacheSettings: settings,
+		grantStore: &testGrantStore{
+			grants: []domain.GrantInfo{{
+				ID:       "grant-123",
+				Email:    "user@example.com",
+				Provider: domain.ProviderGoogle,
+			}},
+			defaultGrant: "grant-123",
+		},
+		offlineQueues: make(map[string]*cache.OfflineQueue),
+		isOnline:      false,
+	}
+	t.Cleanup(func() {
+		_ = server.Stop()
+	})
+
+	body, err := json.Marshal(CacheSettingsResponse{
+		Enabled:             true,
+		MaxSizeMB:           settings.Get().MaxSizeMB,
+		TTLDays:             settings.Get().TTLDays,
+		SyncIntervalMinutes: 5,
+		OfflineQueueEnabled: settings.Get().OfflineQueueEnabled,
+		EncryptionEnabled:   settings.Get().EncryptionEnabled,
+		Theme:               settings.Get().Theme,
+		DefaultView:         settings.Get().DefaultView,
+		CompactMode:         settings.Get().CompactMode,
+		PreviewPosition:     settings.Get().PreviewPosition,
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/cache/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.updateCacheSettings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	if !server.hasCacheRuntime() {
+		t.Fatal("expected cache runtime to be initialized")
+	}
+	if !server.syncRunning {
+		t.Fatal("expected background sync to start after enabling cache")
+	}
+}
+
+func TestUpdateCacheSettings_SyncIntervalRestartChangesWorkerChannel(t *testing.T) {
+	t.Parallel()
+
+	server, _, _ := newCachedTestServer(t)
+	server.nylasClient = nil
+	server.SetOnline(false)
+	server.startBackgroundSync()
+	t.Cleanup(func() {
+		server.stopBackgroundSync()
+	})
+
+	if !server.syncRunning {
+		t.Fatal("expected background sync to be running")
+	}
+
+	current := server.cacheSettings.Get()
+	body, err := json.Marshal(CacheSettingsResponse{
+		Enabled:             current.Enabled,
+		MaxSizeMB:           current.MaxSizeMB,
+		TTLDays:             current.TTLDays,
+		SyncIntervalMinutes: current.SyncIntervalMinutes + 5,
+		OfflineQueueEnabled: current.OfflineQueueEnabled,
+		EncryptionEnabled:   current.EncryptionEnabled,
+		Theme:               current.Theme,
+		DefaultView:         current.DefaultView,
+		CompactMode:         current.CompactMode,
+		PreviewPosition:     current.PreviewPosition,
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/cache/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.updateCacheSettings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	if !server.syncRunning {
+		t.Fatal("expected background sync to remain running")
+	}
+	if server.syncStopCh == nil {
+		t.Fatal("expected restarted background sync to have a stop channel")
+	}
+	if got := server.cacheSettings.Get().SyncIntervalMinutes; got != current.SyncIntervalMinutes+5 {
+		t.Fatalf("expected sync interval to update to %d, got %d", current.SyncIntervalMinutes+5, got)
 	}
 }
