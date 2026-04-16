@@ -30,6 +30,12 @@
     letter-spacing: var(--tracking-tight);
 }
 
+.list-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
 /* Filter Tabs */
 .filter-tabs {
     display: flex;
@@ -83,6 +89,12 @@
 .filter-tab.active .filter-count {
     background: var(--accent);
     color: white;
+}
+
+.email-view-switch {
+    padding: 8px 14px;
+    font-size: var(--text-xs);
+    white-space: nowrap;
 }
 
 /* Email List Container */

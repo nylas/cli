@@ -109,6 +109,7 @@
             {{template "calendar-view" .}}
             {{template "contacts-view" .}}
             {{template "notetaker-view" .}}
+            {{if eq .Provider "nylas"}}{{template "rules-policy-view" .}}{{end}}
         </main>
 
         {{template "status-bar" .}}
@@ -131,6 +132,7 @@
     <script src="/js/api-calendar.js"></script>
     <script src="/js/api-contacts.js"></script>
     <script src="/js/api-productivity.js"></script>
+    <script src="/js/api-agent.js"></script>
     <script src="/js/api-init.js"></script>
 
     <!-- 3. Domain modules -->
@@ -173,6 +175,7 @@
     <script src="/js/notetaker-ui.js"></script>
     <script src="/js/notetaker-actions.js"></script>
     <script src="/js/notetaker-standalone.js"></script>
+    <script src="/js/rules-policy.js"></script>
 
     <!-- 4. Productivity features -->
     <script src="/js/productivity.js"></script>

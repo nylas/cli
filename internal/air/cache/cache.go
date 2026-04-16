@@ -92,6 +92,15 @@ func sanitizeEmail(email string) string {
 	return safe + ".db"
 }
 
+func isAccountDBFile(name string) bool {
+	if !strings.HasSuffix(name, ".db") || strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") {
+		return false
+	}
+
+	// Shared databases are not per-account caches.
+	return name != "photos.db"
+}
+
 // DBPath returns the database path for an email.
 func (m *Manager) DBPath(email string) string {
 	return filepath.Join(m.basePath, sanitizeEmail(email))
@@ -240,7 +249,7 @@ func (m *Manager) ListCachedAccounts() ([]string, error) {
 	var emails []string
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasSuffix(name, ".db") && !strings.HasSuffix(name, "-wal") && !strings.HasSuffix(name, "-shm") {
+		if isAccountDBFile(name) {
 			email := strings.TrimSuffix(name, ".db")
 			emails = append(emails, email)
 		}

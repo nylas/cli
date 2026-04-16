@@ -106,24 +106,24 @@ test.describe('Compose Modal', () => {
   test('can fill compose form', async ({ page }) => {
     await page.click(selectors.email.composeBtn);
     await expect(page.locator(selectors.compose.modal)).toBeVisible();
+    await expect(page.locator(selectors.compose.to)).toBeFocused();
+
+    const toField = page.locator(selectors.compose.to);
+    const subjectField = page.locator(selectors.compose.subject);
+    const bodyField = page.locator(selectors.compose.body);
 
     // Fill To field
-    await page.fill(selectors.compose.to, 'test@example.com');
-    await expect(page.locator(selectors.compose.to)).toHaveValue(
-      'test@example.com'
-    );
+    await toField.fill('test@example.com');
+    await expect(toField).toHaveValue('test@example.com');
 
     // Fill Subject field
-    await page.fill(selectors.compose.subject, 'Test Subject');
-    await expect(page.locator(selectors.compose.subject)).toHaveValue(
-      'Test Subject'
-    );
+    await subjectField.click();
+    await subjectField.fill('Test Subject');
+    await expect(subjectField).toHaveValue('Test Subject');
 
     // Fill Body field
-    await page.fill(selectors.compose.body, 'This is a test email body.');
-    await expect(page.locator(selectors.compose.body)).toHaveValue(
-      'This is a test email body.'
-    );
+    await bodyField.fill('This is a test email body.');
+    await expect(bodyField).toHaveValue('This is a test email body.');
   });
 
   test('send button shows keyboard shortcut', async ({ page }) => {

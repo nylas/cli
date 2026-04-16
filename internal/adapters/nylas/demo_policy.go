@@ -13,6 +13,7 @@ func (d *DemoClient) ListPolicies(ctx context.Context) ([]domain.Policy, error) 
 			Name:           "Demo Policy",
 			ApplicationID:  "app-demo",
 			OrganizationID: "org-demo",
+			Rules:          []string{"rule-demo-1"},
 		},
 	}, nil
 }
@@ -23,6 +24,7 @@ func (d *DemoClient) GetPolicy(ctx context.Context, policyID string) (*domain.Po
 		Name:           "Demo Policy",
 		ApplicationID:  "app-demo",
 		OrganizationID: "org-demo",
+		Rules:          []string{"rule-demo-1"},
 	}, nil
 }
 
@@ -33,6 +35,7 @@ func (d *DemoClient) CreatePolicy(ctx context.Context, payload map[string]any) (
 		Name:           name,
 		ApplicationID:  "app-demo",
 		OrganizationID: "org-demo",
+		Rules:          []string{"rule-demo-1"},
 	}, nil
 }
 
@@ -43,6 +46,7 @@ func (d *DemoClient) UpdatePolicy(ctx context.Context, policyID string, payload 
 		Name:           name,
 		ApplicationID:  "app-demo",
 		OrganizationID: "org-demo",
+		Rules:          []string{"rule-demo-1"},
 	}, nil
 }
 

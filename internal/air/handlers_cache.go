@@ -1,6 +1,8 @@
 package air
 
 import (
+	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -103,10 +105,13 @@ func (s *Server) handleCacheStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get stats for each account
-	if s.cacheManager != nil {
-		accounts, _ := s.cacheManager.ListCachedAccounts()
+	_ = s.withCacheManager(func(manager cacheRuntimeManager) error {
+		accounts, err := manager.ListCachedAccounts()
+		if err != nil {
+			return err
+		}
 		for _, email := range accounts {
-			stats, err := s.cacheManager.GetStats(email)
+			stats, err := manager.GetStats(email)
 			if err != nil {
 				continue
 			}
@@ -130,12 +135,16 @@ func (s *Server) handleCacheStatus(w http.ResponseWriter, r *http.Request) {
 				response.LastSync = info.LastSync
 			}
 		}
-	}
+		return nil
+	})
 
 	// Count pending actions across all queues
-	for _, queue := range s.offlineQueues {
-		count, _ := queue.Count()
-		response.PendingActions += count
+	for _, email := range s.offlineQueueEmails() {
+		_ = s.withOfflineQueue(email, func(queue *cache.OfflineQueue) error {
+			count, _ := queue.Count()
+			response.PendingActions += count
+			return nil
+		})
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -150,7 +159,7 @@ func (s *Server) handleCacheSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.cacheManager == nil {
+	if !s.hasCacheRuntime() {
 		writeJSON(w, http.StatusOK, CacheSyncResponse{
 			Success: false,
 			Error:   "Cache not initialized",
@@ -195,7 +204,7 @@ func (s *Server) handleCacheSync(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, CacheSyncResponse{
 		Success: true,
-		Message: "Synced " + string(rune('0'+synced)) + " account(s)",
+		Message: fmt.Sprintf("Synced %d account(s)", synced),
 	})
 }
 
@@ -208,7 +217,7 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.cacheManager == nil {
+	if !s.hasCacheRuntime() {
 		writeJSON(w, http.StatusOK, CacheSyncResponse{
 			Success: false,
 			Error:   "Cache not initialized",
@@ -221,24 +230,30 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 
 	if email != "" {
 		// Clear single account
-		if err := s.cacheManager.ClearCache(email); err != nil {
+		if err := s.withCacheManager(func(manager cacheRuntimeManager) error {
+			return manager.ClearCache(email)
+		}); err != nil {
 			writeJSON(w, http.StatusOK, CacheSyncResponse{
 				Success: false,
 				Error:   "Failed to clear cache: " + err.Error(),
 			})
 			return
 		}
+		s.offlineQueuesMu.Lock()
 		delete(s.offlineQueues, email)
+		s.offlineQueuesMu.Unlock()
 	} else {
 		// Clear all accounts
-		if err := s.cacheManager.ClearAllCaches(); err != nil {
+		if err := s.withCacheManager(func(manager cacheRuntimeManager) error {
+			return manager.ClearAllCaches()
+		}); err != nil {
 			writeJSON(w, http.StatusOK, CacheSyncResponse{
 				Success: false,
 				Error:   "Failed to clear cache: " + err.Error(),
 			})
 			return
 		}
-		s.offlineQueues = make(map[string]*cache.OfflineQueue)
+		s.clearOfflineQueues()
 	}
 
 	writeJSON(w, http.StatusOK, CacheSyncResponse{
@@ -275,7 +290,7 @@ func (s *Server) handleCacheSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.cacheManager == nil {
+	if !s.hasCacheRuntime() {
 		writeJSON(w, http.StatusOK, CacheSearchResponse{
 			Results: []CacheSearchResult{},
 			Query:   query,
@@ -295,19 +310,12 @@ func (s *Server) handleCacheSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := s.cacheManager.GetDB(email)
-	if err != nil {
-		writeJSON(w, http.StatusOK, CacheSearchResponse{
-			Results: []CacheSearchResult{},
-			Query:   query,
-			Total:   0,
-		})
-		return
-	}
-
-	// Perform unified search
-	results, err := cache.UnifiedSearch(db, query, 20)
-	if err != nil {
+	var results []*cache.UnifiedSearchResult
+	if err := s.withAccountDB(email, func(db *sql.DB) error {
+		var err error
+		results, err = cache.UnifiedSearch(db, query, 20)
+		return err
+	}); err != nil {
 		writeJSON(w, http.StatusOK, CacheSearchResponse{
 			Results: []CacheSearchResult{},
 			Query:   query,
@@ -400,6 +408,8 @@ func (s *Server) updateCacheSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	current := s.cacheSettings.Get()
+
 	// Update settings
 	err := s.cacheSettings.Update(func(s *cache.Settings) {
 		s.Enabled = req.Enabled
@@ -420,6 +430,38 @@ func (s *Server) updateCacheSettings(w http.ResponseWriter, r *http.Request) {
 			"error":   "Failed to save settings: " + err.Error(),
 		})
 		return
+	}
+
+	if current.Enabled != req.Enabled ||
+		current.OfflineQueueEnabled != req.OfflineQueueEnabled ||
+		current.EncryptionEnabled != req.EncryptionEnabled {
+		if err := s.reconfigureCacheRuntime(); err != nil {
+			_ = s.cacheSettings.Update(func(settings *cache.Settings) {
+				settings.Enabled = current.Enabled
+				settings.MaxSizeMB = current.MaxSizeMB
+				settings.TTLDays = current.TTLDays
+				settings.SyncIntervalMinutes = current.SyncIntervalMinutes
+				settings.OfflineQueueEnabled = current.OfflineQueueEnabled
+				settings.EncryptionEnabled = current.EncryptionEnabled
+				settings.Theme = current.Theme
+				settings.DefaultView = current.DefaultView
+				settings.CompactMode = current.CompactMode
+				settings.PreviewPosition = current.PreviewPosition
+			})
+			_ = s.reconfigureCacheRuntime()
+			writeJSON(w, http.StatusOK, map[string]any{
+				"success": false,
+				"error":   "Failed to apply runtime settings: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	if current.SyncIntervalMinutes != req.SyncIntervalMinutes &&
+		current.Enabled == req.Enabled &&
+		current.OfflineQueueEnabled == req.OfflineQueueEnabled &&
+		current.EncryptionEnabled == req.EncryptionEnabled {
+		s.restartBackgroundSync()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

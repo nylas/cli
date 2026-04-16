@@ -17,6 +17,9 @@ exports.nav = {
   settingsBtn: '.settings-btn',
   accountSwitcher: '[data-testid="account-switcher"]',
   accountDropdown: '#accountDropdown',
+  currentAccountEmail: '[data-testid="current-account-email"]',
+  currentAccountProvider: '[data-testid="current-account-provider"]',
+  accountDropdownEmail: '[data-testid="account-dropdown-email"]',
 };
 
 // Views
@@ -25,6 +28,7 @@ exports.views = {
   calendar: '[data-testid="calendar-view"]',
   contacts: '[data-testid="contacts-view"]',
   notetaker: '#notetakerView',
+  rulesPolicy: '[data-testid="rules-policy-view"]',
 };
 
 // Email View
@@ -42,6 +46,7 @@ exports.email = {
   emptyState: '.empty-state',
   filterTabs: '#emailFilterTabs',
   filterTab: '.filter-tab',
+  policyRulesTrigger: '[data-testid="email-policy-rules-trigger"]',
 };
 
 // Compose Modal

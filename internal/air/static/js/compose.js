@@ -90,10 +90,11 @@ const ComposeManager = {
         els.modal.classList.add('active');
         els.modal.setAttribute('aria-hidden', 'false');
 
-        // Focus first input
-        setTimeout(() => {
-            if (els.to) els.to.focus();
-        }, 100);
+        // Focus the primary recipient field immediately so keyboard input
+        // doesn't race against a delayed autofocus timer.
+        if (els.to) {
+            els.to.focus();
+        }
     },
 
     openReply(email) {

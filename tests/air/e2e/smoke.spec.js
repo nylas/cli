@@ -2,6 +2,24 @@
 const { test, expect } = require('@playwright/test');
 const selectors = require('../../shared/helpers/air-selectors');
 
+async function switchToProvider(page, providerName) {
+  await page.locator(selectors.nav.accountSwitcher).click();
+  const item = page
+    .locator(`#accountDropdown .account-dropdown-item:has(.account-dropdown-provider:has-text("${providerName}"))`)
+    .first();
+
+  if ((await item.count()) === 0) {
+    return false;
+  }
+
+  const reloaded = page.waitForEvent('framenavigated');
+  await item.click();
+  await reloaded;
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.locator(selectors.general.app)).toBeVisible();
+  return true;
+}
+
 /**
  * Smoke tests for Nylas Air.
  *
@@ -59,6 +77,58 @@ test.describe('Smoke Tests', () => {
 
     // Settings button
     await expect(page.locator(selectors.nav.settingsBtn)).toBeVisible();
+  });
+
+  test('current account email is fully visible', async ({ page }) => {
+    const currentEmail = page.locator(selectors.nav.currentAccountEmail);
+    await expect(currentEmail).toBeVisible();
+    await expect(currentEmail).toContainText('@');
+
+    const currentFits = await currentEmail.evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1
+    );
+    expect(currentFits).toBeTruthy();
+
+    await page.locator(selectors.nav.accountSwitcher).click();
+
+    const dropdownEmail = page.locator(selectors.nav.accountDropdownEmail).first();
+    await expect(dropdownEmail).toBeVisible();
+
+    const dropdownFits = await dropdownEmail.evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1
+    );
+    expect(dropdownFits).toBeTruthy();
+  });
+
+  test('Policy & Rules is gated by provider and opens for Nylas accounts', async ({ page }) => {
+    const trigger = page.locator(selectors.email.policyRulesTrigger);
+    const provider = page.locator(selectors.nav.currentAccountProvider);
+
+    let providerText = ((await provider.textContent()) || '').trim();
+    if (!/nylas/i.test(providerText)) {
+      const switched = await switchToProvider(page, 'Nylas');
+      if (!switched) {
+        await expect(trigger).toHaveCount(0);
+        return;
+      }
+      providerText = ((await page.locator(selectors.nav.currentAccountProvider).textContent()) || '').trim();
+    }
+
+    await expect(provider).toContainText(/Nylas/i);
+    await expect(trigger).toBeVisible();
+
+    await trigger.click();
+    await expect(page.locator(selectors.views.rulesPolicy)).toBeVisible();
+    await expect(page.locator('[data-testid="rules-policy-back"]')).toBeVisible();
+
+    await page.locator('[data-testid="rules-policy-back"]').click();
+    await expect(page.locator(selectors.views.email)).toBeVisible();
+
+    const switchedToGoogle = await switchToProvider(page, 'Google');
+    if (switchedToGoogle) {
+      await expect(page.locator(selectors.nav.currentAccountProvider)).toContainText(/Google/i);
+      await expect(page.locator(selectors.email.policyRulesTrigger)).toHaveCount(0);
+    }
   });
 
   test('email view is the default active view', async ({ page }) => {

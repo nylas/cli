@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/nylas/cli/internal/air/cache"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -96,20 +97,22 @@ func (s *Server) handleContactSearch(w http.ResponseWriter, r *http.Request) {
 	accountEmail := s.getAccountEmail(grantID)
 
 	// Try cache search first
-	if q != "" && s.cacheManager != nil && s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() {
-		if store, err := s.getContactStore(accountEmail); err == nil {
-			cached, err := store.Search(q, params.Limit)
-			if err == nil && len(cached) > 0 {
-				resp := ContactsResponse{
-					Contacts: make([]ContactResponse, 0, len(cached)),
-					HasMore:  len(cached) >= params.Limit,
-				}
-				for _, c := range cached {
-					resp.Contacts = append(resp.Contacts, cachedContactToResponse(c))
-				}
-				writeJSON(w, http.StatusOK, resp)
-				return
+	if q != "" && s.cacheAvailable() {
+		var cached []*cache.CachedContact
+		if err := s.withContactStore(accountEmail, func(store *cache.ContactStore) error {
+			var err error
+			cached, err = store.Search(q, params.Limit)
+			return err
+		}); err == nil && len(cached) > 0 {
+			resp := ContactsResponse{
+				Contacts: make([]ContactResponse, 0, len(cached)),
+				HasMore:  len(cached) >= params.Limit,
 			}
+			for _, c := range cached {
+				resp.Contacts = append(resp.Contacts, cachedContactToResponse(c))
+			}
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
 	}
 

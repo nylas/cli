@@ -13,6 +13,7 @@ func (m *MockClient) ListPolicies(ctx context.Context) ([]domain.Policy, error) 
 			Name:           "Default Policy",
 			ApplicationID:  "app-123",
 			OrganizationID: "org-123",
+			Rules:          []string{"rule-1"},
 		},
 	}, nil
 }
@@ -23,6 +24,7 @@ func (m *MockClient) GetPolicy(ctx context.Context, policyID string) (*domain.Po
 		Name:           "Default Policy",
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
+		Rules:          []string{"rule-1"},
 	}, nil
 }
 
@@ -33,6 +35,7 @@ func (m *MockClient) CreatePolicy(ctx context.Context, payload map[string]any) (
 		Name:           name,
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
+		Rules:          []string{"rule-1"},
 	}, nil
 }
 
@@ -43,6 +46,7 @@ func (m *MockClient) UpdatePolicy(ctx context.Context, policyID string, payload 
 		Name:           name,
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
+		Rules:          []string{"rule-1"},
 	}, nil
 }
 

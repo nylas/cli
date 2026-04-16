@@ -207,6 +207,14 @@ func (s *PhotoStore) TotalSize() (int64, error) {
 	return size, err
 }
 
+// Close releases the underlying photo metadata database handle.
+func (s *PhotoStore) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
 // RemoveOrphaned removes photo files not referenced in database.
 func (s *PhotoStore) RemoveOrphaned() (int, error) {
 	// Get all known contact IDs

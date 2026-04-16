@@ -14,9 +14,12 @@
             // Skip shortcuts when modifier keys are pressed (allow Cmd+R refresh, etc.)
             if (!e.target.matches('input, textarea, [contenteditable]') && !e.metaKey && !e.ctrlKey && !e.altKey) {
                 if (e.key === 'c') { e.preventDefault(); toggleCompose(); }
-                if (e.key === '1') { document.querySelector('.nav-tab').click(); }
-                if (e.key === '2') { document.querySelectorAll('.nav-tab')[1].click(); }
-                if (e.key === '3') { document.querySelectorAll('.nav-tab')[2].click(); }
+                const shortcutTab = document.querySelector(`.nav-tab[data-shortcut="${e.key}"]`);
+                if (shortcutTab) {
+                    e.preventDefault();
+                    shortcutTab.click();
+                    return;
+                }
                 if (e.key === 'e') { showToast('success', 'Archived', 'Moved to archive'); }
                 if (e.key === 'r') {
                     // Reply to selected email

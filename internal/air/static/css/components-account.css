@@ -4,6 +4,7 @@
 
         .account-switcher-container {
             position: relative;
+            flex: 0 0 auto;
         }
 
         .account-provider {
@@ -18,7 +19,9 @@
             top: 100%;
             right: 0;
             margin-top: 8px;
-            min-width: 280px;
+            min-width: 320px;
+            width: max-content;
+            max-width: min(92vw, 480px);
             background: var(--bg-elevated);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -72,11 +75,13 @@
 
         .account-dropdown-info {
             flex: 1;
+            min-width: 0;
         }
 
         .account-dropdown-email {
             font-size: 13px;
             font-weight: 500;
+            overflow-wrap: anywhere;
         }
 
         .account-dropdown-provider {
@@ -92,6 +97,7 @@
             font-weight: 600;
             border-radius: 4px;
             text-transform: uppercase;
+            flex-shrink: 0;
         }
 
         .account-dropdown-divider {

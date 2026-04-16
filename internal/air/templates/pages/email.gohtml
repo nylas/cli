@@ -1,6 +1,6 @@
 {{define "email-view"}}
 <!-- Email View -->
-<div class="email-view active" id="emailView" role="tabpanel" aria-labelledby="email-tab" data-testid="email-view">
+<div class="email-view active" id="emailView" role="tabpanel" aria-labelledby="email-tab" data-air-view="email" data-testid="email-view">
     <!-- Sidebar -->
     <aside class="sidebar" role="complementary" aria-label="Email folders" data-testid="folder-sidebar">
         <button class="compose-btn" data-testid="compose-btn" onclick="toggleCompose()" aria-label="Compose new email">
@@ -25,10 +25,17 @@
     <div class="email-list-container" data-testid="email-list-container">
         <div class="list-header">
             <div class="list-title">Inbox</div>
-            <div class="filter-tabs" id="emailFilterTabs">
-                <div class="filter-tab active" data-filter="all">All</div>
-                <div class="filter-tab" data-filter="vip">VIP</div>
-                <div class="filter-tab" data-filter="unread">Unread</div>
+            <div class="list-header-actions">
+                <div class="filter-tabs" id="emailFilterTabs">
+                    <div class="filter-tab active" data-filter="all">All</div>
+                    <div class="filter-tab" data-filter="vip">VIP</div>
+                    <div class="filter-tab" data-filter="unread">Unread</div>
+                </div>
+                {{if eq .Provider "nylas"}}
+                <button class="btn-secondary email-view-switch" type="button" onclick="showView('rulesPolicy')" data-testid="email-policy-rules-trigger">
+                    Policy &amp; Rules
+                </button>
+                {{end}}
             </div>
         </div>
         <div class="email-list" data-testid="email-list">

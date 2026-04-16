@@ -76,7 +76,7 @@ func (s *Server) handleListGrants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Filter to only supported providers (Google, Microsoft)
+	// Filter to only providers supported by Air.
 	var grantList []Grant
 	for _, g := range grants {
 		if g.Provider.IsSupportedByAir() {

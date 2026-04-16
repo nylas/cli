@@ -66,6 +66,16 @@ type FoldersResponse struct {
 	Folders []FolderResponse `json:"folders"`
 }
 
+// PoliciesResponse represents the policy list API response.
+type PoliciesResponse struct {
+	Policies []domain.Policy `json:"policies"`
+}
+
+// RulesResponse represents the rule list API response.
+type RulesResponse struct {
+	Rules []domain.Rule `json:"rules"`
+}
+
 // EmailParticipantResponse represents an email participant.
 type EmailParticipantResponse struct {
 	Name  string `json:"name"`

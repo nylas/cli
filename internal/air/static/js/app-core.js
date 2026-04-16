@@ -68,6 +68,8 @@
 
         // View Switching
         function showView(view, event) {
+            const navView = view === 'rulesPolicy' ? 'email' : view;
+
             // Update nav tabs
             document.querySelectorAll('.nav-tab').forEach(tab => {
                 tab.classList.remove('active');
@@ -82,25 +84,17 @@
                     clickedTab.setAttribute('aria-selected', 'true');
                 }
             } else {
-                // Fallback: activate based on view name
-                const tabs = document.querySelectorAll('.nav-tab');
-                const viewIndex = view === 'email' ? 0 : view === 'calendar' ? 1 : 2;
-                if (tabs[viewIndex]) {
-                    tabs[viewIndex].classList.add('active');
-                    tabs[viewIndex].setAttribute('aria-selected', 'true');
+                const fallbackTab = document.querySelector(`.nav-tab[data-view="${navView}"]`);
+                if (fallbackTab) {
+                    fallbackTab.classList.add('active');
+                    fallbackTab.setAttribute('aria-selected', 'true');
                 }
             }
 
             // Hide all views
-            const emailView = document.getElementById('emailView');
-            const calendarView = document.getElementById('calendarView');
-            const contactsView = document.getElementById('contactsView');
-            const notetakerView = document.getElementById('notetakerView');
-
-            if (emailView) emailView.classList.remove('active');
-            if (calendarView) calendarView.classList.remove('active');
-            if (contactsView) contactsView.classList.remove('active');
-            if (notetakerView) notetakerView.classList.remove('active');
+            document.querySelectorAll('[data-air-view]').forEach((viewEl) => {
+                viewEl.classList.remove('active');
+            });
 
             // Show selected view
             const targetView = document.getElementById(view + 'View');
@@ -111,6 +105,9 @@
                 if (view === 'notetaker' && typeof NotetakerModule !== 'undefined') {
                     NotetakerModule.loadNotetakers();
                 }
+                if (view === 'rulesPolicy' && typeof RulesPolicyManager !== 'undefined') {
+                    RulesPolicyManager.loadAll();
+                }
             }
 
             // Update mobile nav if present
@@ -118,14 +115,21 @@
                 item.classList.remove('active');
             });
             const mobileNavItems = document.querySelectorAll('.mobile-nav-item');
-            const mobileIndex = view === 'email' ? 1 : view === 'calendar' ? 2 : 3;
+            const mobileIndex = navView === 'email' ? 1 : navView === 'calendar' ? 2 : 3;
             if (mobileNavItems[mobileIndex]) {
                 mobileNavItems[mobileIndex].classList.add('active');
             }
 
             // Announce view change for screen readers
             if (typeof announce === 'function') {
-                announce(`Switched to ${view} view`);
+                const labels = {
+                    email: 'Email',
+                    calendar: 'Calendar',
+                    contacts: 'Contacts',
+                    notetaker: 'Notetaker',
+                    rulesPolicy: 'Policy and Rules'
+                };
+                announce(`Switched to ${labels[view] || view} view`);
             }
 
             // Lazy load data for the view (only loads once)

@@ -123,7 +123,7 @@ func TestSyncAccountLoop_StopsOnChannel(t *testing.T) {
 	// Start the loop in a goroutine
 	done := make(chan struct{})
 	go func() {
-		server.syncAccountLoop("test@example.com", "grant-123")
+		server.syncAccountLoop(stopCh, "test@example.com", "grant-123")
 		close(done)
 	}()
 
@@ -185,31 +185,44 @@ func TestServer_SyncWaitGroup_Usage(t *testing.T) {
 	}
 }
 
-func TestServer_SyncStopChannel_Creation(t *testing.T) {
+func TestServer_SyncLifecycle_NoWorkers(t *testing.T) {
 	t.Parallel()
 
-	// Create stop channel
-	stopCh := make(chan struct{})
-	server := &Server{
-		syncStopCh: stopCh,
+	server := &Server{}
+	server.stopBackgroundSync()
+	server.restartBackgroundSync()
+}
+
+func TestRestartBackgroundSync_ReplacesStopChannel(t *testing.T) {
+	t.Parallel()
+
+	server, _, _ := newCachedTestServer(t)
+	server.nylasClient = nil
+	server.SetOnline(false)
+	server.startBackgroundSync()
+	t.Cleanup(func() {
+		server.stopBackgroundSync()
+	})
+
+	if !server.syncRunning {
+		t.Fatal("expected sync workers to be running")
 	}
 
-	// Channel should be open initially
-	select {
-	case <-server.syncStopCh:
-		t.Error("Channel should not be closed initially")
-	default:
-		// Expected - channel is open
+	initialStopCh := server.syncStopCh
+	server.restartBackgroundSync()
+
+	if !server.syncRunning {
+		t.Fatal("expected sync workers to remain running after restart")
 	}
-
-	// Close the channel
-	close(stopCh)
-
-	// Channel should now be closed
+	if server.syncStopCh == nil {
+		t.Fatal("expected restarted sync workers to have a stop channel")
+	}
+	if server.syncStopCh == initialStopCh {
+		t.Fatal("expected restart to replace the stop channel")
+	}
 	select {
-	case <-server.syncStopCh:
-		// Expected - channel is closed
+	case <-initialStopCh:
 	default:
-		t.Error("Channel should be closed after close()")
+		t.Fatal("expected restart to stop the previous workers")
 	}
 }

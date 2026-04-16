@@ -13,6 +13,7 @@ type ActionType string
 const (
 	ActionMarkRead      ActionType = "mark_read"
 	ActionMarkUnread    ActionType = "mark_unread"
+	ActionUpdateMessage ActionType = "update_message"
 	ActionStar          ActionType = "star"
 	ActionUnstar        ActionType = "unstar"
 	ActionArchive       ActionType = "archive"
@@ -256,20 +257,38 @@ func (a *QueuedAction) GetActionData(v any) error {
 
 // MarkReadPayload is the payload for mark read/unread actions.
 type MarkReadPayload struct {
+	GrantID string `json:"grant_id,omitempty"`
 	EmailID string `json:"email_id"`
 	Unread  bool   `json:"unread"`
 }
 
+// UpdateMessagePayload is the payload for a generic message update.
+type UpdateMessagePayload struct {
+	GrantID string   `json:"grant_id,omitempty"`
+	EmailID string   `json:"email_id"`
+	Unread  *bool    `json:"unread,omitempty"`
+	Starred *bool    `json:"starred,omitempty"`
+	Folders []string `json:"folders,omitempty"`
+}
+
 // StarPayload is the payload for star/unstar actions.
 type StarPayload struct {
+	GrantID string `json:"grant_id,omitempty"`
 	EmailID string `json:"email_id"`
 	Starred bool   `json:"starred"`
 }
 
 // MovePayload is the payload for move actions.
 type MovePayload struct {
+	GrantID  string `json:"grant_id,omitempty"`
 	EmailID  string `json:"email_id"`
 	FolderID string `json:"folder_id"`
+}
+
+// DeleteMessagePayload is the payload for delete actions.
+type DeleteMessagePayload struct {
+	GrantID string `json:"grant_id,omitempty"`
+	EmailID string `json:"email_id"`
 }
 
 // SendEmailPayload is the payload for send email actions.

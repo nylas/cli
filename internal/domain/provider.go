@@ -15,7 +15,7 @@ const (
 )
 
 // SupportedAirProviders lists providers supported by the Air web UI.
-var SupportedAirProviders = []Provider{ProviderGoogle, ProviderMicrosoft}
+var SupportedAirProviders = []Provider{ProviderGoogle, ProviderMicrosoft, ProviderNylas}
 
 // DisplayName returns the user-friendly name for the provider.
 func (p Provider) DisplayName() string {

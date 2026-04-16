@@ -1,0 +1,50 @@
+{{define "rules-policy-view"}}
+<!-- Policy & Rules View -->
+<div class="rules-policy-view" id="rulesPolicyView" data-air-view="rulesPolicy" data-testid="rules-policy-view" data-account-email="{{.UserEmail}}" data-grant-id="{{.DefaultGrantID}}">
+    <div class="rules-policy-page-header">
+        <div>
+            <div class="rules-policy-page-kicker">Email</div>
+            <h1 class="rules-policy-page-title">Policy &amp; Rules</h1>
+            <p class="rules-policy-page-subtitle">Mailbox controls exposed by this Nylas-managed account.</p>
+        </div>
+        <button class="btn-secondary" type="button" onclick="showView('email')" data-testid="rules-policy-back">
+            Back to Email
+        </button>
+    </div>
+    <div class="rules-policy-shell">
+        <section class="rules-policy-panel" aria-labelledby="policiesSectionTitle">
+            <div class="rules-policy-header">
+                <div>
+                    <h2 id="policiesSectionTitle" class="rules-policy-title">Policies</h2>
+                    <p class="rules-policy-subtitle">Managed mailbox policies available for this Nylas account.</p>
+                </div>
+                <button class="btn-secondary" type="button" onclick="RulesPolicyManager.refreshPolicies()">Refresh</button>
+            </div>
+            <div class="rules-policy-list" id="policyList">
+                <div class="empty-state">
+                    <div class="empty-icon">🛡️</div>
+                    <div class="empty-title">Policies load on demand</div>
+                    <div class="empty-message">Open this view on a Nylas-managed account to inspect active policies.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="rules-policy-panel" aria-labelledby="rulesSectionTitle">
+            <div class="rules-policy-header">
+                <div>
+                    <h2 id="rulesSectionTitle" class="rules-policy-title">Rules</h2>
+                    <p class="rules-policy-subtitle">Inbound processing rules configured for this Nylas account.</p>
+                </div>
+                <button class="btn-secondary" type="button" onclick="RulesPolicyManager.refreshRules()">Refresh</button>
+            </div>
+            <div class="rules-policy-list" id="ruleList">
+                <div class="empty-state">
+                    <div class="empty-icon">⚙️</div>
+                    <div class="empty-title">Rules load on demand</div>
+                    <div class="empty-message">Open this view on a Nylas-managed account to inspect active rules.</div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{{end}}
