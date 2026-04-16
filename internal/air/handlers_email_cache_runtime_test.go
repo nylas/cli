@@ -487,7 +487,12 @@ func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 
 	select {
 	case <-syncDone:
-	case <-time.After(5 * time.Second):
+		// Under -race on shared CI runners, sqlite writes after the fetch unblocks
+		// can take materially longer than the lock probe itself. The behavioral
+		// guarantee this test cares about is that the runtime lock is not held
+		// across the remote fetch, not that the full sync finishes within a tight
+		// local-only deadline.
+	case <-time.After(20 * time.Second):
 		t.Fatal("syncEmails did not finish after fetch was released")
 	}
 
