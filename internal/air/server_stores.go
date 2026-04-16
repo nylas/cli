@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nylas/cli/internal/air/cache"
+	"github.com/nylas/cli/internal/domain"
 )
 
 // requireDefaultGrant gets the default grant ID, writing an error response if not available.
@@ -19,6 +20,25 @@ func (s *Server) requireDefaultGrant(w http.ResponseWriter) (grantID string, ok 
 		return "", false
 	}
 	return grantID, true
+}
+
+// requireDefaultGrantInfo gets the default grant info, writing an error response if not available.
+// Returns the grant info and true if successful, or an empty grant and false if error written.
+func (s *Server) requireDefaultGrantInfo(w http.ResponseWriter) (grant domain.GrantInfo, ok bool) {
+	grantID, ok := s.requireDefaultGrant(w)
+	if !ok {
+		return domain.GrantInfo{}, false
+	}
+
+	info, err := s.grantStore.GetGrant(grantID)
+	if err != nil || info == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Default account is no longer available. Please choose another account.",
+		})
+		return domain.GrantInfo{}, false
+	}
+
+	return *info, true
 }
 
 // getEmailStore returns the email store for the given email account.

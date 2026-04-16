@@ -7,13 +7,13 @@
             <span>Nylas Air</span>
         </div>
         <div class="nav-tabs" role="tablist" aria-label="Application views">
-            <div class="nav-tab active" role="tab" aria-selected="true" tabindex="0" onclick="showView('email', event)" data-testid="nav-tab-email">
+            <div class="nav-tab active" role="tab" aria-selected="true" tabindex="0" onclick="showView('email', event)" data-view="email" data-shortcut="1" data-testid="nav-tab-email">
                 <span>Email</span>
                 {{if gt .UnreadCount 0}}<span class="badge"></span>{{end}}
             </div>
-            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('calendar', event)" data-testid="nav-tab-calendar">Calendar</div>
-            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('contacts', event)" data-testid="nav-tab-contacts">Contacts</div>
-            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('notetaker', event)">
+            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('calendar', event)" data-view="calendar" data-shortcut="2" data-testid="nav-tab-calendar">Calendar</div>
+            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('contacts', event)" data-view="contacts" data-shortcut="3" data-testid="nav-tab-contacts">Contacts</div>
+            <div class="nav-tab" role="tab" aria-selected="false" tabindex="0" onclick="showView('notetaker', event)" data-view="notetaker" data-shortcut="4">
                 <span>Notetaker</span>
                 <span class="nav-tab-icon">🎙️</span>
             </div>
@@ -41,7 +41,7 @@
                 <div class="account-info">
                     <div class="account-name" data-testid="current-account-email">{{.UserEmail}}</div>
                     <div class="account-provider">
-                        {{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else}}{{.Provider}}{{end}}
+                        {{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else if eq .Provider "nylas"}}Nylas{{else}}{{.Provider}}{{end}}
                         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left: 4px;">
                             <path d="m6 9 6 6 6-6"/>
                         </svg>
@@ -55,11 +55,11 @@
                 {{range .Grants}}
                 <div class="account-dropdown-item{{if .IsDefault}} active{{end}}" onclick="switchAccount('{{.ID}}')" data-grant-id="{{.ID}}">
                     <div class="account-avatar-small" style="background: var(--gradient-{{if eq .Provider "google"}}1{{else if eq .Provider "microsoft"}}3{{else}}2{{end}})">
-                        {{if eq .Provider "google"}}G{{else if eq .Provider "microsoft"}}M{{else}}E{{end}}
+                        {{if eq .Provider "google"}}G{{else if eq .Provider "microsoft"}}M{{else if eq .Provider "nylas"}}N{{else}}E{{end}}
                     </div>
                     <div class="account-dropdown-info">
                         <div class="account-dropdown-email" data-testid="account-dropdown-email">{{.Email}}</div>
-                        <div class="account-dropdown-provider">{{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else}}{{.Provider}}{{end}}</div>
+                        <div class="account-dropdown-provider">{{if eq .Provider "google"}}Google{{else if eq .Provider "microsoft"}}Microsoft{{else if eq .Provider "icloud"}}iCloud{{else if eq .Provider "nylas"}}Nylas{{else}}{{.Provider}}{{end}}</div>
                     </div>
                     {{if .IsDefault}}<span class="account-default-badge">Default</span>{{end}}
                 </div>

@@ -1,0 +1,211 @@
+.rules-policy-view {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+}
+
+.rules-policy-view.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.rules-policy-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px 24px 0;
+}
+
+.rules-policy-page-kicker {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.rules-policy-page-title {
+    margin: 8px 0 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.rules-policy-page-subtitle {
+    margin: 8px 0 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.rules-policy-shell {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    width: 100%;
+    padding: 24px;
+    overflow: auto;
+}
+
+.rules-policy-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.rules-policy-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.rules-policy-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rules-policy-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.rules-policy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    overflow: auto;
+}
+
+.rules-policy-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid rgba(139, 92, 246, 0.16);
+    border-radius: 14px;
+    background: rgba(139, 92, 246, 0.06);
+}
+
+.rules-policy-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.rules-policy-card-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rules-policy-card-meta {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.rules-policy-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.16);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.rules-policy-pill.muted {
+    background: rgba(161, 161, 170, 0.16);
+    color: var(--text-secondary);
+}
+
+.rules-policy-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rules-policy-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.rules-policy-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rules-policy-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.rules-policy-tag-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.rules-policy-description {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.rules-policy-empty .empty-state,
+.rules-policy-error .empty-state {
+    min-height: 220px;
+}
+
+@media (max-width: 1100px) {
+    .rules-policy-shell {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .rules-policy-page-header {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 16px 16px 0;
+        gap: 12px;
+    }
+
+    .rules-policy-shell {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .rules-policy-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

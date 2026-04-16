@@ -121,6 +121,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/config", s.handleConfigStatus)
 	mux.HandleFunc("/api/grants", s.handleListGrants)
 	mux.HandleFunc("/api/grants/default", s.handleSetDefaultGrant)
+	mux.HandleFunc("/api/policies", s.handleListPolicies)
+	mux.HandleFunc("/api/rules", s.handleListRules)
 
 	// API routes - Email (Phase 3)
 	mux.HandleFunc("/api/folders", s.handleListFolders)
