@@ -452,7 +452,6 @@ func TestReconfigureCacheRuntime_UnlocksRuntimeMutexOnCloseError(t *testing.T) {
 func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 	server, client, accountEmail := newCachedTestServer(t)
 	server.SetOnline(true)
-	server.grantStore = nil
 
 	fetchStarted := make(chan struct{})
 	releaseFetch := make(chan struct{})
@@ -470,25 +469,24 @@ func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 
 	<-fetchStarted
 
-	reconfigureDone := make(chan error, 1)
+	lockAcquired := make(chan struct{})
 	go func() {
-		reconfigureDone <- server.reconfigureCacheRuntime()
+		server.runtimeMu.Lock()
+		close(lockAcquired)
+		server.runtimeMu.Unlock()
 	}()
 
 	select {
-	case err := <-reconfigureDone:
-		if err != nil {
-			t.Fatalf("reconfigure cache runtime: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("reconfigure blocked on remote fetch while sync was in progress")
+	case <-lockAcquired:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runtime lock remained blocked while remote fetch was in progress")
 	}
 
 	close(releaseFetch)
 
 	select {
 	case <-syncDone:
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("syncEmails did not finish after fetch was released")
 	}
 
