@@ -242,7 +242,7 @@ func TestPrintRuleDetails(t *testing.T) {
 		Description:    "Blocks example.com",
 		Priority:       &priority,
 		Enabled:        &enabled,
-		Trigger:        "inbound",
+		Trigger:        "outbound",
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
 		Match: &domain.RuleMatch{
@@ -275,6 +275,7 @@ func TestPrintRuleDetails(t *testing.T) {
 	assert.Contains(t, output, "Policies:")
 	assert.Contains(t, output, "Default Policy")
 	assert.Contains(t, output, "agent@example.com")
+	assert.Contains(t, output, "Trigger:      outbound")
 	assert.Contains(t, output, "Match:")
 	assert.Contains(t, output, "from.domain is example.com")
 	assert.Contains(t, output, "Actions:")

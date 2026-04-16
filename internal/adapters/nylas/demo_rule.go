@@ -56,12 +56,16 @@ func (d *DemoClient) GetRule(ctx context.Context, ruleID string) (*domain.Rule, 
 
 func (d *DemoClient) CreateRule(ctx context.Context, payload map[string]any) (*domain.Rule, error) {
 	name, _ := payload["name"].(string)
+	trigger, _ := payload["trigger"].(string)
+	if trigger == "" {
+		trigger = "inbound"
+	}
 	enabled := true
 	return &domain.Rule{
 		ID:             "rule-demo-new",
 		Name:           name,
 		Enabled:        &enabled,
-		Trigger:        "inbound",
+		Trigger:        trigger,
 		ApplicationID:  "app-demo",
 		OrganizationID: "org-demo",
 	}, nil
@@ -69,12 +73,16 @@ func (d *DemoClient) CreateRule(ctx context.Context, payload map[string]any) (*d
 
 func (d *DemoClient) UpdateRule(ctx context.Context, ruleID string, payload map[string]any) (*domain.Rule, error) {
 	name, _ := payload["name"].(string)
+	trigger, _ := payload["trigger"].(string)
+	if trigger == "" {
+		trigger = "inbound"
+	}
 	enabled := true
 	return &domain.Rule{
 		ID:             ruleID,
 		Name:           name,
 		Enabled:        &enabled,
-		Trigger:        "inbound",
+		Trigger:        trigger,
 		ApplicationID:  "app-demo",
 		OrganizationID: "org-demo",
 	}, nil

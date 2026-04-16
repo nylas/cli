@@ -13,8 +13,10 @@ nylas agent rule list --all
 nylas agent rule get <rule-id>
 nylas agent rule read <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
+nylas agent rule create --name "Block Replies" --trigger outbound --condition outbound.type,is,reply --action block
 nylas agent rule create --data-file rule.json
 nylas agent rule update <rule-id> --name "Updated Rule"
+nylas agent rule update <rule-id> --trigger outbound --condition recipient.domain,is,example.org --action archive
 nylas agent rule delete <rule-id> --yes
 ```
 
@@ -28,6 +30,12 @@ The CLI resolves rules through agent policy attachment:
 - `get`, `read`, `update`, and `delete` validate that the rule is reachable from the selected agent scope before operating on it
 
 This prevents the agent command surface from mutating rules that are only in non-agent policy usage.
+
+Runtime note:
+
+- inbound rule evaluation is policy-linked
+- outbound rule evaluation is application-scoped in the API
+- the CLI still attaches created outbound rules to the selected policy so they remain visible in the agent-scoped surface
 
 ## Listing Rules
 
@@ -104,6 +112,14 @@ nylas agent rule create \
   --action mark_as_starred
 ```
 
+```bash
+nylas agent rule create \
+  --name "Block Replies" \
+  --trigger outbound \
+  --condition outbound.type,is,reply \
+  --action block
+```
+
 Available common flags:
 
 - `--name`
@@ -136,7 +152,8 @@ Examples:
 ```bash
 --condition from.domain,is,example.com
 --condition from.address,is,ceo@example.com
---condition subject.contains,is,invoice
+--condition recipient.domain,is,example.com
+--condition outbound.type,is,reply
 ```
 
 Important:
@@ -144,6 +161,10 @@ Important:
 - condition values are treated as strings by default
 - values like `true` and `123` stay strings
 - there is no implicit JSON coercion for condition values
+- inbound rules support `from.address`, `from.domain`, and `from.tld`
+- outbound rules also support `recipient.address`, `recipient.domain`, `recipient.tld`, and `outbound.type`
+- `outbound.type` only supports `is` and `is_not`, with values `compose` or `reply`
+- `in_list` requires a JSON array value, so use `--data` or `--data-file` instead of the scalar `--condition` flag syntax
 
 ### `--action`
 
@@ -157,13 +178,20 @@ Formats:
 Examples:
 
 ```bash
+--action block
 --action mark_as_spam
 --action mark_as_read
---action move_to_folder=vip
---action tag=security
+--action assign_to_folder=vip
+--action archive
 ```
 
 Action values are also treated as strings by default.
+
+Important:
+
+- supported actions are `block`, `mark_as_spam`, `assign_to_folder`, `mark_as_read`, `mark_as_starred`, `archive`, and `trash`
+- `assign_to_folder` requires a value
+- `block` cannot be combined with other actions
 
 ### Full JSON Create
 
@@ -194,6 +222,13 @@ nylas agent rule update <rule-id> \
   --action mark_as_spam
 ```
 
+```bash
+nylas agent rule update <rule-id> \
+  --trigger outbound \
+  --condition recipient.domain,is,example.org \
+  --action archive
+```
+
 Behavior:
 
 - `--condition` replaces the rule's condition set
@@ -222,13 +257,19 @@ nylas agent rule delete <rule-id> --yes
 Safety rules:
 
 - delete is rejected if the rule is referenced outside the current `provider=nylas` agent scope
-- delete is rejected if removing the rule would leave an attached agent policy with zero rules
+- delete is rejected if removing an inbound rule would leave an attached agent policy with zero attached rules
+- outbound rules can still be deleted when they are the only rule attached to a policy, because outbound evaluation is not policy-selected at send time
 
 These checks are there to prevent accidental breakage of active agent policy configuration.
 
 ## Relationship to Policies
 
 Rules are attached to policies, and policies are attached to agent accounts.
+Inbound evaluation follows that chain directly. Outbound evaluation does not:
+
+- inbound rules run only when attached to the selected policy
+- outbound rules are evaluated by the application at send time
+- the CLI keeps outbound rules attached to the selected policy so they stay discoverable through the agent-scoped command surface
 
 Practical flow:
 

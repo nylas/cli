@@ -105,6 +105,12 @@ func loadRulePayload(data, dataFile string, opts rulePayloadOptions, requireBody
 		}
 	}
 
+	if requireBody {
+		if err := validateRulePayload(payload, nil, true); err != nil {
+			return nil, err
+		}
+	}
+
 	return payload, nil
 }
 

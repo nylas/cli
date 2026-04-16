@@ -39,10 +39,11 @@ func newRuleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rule",
 		Short: "Manage agent rules",
-		Long: `Manage rules used by policies attached to agent accounts.
+		Long: `Manage rules used by agent accounts.
 
-Rules are backed by the /v3/rules API. The agent namespace scopes them through
-policies that are attached to provider=nylas accounts.
+Rules are backed by the /v3/rules API. Inbound rules are scoped through
+policies attached to provider=nylas accounts, and outbound rules can be
+managed through the same command surface.
 
 Examples:
   nylas agent rule list
@@ -390,6 +391,9 @@ func rollbackPolicyRuleUpdates(ctx context.Context, client ports.NylasClient, or
 
 func printRuleSummary(rule domain.Rule, index int, refs []rulePolicyRef) {
 	fmt.Printf("%d. %-32s %s\n", index+1, common.Cyan.Sprint(rule.Name), common.Dim.Sprint(rule.ID))
+	if rule.Trigger != "" {
+		_, _ = common.Dim.Printf("   Trigger: %s\n", rule.Trigger)
+	}
 	if !rule.UpdatedAt.IsZero() {
 		_, _ = common.Dim.Printf("   Updated: %s\n", common.FormatTimeAgo(rule.UpdatedAt.Time))
 	}

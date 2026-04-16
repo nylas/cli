@@ -471,8 +471,10 @@ nylas agent rule list --all                    # List all rules attached to agen
 nylas agent rule read <rule-id>                # Read one rule
 nylas agent rule get <rule-id>                 # Show one rule
 nylas agent rule create --name NAME --condition from.domain,is,example.com --action mark_as_spam  # Create a rule from common flags
+nylas agent rule create --name NAME --trigger outbound --condition outbound.type,is,reply --action block  # Create an outbound rule from common flags
 nylas agent rule create --data-file rule.json  # Create a rule from full JSON
 nylas agent rule update <rule-id> --name NAME --description TEXT  # Update a rule
+nylas agent rule update <rule-id> --trigger outbound --condition recipient.domain,is,example.org --action archive  # Update an outbound rule
 nylas agent rule delete <rule-id> --yes        # Delete a rule
 nylas agent status                             # Check connector + account status
 ```

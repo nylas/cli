@@ -160,9 +160,11 @@ nylas agent rule list --all
 nylas agent rule read <rule-id>
 nylas agent rule get <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
+nylas agent rule create --name "Block Replies" --trigger outbound --condition outbound.type,is,reply --action block
 nylas agent rule create --name "VIP sender" --condition from.address,is,ceo@example.com --action mark_as_read --action mark_as_starred
 nylas agent rule create --data-file rule.json
 nylas agent rule update <rule-id> --name "Updated Rule" --description "Block example.org"
+nylas agent rule update <rule-id> --trigger outbound --condition recipient.domain,is,example.org --action archive
 nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_spam
 nylas agent rule delete <rule-id> --yes
 ```
@@ -170,7 +172,8 @@ nylas agent rule delete <rule-id> --yes
 Summary:
 - `list` uses the policy attached to the current default `provider=nylas` grant unless `--policy-id` is passed
 - `list --all` shows only rules reachable from policies attached to `provider=nylas` accounts
-- `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`
+- `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`, with `trigger=inbound` as the default
+- outbound rules are supported with `--trigger outbound`, including `recipient.*` and `outbound.type` conditions
 - `get` and `read` are aliases
 - `update` and `delete` refuse to operate on rules that are outside the current `provider=nylas` agent scope
 

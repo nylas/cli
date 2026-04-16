@@ -33,6 +33,7 @@ default provider=nylas grant.
 Examples:
   nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
   nylas agent rule create --name "VIP sender" --condition from.address,is,ceo@example.com --action mark_as_read --action mark_as_starred
+  nylas agent rule create --name "Block Replies" --trigger outbound --condition outbound.type,is,reply --action block
   nylas agent rule create --data-file rule.json
   nylas agent rule create --data-file rule.json --policy-id <policy-id>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -54,7 +55,7 @@ Examples:
 	cmd.Flags().IntVar(&opts.Priority, "priority", 0, "Rule priority")
 	cmd.Flags().BoolVar(&enableRule, "enabled", false, "Create the rule in an enabled state")
 	cmd.Flags().BoolVar(&disableRule, "disabled", false, "Create the rule in a disabled state")
-	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Rule trigger (defaults to inbound when using flags)")
+	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Rule trigger: inbound or outbound (defaults to inbound when omitted)")
 	cmd.Flags().StringVar(&opts.MatchOperator, "match-operator", "", "Match operator for the supplied conditions")
 	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Match condition as field,operator,value (repeatable)")
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Rule action as type or type=value (repeatable)")
@@ -75,7 +76,7 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 
 		rule, err := client.CreateRule(ctx, payload)
 		if err != nil {
-			return struct{}{}, common.WrapCreateError("rule", err)
+			return struct{}{}, wrapRuleMutationError("create", payload, nil, err)
 		}
 
 		if err := attachRuleToPolicy(ctx, client, *policy, rule.ID); err != nil {
@@ -128,6 +129,7 @@ Examples:
   nylas agent rule update <rule-id> --name "Updated Rule"
   nylas agent rule update <rule-id> --description "Block example.org" --priority 20
   nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_spam
+  nylas agent rule update <rule-id> --trigger outbound --condition recipient.domain,is,example.org --action archive
   nylas agent rule update <rule-id> --data-file update.json
   nylas agent rule update <rule-id> --all --json`,
 		Args: cobra.ExactArgs(1),
@@ -160,7 +162,7 @@ Examples:
 	cmd.Flags().IntVar(&opts.Priority, "priority", 0, "Updated rule priority")
 	cmd.Flags().BoolVar(&enableRule, "enabled", false, "Set the rule to enabled")
 	cmd.Flags().BoolVar(&disableRule, "disabled", false, "Set the rule to disabled")
-	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Updated rule trigger")
+	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Updated rule trigger: inbound or outbound")
 	cmd.Flags().StringVar(&opts.MatchOperator, "match-operator", "", "Updated match operator")
 	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Replace conditions with field,operator,value entries (repeatable)")
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Replace actions with type or type=value entries (repeatable)")
@@ -187,10 +189,13 @@ func runRuleUpdate(ruleID string, payload map[string]any, policyID string, allRu
 		}
 
 		preserveRuleMatchOperator(payload, scope.Rule)
+		if err := validateRulePayload(payload, scope.Rule, false); err != nil {
+			return struct{}{}, err
+		}
 
 		rule, err := client.UpdateRule(ctx, ruleID, payload)
 		if err != nil {
-			return struct{}{}, common.WrapUpdateError("rule", err)
+			return struct{}{}, wrapRuleMutationError("update", payload, scope.Rule, err)
 		}
 
 		if jsonOutput {
@@ -252,15 +257,17 @@ func runRuleDelete(ruleID, policyID string, allRules bool) error {
 				"Use the generic policy/rule surface to delete shared rules safely",
 			)
 		}
-		if blockingPolicies := policiesLeftEmptyByRuleRemoval(scope.AllAgentPolicies, ruleID); len(blockingPolicies) > 0 {
-			policyNames := make([]string, 0, len(blockingPolicies))
-			for _, policy := range blockingPolicies {
-				policyNames = append(policyNames, policy.Name)
+		if scope.Rule.Trigger != ruleTriggerOutbound {
+			if blockingPolicies := policiesLeftEmptyByRuleRemoval(scope.AllAgentPolicies, ruleID); len(blockingPolicies) > 0 {
+				policyNames := make([]string, 0, len(blockingPolicies))
+				for _, policy := range blockingPolicies {
+					policyNames = append(policyNames, policy.Name)
+				}
+				return struct{}{}, common.NewUserError(
+					"cannot delete the last rule from an agent policy",
+					fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
+				)
 			}
-			return struct{}{}, common.NewUserError(
-				"cannot delete the last rule from an agent policy",
-				fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
-			)
 		}
 
 		rollback, err := detachRuleFromPolicies(ctx, client, scope.AllAgentPolicies, ruleID)

@@ -39,7 +39,7 @@ func TestLoadRulePayload(t *testing.T) {
 		Name:          "Flag Name",
 		MatchOperator: "any",
 		Conditions:    []string{"from.address,is,ceo@example.com"},
-		Actions:       []string{"move_to_folder=vip"},
+		Actions:       []string{"assign_to_folder=vip"},
 	}, true)
 	if assert.NoError(t, err) {
 		assert.Equal(t, "Flag Name", payload["name"])
@@ -53,15 +53,15 @@ func TestLoadRulePayload(t *testing.T) {
 		}
 		actions, ok := payload["actions"].([]domain.RuleAction)
 		if assert.True(t, ok) && assert.Len(t, actions, 1) {
-			assert.Equal(t, "move_to_folder", actions[0].Type)
+			assert.Equal(t, "assign_to_folder", actions[0].Type)
 			assert.Equal(t, "vip", actions[0].Value)
 		}
 	}
 
 	payload, err = loadRulePayload("", "", rulePayloadOptions{
 		Name:       "Preserve Strings",
-		Conditions: []string{"subject.contains,is,true", "from.tld,is,123"},
-		Actions:    []string{"move_to_folder=123", "tag=true"},
+		Conditions: []string{"from.address,is,true", "from.tld,is,123"},
+		Actions:    []string{"assign_to_folder=123", "assign_to_folder=true"},
 	}, true)
 	if assert.NoError(t, err) {
 		matchPayload, ok := payload["match"].(map[string]any)

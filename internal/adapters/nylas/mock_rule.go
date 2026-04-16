@@ -56,12 +56,16 @@ func (m *MockClient) GetRule(ctx context.Context, ruleID string) (*domain.Rule, 
 
 func (m *MockClient) CreateRule(ctx context.Context, payload map[string]any) (*domain.Rule, error) {
 	name, _ := payload["name"].(string)
+	trigger, _ := payload["trigger"].(string)
+	if trigger == "" {
+		trigger = "inbound"
+	}
 	enabled := true
 	return &domain.Rule{
 		ID:             "rule-new",
 		Name:           name,
 		Enabled:        &enabled,
-		Trigger:        "inbound",
+		Trigger:        trigger,
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
 	}, nil
@@ -69,12 +73,16 @@ func (m *MockClient) CreateRule(ctx context.Context, payload map[string]any) (*d
 
 func (m *MockClient) UpdateRule(ctx context.Context, ruleID string, payload map[string]any) (*domain.Rule, error) {
 	name, _ := payload["name"].(string)
+	trigger, _ := payload["trigger"].(string)
+	if trigger == "" {
+		trigger = "inbound"
+	}
 	enabled := true
 	return &domain.Rule{
 		ID:             ruleID,
 		Name:           name,
 		Enabled:        &enabled,
-		Trigger:        "inbound",
+		Trigger:        trigger,
 		ApplicationID:  "app-123",
 		OrganizationID: "org-123",
 	}, nil
