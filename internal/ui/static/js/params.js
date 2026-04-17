@@ -33,10 +33,6 @@ function getParamSuggestions(section, paramName) {
         'contact-id': 'getCachedContactIds'    // contacts show, update, delete
     };
 
-    const inboundParamMap = {
-        'inbox-id': 'getCachedInboxIds'        // inbound show, delete, messages, monitor
-    };
-
     const webhookParamMap = {
         'webhook-id': 'getCachedWebhookIds'    // webhook show, update, delete
     };
@@ -55,8 +51,6 @@ function getParamSuggestions(section, paramName) {
         getterName = authParamMap[paramName];
     } else if (section === 'contacts') {
         getterName = contactsParamMap[paramName];
-    } else if (section === 'inbound') {
-        getterName = inboundParamMap[paramName];
     } else if (section === 'webhook') {
         getterName = webhookParamMap[paramName];
     } else if (section === 'notetaker') {

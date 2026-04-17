@@ -99,6 +99,81 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 	created = nil
 }
 
+func TestCLI_AgentStatus(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	env := newAgentSandboxEnv(t)
+	client := getTestClient()
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	connectors, err := client.ListConnectors(ctx)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to list connectors for status test: %v", err)
+	}
+
+	expectedConfigured := false
+	expectedConnectorID := ""
+	for _, connector := range connectors {
+		if connector.Provider == string(domain.ProviderNylas) {
+			expectedConfigured = true
+			expectedConnectorID = connector.ID
+			break
+		}
+	}
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	accounts, err := client.ListAgentAccounts(ctx)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to list agent accounts for status test: %v", err)
+	}
+
+	jsonStdout, jsonStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "status", "--json")
+	if err != nil {
+		t.Fatalf("agent status --json failed: %v\nstdout: %s\nstderr: %s", err, jsonStdout, jsonStderr)
+	}
+
+	var result struct {
+		ConnectorConfigured bool                  `json:"connector_configured"`
+		ConnectorID         string                `json:"connector_id"`
+		AccountCount        int                   `json:"account_count"`
+		Accounts            []domain.AgentAccount `json:"accounts"`
+	}
+	if err := json.Unmarshal([]byte(jsonStdout), &result); err != nil {
+		t.Fatalf("failed to parse agent status JSON: %v\noutput: %s", err, jsonStdout)
+	}
+
+	if result.ConnectorConfigured != expectedConfigured {
+		t.Fatalf("connector_configured = %t, want %t", result.ConnectorConfigured, expectedConfigured)
+	}
+	if expectedConfigured && result.ConnectorID != expectedConnectorID {
+		t.Fatalf("connector_id = %q, want %q", result.ConnectorID, expectedConnectorID)
+	}
+	if result.AccountCount != len(accounts) {
+		t.Fatalf("account_count = %d, want %d", result.AccountCount, len(accounts))
+	}
+	if len(result.Accounts) != len(accounts) {
+		t.Fatalf("accounts length = %d, want %d", len(result.Accounts), len(accounts))
+	}
+
+	textStdout, textStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "status")
+	if err != nil {
+		t.Fatalf("agent status failed: %v\nstdout: %s\nstderr: %s", err, textStdout, textStderr)
+	}
+	if !strings.Contains(textStdout, "Agent Status") {
+		t.Fatalf("expected status heading, got: %s", textStdout)
+	}
+	if !strings.Contains(textStdout, "Connector:") {
+		t.Fatalf("expected connector line, got: %s", textStdout)
+	}
+	if !strings.Contains(textStdout, "Accounts:") {
+		t.Fatalf("expected accounts line, got: %s", textStdout)
+	}
+}
+
 func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	skipIfMissingCreds(t)
 	skipIfMissingAgentDomain(t)

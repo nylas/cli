@@ -11,7 +11,7 @@ import (
 )
 
 func isManagedTransactionalGrant(grant *domain.Grant) bool {
-	return grant != nil && (grant.Provider == domain.ProviderInbox || grant.Provider == domain.ProviderNylas)
+	return grant != nil && grant.Provider == domain.ProviderNylas
 }
 
 func validateSendSignatureSupport(signatureID string, sign, encrypt bool, grant *domain.Grant) error {

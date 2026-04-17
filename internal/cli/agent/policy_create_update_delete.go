@@ -114,15 +114,8 @@ func runPolicyUpdate(policyID string, payload map[string]any, jsonOutput bool) e
 			return struct{}{}, err
 		}
 
-		resolved, err := resolvePolicyForAgentOps(scope, policyID)
-		if err != nil {
+		if _, err := resolvePolicyForAgentOps(scope, policyID); err != nil {
 			return struct{}{}, err
-		}
-		if resolved.AttachedToAgent && resolved.AttachedToNonAgent {
-			return struct{}{}, common.NewUserError(
-				"policy is shared with non-agent accounts",
-				"Use a policy attached only to provider=nylas accounts, or manage the shared policy outside the agent namespace",
-			)
 		}
 
 		policy, err := client.UpdatePolicy(ctx, policyID, payload)
@@ -185,12 +178,6 @@ func runPolicyDelete(policyID string) error {
 			return struct{}{}, common.NewUserError(
 				fmt.Sprintf("policy is attached to agent accounts: %s", accountSummary),
 				fmt.Sprintf("Detach or move the listed accounts to another policy before deleting %q", policyID),
-			)
-		}
-		if resolved.AttachedToNonAgent {
-			return struct{}{}, common.NewUserError(
-				"policy is attached outside the nylas agent scope",
-				fmt.Sprintf("Delete or detach the non-agent attachments before deleting %q from the agent namespace", policyID),
 			)
 		}
 

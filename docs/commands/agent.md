@@ -176,14 +176,6 @@ Summary:
 
 **Details:** [Agent rule reference](agent-rule.md)
 
-## Relationship to Inbound
-
-`nylas agent` and `nylas inbound` are different features:
-- `nylas agent` creates managed agent accounts backed by provider `nylas`
-- `nylas inbound` creates inbound inboxes backed by provider `inbox`
-
-Both can use `@yourapp.nylas.email` addresses, but they are separate command groups and separate provider types.
-
 Agent accounts can also expose the mailbox over IMAP and SMTP submission when an `app_password` is configured at creation time.
 
 ## Sending Email from Agent Accounts
@@ -199,4 +191,3 @@ When the active grant is an agent account (`provider=nylas`):
 - [Agent policies](agent-policy.md)
 - [Agent rules](agent-rule.md)
 - [Email commands](email.md)
-- [Inbound email](inbound.md)

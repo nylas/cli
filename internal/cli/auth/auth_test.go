@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/cli/testutil"
@@ -168,6 +169,9 @@ func TestParseLoginProvider(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("parseLoginProvider(%q) expected error", tt.input)
+				}
+				if tt.input == "inbox" && !strings.Contains(err.Error(), "use 'google' or 'microsoft'") {
+					t.Fatalf("parseLoginProvider(%q) error = %q, want provider guidance", tt.input, err.Error())
 				}
 				return
 			}

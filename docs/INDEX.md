@@ -73,7 +73,6 @@ Quick navigation guide to find the right documentation for your needs.
 - **Contacts** → [commands/contacts.md](commands/contacts.md)
 - **Webhooks** → [commands/webhooks.md](commands/webhooks.md)
 - **Agent accounts** → [commands/agent.md](commands/agent.md)
-- **Inbound email** → [commands/inbound.md](commands/inbound.md)
 - **Scheduler** → [commands/scheduler.md](commands/scheduler.md)
 - **Admin** → [commands/admin.md](commands/admin.md)
 - **Timezone** → [commands/timezone.md](commands/timezone.md)
@@ -124,7 +123,7 @@ docs/
 ├── ARCHITECTURE.md        # System design
 ├── DEVELOPMENT.md         # Development setup
 │
-├── commands/              # Detailed command guides (17 files)
+├── commands/              # Detailed command guides (16 files)
 │   ├── ai.md              # AI features
 │   ├── mcp.md             # MCP integration
 │   ├── calendar.md        # Calendar events
@@ -134,7 +133,6 @@ docs/
 │   ├── explain-gpg.md     # GPG explained
 │   ├── contacts.md        # Contact management
 │   ├── webhooks.md        # Webhook setup
-│   ├── inbound.md         # Inbound email
 │   ├── scheduler.md       # Booking pages
 │   ├── admin.md           # API management
 │   ├── timezone.md        # Timezone utilities

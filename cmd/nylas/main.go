@@ -19,7 +19,6 @@ import (
 	"github.com/nylas/cli/internal/cli/dashboard"
 	"github.com/nylas/cli/internal/cli/demo"
 	"github.com/nylas/cli/internal/cli/email"
-	"github.com/nylas/cli/internal/cli/inbound"
 	"github.com/nylas/cli/internal/cli/mcp"
 	"github.com/nylas/cli/internal/cli/notetaker"
 	"github.com/nylas/cli/internal/cli/otp"
@@ -55,7 +54,6 @@ func main() {
 	rootCmd.AddCommand(admin.NewAdminCmd())
 	rootCmd.AddCommand(webhook.NewWebhookCmd())
 	rootCmd.AddCommand(notetaker.NewNotetakerCmd())
-	rootCmd.AddCommand(inbound.NewInboundCmd())
 	rootCmd.AddCommand(timezone.NewTimezoneCmd())
 	rootCmd.AddCommand(mcp.NewMCPCmd())
 	rootCmd.AddCommand(slack.NewSlackCmd())

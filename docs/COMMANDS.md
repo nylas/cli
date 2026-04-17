@@ -218,8 +218,8 @@ nylas email read <message-id> --decrypt --verify               # Decrypt + verif
 ```
 
 **Managed send behavior:**
-- Grants with provider `inbox` and `nylas` use the managed transactional send path automatically.
-- The sender address comes from the active grant email for those managed providers.
+- Grants with provider `nylas` use the managed transactional send path automatically.
+- The sender address comes from the active grant email for those managed accounts.
 - GPG signing/encryption and `--signature-id` are not supported for managed transactional sends.
 
 **AI features:**
@@ -478,28 +478,6 @@ nylas agent status                             # Check connector + account statu
 ```
 
 **Details:** `docs/commands/agent.md`, `docs/commands/agent-policy.md`, `docs/commands/agent-rule.md`
-
----
-
-## Inbound Email
-
-Receive emails at managed addresses without OAuth or third-party mailbox connections.
-
-```bash
-nylas inbound list                              # List inbound inboxes
-nylas inbound create <email-prefix>             # Create inbox (e.g., support@yourapp.nylas.email)
-nylas inbound show <inbox-id>                   # Show inbox details
-nylas inbound delete <inbox-id>                 # Delete inbox
-nylas inbound messages <inbox-id>               # List messages in inbox
-nylas inbound monitor <inbox-id>                # Real-time message monitoring
-```
-
-**Real-time monitoring with tunnel:**
-```bash
-nylas inbound monitor <inbox-id> --tunnel cloudflared
-```
-
-**Details:** `docs/commands/inbound.md`
 
 ---
 
@@ -1014,7 +992,6 @@ All commands follow consistent pattern:
 - Calendar: `docs/commands/calendar.md`
 - Contacts: `docs/commands/contacts.md`
 - Webhooks: `docs/commands/webhooks.md`
-- Inbound: `docs/commands/inbound.md`
 - Scheduler: `docs/commands/scheduler.md`
 - Admin: `docs/commands/admin.md`
 - Workflows: `docs/commands/workflows.md` (OTP, automation)

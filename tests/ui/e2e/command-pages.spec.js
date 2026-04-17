@@ -38,7 +38,6 @@ test.describe('Command Page Structure', () => {
     { nav: 'Calendar', page: 'calendar' },
     { nav: 'Contacts', page: 'contacts' },
     { nav: 'Email', page: 'email' },
-    { nav: 'Inbound', page: 'inbound' },
     { nav: 'Notetaker', page: 'notetaker' },
     { nav: 'OTP', page: 'otp' },
     { nav: 'Scheduler', page: 'scheduler' },

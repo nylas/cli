@@ -42,6 +42,7 @@ func newConnectorListCmd() *cobra.Command {
 				if err != nil {
 					return struct{}{}, common.WrapListError("connectors", err)
 				}
+				connectors = common.FilterVisibleConnectors(connectors)
 
 				if jsonOutput {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(connectors)
@@ -86,6 +87,9 @@ func newConnectorShowCmd() *cobra.Command {
 				connector, err := client.GetConnector(ctx, connectorID)
 				if err != nil {
 					return struct{}{}, common.WrapGetError("connector", err)
+				}
+				if common.IsDeprecatedConnectorProvider(connector.Provider) {
+					return struct{}{}, common.NewUserError("connector not found", "The inbox connector is no longer supported")
 				}
 
 				if jsonOutput {
@@ -148,6 +152,10 @@ func newConnectorCreateCmd() *cobra.Command {
 		Short: "Create a connector",
 		Long:  "Create a new email provider connector.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := common.ValidateSupportedConnectorProvider(provider); err != nil {
+				return err
+			}
+
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.CreateConnectorRequest{
 					Name:     name,

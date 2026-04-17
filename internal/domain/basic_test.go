@@ -59,7 +59,6 @@ func TestProvider(t *testing.T) {
 			{ProviderMicrosoft, true},
 			{ProviderIMAP, false},
 			{ProviderVirtual, false},
-			{ProviderInbox, false},
 			{ProviderNylas, true},
 			{Provider("unknown"), false},
 		}

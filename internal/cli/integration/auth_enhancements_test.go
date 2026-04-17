@@ -48,6 +48,9 @@ func TestCLI_AuthProvidersList(t *testing.T) {
 	if !strings.Contains(stdout, "Available Authentication Providers") {
 		t.Errorf("Expected providers list header, got: %s", stdout)
 	}
+	if strings.Contains(stdout, "Provider:   inbox") {
+		t.Fatalf("auth providers output still exposes removed inbox provider: %s", stdout)
+	}
 
 	t.Logf("auth providers output:\n%s", stdout)
 }
@@ -70,6 +73,11 @@ func TestCLI_AuthProvidersListJSON(t *testing.T) {
 	var connectors []map[string]any
 	if err := json.Unmarshal([]byte(stdout), &connectors); err != nil {
 		t.Fatalf("Failed to parse JSON output: %v\noutput: %s", err, stdout)
+	}
+	for _, connector := range connectors {
+		if provider, _ := connector["provider"].(string); strings.EqualFold(provider, "inbox") {
+			t.Fatalf("auth providers --json still exposes removed inbox provider: %s", stdout)
+		}
 	}
 
 	t.Logf("auth providers --json output: %d connectors", len(connectors))

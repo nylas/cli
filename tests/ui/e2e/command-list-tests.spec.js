@@ -72,14 +72,6 @@ const commandPagesWithList = [
     expectedCommand: 'nylas email list',
   },
   {
-    name: 'Inbound',
-    nav: 'inbound',
-    pageId: 'page-inbound',
-    cmdListId: 'inbound-cmd-list',
-    listSection: null,
-    hasListCommand: false,
-  },
-  {
     name: 'Notetaker',
     nav: 'notetaker',
     pageId: 'page-notetaker',

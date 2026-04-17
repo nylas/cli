@@ -147,13 +147,6 @@ var allowedCommands = map[string]bool{
 	"contacts groups show":   true,
 	"contacts groups create": true,
 	"contacts groups delete": true,
-	// Inbound commands
-	"inbound list":     true,
-	"inbound show":     true,
-	"inbound create":   true,
-	"inbound delete":   true,
-	"inbound messages": true,
-	"inbound monitor":  true,
 	// Scheduler commands
 	"scheduler configurations": true,
 	"scheduler sessions":       true,

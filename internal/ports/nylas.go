@@ -17,7 +17,6 @@ type NylasClient interface {
 	WebhookClient
 	PubSubClient
 	NotetakerClient
-	InboundClient
 	AgentClient
 	PolicyClient
 	RuleClient

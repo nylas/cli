@@ -15,7 +15,6 @@
 //   - NYLAS_TEST_AUTH_LOGOUT: Set to "true" to enable auth logout tests
 //   - NYLAS_TEST_RATE_LIMIT_RPS: API rate limit (requests/sec, default: 2.0)
 //   - NYLAS_TEST_RATE_LIMIT_BURST: API rate limit burst capacity (default: 5)
-//   - NYLAS_INBOUND_GRANT_ID: Grant ID for inbound inbox tests (skips inbound tests if not set)
 //   - NYLAS_FILE_STORE_PASSPHRASE: Passphrase for the encrypted file secret-store fallback
 //
 // Parallel Testing:
@@ -75,12 +74,11 @@ import (
 
 // Test configuration loaded from environment
 var (
-	testAPIKey         string
-	testGrantID        string
-	testClientID       string
-	testEmail          string
-	testBinary         string
-	testInboundGrantID string
+	testAPIKey   string
+	testGrantID  string
+	testClientID string
+	testEmail    string
+	testBinary   string
 )
 
 // Rate limiter for API calls to prevent hitting Nylas rate limits
@@ -97,7 +95,6 @@ func init() {
 	testGrantID = os.Getenv("NYLAS_GRANT_ID")
 	testClientID = os.Getenv("NYLAS_CLIENT_ID")
 	testEmail = os.Getenv("NYLAS_TEST_EMAIL")
-	testInboundGrantID = os.Getenv("NYLAS_INBOUND_GRANT_ID")
 
 	// Configure rate limiter from environment
 	if rpsStr := os.Getenv("NYLAS_TEST_RATE_LIMIT_RPS"); rpsStr != "" {
@@ -180,15 +177,6 @@ func skipIfKeyringDisabled(t *testing.T) {
 	t.Helper()
 	if os.Getenv("NYLAS_DISABLE_KEYRING") == "true" {
 		t.Skip("Test requires keyring access - skipping when NYLAS_DISABLE_KEYRING=true")
-	}
-}
-
-// skipIfMissingInboundCreds skips the test if NYLAS_INBOUND_GRANT_ID is not set.
-// Call this at the start of inbound inbox tests.
-func skipIfMissingInboundCreds(t *testing.T) {
-	t.Helper()
-	if testInboundGrantID == "" {
-		t.Skip("NYLAS_INBOUND_GRANT_ID not set - skipping inbound tests")
 	}
 }
 

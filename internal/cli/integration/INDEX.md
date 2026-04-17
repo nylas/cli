@@ -24,7 +24,7 @@ Quick reference for finding integration tests by feature.
 | `drafts_test.go` | Draft operations | `nylas drafts` |
 | `email_test.go` | Email operations | `nylas email` (list, send, search) |
 | `folders_test.go` | Folder operations | `nylas folders` |
-| `inbound_test.go` | Inbound email | `nylas inbound` (managed inboxes) |
+| `inbound_removed_test.go` | Removed inbound command | Unknown-command behavior and help omission |
 | `metadata_test.go` | Metadata operations | Email/event metadata |
 | `misc_test.go` | Miscellaneous | Version, help, config |
 | `notetaker_test.go` | Notetaker operations | `nylas notetaker` |

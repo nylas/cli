@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderEmailCommands();
     renderCalendarCommands();
     renderContactsCommands();
-    renderInboundCommands();
     renderSchedulerCommands();
     renderTimezoneCommands();
     renderWebhookCommands();

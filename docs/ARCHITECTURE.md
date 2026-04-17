@@ -34,7 +34,6 @@ internal/
     calendar/                 # Calendar & events
     contacts/                 # Contact management
     email/                    # Email operations
-    inbound/                  # Inbound email rules
     integration/              # CLI integration tests
     mcp/                      # MCP server command
     notetaker/                # Meeting notetaker
@@ -165,7 +164,7 @@ url := qb.BuildURL(baseURL)
 1. **Domain** (`internal/domain/`) - 29 files
    - Pure business logic, no external dependencies
    - Core types: Message, Email, Calendar, Event, Contact, Grant, Webhook
-   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Slack, Inbound
+   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Slack, Agent
    - Support types: Config, Errors, Provider, Utilities
    - Shared interfaces: `interfaces.go` (Paginated, QueryParams, Resource, Timestamped, Validator)
 

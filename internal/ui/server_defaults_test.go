@@ -30,9 +30,6 @@ func TestGetDefaultCommands(t *testing.T) {
 	if len(cmds.Contacts) == 0 {
 		t.Error("Contacts commands should not be empty")
 	}
-	if len(cmds.Inbound) == 0 {
-		t.Error("Inbound commands should not be empty")
-	}
 	if len(cmds.Scheduler) == 0 {
 		t.Error("Scheduler commands should not be empty")
 	}
@@ -64,7 +61,6 @@ func TestGetDefaultCommands_RequiredFields(t *testing.T) {
 	allCommands = append(allCommands, cmds.Email...)
 	allCommands = append(allCommands, cmds.Calendar...)
 	allCommands = append(allCommands, cmds.Contacts...)
-	allCommands = append(allCommands, cmds.Inbound...)
 	allCommands = append(allCommands, cmds.Scheduler...)
 	allCommands = append(allCommands, cmds.Timezone...)
 	allCommands = append(allCommands, cmds.Webhook...)
@@ -99,7 +95,6 @@ func TestGetDefaultCommands_ParamCommands(t *testing.T) {
 	allCommands = append(allCommands, cmds.Email...)
 	allCommands = append(allCommands, cmds.Calendar...)
 	allCommands = append(allCommands, cmds.Contacts...)
-	allCommands = append(allCommands, cmds.Inbound...)
 	allCommands = append(allCommands, cmds.Scheduler...)
 	allCommands = append(allCommands, cmds.Timezone...)
 	allCommands = append(allCommands, cmds.Webhook...)
@@ -210,10 +205,6 @@ func TestGetDemoCommandOutput_AllCommands(t *testing.T) {
 		{"contacts list", []string{"Demo Mode", "Alice Johnson", "contact"}},
 		{"contacts list --id", []string{"Demo Mode", "demo-contact-001"}},
 		{"contacts groups", []string{"Demo Mode", "Contact Groups", "Work"}},
-
-		// Inbound commands
-		{"inbound list", []string{"Demo Mode", "Inbound Inboxes", "inbox-001"}},
-		{"inbound messages", []string{"Demo Mode", "Inbound Messages", "billing"}},
 
 		// Scheduler commands
 		{"scheduler configurations", []string{"Demo Mode", "30-min Meeting", "DURATION"}},
