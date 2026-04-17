@@ -22,7 +22,7 @@ func buildTransactionalSendPayload(req *domain.SendMessageRequest) map[string]an
 }
 
 // SendTransactionalMessage sends an email via the domain-based transactional endpoint.
-// Used for Inbox provider grants: POST /v3/domains/{domain}/messages/send
+// Used for managed Nylas grants: POST /v3/domains/{domain}/messages/send
 func (c *HTTPClient) SendTransactionalMessage(ctx context.Context, domainName string, req *domain.SendMessageRequest) (*domain.Message, error) {
 	queryURL := fmt.Sprintf("%s/v3/domains/%s/messages/send", c.baseURL, domainName)
 

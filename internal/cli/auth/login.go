@@ -83,6 +83,9 @@ func parseLoginProvider(provider string) (domain.Provider, error) {
 	case string(domain.ProviderMicrosoft):
 		return domain.ProviderMicrosoft, nil
 	default:
-		return "", common.NewUserError(fmt.Sprintf("invalid provider: %s", provider), "use 'google' or 'microsoft'")
+		return "", common.NewUserError(
+			fmt.Sprintf("invalid provider: %s (use 'google' or 'microsoft')", provider),
+			"use 'google' or 'microsoft'",
+		)
 	}
 }

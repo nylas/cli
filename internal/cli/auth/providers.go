@@ -46,6 +46,7 @@ This command shows connectors configured for your Nylas application.`,
 			if err != nil {
 				return common.WrapFetchError("providers", err)
 			}
+			connectors = common.FilterVisibleConnectors(connectors)
 
 			if outputJSON {
 				enc := json.NewEncoder(cmd.OutOrStdout())
@@ -106,8 +107,6 @@ func providerDisplayName(provider string) string {
 		return "iCloud"
 	case "ews":
 		return "EWS"
-	case "inbox":
-		return "Inbox"
 	case "virtual-calendar":
 		return "Virtual Calendar"
 	default:

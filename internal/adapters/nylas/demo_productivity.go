@@ -179,5 +179,3 @@ func (d *DemoClient) GetNotetakerMedia(ctx context.Context, grantID, notetakerID
 		},
 	}, nil
 }
-
-// ListInboundInboxes returns demo inbound inboxes.

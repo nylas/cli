@@ -67,7 +67,6 @@ func (v *DashboardView) Load() {
 		{":m", "Messages", "Email messages"},
 		{":e", "Events", "Calendar events"},
 		{":c", "Contacts", "Contacts"},
-		{":i", "Inbound", "Inbound inboxes"},
 		{":w", "Webhooks", "Webhooks"},
 		{":ws", "Server", "Webhook server (local)"},
 		{":g", "Grants", "Connected accounts"},

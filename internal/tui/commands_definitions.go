@@ -42,12 +42,6 @@ func (r *CommandRegistry) registerAllCommands() {
 		Category:    CategoryNavigation,
 	})
 	r.Register(Command{
-		Name:        "inbound",
-		Aliases:     []string{"i", "in", "inbox"},
-		Description: "Go to inbound inboxes view",
-		Category:    CategoryNavigation,
-	})
-	r.Register(Command{
 		Name:        "dashboard",
 		Aliases:     []string{"d", "dash", "home"},
 		Description: "Go to dashboard",

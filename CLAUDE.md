@@ -104,7 +104,7 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 
 **Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`, Chat at `internal/chat/`
 
-**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, inbound, mcp, notetaker, otp, scheduler, setup, slack, timezone, webhook
+**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, mcp, notetaker, otp, scheduler, setup, slack, timezone, webhook
 
 **Additional packages:**
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting

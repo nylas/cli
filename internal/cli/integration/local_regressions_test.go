@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -296,6 +297,89 @@ func TestCLI_AuthProviders_RequiresFileStorePassphrase(t *testing.T) {
 	}
 }
 
+func TestCLI_ConnectorSurfaces_HideInboxProvider(t *testing.T) {
+	if testBinary == "" {
+		t.Skip("CLI binary not found")
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v3/connectors" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"conn-inbox-1","name":"Inbox","provider":"inbox"},
+			{"id":"conn-google-1","name":"","provider":"google","settings":{"client_id":"google-client-id"}},
+			{"id":"conn-imap-1","name":"Custom IMAP","provider":"imap","scopes":["mail.read_only","mail.send"]}
+		]}`))
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	configPath := filepath.Join(configHome, "nylas", "config.yaml")
+	configStore := config.NewFileStore(configPath)
+	if err := configStore.Save(&domain.Config{
+		Region: "us",
+		API:    &domain.APIConfig{BaseURL: server.URL},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	overrides := map[string]string{
+		"XDG_CONFIG_HOME":             configHome,
+		"HOME":                        tempDir,
+		"NYLAS_API_KEY":               "test-api-key",
+		"NYLAS_CLIENT_ID":             "",
+		"NYLAS_CLIENT_SECRET":         "",
+		"NYLAS_GRANT_ID":              "",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+	}
+
+	stdout, stderr, err := runCLIWithOverrides(30*time.Second, overrides, "auth", "providers")
+	if err != nil {
+		t.Fatalf("auth providers failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	for _, unwanted := range []string{"Provider:   inbox", "\n  Inbox\n"} {
+		if strings.Contains(stdout, unwanted) {
+			t.Fatalf("auth providers unexpectedly exposed inbox connector: %s", stdout)
+		}
+	}
+	for _, wanted := range []string{"Provider:   google", "Provider:   imap"} {
+		if !strings.Contains(stdout, wanted) {
+			t.Fatalf("auth providers output %q does not contain %q", stdout, wanted)
+		}
+	}
+
+	stdout, stderr, err = runCLIWithOverrides(30*time.Second, overrides, "auth", "providers", "--json")
+	if err != nil {
+		t.Fatalf("auth providers --json failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	assertNoInboxConnector(t, stdout)
+
+	stdout, stderr, err = runCLIWithOverrides(30*time.Second, overrides, "admin", "connectors", "list")
+	if err != nil {
+		t.Fatalf("admin connectors list failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if strings.Contains(stdout, "inbox") {
+		t.Fatalf("admin connectors list unexpectedly exposed inbox connector: %s", stdout)
+	}
+	for _, wanted := range []string{"google", "imap"} {
+		if !strings.Contains(stdout, wanted) {
+			t.Fatalf("admin connectors list output %q does not contain %q", stdout, wanted)
+		}
+	}
+
+	stdout, stderr, err = runCLIWithOverrides(30*time.Second, overrides, "admin", "connectors", "list", "--json")
+	if err != nil {
+		t.Fatalf("admin connectors list --json failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	assertNoInboxConnector(t, stdout)
+}
+
 func TestCLI_AuthProviders_HidesEmptyConnectorFields(t *testing.T) {
 	if testBinary == "" {
 		t.Skip("CLI binary not found")
@@ -359,6 +443,101 @@ func TestCLI_AuthProviders_HidesEmptyConnectorFields(t *testing.T) {
 	} {
 		if strings.Contains(stdout, unwanted) {
 			t.Fatalf("stdout %q unexpectedly contains blank field %q", stdout, unwanted)
+		}
+	}
+}
+
+func TestCLI_AdminConnectorsCreate_RejectsInboxProvider(t *testing.T) {
+	if testBinary == "" {
+		t.Skip("CLI binary not found")
+	}
+
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	configPath := filepath.Join(configHome, "nylas", "config.yaml")
+	configStore := config.NewFileStore(configPath)
+	if err := configStore.Save(&domain.Config{Region: "us"}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	stdout, stderr, err := runCLIWithOverrides(30*time.Second, map[string]string{
+		"XDG_CONFIG_HOME":             configHome,
+		"HOME":                        tempDir,
+		"NYLAS_API_KEY":               "test-api-key",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+	}, "admin", "connectors", "create", "--name", "Removed Inbox", "--provider", "inbox")
+	if err == nil {
+		t.Fatalf("expected admin connectors create --provider inbox to fail\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "invalid provider: inbox") {
+		t.Fatalf("stderr %q does not mention rejected inbox provider", stderr)
+	}
+}
+
+func TestCLI_AdminConnectorsShow_HidesInboxProvider(t *testing.T) {
+	if testBinary == "" {
+		t.Skip("CLI binary not found")
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v3/connectors/conn-inbox-1" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"conn-inbox-1","name":"Inbox","provider":"inbox"}}`))
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	configPath := filepath.Join(configHome, "nylas", "config.yaml")
+	configStore := config.NewFileStore(configPath)
+	if err := configStore.Save(&domain.Config{
+		Region: "us",
+		API:    &domain.APIConfig{BaseURL: server.URL},
+	}); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	overrides := map[string]string{
+		"XDG_CONFIG_HOME":             configHome,
+		"HOME":                        tempDir,
+		"NYLAS_API_KEY":               "test-api-key",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+	}
+
+	for _, args := range [][]string{
+		{"admin", "connectors", "show", "conn-inbox-1"},
+		{"admin", "connectors", "show", "conn-inbox-1", "--json"},
+	} {
+		stdout, stderr, err := runCLIWithOverrides(30*time.Second, overrides, args...)
+		if err == nil {
+			t.Fatalf("expected %v to fail\nstdout: %s\nstderr: %s", args, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "connector not found") {
+			t.Fatalf("stderr %q does not report connector not found for %v", stderr, args)
+		}
+		if strings.Contains(stdout, "provider") || strings.Contains(stdout, "inbox") {
+			t.Fatalf("stdout %q unexpectedly exposed inbox connector for %v", stdout, args)
+		}
+	}
+}
+
+func assertNoInboxConnector(t *testing.T, stdout string) {
+	t.Helper()
+
+	var connectors []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &connectors); err != nil {
+		t.Fatalf("failed to parse connectors JSON: %v\noutput: %s", err, stdout)
+	}
+
+	for _, connector := range connectors {
+		if provider, _ := connector["provider"].(string); strings.EqualFold(provider, "inbox") {
+			t.Fatalf("JSON output still exposed removed inbox provider: %s", stdout)
 		}
 	}
 }

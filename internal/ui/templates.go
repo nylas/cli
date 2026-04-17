@@ -26,7 +26,6 @@ type Commands struct {
 	Email     []Command `json:"email"`
 	Calendar  []Command `json:"calendar"`
 	Contacts  []Command `json:"contacts"`
-	Inbound   []Command `json:"inbound"`
 	Scheduler []Command `json:"scheduler"`
 	Timezone  []Command `json:"timezone"`
 	Webhook   []Command `json:"webhook"`
@@ -159,14 +158,6 @@ func GetDefaultCommands() Commands {
 			{Key: "groups-show", Title: "Show Group", Cmd: "contacts groups show", Desc: "Show group details", ParamName: "group-id", Placeholder: "Enter group ID..."},
 			{Key: "photo-info", Title: "Photo Info", Cmd: "contacts photo info", Desc: "Show photo info", ParamName: "contact-id", Placeholder: "Enter contact ID..."},
 			{Key: "sync", Title: "Sync Info", Cmd: "contacts sync", Desc: "Contact sync info"},
-		},
-		Inbound: []Command{
-			{Key: "list", Title: "List", Cmd: "inbound list", Desc: "List inbound inboxes"},
-			{Key: "show", Title: "Show", Cmd: "inbound show", Desc: "Show inbox details", ParamName: "inbox-id", Placeholder: "Enter inbox ID..."},
-			{Key: "create", Title: "Create", Cmd: "inbound create", Desc: "Create a new inbox", ParamName: "name", Placeholder: "Enter inbox name..."},
-			{Key: "delete", Title: "Delete", Cmd: "inbound delete", Desc: "Delete an inbox", ParamName: "inbox-id", Placeholder: "Enter inbox ID..."},
-			{Key: "messages", Title: "Messages", Cmd: "inbound messages", Desc: "View inbox messages", ParamName: "inbox-id", Placeholder: "Enter inbox ID..."},
-			{Key: "monitor", Title: "Monitor", Cmd: "inbound monitor", Desc: "Monitor for new messages", ParamName: "inbox-id", Placeholder: "Enter inbox ID..."},
 		},
 		Scheduler: []Command{
 			{Key: "config-list", Title: "List Configs", Cmd: "scheduler configurations list", Desc: "List scheduler configurations"},

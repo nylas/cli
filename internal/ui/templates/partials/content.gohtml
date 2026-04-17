@@ -113,12 +113,6 @@
                         </svg>
                         <span>Email</span>
                     </button>
-                    <button class="nav-item" data-page="inbound" onclick="switchPage('inbound')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                        </svg>
-                        <span>Inbound</span>
-                    </button>
                     <button class="nav-item" data-page="notetaker" onclick="switchPage('notetaker')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
@@ -172,7 +166,6 @@
             {{template "page-calendar" .}}
             {{template "page-contacts" .}}
             {{template "page-email" .}}
-            {{template "page-inbound" .}}
             {{template "page-notetaker" .}}
             {{template "page-otp" .}}
             {{template "page-scheduler" .}}

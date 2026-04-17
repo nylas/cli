@@ -456,7 +456,6 @@ func TestCommandsJSContainsNoDashboardOldURL(t *testing.T) {
 		"static/js/commands-calendar.js",
 		"static/js/commands-contacts.js",
 		"static/js/commands-scheduler.js",
-		"static/js/commands-inbound.js",
 		"static/js/commands-timezone.js",
 		"static/js/commands-webhook.js",
 		"static/js/commands-otp.js",

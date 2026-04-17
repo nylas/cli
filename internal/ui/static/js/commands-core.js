@@ -11,7 +11,6 @@ let cachedCalendarIds = [];  // [{id: "calendar-id", label: "Calendar Name"}, ..
 let cachedEventIds = [];     // [{id: "event-id", label: "Event Title"}, ...]
 let cachedGrantIds = [];     // [{id: "grant-id", label: "email@example.com (Provider)"}, ...]
 let cachedContactIds = [];   // [{id: "contact-id", label: "John Doe (john@example.com)"}, ...]
-let cachedInboxIds = [];     // [{id: "inbox-id", label: "support@app.nylas.email"}, ...]
 let cachedWebhookIds = [];   // [{id: "webhook-id", label: "https://example.com/webhook"}, ...]
 let cachedNotetakerIds = []; // [{id: "notetaker-id", label: "Team Standup"}, ...]
 
@@ -311,43 +310,6 @@ function parseContactIdsFromOutput(output) {
 }
 
 /**
- * Parse inbound list output to extract inbox IDs.
- */
-function parseInboxIdsFromOutput(output) {
-    const ids = [];
-    const lines = output.split('\n');
-    let dataStarted = false;
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-
-        if (trimmed.startsWith('ID') && trimmed.includes('ADDRESS')) {
-            dataStarted = true;
-            continue;
-        }
-
-        if (!dataStarted) continue;
-        if (trimmed.includes('───') || trimmed.includes('---') || trimmed.includes('inboxes')) continue;
-
-        const parts = trimmed.split(/\s{2,}/);
-        if (parts.length >= 2) {
-            const id = parts[0].trim();
-            const address = parts[1].trim();
-
-            if (id && id.length >= 5 && !id.includes('ID') && address.includes('@')) {
-                ids.push({
-                    id: id,
-                    label: address
-                });
-            }
-        }
-    }
-
-    return ids;
-}
-
-/**
  * Parse webhook list output to extract webhook IDs.
  */
 function parseWebhookIdsFromOutput(output) {
@@ -434,7 +396,6 @@ function getCachedCalendarIds() { return cachedCalendarIds; }
 function getCachedEventIds() { return cachedEventIds; }
 function getCachedGrantIds() { return cachedGrantIds; }
 function getCachedContactIds() { return cachedContactIds; }
-function getCachedInboxIds() { return cachedInboxIds; }
 function getCachedWebhookIds() { return cachedWebhookIds; }
 function getCachedNotetakerIds() { return cachedNotetakerIds; }
 
@@ -451,7 +412,6 @@ function clearAllCachedIds() {
     cachedEventIds = [];
     cachedGrantIds = [];
     cachedContactIds = [];
-    cachedInboxIds = [];
     cachedWebhookIds = [];
     cachedNotetakerIds = [];
 }
@@ -459,7 +419,7 @@ function clearAllCachedIds() {
 function getTotalCachedCount() {
     return cachedMessageIds.length + cachedFolderIds.length + cachedScheduleIds.length +
            cachedThreadIds.length + cachedCalendarIds.length + cachedEventIds.length +
-           cachedGrantIds.length + cachedContactIds.length + cachedInboxIds.length +
+           cachedGrantIds.length + cachedContactIds.length +
            cachedWebhookIds.length + cachedNotetakerIds.length;
 }
 
@@ -470,7 +430,6 @@ function updateCacheCountBadge() {
         'calendar-cache-count-badge',
         'auth-cache-count-badge',
         'contacts-cache-count-badge',
-        'inbound-cache-count-badge',
         'webhook-cache-count-badge',
         'notetaker-cache-count-badge'
     ];
@@ -505,7 +464,6 @@ function clearCacheAndNotify() {
         { current: 'currentCalendarCmd', commands: 'calendarCommands', prefix: 'calendar' },
         { current: 'currentAuthCmd', commands: 'authCommands', prefix: 'auth' },
         { current: 'currentContactsCmd', commands: 'contactsCommands', prefix: 'contacts' },
-        { current: 'currentInboundCmd', commands: 'inboundCommands', prefix: 'inbound' },
         { current: 'currentWebhookCmd', commands: 'webhookCommands', prefix: 'webhook' },
         { current: 'currentNotetakerCmd', commands: 'notetakerCommands', prefix: 'notetaker' }
     ];

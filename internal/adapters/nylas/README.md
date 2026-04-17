@@ -20,7 +20,6 @@ This package implements the `ports.NylasClient` interface for the Nylas v3 API.
 | `scheduler.go` | Scheduling pages and bookings |
 | `notetakers.go` | Meeting notetaker (Nylas Notetaker API) |
 | `admin.go` | Admin operations (applications, grants) |
-| `inbound.go` | Inbound email parsing |
 
 ## Special Files
 

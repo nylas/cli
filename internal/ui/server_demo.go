@@ -119,25 +119,6 @@ Showing 5 of 127 contacts`
 
 4 groups found`
 
-	case "inbound list":
-		return `Demo Mode - Inbound Inboxes
-
-  ID                     ADDRESS                           STATUS
-  inbox-001              support@yourapp.nylas.email       Active
-  inbox-002              leads@yourapp.nylas.email         Active
-  inbox-003              tickets@yourapp.nylas.email       Active
-
-3 inbound inboxes`
-
-	case "inbound messages":
-		return `Demo Mode - Inbound Messages
-
-  ★ ●  customer@email.com    Need help with billing       5 min ago
-    ●  lead@company.com      Interested in your product   1 hour ago
-       partner@business.com  Partnership inquiry          3 hours ago
-
-Showing 3 of 42 messages`
-
 	case "scheduler configurations":
 		return `Demo Mode - Scheduler Configurations
 

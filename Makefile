@@ -1,4 +1,4 @@
-.PHONY: build test-unit test-race test-integration test-integration-fast test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
+.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
 
 # Disable parallel Make execution - prevents Go build cache corruption on btrfs (CachyOS)
 .NOTPARALLEL:
@@ -15,7 +15,7 @@ export
 NYLAS_API_KEY := $(patsubst "%",%,$(patsubst '%',%,$(NYLAS_API_KEY)))
 NYLAS_GRANT_ID := $(patsubst "%",%,$(patsubst '%',%,$(NYLAS_GRANT_ID)))
 NYLAS_CLIENT_ID := $(patsubst "%",%,$(patsubst '%',%,$(NYLAS_CLIENT_ID)))
-NYLAS_INBOUND_GRANT_ID := $(patsubst "%",%,$(patsubst '%',%,$(NYLAS_INBOUND_GRANT_ID)))
+NYLAS_AGENT_DOMAIN := $(patsubst "%",%,$(patsubst '%',%,$(NYLAS_AGENT_DOMAIN)))
 
 # Rate limit defaults (can be overridden in .env)
 NYLAS_TEST_RATE_LIMIT_RPS ?= 1.0
@@ -146,6 +146,35 @@ test-integration-fast:
 		go test ./internal/cli/integration/... -tags=integration -v -timeout 2m -p 1 \
 			-run "TestCLI_Admin|TestCLI_Timezone|TestCLI_AIConfig|TestCLI_AIProvider|TestCLI_CalendarAI_Basic|TestCLI_CalendarAI_Adapt|TestCLI_CalendarAI_Analyze_Respects|TestCLI_CalendarAI_Analyze_Default|TestCLI_CalendarAI_Analyze_Disabled|TestCLI_CalendarAI_Analyze_Focus|TestCLI_CalendarAI_Analyze_With" \
 	'
+
+# Focused CLI regression checks for command removals and agent behavior.
+# This makes ci-full explicitly verify the removed inbound surface and auth-level provider rejection.
+test-cli-regressions: build
+	@echo "=== Running CLI Regression Checks ==="
+	@go clean -testcache
+	go test ./internal/cli/agent -v
+	NYLAS_DISABLE_KEYRING=true \
+	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
+		-run 'TestCLI_(InboundRemoved|InboxAliasRemoved|HelpOmitsInbound|AuthLoginRejectsInboxProvider|ConnectorSurfaces_HideInboxProvider|AdminConnectorsCreate_RejectsInboxProvider|AdminConnectorsShow_HidesInboxProvider)$$'
+	@echo "✓ CLI regression checks passed"
+
+# Agent integration checks require explicit credentials plus an agent domain so the lifecycle suites do not self-skip.
+test-integration-agent: build
+	@echo "=== Running Agent Integration Checks ==="
+	@: "$${NYLAS_API_KEY:?NYLAS_API_KEY is required for agent integration tests}"
+	@: "$${NYLAS_GRANT_ID:?NYLAS_GRANT_ID is required for agent integration tests}"
+	@: "$${NYLAS_AGENT_DOMAIN:?NYLAS_AGENT_DOMAIN is required for agent integration tests}"
+	@go clean -testcache
+	NYLAS_DISABLE_KEYRING=true \
+	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
+		-run 'TestCLI_Agent.*$$'
+	@echo "✓ Agent integration checks passed"
 
 # Clean up test resources (virtual calendars, test grants, test events, test emails, etc.)
 test-cleanup:
@@ -311,6 +340,16 @@ ci-full:
 		set -eu; \
 		exec > >(tee -a ci-full.txt) 2>&1; \
 		$(MAKE) --no-print-directory ci; \
+		echo ""; \
+		echo "================================="; \
+		echo "Running CLI Regression Checks..."; \
+		echo "================================="; \
+		$(MAKE) --no-print-directory test-cli-regressions; \
+		echo ""; \
+		echo "================================="; \
+		echo "Running Agent Integration Checks..."; \
+		echo "================================="; \
+		$(MAKE) --no-print-directory test-integration-agent; \
 		echo ""; \
 		echo "================================="; \
 		echo "Running Integration Tests..."; \

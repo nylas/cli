@@ -73,31 +73,6 @@ func (c *HTTPClient) getManagedGrant(ctx context.Context, grantID string) (*mana
 	return &result.Data, nil
 }
 
-func (c *HTTPClient) createManagedGrant(ctx context.Context, provider domain.Provider, email string) (*managedGrantResponse, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
-
-	payload := map[string]any{
-		"provider": string(provider),
-		"settings": map[string]string{
-			"email": email,
-		},
-	}
-
-	resp, err := c.doJSONRequest(ctx, "POST", queryURL, payload)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Data managedGrantResponse `json:"data"`
-	}
-	if err := c.decodeJSONResponse(resp, &result); err != nil {
-		return nil, err
-	}
-
-	return &result.Data, nil
-}
-
 func (c *HTTPClient) deleteManagedGrant(ctx context.Context, grantID string, expectedProvider domain.Provider) error {
 	grant, err := c.getManagedGrant(ctx, grantID)
 	if err != nil {
@@ -111,17 +86,6 @@ func (c *HTTPClient) deleteManagedGrant(ctx context.Context, grantID string, exp
 	}
 
 	return c.RevokeGrant(ctx, grantID)
-}
-
-func convertManagedGrantToInboundInbox(grant managedGrantResponse) domain.InboundInbox {
-	return domain.InboundInbox{
-		ID:          grant.ID,
-		Email:       grant.Email,
-		PolicyID:    grant.Settings.PolicyID,
-		GrantStatus: grant.GrantStatus,
-		CreatedAt:   grant.CreatedAt,
-		UpdatedAt:   grant.UpdatedAt,
-	}
 }
 
 func convertManagedGrantToAgentAccount(grant managedGrantResponse) domain.AgentAccount {

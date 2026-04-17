@@ -21,10 +21,9 @@ type rulePolicyRef struct {
 }
 
 type agentPolicyScope struct {
-	AllPolicies       []domain.Policy
-	AgentPolicies     []domain.Policy
-	PolicyRefsByID    map[string][]policyAgentAccountRef
-	NonAgentPolicyIDs map[string]struct{}
+	AllPolicies    []domain.Policy
+	AgentPolicies  []domain.Policy
+	PolicyRefsByID map[string][]policyAgentAccountRef
 }
 
 type resolvedRuleScope struct {
@@ -77,16 +76,10 @@ func loadAgentPolicyScope(ctx context.Context, client ports.NylasClient) (*agent
 	refsByPolicyID := buildPolicyAccountRefs(accounts)
 	agentPolicies := filterPoliciesWithAgentAccounts(policies, refsByPolicyID)
 
-	inboxes, err := client.ListInboundInboxes(ctx)
-	if err != nil {
-		return nil, common.WrapListError("inbound inboxes", err)
-	}
-
 	return &agentPolicyScope{
-		AllPolicies:       policies,
-		AgentPolicies:     agentPolicies,
-		PolicyRefsByID:    refsByPolicyID,
-		NonAgentPolicyIDs: buildNonAgentPolicyIDs(inboxes),
+		AllPolicies:    policies,
+		AgentPolicies:  agentPolicies,
+		PolicyRefsByID: refsByPolicyID,
 	}, nil
 }
 
@@ -257,7 +250,7 @@ func resolveScopedRule(ctx context.Context, client ports.NylasClient, ruleID, po
 		SelectedRefs:       selectedRefs,
 		AllAgentRefs:       allRefs,
 		AllAgentPolicies:   scope.AgentPolicies,
-		SharedOutsideAgent: ruleReferencedOutsideAgentScope(scope.AllPolicies, scope.AgentPolicies, scope.NonAgentPolicyIDs, ruleID),
+		SharedOutsideAgent: ruleReferencedOutsideAgentScope(scope.AllPolicies, scope.AgentPolicies, ruleID),
 	}, nil
 }
 
@@ -271,7 +264,7 @@ func filterRuleRefsByPolicyID(refs []rulePolicyRef, policyID string) []rulePolic
 	return filtered
 }
 
-func ruleReferencedOutsideAgentScope(allPolicies, agentPolicies []domain.Policy, nonAgentPolicyIDs map[string]struct{}, ruleID string) bool {
+func ruleReferencedOutsideAgentScope(allPolicies, agentPolicies []domain.Policy, ruleID string) bool {
 	agentPolicyIDs := make(map[string]struct{}, len(agentPolicies))
 	for _, policy := range agentPolicies {
 		agentPolicyIDs[policy.ID] = struct{}{}
@@ -282,9 +275,6 @@ func ruleReferencedOutsideAgentScope(allPolicies, agentPolicies []domain.Policy,
 			continue
 		}
 		if _, ok := agentPolicyIDs[policy.ID]; !ok {
-			return true
-		}
-		if _, ok := nonAgentPolicyIDs[policy.ID]; ok {
 			return true
 		}
 	}

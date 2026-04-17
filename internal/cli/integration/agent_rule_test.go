@@ -332,20 +332,48 @@ func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
 
 	env := newAgentSandboxEnv(t)
 	client := getTestClient()
-	sharedPolicyID := findNonAgentOnlyPolicyIDForTest(t, client)
-	if sharedPolicyID == "" {
-		t.Skip("no non-agent-only policy available to build mixed scope in this environment")
-	}
-
 	email := newAgentTestEmail(t, "rule-mixed")
-	createdAccount := createAgentWithPolicyForTest(t, email, sharedPolicyID)
-	createdRule := createRuleForTest(t, client, fmt.Sprintf("it-rule-mixed-%d", time.Now().UnixNano()))
-	attachRuleToPolicyForTest(t, client, sharedPolicyID, createdRule.ID)
-	assertPolicyContainsRuleForTest(t, client, sharedPolicyID, createdRule.ID)
+	agentPolicyName := newPolicyTestName("rule-mixed-agent")
+	detachedPolicyName := newPolicyTestName("rule-mixed-detached")
+
+	var agentPolicy *domain.Policy
+	var detachedPolicy *domain.Policy
+	var createdAccount *domain.AgentAccount
+	var createdRule *domain.Rule
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	policy, err := client.CreatePolicy(ctx, map[string]any{"name": agentPolicyName})
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create agent policy for mixed-scope rule test: %v", err)
+	}
+	agentPolicy = policy
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	policy, err = client.CreatePolicy(ctx, map[string]any{"name": detachedPolicyName})
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create detached policy for mixed-scope rule test: %v", err)
+	}
+	detachedPolicy = policy
+
+	createdAccount = createAgentWithPolicyForTest(t, email, agentPolicy.ID)
+	createdRule = createRuleForTest(t, client, fmt.Sprintf("it-rule-mixed-%d", time.Now().UnixNano()))
+	attachRuleToPolicyForTest(t, client, agentPolicy.ID, createdRule.ID)
+	attachRuleToPolicyForTest(t, client, detachedPolicy.ID, createdRule.ID)
+	assertPolicyContainsRuleForTest(t, client, agentPolicy.ID, createdRule.ID)
+	assertPolicyContainsRuleForTest(t, client, detachedPolicy.ID, createdRule.ID)
 
 	t.Cleanup(func() {
 		if createdRule != nil && createdRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, sharedPolicyID, createdRule.ID)
+			if agentPolicy != nil && agentPolicy.ID != "" {
+				removeRuleFromPolicyForTest(t, client, agentPolicy.ID, createdRule.ID)
+			}
+			if detachedPolicy != nil && detachedPolicy.ID != "" {
+				removeRuleFromPolicyForTest(t, client, detachedPolicy.ID, createdRule.ID)
+			}
 		}
 		if createdRule != nil && createdRule.ID != "" {
 			acquireRateLimit(t)
@@ -358,6 +386,18 @@ func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_ = client.DeleteAgentAccount(ctx, createdAccount.ID)
+		}
+		if detachedPolicy != nil && detachedPolicy.ID != "" {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeletePolicy(ctx, detachedPolicy.ID)
+		}
+		if agentPolicy != nil && agentPolicy.ID != "" {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeletePolicy(ctx, agentPolicy.ID)
 		}
 	})
 	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
@@ -372,7 +412,7 @@ func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
 		"rule",
 		"update",
 		createdRule.ID,
-		"--policy-id", sharedPolicyID,
+		"--policy-id", agentPolicy.ID,
 		"--name", fmt.Sprintf("reject-mixed-%d", time.Now().UnixNano()),
 		"--json",
 	)
@@ -391,7 +431,7 @@ func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
 		"rule",
 		"delete",
 		createdRule.ID,
-		"--policy-id", sharedPolicyID,
+		"--policy-id", agentPolicy.ID,
 		"--yes",
 	)
 	if err == nil {

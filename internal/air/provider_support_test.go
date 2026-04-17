@@ -117,7 +117,7 @@ func TestHandleCacheSync_FiltersSupportedProviders(t *testing.T) {
 		},
 		{
 			name:      "does not sync requested unsupported provider",
-			query:     "/api/cache/sync?email=inbox@example.com",
+			query:     "/api/cache/sync?email=virtual@example.com",
 			wantCount: 0,
 		},
 	}
@@ -140,7 +140,7 @@ func TestHandleCacheSync_FiltersSupportedProviders(t *testing.T) {
 					grants: []domain.GrantInfo{
 						{ID: "grant-google", Email: "google@example.com", Provider: domain.ProviderGoogle},
 						{ID: "grant-nylas", Email: "nylas@example.com", Provider: domain.ProviderNylas},
-						{ID: "grant-inbox", Email: "inbox@example.com", Provider: domain.ProviderInbox},
+						{ID: "grant-virtual", Email: "virtual@example.com", Provider: domain.ProviderVirtual},
 						{ID: "grant-imap", Email: "imap@example.com", Provider: domain.ProviderIMAP},
 					},
 					defaultGrant: "grant-google",

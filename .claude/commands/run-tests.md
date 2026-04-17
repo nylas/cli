@@ -48,10 +48,6 @@ export NYLAS_API_KEY="your-api-key"
 export NYLAS_GRANT_ID="your-grant-id"
 export NYLAS_TEST_BINARY="$(pwd)/bin/nylas"
 
-# For inbound tests
-export NYLAS_INBOUND_GRANT_ID="your-inbound-inbox-id"
-export NYLAS_INBOUND_EMAIL="your-inbox@nylas.email"
-
 # For email send tests
 export NYLAS_TEST_SEND_EMAIL="true"       # Enable send email tests
 export NYLAS_TEST_EMAIL="test@example.com" # Recipient for send tests
@@ -60,8 +56,6 @@ export NYLAS_TEST_CC_EMAIL="cc@example.com" # CC recipient (optional)
 # Optional - for destructive tests
 export NYLAS_TEST_DELETE="true"           # Enable delete tests (contacts, folders, webhooks, drafts, calendars)
 export NYLAS_TEST_DELETE_MESSAGE="true"   # Enable email message delete tests
-export NYLAS_TEST_CREATE_INBOUND="true"   # Enable inbound inbox create tests
-export NYLAS_TEST_DELETE_INBOUND="true"   # Enable inbound inbox delete tests
 ```
 
 Build binary first:

@@ -52,13 +52,6 @@ func TestAllowedCommands(t *testing.T) {
 		{"contacts search", "contacts search", true},
 		{"contacts groups", "contacts groups", true},
 
-		// Inbound commands
-		{"inbound list", "inbound list", true},
-		{"inbound show", "inbound show", true},
-		{"inbound create", "inbound create", true},
-		{"inbound messages", "inbound messages", true},
-		{"inbound monitor", "inbound monitor", true},
-
 		// Scheduler commands
 		{"scheduler configurations", "scheduler configurations", true},
 		{"scheduler sessions", "scheduler sessions", true},
@@ -183,7 +176,6 @@ func TestAllowedCommandsCompleteness(t *testing.T) {
 		"email",
 		"calendar",
 		"contacts",
-		"inbound",
 		"scheduler",
 		"timezone",
 		"webhook",

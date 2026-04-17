@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -123,6 +124,9 @@ func TestCLI_AdminConnectorsList(t *testing.T) {
 	if !strings.Contains(stdout, "Found") && !strings.Contains(stdout, "No connectors found") {
 		t.Errorf("Expected connectors list output, got: %s", stdout)
 	}
+	if strings.Contains(stdout, "inbox") {
+		t.Fatalf("admin connectors list still exposes removed inbox provider: %s", stdout)
+	}
 
 	t.Logf("admin connectors list output:\n%s", stdout)
 }
@@ -141,6 +145,15 @@ func TestCLI_AdminConnectorsListJSON(t *testing.T) {
 	trimmed := strings.TrimSpace(stdout)
 	if len(trimmed) > 0 && !strings.HasPrefix(trimmed, "[") {
 		t.Errorf("Expected JSON array output, got: %s", stdout)
+	}
+	var connectors []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &connectors); err != nil {
+		t.Fatalf("failed to parse admin connectors list JSON: %v\noutput: %s", err, stdout)
+	}
+	for _, connector := range connectors {
+		if provider, _ := connector["provider"].(string); strings.EqualFold(provider, "inbox") {
+			t.Fatalf("admin connectors list --json still exposes removed inbox provider: %s", stdout)
+		}
 	}
 
 	t.Logf("admin connectors list --json output:\n%s", stdout)

@@ -10,7 +10,6 @@ const (
 	ProviderMicrosoft Provider = "microsoft"
 	ProviderIMAP      Provider = "imap"
 	ProviderVirtual   Provider = "virtual"
-	ProviderInbox     Provider = "inbox" // Nylas Native Auth
 	ProviderNylas     Provider = "nylas"
 )
 
@@ -28,8 +27,6 @@ func (p Provider) DisplayName() string {
 		return "IMAP"
 	case ProviderVirtual:
 		return "Virtual"
-	case ProviderInbox:
-		return "Inbox"
 	case ProviderNylas:
 		return "Nylas"
 	default:
@@ -40,7 +37,7 @@ func (p Provider) DisplayName() string {
 // IsValid checks if the provider is a known type.
 func (p Provider) IsValid() bool {
 	switch p {
-	case ProviderGoogle, ProviderMicrosoft, ProviderIMAP, ProviderVirtual, ProviderInbox, ProviderNylas:
+	case ProviderGoogle, ProviderMicrosoft, ProviderIMAP, ProviderVirtual, ProviderNylas:
 		return true
 	default:
 		return false

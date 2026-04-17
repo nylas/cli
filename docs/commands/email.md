@@ -129,7 +129,7 @@ nylas email send --to "to@example.com" --subject "Hello" --body "Body" --yes
 - `--template-strict` - Fail if the hosted template references missing variables (default: true)
 - `--signature-id` - Append a stored signature when sending, creating a draft, or sending a draft
 
-**Managed providers (`inbox`, `nylas`):**
+**Managed provider (`nylas`):**
 - `nylas email send` uses the managed transactional send path automatically
 - the sender address is taken from the active grant email
 - `--signature-id` is not supported for managed transactional sends
@@ -198,7 +198,7 @@ nylas email send --list-gpg-keys
 
 `--signature-id` can't be combined with `--sign` or `--encrypt`, because stored signatures are only supported on the standard JSON send and draft endpoints.
 
-Managed transactional sends from `provider=inbox` or `provider=nylas` also do not support `--sign`, `--encrypt`, or `--signature-id`.
+Managed transactional sends from `provider=nylas` also do not support `--sign`, `--encrypt`, or `--signature-id`.
 
 ### Signatures
 
