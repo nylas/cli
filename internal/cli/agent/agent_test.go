@@ -2,6 +2,8 @@ package agent
 
 import (
 	"bytes"
+	"context"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -9,6 +11,14 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
+
+type ruleExistenceClient struct {
+	getRule func(context.Context, string) (*domain.Rule, error)
+}
+
+func (c ruleExistenceClient) GetRule(ctx context.Context, ruleID string) (*domain.Rule, error) {
+	return c.getRule(ctx, ruleID)
+}
 
 func TestNewAgentCmd(t *testing.T) {
 	cmd := NewAgentCmd()
@@ -44,7 +54,7 @@ func TestAccountCmd(t *testing.T) {
 	assert.Equal(t, "account", cmd.Use)
 	assert.Contains(t, cmd.Short, "accounts")
 
-	expected := []string{"create", "list", "get", "delete"}
+	expected := []string{"create", "update", "list", "get", "delete"}
 	cmdMap := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
 		cmdMap[sub.Name()] = true
@@ -57,9 +67,29 @@ func TestAccountCmd(t *testing.T) {
 func TestGetCmd(t *testing.T) {
 	cmd := newGetCmd()
 
-	assert.Equal(t, "get <agent-id|email>", cmd.Use)
+	assert.Equal(t, "get [agent-id|email]", cmd.Use)
 	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Contains(t, cmd.Long, "grant ID or by email address")
+	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
+}
+
+func TestUpdateCmd(t *testing.T) {
+	cmd := newUpdateCmd()
+
+	assert.Equal(t, "update [agent-id|email]", cmd.Use)
+	assert.NotNil(t, cmd.Flags().Lookup("json"))
+	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
+	assert.Contains(t, cmd.Long, "mutable settings")
+	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
+}
+
+func TestAccountDeleteCmd(t *testing.T) {
+	cmd := newDeleteCmd()
+
+	assert.Equal(t, "delete [agent-id|email]", cmd.Use)
+	assert.NotNil(t, cmd.Flags().Lookup("yes"))
+	assert.NotNil(t, cmd.Flags().Lookup("force"))
+	assert.NotContains(t, cmd.Long, "default provider=nylas grant")
 }
 
 func TestPolicyCmd(t *testing.T) {
@@ -167,6 +197,74 @@ func TestRuleUpdateCmd(t *testing.T) {
 	assert.NotNil(t, cmd.Flags().Lookup("condition"))
 	assert.NotNil(t, cmd.Flags().Lookup("action"))
 	assert.Contains(t, cmd.Long, "--condition")
+}
+
+func TestShouldRetryAgentCreateWithoutPassword(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "app password unsupported on create",
+			err:  assert.AnError,
+			want: false,
+		},
+		{
+			name: "unknown app password field",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "settings.app_password is an unknown field",
+			},
+			want: true,
+		},
+		{
+			name: "unexpected app password field",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "app_password field is not allowed on create",
+			},
+			want: true,
+		},
+		{
+			name: "extra fields not permitted",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "extra fields not permitted: app_password",
+			},
+			want: true,
+		},
+		{
+			name: "field not allowed phrasing",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "field not allowed: settings.app_password",
+			},
+			want: true,
+		},
+		{
+			name: "invalid app password value",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "invalid app_password length",
+			},
+			want: false,
+		},
+		{
+			name: "non app password error",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "domain is not registered",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldRetryAgentCreateWithoutPassword(tt.err))
+		})
+	}
 }
 
 func TestPrintPolicyDetails(t *testing.T) {
@@ -408,16 +506,63 @@ func TestRuleReferencedOutsideAgentScope(t *testing.T) {
 }
 
 func TestPoliciesLeftEmptyByRuleRemoval(t *testing.T) {
-	blocking := policiesLeftEmptyByRuleRemoval([]domain.Policy{
+	client := ruleExistenceClient{
+		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
+			switch ruleID {
+			case "rule-1", "rule-2", "rule-3":
+				return &domain.Rule{ID: ruleID}, nil
+			default:
+				return nil, domain.ErrRuleNotFound
+			}
+		},
+	}
+
+	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
 		{ID: "policy-last", Name: "Last Rule", Rules: []string{"rule-1"}},
 		{ID: "policy-shared", Name: "Has Spare", Rules: []string{"rule-1", "rule-2"}},
 		{ID: "policy-other", Name: "Other Rule", Rules: []string{"rule-3"}},
 	}, "rule-1")
+	assert.NoError(t, err)
 
 	if assert.Len(t, blocking, 1) {
 		assert.Equal(t, "policy-last", blocking[0].ID)
 		assert.Equal(t, "Last Rule", blocking[0].Name)
 	}
+}
+
+func TestPoliciesLeftEmptyByRuleRemoval_IgnoresDanglingReferences(t *testing.T) {
+	client := ruleExistenceClient{
+		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
+			if ruleID == "rule-1" {
+				return &domain.Rule{ID: ruleID}, nil
+			}
+			return nil, domain.ErrRuleNotFound
+		},
+	}
+
+	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
+		{ID: "policy-last", Name: "Last Live Rule", Rules: []string{"rule-1", "missing-rule"}},
+	}, "rule-1")
+	assert.NoError(t, err)
+
+	if assert.Len(t, blocking, 1) {
+		assert.Equal(t, "policy-last", blocking[0].ID)
+	}
+}
+
+func TestPoliciesLeftEmptyByRuleRemoval_PropagatesLookupErrors(t *testing.T) {
+	client := ruleExistenceClient{
+		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
+			return nil, context.DeadlineExceeded
+		},
+	}
+
+	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
+		{ID: "policy-last", Name: "Last Rule", Rules: []string{"rule-1", "rule-2"}},
+	}, "rule-1")
+
+	assert.Nil(t, blocking)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func captureStdout(t *testing.T, fn func()) string {

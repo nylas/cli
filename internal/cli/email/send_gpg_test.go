@@ -5,9 +5,34 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nylas/cli/internal/adapters/gpg"
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/domain"
 )
+
+func requireSigningKey(t *testing.T, ctx context.Context) string {
+	t.Helper()
+
+	gpgSvc := gpg.NewService()
+	if err := gpgSvc.CheckGPGAvailable(ctx); err != nil {
+		t.Skipf("GPG not configured, skipping test: %v", err)
+	}
+
+	key, err := gpgSvc.GetDefaultSigningKey(ctx)
+	if err == nil && key != nil && key.KeyID != "" {
+		return key.KeyID
+	}
+
+	keys, err := gpgSvc.ListSigningKeys(ctx)
+	if err != nil {
+		t.Skipf("GPG not configured, skipping test: %v", err)
+	}
+	if len(keys) == 0 {
+		t.Skip("GPG not configured, skipping test: no signing keys available")
+	}
+
+	return keys[0].KeyID
+}
 
 func TestHandleListGPGKeys_NoGPG(t *testing.T) {
 	// This test verifies handleListGPGKeys handles various GPG states gracefully
@@ -69,8 +94,7 @@ func TestSendSignedEmail_MockClient(t *testing.T) {
 		{Email: "test@example.com"},
 	}
 
-	// This will fail if GPG is not configured, which is expected
-	msg, err := sendSignedEmail(ctx, mockClient, "test-grant", req, "", toContacts, "Test Subject", "Test body")
+	msg, err := sendSignedEmail(ctx, mockClient, "test-grant", req, requireSigningKey(t, ctx), toContacts, "Test Subject", "Test body")
 
 	// If GPG is not available, we expect an error
 	if err != nil {
@@ -170,8 +194,7 @@ func TestSendSignedEmail_HTMLBody(t *testing.T) {
 		{Email: "test@example.com"},
 	}
 
-	// This will skip if GPG is not configured
-	msg, err := sendSignedEmail(ctx, mockClient, "test-grant", req, "", toContacts, "HTML Test", "<html><body><h1>Hello</h1></body></html>")
+	msg, err := sendSignedEmail(ctx, mockClient, "test-grant", req, requireSigningKey(t, ctx), toContacts, "HTML Test", "<html><body><h1>Hello</h1></body></html>")
 
 	if err != nil {
 		if strings.Contains(err.Error(), "GPG") || strings.Contains(err.Error(), "gpg") {

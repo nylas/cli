@@ -41,13 +41,15 @@ func newRuleCmd() *cobra.Command {
 		Long: `Manage rules used by policies attached to agent accounts.
 
 Rules are backed by the /v3/rules API. The agent namespace scopes them through
-policies that are attached to provider=nylas accounts.
+policies that are attached to provider=nylas accounts. This surface manages
+both inbound and outbound rules attached to those policies.
 
 Examples:
   nylas agent rule list
   nylas agent rule list --all
   nylas agent rule read <rule-id>
   nylas agent rule create --data-file rule.json
+  nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --action archive
   nylas agent rule update <rule-id> --name "Updated Rule"
   nylas agent rule delete <rule-id> --yes`,
 	}
@@ -316,17 +318,52 @@ func removeString(items []string, value string) []string {
 	return filtered
 }
 
-func policiesLeftEmptyByRuleRemoval(policies []domain.Policy, ruleID string) []domain.Policy {
+func refreshPolicies(ctx context.Context, client ports.NylasClient, policies []domain.Policy) ([]domain.Policy, error) {
+	refreshed := make([]domain.Policy, 0, len(policies))
+	for _, policy := range policies {
+		latest, err := client.GetPolicy(ctx, policy.ID)
+		if err != nil {
+			return nil, err
+		}
+		refreshed = append(refreshed, *latest)
+	}
+	return refreshed, nil
+}
+
+func policiesLeftEmptyByRuleRemoval(ctx context.Context, client interface {
+	GetRule(context.Context, string) (*domain.Rule, error)
+}, policies []domain.Policy, ruleID string) ([]domain.Policy, error) {
 	blocking := make([]domain.Policy, 0)
 	for _, policy := range policies {
 		if !policyContainsRule(policy, ruleID) {
 			continue
 		}
-		if len(removeString(policy.Rules, ruleID)) == 0 {
+
+		liveRemaining := false
+		for _, candidate := range removeString(policy.Rules, ruleID) {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == "" {
+				continue
+			}
+
+			_, err := client.GetRule(ctx, candidate)
+			switch {
+			case err == nil:
+				liveRemaining = true
+			case errors.Is(err, domain.ErrRuleNotFound):
+				continue
+			default:
+				return nil, err
+			}
+			if liveRemaining {
+				break
+			}
+		}
+		if !liveRemaining {
 			blocking = append(blocking, policy)
 		}
 	}
-	return blocking
+	return blocking, nil
 }
 
 func attachRuleToPolicy(ctx context.Context, client ports.NylasClient, policy domain.Policy, ruleID string) error {

@@ -6,22 +6,23 @@ import (
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadRulePayload(t *testing.T) {
 	payload, err := loadRulePayload("", "", rulePayloadOptions{
 		Name:       "Block Example",
 		Conditions: []string{"from.domain,is,example.com"},
-		Actions:    []string{"mark_as_spam"},
+		Actions:    []string{"block"},
 	}, true)
 	if assert.NoError(t, err) {
 		assert.Equal(t, "Block Example", payload["name"])
 		assert.Equal(t, true, payload["enabled"])
-		assert.Equal(t, "inbound", payload["trigger"])
+		assert.Equal(t, ruleTriggerInbound, payload["trigger"])
 
 		matchPayload, ok := payload["match"].(map[string]any)
 		if assert.True(t, ok) {
-			assert.Equal(t, "all", matchPayload["operator"])
+			assert.Equal(t, ruleMatchOperatorAll, matchPayload["operator"])
 			assert.Len(t, matchPayload["conditions"], 1)
 			conditions, ok := matchPayload["conditions"].([]domain.RuleCondition)
 			if assert.True(t, ok) && assert.Len(t, conditions, 1) {
@@ -31,51 +32,55 @@ func TestLoadRulePayload(t *testing.T) {
 
 		actions, ok := payload["actions"].([]domain.RuleAction)
 		if assert.True(t, ok) && assert.Len(t, actions, 1) {
-			assert.Equal(t, "mark_as_spam", actions[0].Type)
+			assert.Equal(t, ruleActionBlock, actions[0].Type)
 		}
 	}
 
 	payload, err = loadRulePayload(`{"name":"JSON Name","trigger":"inbound"}`, "", rulePayloadOptions{
-		Name:          "Flag Name",
+		Name:          "Archive VIP sender",
 		MatchOperator: "any",
-		Conditions:    []string{"from.address,is,ceo@example.com"},
-		Actions:       []string{"move_to_folder=vip"},
+		Conditions:    []string{"from.address,is,ceo@example.com", "from.domain,is,example.com"},
+		Actions:       []string{"assign_to_folder=vip", "mark_as_starred"},
 	}, true)
 	if assert.NoError(t, err) {
-		assert.Equal(t, "Flag Name", payload["name"])
+		assert.Equal(t, "Archive VIP sender", payload["name"])
 		matchPayload, ok := payload["match"].(map[string]any)
 		if assert.True(t, ok) {
-			assert.Equal(t, "any", matchPayload["operator"])
+			assert.Equal(t, ruleMatchOperatorAny, matchPayload["operator"])
 			conditions, ok := matchPayload["conditions"].([]domain.RuleCondition)
-			if assert.True(t, ok) && assert.Len(t, conditions, 1) {
+			if assert.True(t, ok) && assert.Len(t, conditions, 2) {
+				assert.Equal(t, ruleFieldFromAddress, conditions[0].Field)
 				assert.Equal(t, "ceo@example.com", conditions[0].Value)
+				assert.Equal(t, ruleFieldFromDomain, conditions[1].Field)
+				assert.Equal(t, "example.com", conditions[1].Value)
 			}
 		}
 		actions, ok := payload["actions"].([]domain.RuleAction)
-		if assert.True(t, ok) && assert.Len(t, actions, 1) {
-			assert.Equal(t, "move_to_folder", actions[0].Type)
+		if assert.True(t, ok) && assert.Len(t, actions, 2) {
+			assert.Equal(t, ruleActionAssignToFolder, actions[0].Type)
 			assert.Equal(t, "vip", actions[0].Value)
+			assert.Equal(t, ruleActionMarkAsStarred, actions[1].Type)
 		}
 	}
 
 	payload, err = loadRulePayload("", "", rulePayloadOptions{
-		Name:       "Preserve Strings",
-		Conditions: []string{"subject.contains,is,true", "from.tld,is,123"},
-		Actions:    []string{"move_to_folder=123", "tag=true"},
+		Name:       "List-based Inbound Rule",
+		Conditions: []string{"from.tld,in_list,list-123,list-456", "from.domain,is,example.com"},
+		Actions:    []string{"assign_to_folder=folder-123", "mark_as_read"},
 	}, true)
 	if assert.NoError(t, err) {
 		matchPayload, ok := payload["match"].(map[string]any)
 		if assert.True(t, ok) {
 			conditions, ok := matchPayload["conditions"].([]domain.RuleCondition)
 			if assert.True(t, ok) && assert.Len(t, conditions, 2) {
-				assert.Equal(t, "true", conditions[0].Value)
-				assert.Equal(t, "123", conditions[1].Value)
+				assert.Equal(t, []string{"list-123", "list-456"}, conditions[0].Value)
+				assert.Equal(t, "example.com", conditions[1].Value)
 			}
 		}
 		actions, ok := payload["actions"].([]domain.RuleAction)
 		if assert.True(t, ok) && assert.Len(t, actions, 2) {
-			assert.Equal(t, "123", actions[0].Value)
-			assert.Equal(t, "true", actions[1].Value)
+			assert.Equal(t, "folder-123", actions[0].Value)
+			assert.Nil(t, actions[1].Value)
 		}
 	}
 
@@ -84,14 +89,14 @@ func TestLoadRulePayload(t *testing.T) {
 
 	_, err = loadRulePayload("", "", rulePayloadOptions{
 		Name:    "Block Example",
-		Actions: []string{"mark_as_spam"},
+		Actions: []string{"block"},
 	}, true)
 	assert.EqualError(t, err, "rule create is missing required fields")
 
 	_, err = loadRulePayload("", "", rulePayloadOptions{
 		Name:        "Block Example",
 		Conditions:  []string{"from.domain,is,example.com"},
-		Actions:     []string{"mark_as_spam"},
+		Actions:     []string{"block"},
 		EnabledSet:  true,
 		DisabledSet: true,
 	}, true)
@@ -100,7 +105,7 @@ func TestLoadRulePayload(t *testing.T) {
 	_, err = loadRulePayload("", "", rulePayloadOptions{
 		Name:       "Block Example",
 		Conditions: []string{"invalid"},
-		Actions:    []string{"mark_as_spam"},
+		Actions:    []string{"block"},
 	}, true)
 	assert.EqualError(t, err, "invalid --condition value")
 
@@ -110,6 +115,261 @@ func TestLoadRulePayload(t *testing.T) {
 		Actions:    []string{"=broken"},
 	}, true)
 	assert.EqualError(t, err, "invalid --action value")
+}
+
+func TestLoadRulePayload_ValidatesSupportedRuleSurface(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		opts    rulePayloadOptions
+		wantErr string
+	}{
+		{
+			name: "unsupported trigger",
+			opts: rulePayloadOptions{
+				Name:       "Bad Trigger",
+				Trigger:    "scheduled",
+				Conditions: []string{"from.domain,is,example.com"},
+				Actions:    []string{"block"},
+			},
+			wantErr: "unsupported rule trigger",
+		},
+		{
+			name: "inbound rejects recipient field",
+			opts: rulePayloadOptions{
+				Name:       "Bad Inbound",
+				Trigger:    ruleTriggerInbound,
+				Conditions: []string{"recipient.domain,is,example.com"},
+				Actions:    []string{"block"},
+			},
+			wantErr: "inbound rules only support from.* conditions",
+		},
+		{
+			name: "assign_to_folder requires value",
+			opts: rulePayloadOptions{
+				Name:       "Missing Folder Value",
+				Conditions: []string{"from.domain,is,example.com"},
+				Actions:    []string{"assign_to_folder"},
+			},
+			wantErr: "assign_to_folder requires a folder value",
+		},
+		{
+			name: "block cannot combine",
+			opts: rulePayloadOptions{
+				Name:       "Mixed Block",
+				Conditions: []string{"from.domain,is,example.com"},
+				Actions:    []string{"block", "archive"},
+			},
+			wantErr: "block cannot be combined with other actions",
+		},
+		{
+			name: "flags create requires conditions and actions",
+			opts: rulePayloadOptions{
+				Name: "JSON Name",
+			},
+			wantErr: "rule create is missing required fields",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := loadRulePayload(tt.data, "", tt.opts, true)
+			assert.EqualError(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestLoadRulePayload_FlagSurfacePreservesLegacyAndFutureValues(t *testing.T) {
+	payload, err := loadRulePayload("", "", rulePayloadOptions{
+		Name:       "Legacy Rule",
+		Conditions: []string{"subject.contains,contains,vip"},
+		Actions:    []string{"move_to_folder=vip", "tag=important"},
+	}, true)
+	require.NoError(t, err)
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	require.True(t, ok)
+
+	conditions, ok := matchPayload["conditions"].([]domain.RuleCondition)
+	require.True(t, ok)
+	require.Len(t, conditions, 1)
+	assert.Equal(t, "subject.contains", conditions[0].Field)
+	assert.Equal(t, ruleConditionOperatorContains, conditions[0].Operator)
+	assert.Equal(t, "vip", conditions[0].Value)
+
+	actions, ok := payload["actions"].([]domain.RuleAction)
+	require.True(t, ok)
+	require.Len(t, actions, 2)
+	assert.Equal(t, ruleActionAssignToFolder, actions[0].Type)
+	assert.Equal(t, "vip", actions[0].Value)
+	assert.Equal(t, "tag", actions[1].Type)
+	assert.Equal(t, "important", actions[1].Value)
+}
+
+func TestLoadRulePayloadDetails_MixedJSONAndFlagsAreNotPureJSON(t *testing.T) {
+	loaded, err := loadRulePayloadDetails(`{"name":"Mixed","description":"Mixed"}`, "", rulePayloadOptions{
+		Conditions: []string{"from.domain,is,example.com"},
+		Actions:    []string{"archive"},
+	}, true)
+	require.NoError(t, err)
+	assert.True(t, loaded.UsingJSON)
+	assert.False(t, loaded.PureJSON)
+
+	matchPayload, ok := loaded.Payload["match"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, ruleMatchOperatorAll, matchPayload["operator"])
+}
+
+func TestLoadRulePayload_RawJSONRemainsOpaque(t *testing.T) {
+	payload, err := loadRulePayload(`{
+		"name":"Legacy JSON Rule",
+		"trigger":"inbound",
+		"match":{"conditions":[{"field":"subject.contains","operator":"contains","value":"vip"}]},
+		"actions":[{"type":"move_to_folder","value":"vip"}],
+		"future_field":"allowed-through"
+	}`, "", rulePayloadOptions{}, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Legacy JSON Rule", payload["name"])
+	assert.Equal(t, "inbound", payload["trigger"])
+	assert.Equal(t, "allowed-through", payload["future_field"])
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	if assert.True(t, ok) {
+		_, hasOperator := matchPayload["operator"]
+		assert.False(t, hasOperator)
+	}
+}
+
+func TestLoadRulePayload_SupportsOutboundRuleSurface(t *testing.T) {
+	payload, err := loadRulePayload("", "", rulePayloadOptions{
+		Name:          "Outbound Rule",
+		Trigger:       ruleTriggerOutbound,
+		MatchOperator: ruleMatchOperatorAny,
+		Conditions: []string{
+			"recipient.domain,is,example.com",
+			"outbound.type,is,compose",
+		},
+		Actions: []string{"archive"},
+	}, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, ruleTriggerOutbound, payload["trigger"])
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	if assert.True(t, ok) {
+		assert.Equal(t, ruleMatchOperatorAny, matchPayload["operator"])
+
+		conditions, ok := matchPayload["conditions"].([]domain.RuleCondition)
+		if assert.True(t, ok) {
+			if assert.Len(t, conditions, 2) {
+				assert.Equal(t, ruleFieldRecipientDomain, conditions[0].Field)
+				assert.Equal(t, "example.com", conditions[0].Value)
+				assert.Equal(t, ruleFieldOutboundType, conditions[1].Field)
+				assert.Equal(t, ruleOutboundTypeCompose, conditions[1].Value)
+			}
+		}
+	}
+}
+
+func TestValidateRulePayload_UsesExistingTriggerOnUpdate(t *testing.T) {
+	err := validateRulePayload(map[string]any{
+		"match": map[string]any{
+			"conditions": []domain.RuleCondition{{
+				Field:    ruleFieldFromDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.com",
+			}},
+		},
+		"actions": []domain.RuleAction{{
+			Type: ruleActionMarkAsSpam,
+		}},
+	}, &domain.Rule{
+		Trigger: ruleTriggerInbound,
+	})
+	assert.NoError(t, err)
+
+	err = validateRulePayload(map[string]any{
+		"match": map[string]any{
+			"conditions": []domain.RuleCondition{{
+				Field:    ruleFieldRecipientDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.com",
+			}, {
+				Field:    ruleFieldOutboundType,
+				Operator: ruleConditionOperatorIs,
+				Value:    ruleOutboundTypeReply,
+			}},
+		},
+		"actions": []domain.RuleAction{{
+			Type: ruleActionArchive,
+		}},
+	}, &domain.Rule{
+		Trigger: ruleTriggerOutbound,
+	})
+	assert.NoError(t, err)
+}
+
+func TestValidateRulePayload_RejectsTriggerOnlyUpdateWhenExistingConditionsAreIncompatible(t *testing.T) {
+	err := validateRulePayload(map[string]any{
+		"trigger": ruleTriggerInbound,
+	}, &domain.Rule{
+		Trigger: ruleTriggerOutbound,
+		Match: &domain.RuleMatch{
+			Conditions: []domain.RuleCondition{{
+				Field:    ruleFieldRecipientDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.com",
+			}},
+		},
+	})
+
+	assert.EqualError(t, err, "inbound rules only support from.* conditions")
+}
+
+func TestLoadRulePayload_FlagCreateDefaultsTriggerToInbound(t *testing.T) {
+	payload, err := loadRulePayload("", "", rulePayloadOptions{
+		Name:       "JSON Rule",
+		Conditions: []string{"from.domain,is,example.com"},
+		Actions:    []string{"archive"},
+	}, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, ruleTriggerInbound, payload["trigger"])
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	if assert.True(t, ok) {
+		assert.Equal(t, ruleMatchOperatorAll, matchPayload["operator"])
+	}
+}
+
+func TestLoadRulePayload_JSONCreateDoesNotInjectDefaults(t *testing.T) {
+	payload, err := loadRulePayload(`{
+		"name":"JSON Rule",
+		"match":{"conditions":[{"field":"from.domain","operator":"is","value":"example.com"}]},
+		"actions":[{"type":"archive"}]
+	}`, "", rulePayloadOptions{}, true)
+	require.NoError(t, err)
+
+	_, hasTrigger := payload["trigger"]
+	assert.False(t, hasTrigger)
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	if assert.True(t, ok) {
+		_, hasOperator := matchPayload["operator"]
+		assert.False(t, hasOperator)
+	}
+}
+
+func TestLoadRulePayload_AllowsMalformedJSONMatchPayloadThrough(t *testing.T) {
+	payload, err := loadRulePayload(`{
+		"name":"JSON Rule",
+		"match":"invalid",
+		"actions":[{"type":"archive"}]
+	}`, "", rulePayloadOptions{}, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, "invalid", payload["match"])
 }
 
 func TestPreserveRuleMatchOperator(t *testing.T) {
@@ -155,6 +415,77 @@ func TestPreserveRuleMatchOperator_NoOverride(t *testing.T) {
 	}
 }
 
+func TestFinalizeRuleUpdatePayload_SkipsValidationAndMutationForPureJSON(t *testing.T) {
+	payload := map[string]any{
+		"match": map[string]any{
+			"conditions": []domain.RuleCondition{{
+				Field:    ruleFieldRecipientDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.com",
+			}},
+		},
+	}
+
+	err := finalizeRuleUpdatePayload(payload, &domain.Rule{
+		Trigger: ruleTriggerInbound,
+		Match: &domain.RuleMatch{
+			Operator: ruleMatchOperatorAny,
+		},
+	}, true)
+	require.NoError(t, err)
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	require.True(t, ok)
+	_, hasOperator := matchPayload["operator"]
+	assert.False(t, hasOperator)
+}
+
+func TestFinalizeRuleUpdatePayload_MixedJSONAndFlagsPreservesOperator(t *testing.T) {
+	payload := map[string]any{
+		"description": "Updated",
+		"match": map[string]any{
+			"conditions": []domain.RuleCondition{{
+				Field:    ruleFieldFromDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.org",
+			}},
+		},
+	}
+
+	err := finalizeRuleUpdatePayload(payload, &domain.Rule{
+		Trigger: ruleTriggerInbound,
+		Match: &domain.RuleMatch{
+			Operator: ruleMatchOperatorAny,
+		},
+	}, false)
+	require.NoError(t, err)
+
+	matchPayload, ok := payload["match"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, ruleMatchOperatorAny, matchPayload["operator"])
+}
+
+func TestFinalizeRuleUpdatePayload_MixedJSONAndFlagsStillValidateAgainstExistingRule(t *testing.T) {
+	payload := map[string]any{
+		"trigger": ruleTriggerInbound,
+		"match": map[string]any{
+			"conditions": []domain.RuleCondition{{
+				Field:    ruleFieldRecipientDomain,
+				Operator: ruleConditionOperatorIs,
+				Value:    "example.com",
+			}},
+		},
+	}
+
+	err := finalizeRuleUpdatePayload(payload, &domain.Rule{
+		Trigger: ruleTriggerOutbound,
+		Match: &domain.RuleMatch{
+			Operator: ruleMatchOperatorAny,
+		},
+	}, false)
+	assert.EqualError(t, err, "inbound rules only support from.* conditions")
+}
+
 func TestRuleJSONPreservesZeroAndFalseValues(t *testing.T) {
 	priority := 0
 	enabled := false
@@ -184,7 +515,7 @@ func TestValidateAgentAppPassword(t *testing.T) {
 func TestDeleteCmd(t *testing.T) {
 	cmd := newDeleteCmd()
 
-	assert.Equal(t, "delete <agent-id|email>", cmd.Use)
+	assert.Equal(t, "delete [agent-id|email]", cmd.Use)
 	assert.NotNil(t, cmd.Flags().Lookup("yes"))
 	assert.NotNil(t, cmd.Flags().Lookup("force"))
 }

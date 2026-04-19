@@ -44,6 +44,16 @@ func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword,
 	}, nil
 }
 
+func (m *MockClient) UpdateAgentAccount(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
+	return &domain.AgentAccount{
+		ID:          grantID,
+		Provider:    domain.ProviderNylas,
+		Email:       email,
+		GrantStatus: "valid",
+		Settings:    domain.AgentAccountSettings{PolicyID: "policy-1"},
+	}, nil
+}
+
 func (m *MockClient) DeleteAgentAccount(ctx context.Context, grantID string) error {
 	return nil
 }

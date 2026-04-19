@@ -1,7 +1,11 @@
 // Package domain contains the core business logic and domain models.
 package domain
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // Sentinel errors for the application.
 var (
@@ -76,3 +80,30 @@ var (
 	ErrConfigurationNotFound = errors.New("configuration not found")
 	ErrPageNotFound          = errors.New("page not found")
 )
+
+// APIError carries structured details from an HTTP error response while still
+// unwrapping to ErrAPIError for existing callers.
+type APIError struct {
+	StatusCode int
+	Type       string
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	if e == nil {
+		return ErrAPIError.Error()
+	}
+
+	message := strings.TrimSpace(e.Message)
+	if message != "" {
+		return fmt.Sprintf("%s: %s", ErrAPIError, message)
+	}
+	if e.StatusCode > 0 {
+		return fmt.Sprintf("%s: status %d", ErrAPIError, e.StatusCode)
+	}
+	return ErrAPIError.Error()
+}
+
+func (e *APIError) Unwrap() error {
+	return ErrAPIError
+}

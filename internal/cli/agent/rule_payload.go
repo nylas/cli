@@ -22,6 +22,12 @@ type rulePayloadOptions struct {
 	Actions       []string
 }
 
+type loadedRulePayload struct {
+	Payload   map[string]any
+	UsingJSON bool
+	PureJSON  bool
+}
+
 func (o rulePayloadOptions) hasFlagInput() bool {
 	return strings.TrimSpace(o.Name) != "" ||
 		strings.TrimSpace(o.Description) != "" ||
@@ -35,21 +41,30 @@ func (o rulePayloadOptions) hasFlagInput() bool {
 }
 
 func loadRulePayload(data, dataFile string, opts rulePayloadOptions, requireBody bool) (map[string]any, error) {
-	payload, err := common.ReadJSONStringMap(data, dataFile)
+	loaded, err := loadRulePayloadDetails(data, dataFile, opts, requireBody)
 	if err != nil {
 		return nil, err
 	}
+	return loaded.Payload, nil
+}
+
+func loadRulePayloadDetails(data, dataFile string, opts rulePayloadOptions, requireBody bool) (loadedRulePayload, error) {
+	payload, err := common.ReadJSONStringMap(data, dataFile)
+	if err != nil {
+		return loadedRulePayload{}, err
+	}
 
 	if opts.EnabledSet && opts.DisabledSet {
-		return nil, common.NewUserError(
+		return loadedRulePayload{}, common.NewUserError(
 			"cannot combine --enabled with --disabled",
 			"Use only one of the two flags",
 		)
 	}
 
 	usingJSON := strings.TrimSpace(data) != "" || strings.TrimSpace(dataFile) != ""
+	pureJSON := usingJSON && !opts.hasFlagInput()
 	if requireBody && !usingJSON && !opts.hasFlagInput() {
-		return nil, common.NewUserError(
+		return loadedRulePayload{}, common.NewUserError(
 			"rule create requires a rule definition",
 			"Use --condition/--action for the common case or --data/--data-file for full JSON",
 		)
@@ -77,7 +92,7 @@ func loadRulePayload(data, dataFile string, opts rulePayloadOptions, requireBody
 	if strings.TrimSpace(opts.MatchOperator) != "" || len(opts.Conditions) > 0 {
 		matchPayload, err := mergeRuleMatchPayload(payload["match"], opts)
 		if err != nil {
-			return nil, err
+			return loadedRulePayload{}, err
 		}
 		payload["match"] = matchPayload
 	}
@@ -85,27 +100,33 @@ func loadRulePayload(data, dataFile string, opts rulePayloadOptions, requireBody
 	if len(opts.Actions) > 0 {
 		actions, err := parseRuleActions(opts.Actions)
 		if err != nil {
-			return nil, err
+			return loadedRulePayload{}, err
 		}
 		payload["actions"] = actions
 	}
 
-	if requireBody && !usingJSON {
+	if requireBody && !pureJSON {
 		if _, ok := payload["enabled"]; !ok {
 			payload["enabled"] = true
 		}
 		if strings.TrimSpace(asString(payload["trigger"])) == "" {
-			payload["trigger"] = "inbound"
+			payload["trigger"] = ruleTriggerInbound
 		}
 		if err := applyDefaultMatchOperator(payload); err != nil {
-			return nil, err
+			return loadedRulePayload{}, err
 		}
-		if err := validateFlagBuiltRuleCreatePayload(payload); err != nil {
-			return nil, err
+		if err := validateRuleCreatePayload(payload); err != nil {
+			return loadedRulePayload{}, err
 		}
 	}
 
-	return payload, nil
+	if !pureJSON {
+		if err := validateRulePayload(payload, nil); err != nil {
+			return loadedRulePayload{}, err
+		}
+	}
+
+	return loadedRulePayload{Payload: payload, UsingJSON: usingJSON, PureJSON: pureJSON}, nil
 }
 
 func mergeRuleMatchPayload(existing any, opts rulePayloadOptions) (map[string]any, error) {
@@ -145,10 +166,15 @@ func parseRuleConditions(rawConditions []string) ([]domain.RuleCondition, error)
 			return nil, invalidRuleConditionError(raw)
 		}
 
+		parsedValue, ok := parseRuleConditionValue(operator, value)
+		if !ok {
+			return nil, invalidRuleConditionError(raw)
+		}
+
 		conditions = append(conditions, domain.RuleCondition{
 			Field:    field,
 			Operator: operator,
-			Value:    parseRuleValue(value),
+			Value:    parsedValue,
 		})
 	}
 
@@ -169,6 +195,7 @@ func parseRuleActions(rawActions []string) ([]domain.RuleAction, error) {
 		if actionType == "" {
 			return nil, invalidRuleActionError(raw)
 		}
+		actionType = canonicalRuleActionType(actionType)
 
 		action := domain.RuleAction{Type: actionType}
 		if hasValue && actionValue != "" {
@@ -179,6 +206,27 @@ func parseRuleActions(rawActions []string) ([]domain.RuleAction, error) {
 	}
 
 	return actions, nil
+}
+
+func parseRuleConditionValue(operator, raw string) (any, bool) {
+	if strings.TrimSpace(operator) != ruleConditionOperatorInList {
+		return raw, true
+	}
+
+	items := strings.Split(raw, ",")
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		values = append(values, item)
+	}
+	if len(values) == 0 {
+		return nil, false
+	}
+
+	return values, true
 }
 
 func parseRuleValue(raw string) any {
@@ -226,18 +274,31 @@ func applyDefaultMatchOperator(payload map[string]any) error {
 	return nil
 }
 
-func validateFlagBuiltRuleCreatePayload(payload map[string]any) error {
+func validateRuleCreatePayload(payload map[string]any) error {
 	missing := make([]string, 0, 3)
 	if strings.TrimSpace(asString(payload["name"])) == "" {
-		missing = append(missing, "--name")
+		missing = append(missing, "name")
 	}
 
-	matchPayload := copyStringAnyMap(payload["match"])
-	if sliceLen(matchPayload["conditions"]) == 0 {
-		missing = append(missing, "--condition")
+	matchPayload, err := createRuleMatchPayload(payload["match"])
+	if err != nil {
+		return err
 	}
-	if sliceLen(payload["actions"]) == 0 {
-		missing = append(missing, "--action")
+
+	conditions, err := extractRuleConditions(matchPayload["conditions"])
+	if err != nil {
+		return err
+	}
+	if len(conditions) == 0 {
+		missing = append(missing, "match.conditions")
+	}
+
+	actions, err := extractRuleActions(payload["actions"])
+	if err != nil {
+		return err
+	}
+	if len(actions) == 0 {
+		missing = append(missing, "actions")
 	}
 
 	if len(missing) == 0 {
@@ -246,8 +307,24 @@ func validateFlagBuiltRuleCreatePayload(payload map[string]any) error {
 
 	return common.NewUserError(
 		"rule create is missing required fields",
-		fmt.Sprintf("Use %s, or provide a full rule body with --data/--data-file", strings.Join(missing, ", ")),
+		fmt.Sprintf("Provide %s, either with flags or in --data/--data-file JSON", strings.Join(missing, ", ")),
 	)
+}
+
+func createRuleMatchPayload(value any) (map[string]any, error) {
+	if value == nil {
+		return map[string]any{}, nil
+	}
+
+	matchPayload, ok := value.(map[string]any)
+	if !ok {
+		return nil, common.NewUserError(
+			"invalid rule match payload",
+			"match must be an object with operator and conditions fields",
+		)
+	}
+
+	return copyStringAnyMap(matchPayload), nil
 }
 
 func copyStringAnyMap(value any) map[string]any {

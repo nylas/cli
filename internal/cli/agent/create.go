@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -64,7 +66,7 @@ func runCreate(email, appPassword, policyID string, jsonOutput bool) error {
 			return struct{}{}, common.WrapCreateError("nylas connector", err)
 		}
 
-		account, err := client.CreateAgentAccount(ctx, email, appPassword, policyID)
+		account, err := createAgentAccountWithFallback(ctx, client, email, appPassword, policyID)
 		if err != nil {
 			return struct{}{}, common.WrapCreateError("agent account", err)
 		}
@@ -93,6 +95,146 @@ func runCreate(email, appPassword, policyID string, jsonOutput bool) error {
 	})
 
 	return err
+}
+
+func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClient, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+	account, err := client.CreateAgentAccount(ctx, email, appPassword, policyID)
+	if err == nil || appPassword == "" || !shouldRetryAgentCreateWithoutPassword(err) {
+		return account, err
+	}
+
+	existingAccount, lookupErr := findExistingAgentAccountByEmail(ctx, client, email)
+	if lookupErr == nil && existingAccount != nil {
+		if err := validateExistingAgentAccountPolicy(existingAccount, policyID); err != nil {
+			return nil, err
+		}
+
+		updated, updateErr := client.UpdateAgentAccount(ctx, existingAccount.ID, email, appPassword)
+		if updateErr == nil {
+			return updated, nil
+		}
+
+		return nil, fmt.Errorf("failed to set app password on existing agent account %s: %w", email, updateErr)
+	}
+
+	account, retryErr := client.CreateAgentAccount(ctx, email, "", policyID)
+	if retryErr != nil {
+		return nil, fmt.Errorf("failed to create agent account after retrying without app password: %w", retryErr)
+	}
+
+	updated, updateErr := client.UpdateAgentAccount(ctx, account.ID, email, appPassword)
+	if updateErr == nil {
+		return updated, nil
+	}
+
+	if lookupErr != nil {
+		return nil, fmt.Errorf(
+			"created agent account %s but failed to set app password: %w (existing-account lookup before retry also failed: %v)",
+			account.ID,
+			updateErr,
+			lookupErr,
+		)
+	}
+
+	return nil, fmt.Errorf(
+		"created agent account %s but failed to set app password; run 'nylas agent account update %s --app-password <password>' to finish setup: %w",
+		account.ID,
+		account.ID,
+		updateErr,
+	)
+}
+
+func findExistingAgentAccountByEmail(ctx context.Context, client ports.AgentClient, email string) (*domain.AgentAccount, error) {
+	accounts, err := client.ListAgentAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, account := range accounts {
+		if strings.EqualFold(account.Email, email) {
+			accountCopy := account
+			return &accountCopy, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func validateExistingAgentAccountPolicy(account *domain.AgentAccount, requestedPolicyID string) error {
+	if account == nil {
+		return nil
+	}
+
+	requestedPolicyID = strings.TrimSpace(requestedPolicyID)
+	if requestedPolicyID == "" {
+		return nil
+	}
+
+	currentPolicyID := strings.TrimSpace(account.Settings.PolicyID)
+	if currentPolicyID == requestedPolicyID {
+		return nil
+	}
+	if currentPolicyID == "" {
+		return common.NewUserError(
+			"existing agent account is not attached to the requested policy",
+			fmt.Sprintf("Agent account %s already exists without a policy; create fallback cannot attach it to policy %s. Attach the policy separately, then run 'nylas agent account update %s --app-password <password>'.", account.Email, requestedPolicyID, account.ID),
+		)
+	}
+
+	return common.NewUserError(
+		"existing agent account is attached to a different policy",
+		fmt.Sprintf("Agent account %s already exists on policy %s; create fallback cannot change it to policy %s. Update the policy assignment separately, then run 'nylas agent account update %s --app-password <password>'.", account.Email, currentPolicyID, requestedPolicyID, account.ID),
+	)
+}
+
+func shouldRetryAgentCreateWithoutPassword(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr *domain.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	if apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusUnprocessableEntity {
+		return false
+	}
+
+	msg := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	if !strings.Contains(msg, "app_password") && !strings.Contains(msg, "app password") {
+		return false
+	}
+
+	phrases := []string{
+		"unknown field",
+		"unexpected field",
+		"field not allowed",
+		"field is not allowed",
+		"extra field",
+		"extra fields",
+		"extra fields not permitted",
+		"additional property",
+		"additional properties",
+		"unrecognized field",
+		"unknown parameter",
+		"unexpected parameter",
+		"unsupported field",
+		"unsupported parameter",
+	}
+	for _, phrase := range phrases {
+		if strings.Contains(msg, phrase) {
+			return true
+		}
+	}
+
+	if (strings.Contains(msg, "not permitted") || strings.Contains(msg, "not allowed")) &&
+		(strings.Contains(msg, "field") || strings.Contains(msg, "fields") ||
+			strings.Contains(msg, "property") || strings.Contains(msg, "properties") ||
+			strings.Contains(msg, "parameter") || strings.Contains(msg, "parameters")) {
+		return true
+	}
+
+	return false
 }
 
 func validateAgentAppPassword(appPassword string) error {

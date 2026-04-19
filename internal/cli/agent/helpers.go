@@ -2,10 +2,13 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	config "github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -119,12 +122,86 @@ func resolveAgentID(ctx context.Context, client ports.NylasClient, identifier st
 
 func getAgentIdentifier(args []string) (string, error) {
 	if len(args) > 0 {
-		return strings.TrimSpace(args[0]), nil
+		identifier := strings.TrimSpace(args[0])
+		if identifier != "" {
+			return identifier, nil
+		}
+		return "", common.NewUserError("agent ID required", "Provide an agent ID/email or set NYLAS_AGENT_GRANT_ID")
 	}
 
-	if envID := os.Getenv("NYLAS_AGENT_GRANT_ID"); envID != "" {
+	if envID := strings.TrimSpace(os.Getenv("NYLAS_AGENT_GRANT_ID")); envID != "" {
+		return envID, nil
+	}
+
+	return resolveDefaultAgentGrantID()
+}
+
+func getRequiredAgentIdentifier(args []string) (string, error) {
+	if len(args) > 0 {
+		identifier := strings.TrimSpace(args[0])
+		if identifier != "" {
+			return identifier, nil
+		}
+		return "", common.NewUserError("agent ID required", "Provide an agent ID/email or set NYLAS_AGENT_GRANT_ID")
+	}
+
+	if envID := strings.TrimSpace(os.Getenv("NYLAS_AGENT_GRANT_ID")); envID != "" {
 		return envID, nil
 	}
 
 	return "", common.NewUserError("agent ID required", "Provide an agent ID/email or set NYLAS_AGENT_GRANT_ID")
+}
+
+func resolveDefaultAgentGrantID() (string, error) {
+	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	if err != nil {
+		return "", err
+	}
+
+	grantStore := keyring.NewGrantStore(secretStore)
+	grants, err := grantStore.ListGrants()
+	if err != nil {
+		return "", err
+	}
+
+	defaultGrantID := strings.TrimSpace(os.Getenv("NYLAS_GRANT_ID"))
+	if defaultGrantID == "" {
+		storedDefaultGrantID, defaultErr := grantStore.GetDefaultGrant()
+		if defaultErr != nil && !errors.Is(defaultErr, domain.ErrNoDefaultGrant) {
+			return "", defaultErr
+		}
+		defaultGrantID = strings.TrimSpace(storedDefaultGrantID)
+	}
+
+	if defaultGrantID != "" {
+		defaultGrant, err := grantStore.GetGrant(defaultGrantID)
+		if err == nil && defaultGrant.Provider == domain.ProviderNylas {
+			return defaultGrantID, nil
+		}
+		if err != nil && !errors.Is(err, domain.ErrGrantNotFound) {
+			return "", err
+		}
+	}
+
+	agentGrants := make([]domain.GrantInfo, 0, len(grants))
+	for _, grant := range grants {
+		if grant.Provider == domain.ProviderNylas {
+			agentGrants = append(agentGrants, grant)
+		}
+	}
+
+	switch len(agentGrants) {
+	case 1:
+		return agentGrants[0].ID, nil
+	case 0:
+		return "", common.NewUserError(
+			"no provider=nylas agent grant configured",
+			"Run 'nylas agent account list' to find an agent account, or pass an agent ID/email explicitly",
+		)
+	default:
+		return "", common.NewUserError(
+			"multiple provider=nylas agent grants available",
+			"Pass an agent ID/email explicitly or set NYLAS_AGENT_GRANT_ID",
+		)
+	}
 }

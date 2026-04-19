@@ -17,7 +17,7 @@ func newDeleteCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "delete <agent-id|email>",
+		Use:   "delete [agent-id|email]",
 		Short: "Delete an agent account",
 		Long: `Delete a Nylas agent account.
 
@@ -28,7 +28,7 @@ Examples:
   nylas agent account delete me@yourapp.nylas.email --yes`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			identifier, err := getAgentIdentifier(args)
+			identifier, err := getRequiredAgentIdentifier(args)
 			if err != nil {
 				return err
 			}

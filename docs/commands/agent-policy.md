@@ -167,13 +167,13 @@ To remove a policy from active use:
 
 ## Relationship to Agent Accounts
 
-Policies are attached at agent account creation time:
+Policies are primarily attached at agent account creation time:
 
 ```bash
 nylas agent account create me@yourapp.nylas.email --policy-id <policy-id>
 ```
 
-There is currently no separate `agent account update` command, so the main CLI-managed attachment point is account creation.
+The CLI now has `nylas agent account update`, but it currently manages mutable account settings such as `--app-password`, not `settings.policy_id`. In practice, policy attachment remains a create-time workflow on the agent account surface.
 
 ## Troubleshooting
 

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,18 +127,34 @@ func (c *HTTPClient) parseError(resp *http.Response) error {
 	limitedReader := io.LimitReader(resp.Body, 10*1024)
 
 	var errResp struct {
-		Error struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+		Error   struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
 		} `json:"error"`
 	}
 
 	// Use streaming decoder instead of ReadAll + Unmarshal
-	if err := json.NewDecoder(limitedReader).Decode(&errResp); err == nil && errResp.Error.Message != "" {
-		return fmt.Errorf("%w: %s", domain.ErrAPIError, errResp.Error.Message)
+	if err := json.NewDecoder(limitedReader).Decode(&errResp); err == nil {
+		message := strings.TrimSpace(errResp.Error.Message)
+		errType := strings.TrimSpace(errResp.Error.Type)
+		if message == "" {
+			message = strings.TrimSpace(errResp.Message)
+		}
+		if errType == "" {
+			errType = strings.TrimSpace(errResp.Type)
+		}
+		if message != "" || errType != "" {
+			return &domain.APIError{
+				StatusCode: resp.StatusCode,
+				Type:       errType,
+				Message:    message,
+			}
+		}
 	}
 
-	return fmt.Errorf("%w: status %d", domain.ErrAPIError, resp.StatusCode)
+	return &domain.APIError{StatusCode: resp.StatusCode}
 }
 
 // getRequestID extracts the request ID from response headers.

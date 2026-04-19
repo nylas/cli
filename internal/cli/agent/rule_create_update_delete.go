@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -31,8 +32,8 @@ Rules are created through /v3/rules, then attached to the selected policy. If
 default provider=nylas grant.
 
 Examples:
-  nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
-  nylas agent rule create --name "VIP sender" --condition from.address,is,ceo@example.com --action mark_as_read --action mark_as_starred
+  nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action block
+  nylas agent rule create --name "Archive example.com" --condition from.domain,is,example.com --action archive --action mark_as_read
   nylas agent rule create --data-file rule.json
   nylas agent rule create --data-file rule.json --policy-id <policy-id>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -41,11 +42,11 @@ Examples:
 				return err
 			}
 
-			payload, err := loadRulePayload(data, dataFile, opts, true)
+			loaded, err := loadRulePayloadDetails(data, dataFile, opts, true)
 			if err != nil {
 				return err
 			}
-			return runRuleCreate(payload, policyID, jsonOutput)
+			return runRuleCreate(loaded.Payload, policyID, jsonOutput)
 		},
 	}
 
@@ -54,9 +55,9 @@ Examples:
 	cmd.Flags().IntVar(&opts.Priority, "priority", 0, "Rule priority")
 	cmd.Flags().BoolVar(&enableRule, "enabled", false, "Create the rule in an enabled state")
 	cmd.Flags().BoolVar(&disableRule, "disabled", false, "Create the rule in a disabled state")
-	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Rule trigger (defaults to inbound when using flags)")
+	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Rule trigger (inbound or outbound; defaults to inbound when using flags)")
 	cmd.Flags().StringVar(&opts.MatchOperator, "match-operator", "", "Match operator for the supplied conditions")
-	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Match condition as field,operator,value (repeatable)")
+	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Match condition as field,operator,value (repeatable). For in_list, pass field,in_list,list-id-1,list-id-2")
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Rule action as type or type=value (repeatable)")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
@@ -126,8 +127,8 @@ agent policy, or --all to search any agent policy.
 
 Examples:
   nylas agent rule update <rule-id> --name "Updated Rule"
-  nylas agent rule update <rule-id> --description "Block example.org" --priority 20
-  nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_spam
+  nylas agent rule update <rule-id> --description "Archive vendor mail" --priority 20
+  nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_starred
   nylas agent rule update <rule-id> --data-file update.json
   nylas agent rule update <rule-id> --all --json`,
 		Args: cobra.ExactArgs(1),
@@ -141,17 +142,18 @@ Examples:
 				return err
 			}
 
-			payload, err := loadRulePayload(data, dataFile, opts, false)
+			loaded, err := loadRulePayloadDetails(data, dataFile, opts, false)
 			if err != nil {
 				return err
 			}
+			payload := loaded.Payload
 			if len(payload) == 0 {
 				return common.NewUserError(
 					"rule update requires at least one field",
 					"Use flags like --name/--condition/--action, or provide JSON with --data/--data-file",
 				)
 			}
-			return runRuleUpdate(args[0], payload, policyID, allRules, jsonOutput)
+			return runRuleUpdate(args[0], payload, loaded.PureJSON, policyID, allRules, jsonOutput)
 		},
 	}
 
@@ -160,9 +162,9 @@ Examples:
 	cmd.Flags().IntVar(&opts.Priority, "priority", 0, "Updated rule priority")
 	cmd.Flags().BoolVar(&enableRule, "enabled", false, "Set the rule to enabled")
 	cmd.Flags().BoolVar(&disableRule, "disabled", false, "Set the rule to disabled")
-	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Updated rule trigger")
+	cmd.Flags().StringVar(&opts.Trigger, "trigger", "", "Updated rule trigger (inbound or outbound)")
 	cmd.Flags().StringVar(&opts.MatchOperator, "match-operator", "", "Updated match operator")
-	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Replace conditions with field,operator,value entries (repeatable)")
+	cmd.Flags().StringArrayVar(&opts.Conditions, "condition", nil, "Replace conditions with field,operator,value entries (repeatable). For in_list, pass field,in_list,list-id-1,list-id-2")
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Replace actions with type or type=value entries (repeatable)")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
@@ -173,7 +175,7 @@ Examples:
 	return cmd
 }
 
-func runRuleUpdate(ruleID string, payload map[string]any, policyID string, allRules, jsonOutput bool) error {
+func runRuleUpdate(ruleID string, payload map[string]any, pureJSON bool, policyID string, allRules, jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 		scope, err := resolveScopedRule(ctx, client, ruleID, policyID, allRules)
 		if err != nil {
@@ -186,7 +188,9 @@ func runRuleUpdate(ruleID string, payload map[string]any, policyID string, allRu
 			)
 		}
 
-		preserveRuleMatchOperator(payload, scope.Rule)
+		if err := finalizeRuleUpdatePayload(payload, scope.Rule, pureJSON); err != nil {
+			return struct{}{}, err
+		}
 
 		rule, err := client.UpdateRule(ctx, ruleID, payload)
 		if err != nil {
@@ -204,6 +208,15 @@ func runRuleUpdate(ruleID string, payload map[string]any, policyID string, allRu
 	})
 
 	return err
+}
+
+func finalizeRuleUpdatePayload(payload map[string]any, existingRule *domain.Rule, pureJSON bool) error {
+	if pureJSON {
+		return nil
+	}
+
+	preserveRuleMatchOperator(payload, existingRule)
+	return validateRulePayload(payload, existingRule)
 }
 
 func newRuleDeleteCmd() *cobra.Command {
@@ -252,7 +265,17 @@ func runRuleDelete(ruleID, policyID string, allRules bool) error {
 				"Use the generic policy/rule surface to delete shared rules safely",
 			)
 		}
-		if blockingPolicies := policiesLeftEmptyByRuleRemoval(scope.AllAgentPolicies, ruleID); len(blockingPolicies) > 0 {
+
+		latestPolicies, err := refreshPolicies(ctx, client, scope.AllAgentPolicies)
+		if err != nil {
+			return struct{}{}, common.WrapGetError("policy", err)
+		}
+
+		blockingPolicies, err := policiesLeftEmptyByRuleRemoval(ctx, client, latestPolicies, ruleID)
+		if err != nil {
+			return struct{}{}, common.WrapGetError("rule", err)
+		}
+		if len(blockingPolicies) > 0 {
 			policyNames := make([]string, 0, len(blockingPolicies))
 			for _, policy := range blockingPolicies {
 				policyNames = append(policyNames, policy.Name)
@@ -263,7 +286,7 @@ func runRuleDelete(ruleID, policyID string, allRules bool) error {
 			)
 		}
 
-		rollback, err := detachRuleFromPolicies(ctx, client, scope.AllAgentPolicies, ruleID)
+		rollback, err := detachRuleFromPolicies(ctx, client, latestPolicies, ruleID)
 		if err != nil {
 			return struct{}{}, fmt.Errorf("failed to detach rule from agent policies: %w", err)
 		}

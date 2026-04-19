@@ -64,15 +64,63 @@ func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword,
 		return nil, err
 	}
 
-	grant, err := decodeCreatedManagedGrant(resp)
+	grant, err := decodeManagedGrantResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+	if grant.Provider != domain.ProviderNylas {
+		return nil, fmt.Errorf("%w: create returned non-nylas managed grant (provider=%s)", domain.ErrInvalidGrant, grant.Provider)
+	}
+
+	account := convertManagedGrantToAgentAccount(*grant)
+	return &account, nil
+}
+
+// UpdateAgentAccount updates mutable settings on an existing managed agent account grant.
+func (c *HTTPClient) UpdateAgentAccount(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
+	if err := validateRequired("grant ID", grantID); err != nil {
+		return nil, err
+	}
+	if err := validateRequired("email", email); err != nil {
+		return nil, err
+	}
+
+	grant, err := c.getManagedGrant(ctx, grantID)
+	if err != nil {
+		return nil, err
+	}
+	if grant.Provider != domain.ProviderNylas {
+		return nil, fmt.Errorf("%w: grant is not a nylas agent account (provider=%s)", domain.ErrInvalidGrant, grant.Provider)
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	settings := make(map[string]any)
+	settings["email"] = email
+	if grant.Settings.PolicyID != "" {
+		settings["policy_id"] = grant.Settings.PolicyID
+	}
+	if appPassword != "" {
+		settings["app_password"] = appPassword
+	}
+
+	payload := map[string]any{
+		"settings": settings,
+	}
+
+	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	account := convertManagedGrantToAgentAccount(*grant)
-	if policyID != "" && account.Settings.PolicyID == "" {
-		account.Settings.PolicyID = policyID
+	updatedGrant, err := decodeManagedGrantResponse(resp)
+	if err != nil {
+		return nil, err
 	}
+	if updatedGrant.Provider != domain.ProviderNylas {
+		return nil, fmt.Errorf("%w: update returned non-nylas managed grant (provider=%s)", domain.ErrInvalidGrant, updatedGrant.Provider)
+	}
+
+	account := convertManagedGrantToAgentAccount(*updatedGrant)
 	return &account, nil
 }
 
@@ -81,7 +129,7 @@ func (c *HTTPClient) DeleteAgentAccount(ctx context.Context, grantID string) err
 	return c.deleteManagedGrant(ctx, grantID, domain.ProviderNylas)
 }
 
-func decodeCreatedManagedGrant(resp *http.Response) (*managedGrantResponse, error) {
+func decodeManagedGrantResponse(resp *http.Response) (*managedGrantResponse, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)

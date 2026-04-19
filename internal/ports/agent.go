@@ -19,6 +19,11 @@ type AgentClient interface {
 	// policyID is optional and attaches the created account to an existing policy.
 	CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error)
 
+	// UpdateAgentAccount updates mutable settings on an existing agent account.
+	// email is required by the current grant update API for provider=nylas grants.
+	// appPassword rotates or adds IMAP/SMTP credentials when set.
+	UpdateAgentAccount(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error)
+
 	// DeleteAgentAccount deletes an agent account by revoking its grant.
 	DeleteAgentAccount(ctx context.Context, grantID string) error
 }

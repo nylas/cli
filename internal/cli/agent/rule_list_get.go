@@ -116,24 +116,14 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 		if err != nil {
 			return struct{}{}, common.WrapListError("rules", err)
 		}
-		rulesByID := make(map[string]domain.Rule, len(allRulesList))
-		for _, rule := range allRulesList {
-			rulesByID[rule.ID] = rule
-		}
-
-		rules := make([]domain.Rule, 0, len(ruleIDs))
-		ruleRefs := make(map[string][]rulePolicyRef, len(ruleIDs))
-		for _, ruleID := range ruleIDs {
-			rule, ok := rulesByID[ruleID]
-			if !ok {
-				return struct{}{}, common.WrapGetError("rule", domain.ErrRuleNotFound)
+		rules, ruleRefs := collectPolicyScopedRules(policy, accounts, allRulesList)
+		if len(rules) == 0 {
+			if jsonOutput {
+				fmt.Println("[]")
+				return struct{}{}, nil
 			}
-			rules = append(rules, rule)
-			ruleRefs[rule.ID] = []rulePolicyRef{{
-				PolicyID:   policy.ID,
-				PolicyName: policy.Name,
-				Accounts:   accounts,
-			}}
+			common.PrintEmptyStateWithHint("rules on the selected agent policy", "Use 'nylas agent rule create --data-file rule.json' to add one")
+			return struct{}{}, nil
 		}
 
 		if jsonOutput {
@@ -149,6 +139,41 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 	})
 
 	return err
+}
+
+func collectPolicyScopedRules(policy *domain.Policy, accounts []policyAgentAccountRef, allRules []domain.Rule) ([]domain.Rule, map[string][]rulePolicyRef) {
+	rulesByID := make(map[string]domain.Rule, len(allRules))
+	for _, rule := range allRules {
+		rulesByID[rule.ID] = rule
+	}
+
+	accountRefs := append([]policyAgentAccountRef(nil), accounts...)
+	rules := make([]domain.Rule, 0, len(policy.Rules))
+	ruleRefs := make(map[string][]rulePolicyRef, len(policy.Rules))
+
+	for _, ruleID := range policy.Rules {
+		ruleID = strings.TrimSpace(ruleID)
+		if ruleID == "" {
+			continue
+		}
+
+		rule, ok := rulesByID[ruleID]
+		if !ok {
+			continue
+		}
+
+		rules = append(rules, rule)
+		if _, ok := ruleRefs[rule.ID]; ok {
+			continue
+		}
+		ruleRefs[rule.ID] = []rulePolicyRef{{
+			PolicyID:   policy.ID,
+			PolicyName: policy.Name,
+			Accounts:   accountRefs,
+		}}
+	}
+
+	return rules, ruleRefs
 }
 
 func newRuleGetCmd() *cobra.Command {
