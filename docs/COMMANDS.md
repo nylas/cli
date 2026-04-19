@@ -456,6 +456,7 @@ nylas agent account list                       # List agent accounts
 nylas agent account create <email>             # Create agent account
 nylas agent account create <email> --app-password PW  # Create account with IMAP/SMTP app password
 nylas agent account create <email> --policy-id <policy-id>  # Create account attached to a policy
+nylas agent account update [agent-id|email] --app-password PW  # Add or rotate IMAP/SMTP app password
 nylas agent account get <agent-id|email>       # Show one agent account
 nylas agent account delete <agent-id|email>    # Delete/revoke agent account
 nylas agent account delete <agent-id|email> --yes  # Skip confirmation
@@ -471,6 +472,7 @@ nylas agent rule list --all                    # List all rules attached to agen
 nylas agent rule read <rule-id>                # Read one rule
 nylas agent rule get <rule-id>                 # Show one rule
 nylas agent rule create --name NAME --condition from.domain,is,example.com --action mark_as_spam  # Create a rule from common flags
+nylas agent rule create --name NAME --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive  # Create an outbound rule
 nylas agent rule create --data-file rule.json  # Create a rule from full JSON
 nylas agent rule update <rule-id> --name NAME --description TEXT  # Update a rule
 nylas agent rule delete <rule-id> --yes        # Delete a rule

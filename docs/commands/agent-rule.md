@@ -13,6 +13,7 @@ nylas agent rule list --all
 nylas agent rule get <rule-id>
 nylas agent rule read <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
+nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive
 nylas agent rule create --data-file rule.json
 nylas agent rule update <rule-id> --name "Updated Rule"
 nylas agent rule delete <rule-id> --yes
@@ -43,6 +44,7 @@ Behavior:
 - resolves the default local `provider=nylas` grant
 - finds the policy attached to that grant
 - returns the rules attached to that policy
+- skips stale policy rule references that no longer exist in `/v3/rules`
 
 ### Rules for a Specific Agent Policy
 
@@ -104,6 +106,15 @@ nylas agent rule create \
   --action mark_as_starred
 ```
 
+```bash
+nylas agent rule create \
+  --name "Archive outbound mail" \
+  --trigger outbound \
+  --condition recipient.domain,is,example.com \
+  --condition outbound.type,is,compose \
+  --action archive
+```
+
 Available common flags:
 
 - `--name`
@@ -123,6 +134,31 @@ Defaults when creating from flags:
 - `enabled=true`
 - `match.operator=all`
 
+Supported triggers:
+
+- `inbound`
+- `outbound`
+
+Supported fields:
+
+- inbound: `from.address`, `from.domain`, `from.tld`
+- outbound: `from.address`, `from.domain`, `from.tld`, `recipient.address`, `recipient.domain`, `recipient.tld`, `outbound.type`
+
+Supported operators:
+
+- all string fields: `is`, `is_not`, `contains`, `in_list`
+- `outbound.type`: `is`, `is_not`
+
+Supported actions:
+
+- `block`
+- `mark_as_spam`
+- `assign_to_folder=<folder>`
+- `mark_as_read`
+- `mark_as_starred`
+- `archive`
+- `trash`
+
 ### `--condition`
 
 Format:
@@ -136,7 +172,9 @@ Examples:
 ```bash
 --condition from.domain,is,example.com
 --condition from.address,is,ceo@example.com
---condition subject.contains,is,invoice
+--condition recipient.domain,is,example.com
+--condition outbound.type,is,reply
+--condition from.domain,in_list,example.com,example.org
 ```
 
 Important:
@@ -144,6 +182,8 @@ Important:
 - condition values are treated as strings by default
 - values like `true` and `123` stay strings
 - there is no implicit JSON coercion for condition values
+- `in_list` expects additional comma-separated values, for example `field,in_list,list-a,list-b`
+- `outbound.type` only supports `compose` and `reply`
 
 ### `--action`
 
@@ -159,8 +199,8 @@ Examples:
 ```bash
 --action mark_as_spam
 --action mark_as_read
---action move_to_folder=vip
---action tag=security
+--action assign_to_folder=vip
+--action archive
 ```
 
 Action values are also treated as strings by default.
@@ -192,6 +232,15 @@ nylas agent rule update <rule-id> \
   --condition from.domain,is,example.org \
   --condition from.tld,is,org \
   --action mark_as_spam
+```
+
+```bash
+nylas agent rule update <rule-id> \
+  --trigger outbound \
+  --match-operator any \
+  --condition recipient.domain,is,example.org \
+  --condition outbound.type,is,reply \
+  --action archive
 ```
 
 Behavior:
@@ -249,10 +298,12 @@ If `nylas agent rule list` returns nothing:
 - make sure your default grant is `provider=nylas`
 - confirm that default agent account has a policy attached
 - confirm the policy actually has rules attached
+- if the policy only references deleted rules, `list` now returns an empty result instead of failing
 
 If `nylas agent rule read` or `update` says the rule is not found:
 
 - the rule may exist in the application but outside the current agent scope
+- or the policy may still reference a deleted rule ID
 - try `nylas agent rule list --all` to see what is reachable from agent accounts
 
 If `nylas agent rule delete` is rejected:

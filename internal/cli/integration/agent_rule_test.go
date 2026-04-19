@@ -90,7 +90,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 		"rule",
 		"create",
 		"--name", ruleName,
-		"--description", "Blocks example.com",
+		"--description", "Marks inbound mail from example.com as spam",
 		"--priority", "10",
 		"--disabled",
 		"--match-operator", "any",
@@ -113,8 +113,8 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	if rule.Name != ruleName {
 		t.Fatalf("created rule name = %q, want %q", rule.Name, ruleName)
 	}
-	if rule.Description != "Blocks example.com" {
-		t.Fatalf("created rule description = %q, want %q", rule.Description, "Blocks example.com")
+	if rule.Description != "Marks inbound mail from example.com as spam" {
+		t.Fatalf("created rule description = %q, want %q", rule.Description, "Marks inbound mail from example.com as spam")
 	}
 	if rule.Priority == nil || *rule.Priority != 10 {
 		t.Fatalf("created rule priority = %v, want %d", rule.Priority, 10)
@@ -124,6 +124,9 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	}
 	if rule.Match == nil || rule.Match.Operator != "any" {
 		t.Fatalf("created rule operator = %q, want %q", rule.Match.Operator, "any")
+	}
+	if rule.Trigger != "inbound" {
+		t.Fatalf("created rule trigger = %q, want %q", rule.Trigger, "inbound")
 	}
 	createdRule = &rule
 
@@ -146,7 +149,12 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rule read text failed: %v\nstdout: %s\nstderr: %s", err, readTextStdout, readTextStderr)
 	}
-	if !strings.Contains(readTextStdout, "Match:") || !strings.Contains(readTextStdout, "Actions:") || !strings.Contains(readTextStdout, createdPolicy.Name) {
+	if !strings.Contains(readTextStdout, "Match:") ||
+		!strings.Contains(readTextStdout, "Actions:") ||
+		!strings.Contains(readTextStdout, createdPolicy.Name) ||
+		!strings.Contains(readTextStdout, "from.domain is example.com") ||
+		!strings.Contains(readTextStdout, "from.tld is com") ||
+		!strings.Contains(readTextStdout, "mark_as_spam") {
 		t.Fatalf("rule read text output missing expected sections\noutput: %s", readTextStdout)
 	}
 
@@ -187,7 +195,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 		"update",
 		createdRule.ID,
 		"--name", updatedRuleName,
-		"--description", "Blocks example.org",
+		"--description", "Marks inbound mail from example.org as spam",
 		"--priority", "20",
 		"--enabled",
 		"--condition", "from.domain,is,example.org",
@@ -205,8 +213,8 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	if updatedRule.Name != updatedRuleName {
 		t.Fatalf("updated rule name = %q, want %q", updatedRule.Name, updatedRuleName)
 	}
-	if updatedRule.Description != "Blocks example.org" {
-		t.Fatalf("updated rule description = %q, want %q", updatedRule.Description, "Blocks example.org")
+	if updatedRule.Description != "Marks inbound mail from example.org as spam" {
+		t.Fatalf("updated rule description = %q, want %q", updatedRule.Description, "Marks inbound mail from example.org as spam")
 	}
 	if updatedRule.Priority == nil || *updatedRule.Priority != 20 {
 		t.Fatalf("updated rule priority = %v, want %d", updatedRule.Priority, 20)
@@ -216,6 +224,9 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	}
 	if updatedRule.Match == nil || updatedRule.Match.Operator != "any" {
 		t.Fatalf("updated rule operator = %q, want %q", updatedRule.Match.Operator, "any")
+	}
+	if updatedRule.Trigger != "inbound" {
+		t.Fatalf("updated rule trigger = %q, want %q", updatedRule.Trigger, "inbound")
 	}
 
 	deleteStdout, deleteStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "rule", "delete", createdRule.ID, "--yes")

@@ -12,13 +12,15 @@ func newGetCmd() *cobra.Command {
 	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "get <agent-id|email>",
+		Use:   "get [agent-id|email]",
 		Short: "Show an agent account",
 		Long: `Show a Nylas agent account.
 
-You can look up an account by grant ID or by email address.
+You can look up an account by grant ID or by email address. If omitted, the CLI
+resolves a local provider=nylas grant when one can be identified safely.
 
 Examples:
+  nylas agent account get
   nylas agent account get 123456
   nylas agent account get me@yourapp.nylas.email
   nylas agent account get me@yourapp.nylas.email --json`,

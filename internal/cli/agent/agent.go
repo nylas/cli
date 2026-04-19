@@ -14,12 +14,15 @@ Agent account operations live under the account subcommand. Top-level status
 reports the readiness of the nylas connector and the currently configured
 managed accounts.
 
-Examples:
-  # Create a new agent account
-  nylas agent account create me@yourapp.nylas.email
+	Examples:
+	  # Create a new agent account
+	  nylas agent account create me@yourapp.nylas.email
 
-  # List agent accounts
-  nylas agent account list
+	  # Update an existing agent account
+	  nylas agent account update me@yourapp.nylas.email --app-password "MySecureP4ssword!2024"
+
+	  # List agent accounts
+	  nylas agent account list
 
   # List policies
   nylas agent policy list

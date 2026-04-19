@@ -13,6 +13,7 @@
 //   - NYLAS_TEST_SEND_EMAIL: Set to "true" to enable send tests
 //   - NYLAS_TEST_DELETE: Set to "true" to enable delete tests
 //   - NYLAS_TEST_AUTH_LOGOUT: Set to "true" to enable auth logout tests
+//   - NYLAS_TEST_USE_LOCAL_AUTH: Set to "true" to opt into loading API key/default grant from local CLI auth
 //   - NYLAS_TEST_RATE_LIMIT_RPS: API rate limit (requests/sec, default: 2.0)
 //   - NYLAS_TEST_RATE_LIMIT_BURST: API rate limit burst capacity (default: 5)
 //   - NYLAS_FILE_STORE_PASSPHRASE: Passphrase for the encrypted file secret-store fallback
@@ -67,6 +68,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/nylas"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
@@ -95,6 +97,19 @@ func init() {
 	testGrantID = os.Getenv("NYLAS_GRANT_ID")
 	testClientID = os.Getenv("NYLAS_CLIENT_ID")
 	testEmail = os.Getenv("NYLAS_TEST_EMAIL")
+
+	if useLocalAuthForIntegration() {
+		if testAPIKey == "" {
+			if apiKey, err := common.GetAPIKey(); err == nil {
+				testAPIKey = apiKey
+			}
+		}
+		if testGrantID == "" {
+			if grantID, err := common.GetGrantID(nil); err == nil {
+				testGrantID = grantID
+			}
+		}
+	}
 
 	// Configure rate limiter from environment
 	if rpsStr := os.Getenv("NYLAS_TEST_RATE_LIMIT_RPS"); rpsStr != "" {
@@ -140,6 +155,11 @@ func init() {
 			break
 		}
 	}
+}
+
+func useLocalAuthForIntegration() bool {
+	value := strings.TrimSpace(os.Getenv("NYLAS_TEST_USE_LOCAL_AUTH"))
+	return value == "1" || strings.EqualFold(value, "true")
 }
 
 // acquireRateLimit waits for permission to make an API call.

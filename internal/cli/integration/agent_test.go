@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func TestCLI_AgentStatus(t *testing.T) {
 
 	acquireRateLimit(t)
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	accounts, err := client.ListAgentAccounts(ctx)
+	accountsBefore, err := client.ListAgentAccounts(ctx)
 	cancel()
 	if err != nil {
 		t.Fatalf("failed to list agent accounts for status test: %v", err)
@@ -152,11 +153,12 @@ func TestCLI_AgentStatus(t *testing.T) {
 	if expectedConfigured && result.ConnectorID != expectedConnectorID {
 		t.Fatalf("connector_id = %q, want %q", result.ConnectorID, expectedConnectorID)
 	}
-	if result.AccountCount != len(accounts) {
-		t.Fatalf("account_count = %d, want %d", result.AccountCount, len(accounts))
+	if result.AccountCount != len(result.Accounts) {
+		t.Fatalf("account_count = %d, accounts length = %d", result.AccountCount, len(result.Accounts))
 	}
-	if len(result.Accounts) != len(accounts) {
-		t.Fatalf("accounts length = %d, want %d", len(result.Accounts), len(accounts))
+
+	if err := waitForAgentStatusSnapshotMatch(t, client, result.Accounts); err != nil {
+		t.Fatalf("agent status accounts did not converge to a live snapshot: %v (before=%v, status=%v)", err, agentAccountIDs(accountsBefore), agentAccountIDs(result.Accounts))
 	}
 
 	textStdout, textStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "status")
@@ -172,6 +174,54 @@ func TestCLI_AgentStatus(t *testing.T) {
 	if !strings.Contains(textStdout, "Accounts:") {
 		t.Fatalf("expected accounts line, got: %s", textStdout)
 	}
+}
+
+func waitForAgentStatusSnapshotMatch(t *testing.T, client interface {
+	ListAgentAccounts(context.Context) ([]domain.AgentAccount, error)
+}, want []domain.AgentAccount) error {
+	t.Helper()
+
+	deadline := time.Now().Add(15 * time.Second)
+	var lastIDs []string
+
+	for time.Now().Before(deadline) {
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		accounts, err := client.ListAgentAccounts(ctx)
+		cancel()
+		if err != nil {
+			return err
+		}
+
+		lastIDs = agentAccountIDs(accounts)
+		if sameAgentAccountSet(accounts, want) {
+			return nil
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return fmt.Errorf("latest live accounts = %v, want %v", lastIDs, agentAccountIDs(want))
+}
+
+func sameAgentAccountSet(got, want []domain.AgentAccount) bool {
+	if len(got) != len(want) {
+		return false
+	}
+
+	gotIDs := agentAccountIDs(got)
+	wantIDs := agentAccountIDs(want)
+	slices.Sort(gotIDs)
+	slices.Sort(wantIDs)
+	return slices.Equal(gotIDs, wantIDs)
+}
+
+func agentAccountIDs(accounts []domain.AgentAccount) []string {
+	ids := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		ids = append(ids, account.ID)
+	}
+	return ids
 }
 
 func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
@@ -223,8 +273,8 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	if account.Email != email {
 		t.Fatalf("created email = %q, want %q", account.Email, email)
 	}
-	if account.Settings.PolicyID != policy.ID {
-		t.Fatalf("created policy_id = %q, want %q", account.Settings.PolicyID, policy.ID)
+	if account.Settings.PolicyID != "" && account.Settings.PolicyID != policy.ID {
+		t.Fatalf("created policy_id = %q, want %q or empty response field", account.Settings.PolicyID, policy.ID)
 	}
 	created = &account
 
@@ -232,6 +282,161 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 		t.Fatalf("created agent account %q did not appear in list", email)
 	} else if listed.Settings.PolicyID != policy.ID {
 		t.Fatalf("listed policy_id = %q, want %q", listed.Settings.PolicyID, policy.ID)
+	}
+}
+
+func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	email := newAgentTestEmail(t, "update")
+	appPassword := validAgentTestPassword()
+	client := getTestClient()
+
+	var created *domain.AgentAccount
+	t.Cleanup(func() {
+		if created != nil {
+			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
+				acquireRateLimit(t)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = client.DeleteAgentAccount(ctx, account.ID)
+			}
+		}
+	})
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
+	}
+	created = account
+	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
+		t.Fatalf("created agent account %q did not appear in list before update", email)
+	}
+
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(
+		t,
+		2*time.Minute,
+		env,
+		"agent",
+		"account",
+		"update",
+		email,
+		"--app-password", appPassword,
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("agent update failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	var updated domain.AgentAccount
+	if err := json.Unmarshal([]byte(stdout), &updated); err != nil {
+		t.Fatalf("failed to parse agent update JSON: %v\noutput: %s", err, stdout)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("updated agent ID = %q, want %q", updated.ID, created.ID)
+	}
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	refetched, err := client.GetAgentAccount(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("failed to refetch agent account after update: %v", err)
+	}
+	if refetched.ID != created.ID {
+		t.Fatalf("refetched agent ID = %q, want %q", refetched.ID, created.ID)
+	}
+}
+
+func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
+	skipIfMissingCreds(t)
+	skipIfMissingAgentDomain(t)
+
+	env := newAgentSandboxEnv(t)
+	email := newAgentTestEmail(t, "update-policy")
+	appPassword := validAgentTestPassword()
+	policyName := newPolicyTestName("account-update")
+	client := getTestClient()
+
+	var createdPolicy *domain.Policy
+	var created *domain.AgentAccount
+	t.Cleanup(func() {
+		if created != nil {
+			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
+				acquireRateLimit(t)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = client.DeleteAgentAccount(ctx, account.ID)
+			}
+		}
+		if createdPolicy != nil {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeletePolicy(ctx, createdPolicy.ID)
+		}
+	})
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	policy, err := client.CreatePolicy(ctx, map[string]any{"name": policyName})
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create policy for agent update test: %v", err)
+	}
+	createdPolicy = policy
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	account, err := client.CreateAgentAccount(ctx, email, "", policy.ID)
+	cancel()
+	if err != nil {
+		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
+	}
+	created = account
+	if exists, listed := waitForAgentByEmail(t, client, email, true); !exists {
+		t.Fatalf("created agent account %q did not appear in list before update", email)
+	} else if listed.Settings.PolicyID != policy.ID {
+		t.Fatalf("listed policy_id before update = %q, want %q", listed.Settings.PolicyID, policy.ID)
+	}
+
+	stdout, stderr, err := runCLIWithOverridesAndRateLimit(
+		t,
+		2*time.Minute,
+		env,
+		"agent",
+		"account",
+		"update",
+		email,
+		"--app-password", appPassword,
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("agent update with policy failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	var updated domain.AgentAccount
+	if err := json.Unmarshal([]byte(stdout), &updated); err != nil {
+		t.Fatalf("failed to parse agent update with policy JSON: %v\noutput: %s", err, stdout)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("updated agent ID = %q, want %q", updated.ID, created.ID)
+	}
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	refetched, err := client.GetAgentAccount(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("failed to refetch agent account after update: %v", err)
+	}
+	if refetched.Settings.PolicyID != policy.ID {
+		t.Fatalf("refetched policy_id after update = %q, want %q", refetched.Settings.PolicyID, policy.ID)
 	}
 }
 
@@ -407,6 +612,7 @@ func newAgentSandboxEnv(t *testing.T) map[string]string {
 		"HOME":                        configHome,
 		"NYLAS_DISABLE_KEYRING":       "true",
 		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+		"NYLAS_AGENT_GRANT_ID":        "",
 		"NYLAS_GRANT_ID":              "",
 	}
 }

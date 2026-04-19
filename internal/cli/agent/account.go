@@ -12,12 +12,15 @@ Agent accounts are managed email identities backed by the Nylas provider.
 This command always uses provider=nylas and keeps connector setup out of the
 user's path.
 
-Examples:
-  # Create a new agent account
-  nylas agent account create me@yourapp.nylas.email
+	Examples:
+	  # Create a new agent account
+	  nylas agent account create me@yourapp.nylas.email
 
-  # List agent accounts
-  nylas agent account list
+	  # Update an existing agent account
+	  nylas agent account update me@yourapp.nylas.email --app-password "MySecureP4ssword!2024"
+
+	  # List agent accounts
+	  nylas agent account list
 
   # Show one agent account
   nylas agent account get <agent-id|email>
@@ -27,6 +30,7 @@ Examples:
 	}
 
 	cmd.AddCommand(newCreateCmd())
+	cmd.AddCommand(newUpdateCmd())
 	cmd.AddCommand(newListCmd())
 	cmd.AddCommand(newGetCmd())
 	cmd.AddCommand(newDeleteCmd())

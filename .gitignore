@@ -49,6 +49,7 @@ ci-full.txt
 ci-full-verification.txt
 *-verification.txt
 test-integration.txt
+internal/air/photos.db
 
 # IDE
 .idea/

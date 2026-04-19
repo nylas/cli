@@ -9,6 +9,7 @@ Agent accounts are managed email identities backed by provider `nylas`. Unlike O
 ```bash
 nylas agent account list
 nylas agent account create <email>
+nylas agent account update [agent-id|email] --app-password 'ValidAgentPass123ABC!'
 nylas agent account get <agent-id|email>
 nylas agent account delete <agent-id|email>
 nylas agent policy list
@@ -20,6 +21,7 @@ nylas agent policy delete <policy-id>
 nylas agent rule list
 nylas agent rule read <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
+nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive
 nylas agent rule update <rule-id> --name "Updated Rule" --description "Block example.org"
 nylas agent rule delete <rule-id>
 nylas agent status
@@ -100,12 +102,28 @@ nylas agent account create me@yourapp.nylas.email --policy-id 12345678-1234-1234
 ## Show Agent Account
 
 ```bash
+nylas agent account get
 nylas agent account get 12345678-1234-1234-1234-123456789012
 nylas agent account get me@yourapp.nylas.email
 nylas agent account get me@yourapp.nylas.email --json
 ```
 
-You can look up an agent account by grant ID or by email address.
+You can look up an agent account by grant ID or by email address. If you omit the identifier, the CLI resolves a local `provider=nylas` grant when one can be identified safely.
+
+## Update Agent Account
+
+```bash
+nylas agent account update --app-password 'ValidAgentPass123ABC!'
+nylas agent account update 12345678-1234-1234-1234-123456789012 --app-password 'ValidAgentPass123ABC!'
+nylas agent account update me@yourapp.nylas.email --app-password 'ValidAgentPass123ABC!' --json
+```
+
+Behavior:
+- updates the resolved local `provider=nylas` grant when no identifier is passed
+- currently supports rotating or adding `settings.app_password`
+- preserves the existing account email and policy attachment
+
+Use this when you want to add mail-client access after creation or rotate an existing IMAP/SMTP app password.
 
 ## Delete Agent Account
 
@@ -161,16 +179,19 @@ nylas agent rule read <rule-id>
 nylas agent rule get <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
 nylas agent rule create --name "VIP sender" --condition from.address,is,ceo@example.com --action mark_as_read --action mark_as_starred
+nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive
 nylas agent rule create --data-file rule.json
 nylas agent rule update <rule-id> --name "Updated Rule" --description "Block example.org"
-nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_spam
+nylas agent rule update <rule-id> --trigger outbound --condition recipient.domain,is,example.org --condition outbound.type,is,reply --action archive
 nylas agent rule delete <rule-id> --yes
 ```
 
 Summary:
 - `list` uses the policy attached to the current default `provider=nylas` grant unless `--policy-id` is passed
 - `list --all` shows only rules reachable from policies attached to `provider=nylas` accounts
+- `list` skips stale policy rule references and returns only rules that still exist
 - `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`
+- both inbound and outbound rule triggers are supported on the agent rule surface
 - `get` and `read` are aliases
 - `update` and `delete` refuse to operate on rules that are outside the current `provider=nylas` agent scope
 

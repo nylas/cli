@@ -4,9 +4,12 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nylas/cli/internal/cli/common"
 )
 
 // =============================================================================
@@ -77,20 +80,7 @@ func TestCLI_EmailList_Filters(t *testing.T) {
 func TestCLI_EmailRead(t *testing.T) {
 	skipIfMissingCreds(t)
 
-	// First get a message ID
-	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	messages, err := client.GetMessages(ctx, testGrantID, 1)
-	if err != nil {
-		t.Fatalf("Failed to get messages: %v", err)
-	}
-	if len(messages) == 0 {
-		t.Skip("No messages available for read test")
-	}
-
-	messageID := messages[0].ID
+	messageID := getRecentMessageID(t)
 
 	stdout, stderr, err := runCLI("email", "read", messageID, testGrantID)
 
@@ -113,19 +103,7 @@ func TestCLI_EmailShow(t *testing.T) {
 	skipIfMissingCreds(t)
 
 	// Test the 'show' alias for 'read' command
-	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	messages, err := client.GetMessages(ctx, testGrantID, 1)
-	if err != nil {
-		t.Fatalf("Failed to get messages: %v", err)
-	}
-	if len(messages) == 0 {
-		t.Skip("No messages available for show test")
-	}
-
-	messageID := messages[0].ID
+	messageID := getRecentMessageID(t)
 
 	// Use 'show' alias instead of 'read'
 	stdout, stderr, err := runCLI("email", "show", messageID, testGrantID)
@@ -148,20 +126,7 @@ func TestCLI_EmailShow(t *testing.T) {
 func TestCLI_EmailRead_JSON(t *testing.T) {
 	skipIfMissingCreds(t)
 
-	// First get a message ID
-	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	messages, err := client.GetMessages(ctx, testGrantID, 1)
-	if err != nil {
-		t.Fatalf("Failed to get messages: %v", err)
-	}
-	if len(messages) == 0 {
-		t.Skip("No messages available for read test")
-	}
-
-	messageID := messages[0].ID
+	messageID := getRecentMessageID(t)
 
 	stdout, stderr, err := runCLI("email", "read", messageID, testGrantID, "--json")
 
@@ -194,20 +159,7 @@ func TestCLI_EmailRead_JSON(t *testing.T) {
 func TestCLI_EmailRead_Raw(t *testing.T) {
 	skipIfMissingCreds(t)
 
-	// First get a message ID
-	client := getTestClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	messages, err := client.GetMessages(ctx, testGrantID, 1)
-	if err != nil {
-		t.Fatalf("Failed to get messages: %v", err)
-	}
-	if len(messages) == 0 {
-		t.Skip("No messages available for read test")
-	}
-
-	messageID := messages[0].ID
+	messageID := getRecentMessageID(t)
 
 	stdout, stderr, err := runCLI("email", "read", messageID, testGrantID, "--raw")
 
@@ -226,6 +178,58 @@ func TestCLI_EmailRead_Raw(t *testing.T) {
 	// Raw output typically contains HTML tags if the message is HTML
 	// OR it's plain text - either way it should have body content
 	t.Logf("email read --raw output:\n%s", stdout)
+}
+
+func getRecentMessageID(t *testing.T) string {
+	t.Helper()
+
+	client := getTestClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	messageID, err := lookupRecentMessageID(ctx, func() {
+		acquireRateLimit(t)
+	}, func(ctx context.Context) (string, error) {
+		messages, err := client.GetMessages(ctx, testGrantID, 1)
+		if err != nil {
+			return "", err
+		}
+		if len(messages) == 0 {
+			return "", fmt.Errorf("no messages available for read test")
+		}
+
+		return messages[0].ID, nil
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "no messages available") {
+			t.Skip("No messages available for read test")
+		}
+		t.Fatalf("Failed to get messages: %v", err)
+	}
+
+	return messageID
+}
+
+func lookupRecentMessageID(ctx context.Context, beforeAttempt func(), fetch func(context.Context) (string, error)) (string, error) {
+	var messageID string
+	err := common.WithRetry(ctx, common.RetryConfig{
+		MaxRetries:  3,
+		BaseDelay:   1 * time.Second,
+		MaxDelay:    5 * time.Second,
+		Multiplier:  2.0,
+		JitterRatio: 0,
+	}, func() error {
+		if beforeAttempt != nil {
+			beforeAttempt()
+		}
+		id, err := fetch(ctx)
+		if err != nil {
+			return err
+		}
+		messageID = id
+		return nil
+	})
+	return messageID, err
 }
 
 // =============================================================================
