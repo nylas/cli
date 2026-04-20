@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/nylas/cli/internal/domain"
@@ -14,6 +15,32 @@ import (
 type AuthService struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
+}
+
+var (
+	dashboardSessionStateKeys = []string{
+		ports.KeyDashboardUserToken,
+		ports.KeyDashboardOrgToken,
+		ports.KeyDashboardUserPublicID,
+		ports.KeyDashboardOrgPublicID,
+		ports.KeyDashboardAppID,
+		ports.KeyDashboardAppRegion,
+	}
+	dashboardRefreshStateKeys = []string{
+		ports.KeyDashboardUserToken,
+		ports.KeyDashboardOrgToken,
+	}
+	dashboardSwitchOrgStateKeys = []string{
+		ports.KeyDashboardOrgToken,
+		ports.KeyDashboardOrgPublicID,
+		ports.KeyDashboardAppID,
+		ports.KeyDashboardAppRegion,
+	}
+)
+
+type secretSnapshot struct {
+	value   string
+	present bool
 }
 
 // NewAuthService creates a new dashboard auth service.
@@ -85,21 +112,8 @@ func (s *AuthService) Refresh(ctx context.Context) error {
 		return err
 	}
 
-	resp, err := s.account.Refresh(ctx, userToken, orgToken)
-	if err != nil {
-		return err
-	}
-
-	if err := s.secrets.Set(ports.KeyDashboardUserToken, resp.UserToken); err != nil {
-		return fmt.Errorf("failed to store refreshed user token: %w", err)
-	}
-	if resp.OrgToken != "" {
-		if err := s.secrets.Set(ports.KeyDashboardOrgToken, resp.OrgToken); err != nil {
-			return fmt.Errorf("failed to store refreshed org token: %w", err)
-		}
-	}
-
-	return nil
+	_, _, err = s.refreshTokens(ctx, userToken, orgToken)
+	return err
 }
 
 // Logout invalidates the session and clears local tokens.
@@ -112,8 +126,7 @@ func (s *AuthService) Logout(ctx context.Context) error {
 	}
 
 	// Always clear local state
-	s.clearTokens()
-	return nil
+	return s.clearTokens()
 }
 
 // SSOStart initiates an SSO device authorization flow.
@@ -169,6 +182,17 @@ func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardS
 	if err != nil {
 		return nil, err
 	}
+
+	session, err := s.account.GetCurrentSession(ctx, userToken, orgToken)
+	if !errors.Is(err, domain.ErrDashboardSessionExpired) {
+		return session, err
+	}
+
+	userToken, orgToken, err = s.refreshTokens(ctx, userToken, orgToken)
+	if err != nil {
+		return nil, err
+	}
+
 	return s.account.GetCurrentSession(ctx, userToken, orgToken)
 }
 
@@ -180,25 +204,29 @@ func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domai
 	}
 
 	resp, err := s.account.SwitchOrg(ctx, orgPublicID, userToken, orgToken)
+	if errors.Is(err, domain.ErrDashboardSessionExpired) {
+		userToken, orgToken, err = s.refreshTokens(ctx, userToken, orgToken)
+		if err != nil {
+			return nil, err
+		}
+		resp, err = s.account.SwitchOrg(ctx, orgPublicID, userToken, orgToken)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	// Store the new org token and org ID
-	if resp.OrgToken != "" {
-		if err := s.secrets.Set(ports.KeyDashboardOrgToken, resp.OrgToken); err != nil {
-			return nil, fmt.Errorf("failed to store org token: %w", err)
-		}
-	}
+	nextOrgID := orgPublicID
 	if resp.Org.PublicID != "" {
-		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, resp.Org.PublicID); err != nil {
-			return nil, fmt.Errorf("failed to store org ID: %w", err)
-		}
+		nextOrgID = resp.Org.PublicID
 	}
-
-	// Clear active app since it belongs to the previous org
-	_ = s.secrets.Delete(ports.KeyDashboardAppID)
-	_ = s.secrets.Delete(ports.KeyDashboardAppRegion)
+	if err := s.replaceSecretValues(dashboardSwitchOrgStateKeys, map[string]*string{
+		ports.KeyDashboardOrgToken:    stringPtrOrNil(resp.OrgToken),
+		ports.KeyDashboardOrgPublicID: stringPtrOrNil(nextOrgID),
+		ports.KeyDashboardAppID:       nil,
+		ports.KeyDashboardAppRegion:   nil,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to persist organization switch: %w", err)
+	}
 
 	return resp, nil
 }
@@ -221,25 +249,19 @@ func (s *AuthService) SyncSessionOrg(ctx context.Context) error {
 
 // storeTokens persists auth tokens and user/org identifiers.
 func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
-	if err := s.secrets.Set(ports.KeyDashboardUserToken, resp.UserToken); err != nil {
-		return err
-	}
-	if resp.OrgToken != "" {
-		if err := s.secrets.Set(ports.KeyDashboardOrgToken, resp.OrgToken); err != nil {
-			return err
-		}
-	}
-	if resp.User.PublicID != "" {
-		if err := s.secrets.Set(ports.KeyDashboardUserPublicID, resp.User.PublicID); err != nil {
-			return err
-		}
-	}
+	orgPublicID := ""
 	if len(resp.Organizations) == 1 {
-		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, resp.Organizations[0].PublicID); err != nil {
-			return err
-		}
+		orgPublicID = resp.Organizations[0].PublicID
 	}
-	return nil
+
+	return s.replaceSecretValues(dashboardSessionStateKeys, map[string]*string{
+		ports.KeyDashboardUserToken:    stringPtrOrNil(resp.UserToken),
+		ports.KeyDashboardOrgToken:     stringPtrOrNil(resp.OrgToken),
+		ports.KeyDashboardUserPublicID: stringPtrOrNil(resp.User.PublicID),
+		ports.KeyDashboardOrgPublicID:  stringPtrOrNil(orgPublicID),
+		ports.KeyDashboardAppID:        nil,
+		ports.KeyDashboardAppRegion:    nil,
+	})
 }
 
 // SetActiveOrg updates the active organization.
@@ -249,16 +271,113 @@ func (s *AuthService) SetActiveOrg(orgPublicID string) error {
 
 // clearTokens removes all dashboard auth data from the keyring,
 // including the active app selection to prevent stale state after re-login.
-func (s *AuthService) clearTokens() {
-	_ = s.secrets.Delete(ports.KeyDashboardUserToken)
-	_ = s.secrets.Delete(ports.KeyDashboardOrgToken)
-	_ = s.secrets.Delete(ports.KeyDashboardUserPublicID)
-	_ = s.secrets.Delete(ports.KeyDashboardOrgPublicID)
-	_ = s.secrets.Delete(ports.KeyDashboardAppID)
-	_ = s.secrets.Delete(ports.KeyDashboardAppRegion)
+func (s *AuthService) clearTokens() error {
+	var errs []error
+	for _, key := range dashboardSessionStateKeys {
+		if err := s.secrets.Delete(key); err != nil {
+			errs = append(errs, fmt.Errorf("failed to clear %s: %w", key, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // loadTokens retrieves the stored tokens.
 func (s *AuthService) loadTokens() (userToken, orgToken string, err error) {
 	return loadDashboardTokens(s.secrets)
+}
+
+func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken string) (string, string, error) {
+	resp, err := s.account.Refresh(ctx, userToken, orgToken)
+	if err != nil {
+		return "", "", err
+	}
+
+	updates := map[string]*string{
+		ports.KeyDashboardUserToken: stringPtrOrNil(resp.UserToken),
+	}
+	if resp.OrgToken != "" {
+		updates[ports.KeyDashboardOrgToken] = stringPtrOrNil(resp.OrgToken)
+	}
+	if err := s.replaceSecretValues(dashboardRefreshStateKeys, updates); err != nil {
+		return "", "", fmt.Errorf("failed to store refreshed credentials: %w", err)
+	}
+	userToken = resp.UserToken
+	if resp.OrgToken != "" {
+		orgToken = resp.OrgToken
+	}
+
+	return userToken, orgToken, nil
+}
+
+func (s *AuthService) replaceSecretValues(keys []string, updates map[string]*string) error {
+	snapshot, err := s.snapshotSecretValues(keys)
+	if err != nil {
+		return err
+	}
+	if err := s.applySecretValues(keys, updates); err != nil {
+		if rollbackErr := s.restoreSecretValues(keys, snapshot); rollbackErr != nil {
+			return errors.Join(err, fmt.Errorf("failed to rollback dashboard session state: %w", rollbackErr))
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *AuthService) snapshotSecretValues(keys []string) (map[string]secretSnapshot, error) {
+	snapshot := make(map[string]secretSnapshot, len(keys))
+	for _, key := range keys {
+		value, err := s.secrets.Get(key)
+		switch {
+		case err == nil:
+			snapshot[key] = secretSnapshot{value: value, present: true}
+		case errors.Is(err, domain.ErrSecretNotFound):
+			snapshot[key] = secretSnapshot{}
+		default:
+			return nil, fmt.Errorf("failed to read %s: %w", key, err)
+		}
+	}
+	return snapshot, nil
+}
+
+func (s *AuthService) applySecretValues(keys []string, updates map[string]*string) error {
+	for _, key := range keys {
+		value, ok := updates[key]
+		if !ok {
+			continue
+		}
+		if value == nil {
+			if err := s.secrets.Delete(key); err != nil {
+				return fmt.Errorf("failed to clear %s: %w", key, err)
+			}
+			continue
+		}
+		if err := s.secrets.Set(key, *value); err != nil {
+			return fmt.Errorf("failed to store %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
+func (s *AuthService) restoreSecretValues(keys []string, snapshot map[string]secretSnapshot) error {
+	var errs []error
+	for _, key := range keys {
+		prev := snapshot[key]
+		var err error
+		if prev.present {
+			err = s.secrets.Set(key, prev.value)
+		} else {
+			err = s.secrets.Delete(key)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func stringPtrOrNil(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }

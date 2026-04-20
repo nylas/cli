@@ -3,10 +3,12 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/nylas/cli/internal/adapters/browser"
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
@@ -47,14 +49,18 @@ func newSSOLoginCmd() *cobra.Command {
 }
 
 func newSSORegisterCmd() *cobra.Command {
-	var provider string
+	var (
+		provider                string
+		acceptPrivacyPolicyFlag bool
+	)
 
 	cmd := &cobra.Command{
-		Use:     "register",
-		Short:   "Register via SSO",
-		Example: `  nylas dashboard sso register --provider google`,
+		Use:   "register",
+		Short: "Register via SSO",
+		Example: `  nylas dashboard sso register --provider google
+  nylas dashboard sso register --provider google --accept-privacy-policy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := acceptPrivacyPolicy(); err != nil {
+			if err := acceptPrivacyPolicy(acceptPrivacyPolicyFlag); err != nil {
 				return err
 			}
 			return runSSO(provider, "register", true)
@@ -62,6 +68,7 @@ func newSSORegisterCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&provider, "provider", "p", "google", "SSO provider (google, microsoft, github)")
+	cmd.Flags().BoolVar(&acceptPrivacyPolicyFlag, "accept-privacy-policy", false, "Confirm that you accept the Nylas Privacy Policy")
 
 	return cmd
 }
@@ -126,6 +133,7 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...s
 	}
 
 	if err := persistActiveOrg(authSvc, auth, orgPublicID); err != nil {
+		rollbackPostAuthFailure(authSvc)
 		return wrapDashboardError(err)
 	}
 
@@ -167,6 +175,11 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID, org
 			if resp.MFA == nil {
 				return nil, fmt.Errorf("unexpected empty MFA response")
 			}
+
+			mfaOrg, resolveErr := resolveSSOMFAOrg(orgPublicID, resp.MFA.Organizations)
+			if resolveErr != nil {
+				return nil, resolveErr
+			}
 			code, readErr := common.PasswordPrompt("MFA code")
 			if readErr != nil {
 				return nil, readErr
@@ -174,10 +187,6 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID, org
 
 			ctx2, cancel := common.CreateContext()
 			var auth *domain.DashboardAuthResponse
-			mfaOrg := orgPublicID
-			if mfaOrg == "" && len(resp.MFA.Organizations) > 0 {
-				mfaOrg = resp.MFA.Organizations[0].PublicID
-			}
 			mfaErr := common.RunWithSpinner("Verifying MFA...", func() error {
 				auth, err = authSvc.CompleteMFA(ctx2, resp.MFA.User.PublicID, code, mfaOrg)
 				return err
@@ -202,6 +211,36 @@ func pollSSO(ctx context.Context, authSvc *dashboardapp.AuthService, flowID, org
 			}
 		}
 	}
+}
+
+func resolveSSOMFAOrg(orgPublicID string, orgs []domain.DashboardOrganization) (string, error) {
+	if orgPublicID != "" || len(orgs) == 0 {
+		return orgPublicID, nil
+	}
+	if len(orgs) == 1 {
+		return orgs[0].PublicID, nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", dashboardError(
+			"multiple organizations available for MFA",
+			"Pass --org to choose the organization",
+		)
+	}
+
+	opts := make([]common.SelectOption[string], len(orgs))
+	for i, org := range orgs {
+		label := org.Name
+		if label == "" {
+			label = org.PublicID
+		}
+		opts[i] = common.SelectOption[string]{Label: label, Value: org.PublicID}
+	}
+
+	selected, err := common.Select("Select organization", opts)
+	if err != nil {
+		return "", err
+	}
+	return selected, nil
 }
 
 // mapProvider maps a user-friendly provider name to the server login type.

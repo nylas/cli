@@ -1,11 +1,13 @@
 package dashboard
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 )
 
 func newRefreshCmd() *cobra.Command {
@@ -25,8 +27,10 @@ func newRefreshCmd() *cobra.Command {
 				return authSvc.Refresh(ctx)
 			})
 			if err != nil {
-				fmt.Println("Session expired. Please log in again:")
-				fmt.Println("  nylas dashboard login")
+				if errors.Is(err, domain.ErrDashboardSessionExpired) {
+					fmt.Println("Session expired. Please log in again:")
+					fmt.Println("  nylas dashboard login")
+				}
 				return wrapDashboardError(err)
 			}
 

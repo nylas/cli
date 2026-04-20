@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -71,7 +72,11 @@ Use --region to filter to a specific region.`,
 
 			apps, err := appSvc.ListApplications(ctx, orgPublicID, region)
 			if err != nil {
-				return wrapDashboardError(err)
+				var partialErr *domain.DashboardPartialResultError
+				if !errors.As(err, &partialErr) || len(apps) == 0 {
+					return wrapDashboardError(err)
+				}
+				common.PrintWarning("%v", partialErr)
 			}
 
 			if len(apps) == 0 {
@@ -92,8 +97,9 @@ Use --region to filter to a specific region.`,
 
 func newAppsCreateCmd() *cobra.Command {
 	var (
-		name   string
-		region string
+		name           string
+		region         string
+		secretDelivery string
 	)
 
 	cmd := &cobra.Command{
@@ -104,7 +110,10 @@ func newAppsCreateCmd() *cobra.Command {
   nylas dashboard apps create --name "My App" --region us
 
   # Create an EU application
-  nylas dashboard apps create --name "EU App" --region eu`,
+  nylas dashboard apps create --name "EU App" --region eu
+
+  # Non-interactive secret delivery
+  nylas dashboard apps create --name "My App" --region us --secret-delivery file`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return dashboardError("application name is required", "Use --name to specify the application name")
@@ -114,6 +123,15 @@ func newAppsCreateCmd() *cobra.Command {
 			}
 			if region != "us" && region != "eu" {
 				return dashboardError("invalid region", "Use --region us or --region eu")
+			}
+			if err := validateSecretDelivery(secretDelivery); err != nil {
+				return err
+			}
+			if !isInteractive() && secretDelivery == "" {
+				return dashboardError(
+					"client secret delivery requires an explicit choice in non-interactive runs",
+					"Pass --secret-delivery clipboard or --secret-delivery file",
+				)
 			}
 
 			appSvc, err := createAppService()
@@ -143,7 +161,7 @@ func newAppsCreateCmd() *cobra.Command {
 
 			if app.ClientSecret != "" {
 				_, _ = common.Yellow.Println("\n  Client Secret (available once — save it now):")
-				if err := handleSecretDelivery(app.ClientSecret, "Client Secret"); err != nil {
+				if err := handleSecretDelivery(app.ClientSecret, "Client Secret", secretDelivery); err != nil {
 					return err
 				}
 			}
@@ -157,6 +175,7 @@ func newAppsCreateCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Application name (required)")
 	cmd.Flags().StringVarP(&region, "region", "r", "", "Region (required: us or eu)")
+	cmd.Flags().StringVar(&secretDelivery, "secret-delivery", "", "Secret delivery method (clipboard or file)")
 
 	return cmd
 }
@@ -189,6 +208,12 @@ When called without arguments, lists your applications and lets you pick one int
 
 			// If no app ID provided, show interactive selector
 			if appID == "" {
+				if !isInteractive() {
+					return dashboardError(
+						"application selection requires an interactive terminal",
+						"Pass the application ID and --region in non-interactive runs",
+					)
+				}
 				selectedID, selectedRegion, err := selectApp(region)
 				if err != nil {
 					return wrapDashboardError(err)
@@ -226,6 +251,13 @@ When called without arguments, lists your applications and lets you pick one int
 // selectApp fetches apps and presents an interactive selector.
 // Returns the selected app ID and region.
 func selectApp(regionFilter string) (appID, region string, err error) {
+	if !isInteractive() {
+		return "", "", dashboardError(
+			"application selection requires an interactive terminal",
+			"Pass the application ID and --region in non-interactive runs",
+		)
+	}
+
 	appSvc, err := createAppService()
 	if err != nil {
 		return "", "", err
@@ -280,7 +312,13 @@ func selectApp(regionFilter string) (appID, region string, err error) {
 // getActiveApp returns the active app ID and region from the keyring.
 // Flags take priority over the stored active app.
 func getActiveApp(appFlag, regionFlag string) (appID, region string, err error) {
-	if appFlag != "" && regionFlag != "" {
+	if appFlag != "" || regionFlag != "" {
+		if appFlag == "" || regionFlag == "" {
+			return "", "", dashboardError(
+				"both --app and --region must be provided together",
+				"Pass both flags, or use 'nylas dashboard apps use <app-id> --region <region>' first",
+			)
+		}
 		return appFlag, regionFlag, nil
 	}
 

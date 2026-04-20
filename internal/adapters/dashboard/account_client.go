@@ -77,7 +77,7 @@ func (c *AccountClient) Login(ctx context.Context, email, password, orgPublicID 
 
 	raw, err := c.doPostRaw(ctx, "/auth/cli/login", body, nil, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w", domain.ErrDashboardLoginFailed)
+		return nil, nil, fmt.Errorf("%w: %w", domain.ErrDashboardLoginFailed, err)
 	}
 
 	// Check if response contains userToken (success) or totpFactor (MFA required)
@@ -120,7 +120,7 @@ func (c *AccountClient) LoginMFA(ctx context.Context, userPublicID, code, orgPub
 
 	var result domain.DashboardAuthResponse
 	if err := c.doPost(ctx, "/auth/cli/login/mfa", body, nil, "", &result); err != nil {
-		return nil, fmt.Errorf("%w", domain.ErrDashboardLoginFailed)
+		return nil, fmt.Errorf("%w: %w", domain.ErrDashboardLoginFailed, err)
 	}
 	return &result, nil
 }
@@ -130,7 +130,7 @@ func (c *AccountClient) Refresh(ctx context.Context, userToken, orgToken string)
 	headers := bearerHeaders(userToken, orgToken)
 	var result domain.DashboardRefreshResponse
 	if err := c.doPost(ctx, "/auth/cli/refresh", nil, headers, userToken, &result); err != nil {
-		return nil, fmt.Errorf("%w", domain.ErrDashboardSessionExpired)
+		return nil, fmt.Errorf("failed to refresh session: %w", err)
 	}
 	return &result, nil
 }

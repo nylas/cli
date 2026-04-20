@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 const (
@@ -188,20 +190,6 @@ func (c *AccountClient) doGet(ctx context.Context, path string, extraHeaders map
 	return nil
 }
 
-// DashboardAPIError represents an error from the dashboard API.
-// It carries the status code and server message for debugging.
-type DashboardAPIError struct {
-	StatusCode int
-	ServerMsg  string
-}
-
-func (e *DashboardAPIError) Error() string {
-	if e.ServerMsg != "" {
-		return fmt.Sprintf("dashboard API error (HTTP %d): %s", e.StatusCode, e.ServerMsg)
-	}
-	return fmt.Sprintf("dashboard API error (HTTP %d)", e.StatusCode)
-}
-
 // parseErrorResponse extracts a user-friendly error from an HTTP error response.
 // The dashboard-account error envelope is:
 //
@@ -213,18 +201,17 @@ func parseErrorResponse(statusCode int, body []byte) error {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
+	code := ""
 	msg := ""
-	if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+	if json.Unmarshal(body, &errResp) == nil {
+		code = errResp.Error.Code
 		msg = errResp.Error.Message
-		if errResp.Error.Code != "" {
-			msg = errResp.Error.Code + ": " + msg
-		}
 	}
-	if msg == "" {
+	if msg == "" && code == "" {
 		msg = string(body)
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
 	}
-	return &DashboardAPIError{StatusCode: statusCode, ServerMsg: msg}
+	return domain.NewDashboardAPIError(statusCode, code, msg)
 }
