@@ -41,8 +41,8 @@ function showDashboard(data) {
     };
 
     const region = currentConfig.region.toUpperCase();
-    setText('cfg-region', region);
-    setText('cfg-client', truncate(currentConfig.client_id, 16) || '-');
+    setText('config-region', region);
+    setText('config-client', truncate(currentConfig.client_id, 16) || '-');
 
     loadAccounts();
 }

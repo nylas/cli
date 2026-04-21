@@ -134,14 +134,26 @@ type Contact struct {
 // buildMockPageData creates mock data for Phase 1 (static design).
 func buildMockPageData() PageData {
 	return PageData{
-		UserName:      "Demo User",
-		UserEmail:     "user@example.com",
-		UserAvatar:    "DU",
-		ActiveView:    "email",
-		ActiveFolder:  "inbox",
-		UnreadCount:   23,
-		SyncedAt:      time.Now(),
-		AccountsCount: 3,
+		UserName:       "Nylas",
+		UserEmail:      "nylas@example.com",
+		UserAvatar:     "N",
+		Configured:     true,
+		ClientID:       "demo-client-id",
+		Region:         "us",
+		HasAPIKey:      true,
+		DefaultGrantID: "demo-grant-nylas",
+		Provider:       "nylas",
+		ActiveView:     "email",
+		ActiveFolder:   "inbox",
+		UnreadCount:    23,
+		SyncedAt:       time.Now(),
+		AccountsCount:  1,
+		Grants: []GrantInfo{{
+			ID:        "demo-grant-nylas",
+			Email:     "nylas@example.com",
+			Provider:  "nylas",
+			IsDefault: true,
+		}},
 
 		Folders: []Folder{
 			{ID: "inbox", Name: "Inbox", Icon: "inbox", Count: 23, UnreadCount: 23, IsActive: true},

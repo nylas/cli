@@ -32,18 +32,15 @@ func (s *Server) handleConfigStatus(w http.ResponseWriter, r *http.Request) {
 	// Use s.hasAPIKey which is set during server initialization from keyring
 	hasAPIKey := s.hasAPIKey || status.HasAPIKey
 
-	// Get grant count from grant store (more accurate than config file)
-	grantCount := status.GrantCount
-	if grants, err := s.grantStore.ListGrants(); err == nil {
+	// Air is only configured once it has at least one supported account.
+	grantCount := 0
+	if grants, err := s.listSupportedGrants(); err == nil {
 		grantCount = len(grants)
 	}
 
-	// Get default grant from grant store
 	defaultGrant := status.DefaultGrant
-	if defaultGrant == "" {
-		if grantID, err := s.grantStore.GetDefaultGrant(); err == nil {
-			defaultGrant = grantID
-		}
+	if grant, err := s.resolveDefaultGrantInfo(); err == nil {
+		defaultGrant = grant.ID
 	}
 
 	resp := ConfigStatusResponse{
@@ -84,18 +81,9 @@ func (s *Server) handleListGrants(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	defaultID, _ := s.grantStore.GetDefaultGrant()
-
-	// If default grant is not a supported provider, pick the first supported account as default
-	defaultIsSupported := false
-	for _, g := range grantList {
-		if g.ID == defaultID {
-			defaultIsSupported = true
-			break
-		}
-	}
-	if !defaultIsSupported && len(grantList) > 0 {
-		defaultID = grantList[0].ID
+	defaultID := ""
+	if grant, err := s.resolveDefaultGrantInfo(); err == nil {
+		defaultID = grant.ID
 	}
 
 	writeJSON(w, http.StatusOK, GrantsResponse{
@@ -151,7 +139,23 @@ func (s *Server) handleSetDefaultGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.grantStore.SetDefaultGrant(req.GrantID); err != nil {
+	selectedGrant, err := s.grantStore.GetGrant(req.GrantID)
+	if err != nil || selectedGrant == nil {
+		writeJSON(w, http.StatusNotFound, SetDefaultGrantResponse{
+			Success: false,
+			Error:   "Grant not found",
+		})
+		return
+	}
+	if !selectedGrant.Provider.IsSupportedByAir() {
+		writeJSON(w, http.StatusBadRequest, SetDefaultGrantResponse{
+			Success: false,
+			Error:   "Grant provider is not supported by Air",
+		})
+		return
+	}
+
+	if err := s.setDefaultGrant(req.GrantID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, SetDefaultGrantResponse{
 			Success: false,
 			Error:   "Failed to set default grant: " + err.Error(),

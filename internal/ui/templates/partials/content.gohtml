@@ -14,14 +14,14 @@
                 <p>Connect your Nylas account to get started</p>
             </div>
 
-            <div class="setup-form">
+            <form class="setup-form" id="setup-form">
                 <div class="error-msg" id="setup-error"></div>
 
                 <div class="field">
                     <label for="api-key">API Key</label>
                     <div class="input-wrapper">
                         <input type="password" id="api-key" placeholder="nyk_v0_...">
-                        <button class="input-btn" onclick="toggleApiKeyVisibility()">
+                        <button type="button" class="input-btn" onclick="togglePassword()">
                             <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                 <circle cx="12" cy="12" r="3"/>
@@ -47,10 +47,21 @@
                     </div>
                 </div>
 
-                <button class="btn-primary" id="setup-btn" onclick="submitSetup()">
+                <div class="field is-hidden" id="client-id-field">
+                    <label for="client-id">Application</label>
+                    <div class="select-wrapper">
+                        <select id="client-id"></select>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </div>
+                    <p class="setup-help">This API key is linked to multiple applications. Choose the application to configure.</p>
+                </div>
+
+                <button type="submit" class="btn-primary" id="setup-btn">
                     Connect Account
                 </button>
-            </div>
+            </form>
         </div>
     </section>
 

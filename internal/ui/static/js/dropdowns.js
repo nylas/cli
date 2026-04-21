@@ -29,13 +29,13 @@ function updateHeaderDropdowns() {
     controls.style.display = 'flex';
 
     // Update app dropdown
-    const appSpan = document.getElementById('current-app');
+    const appSpan = document.getElementById('selected-client');
     if (appSpan && currentConfig.client_id) {
         appSpan.textContent = currentConfig.client_id;
     }
 
     // Update app menu
-    const appMenu = document.getElementById('app-menu');
+    const appMenu = document.getElementById('client-menu');
     if (appMenu && currentConfig.client_id) {
         appMenu.innerHTML = `
             <button class="dropdown-item active">
@@ -53,8 +53,8 @@ function updateHeaderDropdowns() {
 }
 
 function updateAccountDropdown() {
-    const accountSpan = document.getElementById('current-account');
-    const accountMenu = document.getElementById('account-menu');
+    const accountSpan = document.getElementById('selected-grant');
+    const accountMenu = document.getElementById('grant-menu');
 
     if (!accountSpan || !accountMenu) return;
 
@@ -62,9 +62,9 @@ function updateAccountDropdown() {
     const defaultAccount = currentGrants.find(g => g.id === currentDefaultGrant);
 
     if (defaultAccount) {
-        accountSpan.textContent = defaultAccount.id;
+        accountSpan.textContent = defaultAccount.email || defaultAccount.id;
     } else if (currentGrants.length > 0) {
-        accountSpan.textContent = currentGrants[0].id;
+        accountSpan.textContent = currentGrants[0].email || currentGrants[0].id;
     } else {
         accountSpan.textContent = 'None';
     }
@@ -121,4 +121,12 @@ function showAddAccount() {
 
     // Show a simple alert with the command
     alert('Run this command in your terminal:\n\nnylas auth login');
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        toggleDropdown,
+        updateAccountDropdown,
+        updateHeaderDropdowns,
+    };
 }

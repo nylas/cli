@@ -27,6 +27,9 @@ Already have an API key? Skip the wizard:
   # Quick setup with existing API key
   nylas init --api-key nyl_abc123
 
+  # Quick setup for a specific application
+  nylas init --api-key nyl_abc123 --client-id app-123
+
   # Quick setup with region
   nylas init --api-key nyl_abc123 --region eu
 
@@ -38,6 +41,7 @@ Already have an API key? Skip the wizard:
 	}
 
 	cmd.Flags().StringVar(&opts.apiKey, "api-key", "", "Nylas API key (skips interactive setup)")
+	cmd.Flags().StringVar(&opts.clientID, "client-id", "", "Nylas Client ID to use with --api-key")
 	cmd.Flags().StringVarP(&opts.region, "region", "r", "us", "API region (us or eu)")
 	cmd.Flags().BoolVar(&opts.google, "google", false, "Use Google SSO")
 	cmd.Flags().BoolVar(&opts.microsoft, "microsoft", false, "Use Microsoft SSO")

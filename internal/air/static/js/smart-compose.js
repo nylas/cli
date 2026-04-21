@@ -20,6 +20,8 @@ const SmartCompose = {
         lastText: '',
         debounceTimer: null,
         textarea: null,
+        abortController: null,
+        requestId: 0,
     },
 
     /**
@@ -67,6 +69,9 @@ const SmartCompose = {
      */
     handleInput() {
         clearTimeout(this.state.debounceTimer);
+        this.state.debounceTimer = null;
+        this.cancelPendingRequest();
+        this.hideSuggestion();
 
         const text = this.state.textarea.value;
 
@@ -92,6 +97,11 @@ const SmartCompose = {
         // Don't fetch if text unchanged
         if (text === this.state.lastText) return;
         this.state.lastText = text;
+        this.cancelPendingRequest();
+
+        const controller = new AbortController();
+        const requestId = ++this.state.requestId;
+        this.state.abortController = controller;
 
         try {
             const response = await fetch('/api/ai/complete', {
@@ -101,16 +111,33 @@ const SmartCompose = {
                     text: text,
                     maxLength: this.config.maxSuggestionLength,
                 }),
+                signal: controller.signal,
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.suggestion) {
-                    this.showSuggestion(data.suggestion);
-                }
+            if (!response.ok) {
+                this.hideSuggestion();
+                return;
+            }
+
+            const data = await response.json();
+            if (requestId !== this.state.requestId || text !== this.state.textarea.value) {
+                return;
+            }
+
+            if (data.suggestion) {
+                this.showSuggestion(data.suggestion);
+            } else {
+                this.hideSuggestion();
             }
         } catch (error) {
+            if (error && error.name === 'AbortError') {
+                return;
+            }
             console.error('Smart compose error:', error);
+        } finally {
+            if (this.state.abortController === controller) {
+                this.state.abortController = null;
+            }
         }
     },
 
@@ -166,10 +193,10 @@ const SmartCompose = {
         const { textarea } = this.state;
         textarea.value += this.state.currentSuggestion;
 
+        this.clearSuggestion();
+
         // Trigger input event for other listeners
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-        this.clearSuggestion();
 
         // Track acceptance for learning
         this.trackAcceptance();
@@ -179,12 +206,30 @@ const SmartCompose = {
      * Clear suggestion
      */
     clearSuggestion() {
+        this.cancelPendingRequest();
+        this.state.lastText = '';
+        this.hideSuggestion();
+    },
+
+    hideSuggestion() {
         this.state.currentSuggestion = '';
         this.state.isActive = false;
 
         if (this.overlay) {
             this.overlay.classList.remove('visible');
         }
+    },
+
+    cancelPendingRequest() {
+        if (this.state.debounceTimer) {
+            clearTimeout(this.state.debounceTimer);
+            this.state.debounceTimer = null;
+        }
+        if (this.state.abortController) {
+            this.state.abortController.abort();
+            this.state.abortController = null;
+        }
+        this.state.requestId += 1;
     },
 
     /**
@@ -220,4 +265,8 @@ const SmartCompose = {
 // Export for use
 if (typeof window !== 'undefined') {
     window.SmartCompose = SmartCompose;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SmartCompose;
 }

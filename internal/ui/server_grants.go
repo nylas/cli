@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 
+	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -109,7 +110,7 @@ func (s *Server) handleSetDefaultGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.grantStore.SetDefaultGrant(req.GrantID); err != nil {
+	if err := authapp.PersistDefaultGrant(s.configStore, s.grantStore, req.GrantID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, SetDefaultGrantResponse{
 			Success: false,
 			Error:   "Failed to set default grant: " + err.Error(),

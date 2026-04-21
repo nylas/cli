@@ -1,11 +1,13 @@
 package air
 
 import (
+	"errors"
 	"html/template"
 	"testing"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/ports"
 )
 
 // =============================================================================
@@ -244,7 +246,10 @@ func TestEventParticipantsToStrings(t *testing.T) {
 func TestNewServer(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(":8080")
+	server, err := NewServer(":8080")
+	if err != nil {
+		t.Fatalf("expected no error creating server, got %v", err)
+	}
 
 	if server == nil {
 		t.Fatal("expected non-nil server")
@@ -282,10 +287,47 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
+func TestNewServer_UsesDemoServerWhenAirTestModeEnabled(t *testing.T) {
+	t.Setenv("AIR_TEST_MODE", "true")
+
+	server, err := NewServer(":8080")
+	if err != nil {
+		t.Fatalf("expected no error creating test-mode server, got %v", err)
+	}
+
+	if server == nil {
+		t.Fatal("expected non-nil server")
+	}
+	if !server.demoMode {
+		t.Error("expected AIR_TEST_MODE server to run in demo mode")
+	}
+	if server.configSvc != nil {
+		t.Error("expected demo-mode server to skip config initialization")
+	}
+}
+
+func TestNewServer_ReturnsErrorWhenSecretStoreInitializationFails(t *testing.T) {
+	t.Parallel()
+
+	server, err := newServer(":8080", func(string) (ports.SecretStore, error) {
+		return nil, errors.New("boom")
+	})
+
+	if err == nil {
+		t.Fatal("expected error when secret store initialization fails")
+	}
+	if server != nil {
+		t.Fatal("expected nil server when initialization fails")
+	}
+}
+
 func TestServer_IsOnline_SetOnline(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(":8080")
+	server, err := NewServer(":8080")
+	if err != nil {
+		t.Fatalf("expected no error creating server, got %v", err)
+	}
 
 	// Initial state
 	if !server.IsOnline() {
@@ -388,7 +430,10 @@ func TestTemplateFuncs_SafeHTML(t *testing.T) {
 func TestBuildPageData_NonDemoMode(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(":8080")
+	server, err := NewServer(":8080")
+	if err != nil {
+		t.Fatalf("expected no error creating server, got %v", err)
+	}
 	data := server.buildPageData()
 
 	// In non-demo mode with no grants, should have nil data arrays

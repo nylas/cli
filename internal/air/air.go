@@ -113,7 +113,10 @@ The client runs locally on your machine for privacy and performance.`,
 			}
 
 			// Start the server (blocks until interrupted)
-			server := NewServer(addr)
+			server, err := NewServer(addr)
+			if err != nil {
+				return fmt.Errorf("create air server: %w", err)
+			}
 			return server.Start()
 		},
 	}

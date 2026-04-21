@@ -2,10 +2,12 @@ package air
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/nylas/cli/internal/air/cache"
+	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -122,37 +124,85 @@ func (s *Server) withOfflineQueue(email string, fn func(*cache.OfflineQueue) err
 	return fn(queue)
 }
 
+func (s *Server) listSupportedGrants() ([]domain.GrantInfo, error) {
+	if s.grantStore == nil {
+		return nil, domain.ErrGrantNotFound
+	}
+
+	grants, err := s.grantStore.ListGrants()
+	if err != nil {
+		return nil, err
+	}
+
+	supported := make([]domain.GrantInfo, 0, len(grants))
+	for _, grant := range grants {
+		if grant.Provider.IsSupportedByAir() {
+			supported = append(supported, grant)
+		}
+	}
+
+	return supported, nil
+}
+
+func (s *Server) setDefaultGrant(grantID string) error {
+	if s.grantStore == nil {
+		return domain.ErrGrantNotFound
+	}
+
+	return authapp.PersistDefaultGrant(s.configStore, s.grantStore, grantID)
+}
+
+func (s *Server) resolveDefaultGrantInfo() (domain.GrantInfo, error) {
+	supported, err := s.listSupportedGrants()
+	if err != nil {
+		return domain.GrantInfo{}, err
+	}
+	if len(supported) == 0 {
+		return domain.GrantInfo{}, domain.ErrGrantNotFound
+	}
+
+	defaultID, err := s.grantStore.GetDefaultGrant()
+	switch {
+	case err == nil:
+		for _, grant := range supported {
+			if grant.ID == defaultID {
+				return grant, nil
+			}
+		}
+	case !errors.Is(err, domain.ErrNoDefaultGrant):
+		return domain.GrantInfo{}, err
+	}
+
+	selected := supported[0]
+	return selected, nil
+}
+
 // requireDefaultGrant gets the default grant ID, writing an error response if not available.
 // Returns the grant ID and true if successful, or empty string and false if error written.
 // Callers should return immediately when ok is false.
 func (s *Server) requireDefaultGrant(w http.ResponseWriter) (grantID string, ok bool) {
-	grantID, err := s.grantStore.GetDefaultGrant()
-	if err != nil || grantID == "" {
+	grant, err := s.resolveDefaultGrantInfo()
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "No default account. Please select an account first.",
+			"error": "No supported Air account is configured. Please select a Google, Microsoft, or Nylas account first.",
 		})
 		return "", false
 	}
-	return grantID, true
+	return grant.ID, true
 }
 
 // requireDefaultGrantInfo gets the default grant info, writing an error response if not available.
 // Returns the grant info and true if successful, or an empty grant and false if error written.
 func (s *Server) requireDefaultGrantInfo(w http.ResponseWriter) (grant domain.GrantInfo, ok bool) {
-	grantID, ok := s.requireDefaultGrant(w)
-	if !ok {
-		return domain.GrantInfo{}, false
-	}
-
-	info, err := s.grantStore.GetGrant(grantID)
-	if err != nil || info == nil {
+	info, err := s.resolveDefaultGrantInfo()
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Default account is no longer available. Please choose another account.",
+			"error": "No supported Air account is configured. Please choose another account.",
 		})
 		return domain.GrantInfo{}, false
 	}
 
-	return *info, true
+	return info, true
 }
 
 // getEmailStore returns the email store for the given email account.

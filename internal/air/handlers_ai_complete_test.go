@@ -2,9 +2,11 @@ package air
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -275,5 +277,70 @@ func TestBuildCompletionPrompt(t *testing.T) {
 
 	if len(prompt) < len(text) {
 		t.Error("prompt should include the input text")
+	}
+
+	if !strings.Contains(prompt, "Maximum 50 characters.") {
+		t.Fatalf("expected prompt to include max length, got %q", prompt)
+	}
+}
+
+func TestGetAICompletion_UsesTimeoutAndTruncatesOutput(t *testing.T) {
+	originalRunner := runSmartComposeCommand
+	t.Cleanup(func() {
+		runSmartComposeCommand = originalRunner
+	})
+
+	runSmartComposeCommand = func(ctx context.Context, prompt string) ([]byte, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("expected smart compose runner to receive a deadline")
+		}
+		if !strings.Contains(prompt, "Maximum 10 characters.") {
+			t.Fatalf("expected prompt to contain max length, got %q", prompt)
+		}
+		return []byte("hello world again"), nil
+	}
+
+	suggestion := getAICompletion(context.Background(), "Hello", 10)
+	if suggestion != "hello" {
+		t.Fatalf("expected truncated suggestion %q, got %q", "hello", suggestion)
+	}
+}
+
+func TestHandleAIComplete_ReturnsEmptySuggestionWhenRequestContextIsCanceled(t *testing.T) {
+	originalRunner := runSmartComposeCommand
+	t.Cleanup(func() {
+		runSmartComposeCommand = originalRunner
+	})
+
+	runSmartComposeCommand = func(ctx context.Context, prompt string) ([]byte, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	server := &Server{}
+
+	body := CompleteRequest{Text: "Draft a reply", MaxLength: 100}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/complete", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	server.handleAIComplete(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp CompleteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Suggestion != "" {
+		t.Fatalf("expected empty suggestion when command context is canceled, got %q", resp.Suggestion)
 	}
 }

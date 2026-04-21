@@ -1,11 +1,24 @@
 package air
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 )
+
+const smartComposeTimeout = 5 * time.Second
+
+var runSmartComposeCommand = func(ctx context.Context, prompt string) ([]byte, error) {
+	//nolint:gosec // G204: Command is hardcoded "claude" binary, prompt is passed as a single argument.
+	cmd := exec.Command("claude", "-p", prompt)
+	return runCommandOutput(ctx, cmd)
+}
 
 // CompleteRequest represents a smart compose request
 type CompleteRequest struct {
@@ -41,7 +54,7 @@ func (s *Server) handleAIComplete(w http.ResponseWriter, r *http.Request) {
 		req.MaxLength = 100
 	}
 
-	suggestion := getAICompletion(req.Text, req.MaxLength)
+	suggestion := getAICompletion(r.Context(), req.Text, req.MaxLength)
 
 	w.Header().Set("Content-Type", "application/json")
 	resp := CompleteResponse{
@@ -54,12 +67,13 @@ func (s *Server) handleAIComplete(w http.ResponseWriter, r *http.Request) {
 }
 
 // getAICompletion gets completion from Claude via CLI
-func getAICompletion(text string, maxLen int) string {
+func getAICompletion(ctx context.Context, text string, maxLen int) string {
 	prompt := buildCompletionPrompt(text, maxLen)
 
-	//nolint:gosec // G204: Command is hardcoded "claude" binary, prompt is user-controlled but safe for CLI arg
-	cmd := exec.Command("claude", "-p", prompt)
-	output, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(ctx, smartComposeTimeout)
+	defer cancel()
+
+	output, err := runSmartComposeCommand(ctx, prompt)
 	if err != nil {
 		return ""
 	}
@@ -86,13 +100,47 @@ func buildCompletionPrompt(text string, maxLen int) string {
 		"Complete the following email text naturally.",
 		"Only provide the completion, not the original text.",
 		"Keep it concise and professional.",
-		"Maximum " + string(rune(maxLen)) + " characters.",
+		fmt.Sprintf("Maximum %s characters.", strconv.Itoa(maxLen)),
 		"",
 		"Text to complete:",
 		text,
 		"",
 		"Completion:",
 	}, "\n")
+}
+
+func runCommandOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	configureChildProcessGroup(cmd)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-waitCh:
+		if err != nil {
+			return nil, err
+		}
+		return stdout.Bytes(), nil
+	case <-ctx.Done():
+		_ = killCommandTree(cmd)
+		<-waitCh
+		return nil, ctx.Err()
+	}
 }
 
 // NLSearchRequest represents a natural language search request

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/config"
@@ -16,9 +17,20 @@ import (
 )
 
 // NewServer creates a new Air server.
-func NewServer(addr string) *Server {
+func NewServer(addr string) (*Server, error) {
+	return newServer(addr, keyring.NewSecretStore)
+}
+
+func newServer(addr string, secretStoreFactory func(string) (ports.SecretStore, error)) (*Server, error) {
+	if airTestModeEnabled() {
+		return NewDemoServer(addr), nil
+	}
+
 	configStore := config.NewDefaultFileStore()
-	secretStore, _ := keyring.NewSecretStore(config.DefaultConfigDir())
+	secretStore, err := secretStoreFactory(config.DefaultConfigDir())
+	if err != nil {
+		return nil, fmt.Errorf("initialize secret store: %w", err)
+	}
 	grantStore := keyring.NewGrantStore(secretStore)
 	configSvc := authapp.NewConfigService(configStore, secretStore)
 
@@ -66,7 +78,7 @@ func NewServer(addr string) *Server {
 		offlineQueues: make(map[string]*cache.OfflineQueue),
 		syncStopCh:    make(chan struct{}),
 		isOnline:      true,
-	}
+	}, nil
 }
 
 // initCacheRuntime initializes runtime cache components for the server.
@@ -111,6 +123,11 @@ func NewDemoServer(addr string) *Server {
 		demoMode:  true,
 		templates: tmpl,
 	}
+}
+
+func airTestModeEnabled() bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("AIR_TEST_MODE")))
+	return value == "1" || value == "true" || value == "yes"
 }
 
 // Start starts the HTTP server.
@@ -278,14 +295,17 @@ func (s *Server) Start() error {
 		s.startBackgroundSync()
 	}
 
-	// Apply middleware chain for performance and security
-	// Order matters: CORS → Security → Compression → Cache → Monitoring → MethodOverride → Handler
-	handler := CORSMiddleware(
-		SecurityHeadersMiddleware(
-			CompressionMiddleware(
-				CacheMiddleware(
-					PerformanceMonitoringMiddleware(
-						MethodOverrideMiddleware(mux))))))
+	// Apply middleware chain for performance and security.
+	// Order matters: HostValidation → CORS → OriginProtection → Security →
+	// Compression → Cache → Monitoring → MethodOverride → Handler
+	handler := HostValidationMiddleware(
+		CORSMiddleware(
+			OriginProtectionMiddleware(
+				SecurityHeadersMiddleware(
+					CompressionMiddleware(
+						CacheMiddleware(
+							PerformanceMonitoringMiddleware(
+								MethodOverrideMiddleware(mux))))))))
 
 	server := &http.Server{
 		Addr:              s.addr,
