@@ -13,6 +13,7 @@ import (
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
+	"golang.org/x/term"
 )
 
 // createDPoPService creates a DPoP service backed by the keyring.
@@ -141,6 +142,17 @@ func resolveAuthMethod(google, microsoft, github, email bool, action string) (st
 // chooseAuthMethod presents an interactive menu. SSO first.
 // Email/password registration is temporarily disabled.
 func chooseAuthMethod(action string) (string, error) {
+	if !isInteractive() {
+		hint := "Use --google, --microsoft, --github, or --email"
+		if action == "register" {
+			hint = "Use --google, --microsoft, or --github"
+		}
+		return "", dashboardError(
+			fmt.Sprintf("an auth method is required to %s in non-interactive runs", action),
+			hint,
+		)
+	}
+
 	opts := []common.SelectOption[string]{
 		{Label: "Google (recommended)", Value: methodGoogle},
 		{Label: "Microsoft", Value: methodMicrosoft},
@@ -153,13 +165,24 @@ func chooseAuthMethod(action string) (string, error) {
 	return common.Select(fmt.Sprintf("How would you like to %s?", action), opts)
 }
 
+func isInteractive() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
 // selectOrg prompts the user to select an organization if multiple are available.
-func selectOrg(orgs []domain.DashboardOrganization) string {
+func selectOrg(orgs []domain.DashboardOrganization) (string, error) {
 	if len(orgs) <= 1 {
 		if len(orgs) == 1 {
-			return orgs[0].PublicID
+			return orgs[0].PublicID, nil
 		}
-		return ""
+		return "", nil
+	}
+
+	if !isInteractive() {
+		return "", dashboardError(
+			"multiple organizations available",
+			"Pass --org to choose the organization in non-interactive runs",
+		)
 	}
 
 	opts := make([]common.SelectOption[string], len(orgs))
@@ -173,15 +196,19 @@ func selectOrg(orgs []domain.DashboardOrganization) string {
 
 	selected, err := common.Select("Select organization", opts)
 	if err != nil {
-		return orgs[0].PublicID
+		return "", err
 	}
-	return selected
+	return selected, nil
 }
 
 func persistActiveOrg(authSvc *dashboardapp.AuthService, auth *domain.DashboardAuthResponse, orgPublicID string) error {
 	selectedOrgID := orgPublicID
 	if selectedOrgID == "" && len(auth.Organizations) > 1 {
-		selectedOrgID = selectOrg(auth.Organizations)
+		var err error
+		selectedOrgID, err = selectOrg(auth.Organizations)
+		if err != nil {
+			return err
+		}
 	}
 	if selectedOrgID == "" {
 		return nil
@@ -196,6 +223,16 @@ func persistActiveOrg(authSvc *dashboardapp.AuthService, auth *domain.DashboardA
 		return fmt.Errorf("failed to switch organization: %w", err)
 	}
 	return nil
+}
+
+func rollbackPostAuthFailure(authSvc *dashboardapp.AuthService) {
+	if authSvc == nil {
+		return
+	}
+
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+	_ = authSvc.Logout(ctx)
 }
 
 // printAuthSuccess prints the standard post-login success message.
@@ -240,7 +277,17 @@ func syncSessionOrgWithWarning(authSvc *dashboardapp.AuthService) {
 }
 
 // acceptPrivacyPolicy prompts for or validates privacy policy acceptance.
-func acceptPrivacyPolicy() error {
+func acceptPrivacyPolicy(acceptedFlag bool) error {
+	if acceptedFlag {
+		return nil
+	}
+	if !isInteractive() {
+		return dashboardError(
+			"privacy policy must be accepted to continue",
+			"Pass --accept-privacy-policy to confirm acceptance in non-interactive runs",
+		)
+	}
+
 	accepted, err := common.ConfirmPrompt("Accept Nylas Privacy Policy?", true)
 	if err != nil {
 		return err

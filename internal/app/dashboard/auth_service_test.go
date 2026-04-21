@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -47,7 +48,9 @@ func (m *memSecretStore) Name() string { return "mem" }
 
 type failingSecretStore struct {
 	*memSecretStore
-	failSetKey string
+	failSetKey    string
+	failGetKey    string
+	failDeleteKey string
 }
 
 func (f *failingSecretStore) Set(key, value string) error {
@@ -55,6 +58,20 @@ func (f *failingSecretStore) Set(key, value string) error {
 		return errors.New("set failed")
 	}
 	return f.memSecretStore.Set(key, value)
+}
+
+func (f *failingSecretStore) Get(key string) (string, error) {
+	if key == f.failGetKey {
+		return "", fmt.Errorf("%w: get failed", domain.ErrSecretStoreFailed)
+	}
+	return f.memSecretStore.Get(key)
+}
+
+func (f *failingSecretStore) Delete(key string) error {
+	if key == f.failDeleteKey {
+		return errors.New("delete failed")
+	}
+	return f.memSecretStore.Delete(key)
 }
 
 // seedTokens pre-populates userToken (and optionally orgToken) so that
@@ -168,6 +185,72 @@ func TestAuthService_GetCurrentSession(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthService_GetCurrentSessionRefreshesExpiredSession(t *testing.T) {
+	t.Parallel()
+
+	store := newMemSecretStore()
+	seedTokens(store, "user-old", "org-old")
+
+	sessionResp := &domain.DashboardSessionResponse{
+		User:       domain.DashboardUser{PublicID: "user-1"},
+		CurrentOrg: "org-1",
+	}
+
+	var calls []string
+	mock := &dashboardadapter.MockAccountClient{
+		GetCurrentSessionFn: func(_ context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error) {
+			calls = append(calls, userToken+"/"+orgToken)
+			if len(calls) == 1 {
+				return nil, domain.NewDashboardAPIError(401, "INVALID_SESSION", "Invalid or expired session")
+			}
+			return sessionResp, nil
+		},
+		RefreshFn: func(_ context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error) {
+			assert.Equal(t, "user-old", userToken)
+			assert.Equal(t, "org-old", orgToken)
+			return &domain.DashboardRefreshResponse{
+				UserToken: "user-new",
+				OrgToken:  "org-new",
+			}, nil
+		},
+	}
+
+	svc := NewAuthService(mock, store)
+	got, err := svc.GetCurrentSession(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, sessionResp, got)
+	assert.Equal(t, []string{"user-old/org-old", "user-new/org-new"}, calls)
+
+	storedUserToken, _ := store.Get(ports.KeyDashboardUserToken)
+	assert.Equal(t, "user-new", storedUserToken)
+	storedOrgToken, _ := store.Get(ports.KeyDashboardOrgToken)
+	assert.Equal(t, "org-new", storedOrgToken)
+}
+
+func TestAuthService_GetCurrentSessionReturnsRefreshError(t *testing.T) {
+	t.Parallel()
+
+	store := newMemSecretStore()
+	seedTokens(store, "user-old", "org-old")
+
+	mock := &dashboardadapter.MockAccountClient{
+		GetCurrentSessionFn: func(_ context.Context, _, _ string) (*domain.DashboardSessionResponse, error) {
+			return nil, domain.NewDashboardAPIError(401, "INVALID_SESSION", "Invalid or expired session")
+		},
+		RefreshFn: func(_ context.Context, _, _ string) (*domain.DashboardRefreshResponse, error) {
+			return nil, errors.New("refresh backend unavailable")
+		},
+	}
+
+	svc := NewAuthService(mock, store)
+	got, err := svc.GetCurrentSession(context.Background())
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "refresh backend unavailable")
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +417,111 @@ func TestAuthService_SwitchOrg(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthService_SwitchOrgRefreshesExpiredSession(t *testing.T) {
+	t.Parallel()
+
+	store := newMemSecretStore()
+	seedTokens(store, "user-old", "org-old")
+
+	var switchCalls []string
+	mock := &dashboardadapter.MockAccountClient{
+		SwitchOrgFn: func(_ context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error) {
+			switchCalls = append(switchCalls, orgPublicID+":"+userToken+"/"+orgToken)
+			if len(switchCalls) == 1 {
+				return nil, domain.NewDashboardAPIError(401, "INVALID_SESSION", "Invalid or expired session")
+			}
+			return &domain.DashboardSwitchOrgResponse{
+				OrgToken: "org-fresh",
+				Org:      domain.DashboardSwitchOrgOrg{PublicID: "org-target"},
+			}, nil
+		},
+		RefreshFn: func(_ context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error) {
+			assert.Equal(t, "user-old", userToken)
+			assert.Equal(t, "org-old", orgToken)
+			return &domain.DashboardRefreshResponse{
+				UserToken: "user-fresh",
+				OrgToken:  "org-fresh-refresh",
+			}, nil
+		},
+	}
+
+	svc := NewAuthService(mock, store)
+	resp, err := svc.SwitchOrg(context.Background(), "org-target")
+
+	require.NoError(t, err)
+	assert.Equal(t, &domain.DashboardSwitchOrgResponse{
+		OrgToken: "org-fresh",
+		Org:      domain.DashboardSwitchOrgOrg{PublicID: "org-target"},
+	}, resp)
+	assert.Equal(t, []string{
+		"org-target:user-old/org-old",
+		"org-target:user-fresh/org-fresh-refresh",
+	}, switchCalls)
+
+	storedUserToken, _ := store.Get(ports.KeyDashboardUserToken)
+	assert.Equal(t, "user-fresh", storedUserToken)
+	storedOrgToken, _ := store.Get(ports.KeyDashboardOrgToken)
+	assert.Equal(t, "org-fresh", storedOrgToken)
+}
+
+func TestAuthService_RefreshStoresUpdatedTokens(t *testing.T) {
+	t.Parallel()
+
+	store := newMemSecretStore()
+	seedTokens(store, "user-old", "org-old")
+
+	mock := &dashboardadapter.MockAccountClient{
+		RefreshFn: func(_ context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error) {
+			assert.Equal(t, "user-old", userToken)
+			assert.Equal(t, "org-old", orgToken)
+			return &domain.DashboardRefreshResponse{
+				UserToken: "user-new",
+				OrgToken:  "org-new",
+			}, nil
+		},
+	}
+
+	svc := NewAuthService(mock, store)
+	err := svc.Refresh(context.Background())
+
+	require.NoError(t, err)
+
+	storedUserToken, _ := store.Get(ports.KeyDashboardUserToken)
+	assert.Equal(t, "user-new", storedUserToken)
+	storedOrgToken, _ := store.Get(ports.KeyDashboardOrgToken)
+	assert.Equal(t, "org-new", storedOrgToken)
+}
+
+func TestAuthService_RefreshRollsBackOnStoreFailure(t *testing.T) {
+	t.Parallel()
+
+	store := &failingSecretStore{
+		memSecretStore: newMemSecretStore(),
+	}
+	seedTokens(store, "user-old", "org-old")
+	store.failSetKey = ports.KeyDashboardOrgToken
+
+	mock := &dashboardadapter.MockAccountClient{
+		RefreshFn: func(_ context.Context, _, _ string) (*domain.DashboardRefreshResponse, error) {
+			return &domain.DashboardRefreshResponse{
+				UserToken: "user-new",
+				OrgToken:  "org-new",
+			}, nil
+		},
+	}
+
+	svc := NewAuthService(mock, store)
+	err := svc.Refresh(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to store refreshed credentials")
+
+	storedUserToken, _ := store.Get(ports.KeyDashboardUserToken)
+	assert.Equal(t, "user-old", storedUserToken)
+	storedOrgToken, _ := store.Get(ports.KeyDashboardOrgToken)
+	assert.Equal(t, "org-old", storedOrgToken)
 }
 
 // ---------------------------------------------------------------------------

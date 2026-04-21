@@ -30,6 +30,12 @@ or pass --org to switch directly.`,
 			if err != nil {
 				return wrapDashboardError(err)
 			}
+			if orgFlag == "" && !isInteractive() {
+				return dashboardError(
+					"organization selection requires an interactive terminal",
+					"Pass --org to choose the organization in non-interactive runs",
+				)
+			}
 
 			ctx, cancel := common.CreateContext()
 			defer cancel()

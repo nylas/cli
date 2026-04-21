@@ -23,7 +23,7 @@ func RunSSO(provider, mode string, privacyAccepted bool) error {
 
 // AcceptPrivacyPolicy prompts for privacy policy acceptance (exported for setup wizard).
 func AcceptPrivacyPolicy() error {
-	return acceptPrivacyPolicy()
+	return acceptPrivacyPolicy(false)
 }
 
 // ActivateAPIKey stores an API key in the keyring and configures the CLI (exported for setup wizard).

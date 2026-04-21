@@ -37,8 +37,9 @@ func (s *AppService) ListApplications(ctx context.Context, orgPublicID, regionFi
 
 	// Query both regions in parallel
 	type result struct {
-		apps []domain.GatewayApplication
-		err  error
+		region string
+		apps   []domain.GatewayApplication
+		err    error
 	}
 
 	var wg sync.WaitGroup
@@ -50,27 +51,37 @@ func (s *AppService) ListApplications(ctx context.Context, orgPublicID, regionFi
 		go func(idx int, r string) {
 			defer wg.Done()
 			apps, err := s.gateway.ListApplications(ctx, orgPublicID, r, userToken, orgToken)
-			results[idx] = result{apps: apps, err: err}
+			results[idx] = result{region: r, apps: apps, err: err}
 		}(i, region)
 	}
 	wg.Wait()
 
 	var allApps []domain.GatewayApplication
-	var errs []error
+	failures := make(map[string]error)
 	for _, r := range results {
 		if r.err != nil {
-			errs = append(errs, r.err)
+			failures[r.region] = r.err
 			continue
 		}
 		allApps = append(allApps, r.apps...)
 	}
 
 	// If both failed, return the first error
-	if len(errs) == len(regions) {
-		return nil, fmt.Errorf("failed to list applications: %w", errs[0])
+	if len(failures) == len(regions) {
+		for _, region := range regions {
+			if err := failures[region]; err != nil {
+				return nil, fmt.Errorf("failed to list applications: %w", err)
+			}
+		}
 	}
 
 	allApps = deduplicateApps(allApps)
+	if len(failures) > 0 {
+		return allApps, &domain.DashboardPartialResultError{
+			Operation: "application list",
+			Failures:  failures,
+		}
+	}
 
 	return allApps, nil
 }

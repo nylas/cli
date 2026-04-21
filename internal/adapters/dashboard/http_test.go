@@ -3,10 +3,12 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,6 +86,7 @@ func TestParseErrorResponse(t *testing.T) {
 		statusCode int
 		body       string
 		wantMsg    string
+		wantErrIs  error
 	}{
 		{
 			name:       "parses error with code and message",
@@ -109,20 +112,37 @@ func TestParseErrorResponse(t *testing.T) {
 			body:       string(make([]byte, 300)),
 			wantMsg:    "", // truncated to 200 chars
 		},
+		{
+			name:       "classifies invalid session",
+			statusCode: 401,
+			body:       `{"error":{"code":"INVALID_SESSION","message":"Invalid or expired session"}}`,
+			wantMsg:    "INVALID_SESSION: Invalid or expired session",
+			wantErrIs:  domain.ErrDashboardSessionExpired,
+		},
+		{
+			name:       "classifies code-only invalid session",
+			statusCode: 401,
+			body:       `{"error":{"code":"INVALID_SESSION"}}`,
+			wantMsg:    "INVALID_SESSION",
+			wantErrIs:  domain.ErrDashboardSessionExpired,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := parseErrorResponse(tt.statusCode, []byte(tt.body))
-			dashErr, ok := err.(*DashboardAPIError)
+			dashErr, ok := err.(*domain.DashboardAPIError)
 			if !ok {
-				t.Fatalf("expected *DashboardAPIError, got %T", err)
+				t.Fatalf("expected *domain.DashboardAPIError, got %T", err)
 			}
 			if dashErr.StatusCode != tt.statusCode {
 				t.Errorf("StatusCode = %d, want %d", dashErr.StatusCode, tt.statusCode)
 			}
 			if tt.wantMsg != "" && dashErr.ServerMsg != tt.wantMsg {
 				t.Errorf("ServerMsg = %q, want %q", dashErr.ServerMsg, tt.wantMsg)
+			}
+			if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
+				t.Fatalf("expected errors.Is(%v), got %v", tt.wantErrIs, err)
 			}
 		})
 	}
@@ -179,17 +199,17 @@ func TestUnwrapEnvelope(t *testing.T) {
 func TestDashboardAPIError_Error(t *testing.T) {
 	tests := []struct {
 		name    string
-		err     DashboardAPIError
+		err     domain.DashboardAPIError
 		wantStr string
 	}{
 		{
 			name:    "with message",
-			err:     DashboardAPIError{StatusCode: 400, ServerMsg: "bad request"},
+			err:     domain.DashboardAPIError{StatusCode: 400, ServerMsg: "bad request"},
 			wantStr: "dashboard API error (HTTP 400): bad request",
 		},
 		{
 			name:    "without message",
-			err:     DashboardAPIError{StatusCode: 500},
+			err:     domain.DashboardAPIError{StatusCode: 500},
 			wantStr: "dashboard API error (HTTP 500)",
 		},
 	}

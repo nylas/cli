@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -68,7 +69,7 @@ func (c *GatewayClient) ListApplications(ctx context.Context, orgPublicID, regio
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+		return nil, fmt.Errorf("failed to list applications: %w", graphQLErrorAsError(resp.Errors[0]))
 	}
 
 	return resp.Data.Applications.Applications, nil
@@ -115,7 +116,7 @@ func (c *GatewayClient) CreateApplication(ctx context.Context, orgPublicID, regi
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+		return nil, fmt.Errorf("failed to create application: %w", graphQLErrorAsError(resp.Errors[0]))
 	}
 
 	return &resp.Data.CreateApplication, nil
@@ -156,7 +157,7 @@ func (c *GatewayClient) ListAPIKeys(ctx context.Context, appID, region, userToke
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+		return nil, fmt.Errorf("failed to list API keys: %w", graphQLErrorAsError(resp.Errors[0]))
 	}
 
 	return resp.Data.APIKeys, nil
@@ -206,7 +207,7 @@ func (c *GatewayClient) CreateAPIKey(ctx context.Context, appID, region, name st
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", formatGraphQLError(resp.Errors[0]))
+		return nil, fmt.Errorf("failed to create API key: %w", graphQLErrorAsError(resp.Errors[0]))
 	}
 
 	return &resp.Data.CreateAPIKey, nil
@@ -259,6 +260,9 @@ func (c *GatewayClient) doGraphQL(ctx context.Context, url, query string, variab
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if gqlErr := parseGraphQLErrorResponse(resp.StatusCode, respBody); gqlErr != nil {
+			return nil, gqlErr
+		}
 		return nil, parseErrorResponse(resp.StatusCode, respBody)
 	}
 
@@ -308,4 +312,59 @@ func formatGraphQLError(e graphQLError) string {
 		return e.Extensions.Message
 	}
 	return e.Message
+}
+
+func graphQLErrorAsError(e graphQLError) error {
+	return graphQLErrorAsErrorWithStatus(http.StatusOK, e)
+}
+
+func parseGraphQLErrorResponse(statusCode int, body []byte) error {
+	var resp struct {
+		Errors []graphQLError `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil || len(resp.Errors) == 0 {
+		return nil
+	}
+	return graphQLErrorAsErrorWithStatus(statusCode, resp.Errors[0])
+}
+
+func graphQLErrorAsErrorWithStatus(statusCode int, e graphQLError) error {
+	message := formatGraphQLError(e)
+	if isGraphQLInvalidSession(statusCode, e) {
+		return domain.NewDashboardAPIError(http.StatusUnauthorized, "INVALID_SESSION", invalidSessionMessage(e))
+	}
+
+	if e.Extensions == nil || e.Extensions.Code == "" {
+		return fmt.Errorf("GraphQL error: %s", message)
+	}
+
+	return domain.NewDashboardAPIError(statusCode, e.Extensions.Code, message)
+}
+
+func isGraphQLInvalidSession(statusCode int, e graphQLError) bool {
+	if e.Extensions == nil {
+		return false
+	}
+	if e.Extensions.Code == "INVALID_SESSION" {
+		return true
+	}
+	if statusCode != http.StatusUnauthorized || e.Extensions.Code != "UNAUTHENTICATED" {
+		return false
+	}
+
+	topLevel := strings.TrimSpace(e.Message)
+	extensionMsg := strings.TrimSpace(e.Extensions.Message)
+	return strings.EqualFold(topLevel, "INVALID_SESSION") || strings.EqualFold(extensionMsg, "INVALID_SESSION")
+}
+
+func invalidSessionMessage(e graphQLError) string {
+	if e.Extensions != nil {
+		if msg := strings.TrimSpace(e.Extensions.Message); msg != "" && !strings.EqualFold(msg, "INVALID_SESSION") {
+			return msg
+		}
+	}
+	if msg := strings.TrimSpace(e.Message); msg != "" && !strings.EqualFold(msg, "INVALID_SESSION") {
+		return msg
+	}
+	return "Invalid or expired session"
 }

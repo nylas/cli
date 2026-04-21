@@ -27,34 +27,37 @@ func newStatusCmd() *cobra.Command {
 				return nil
 			}
 
-			_, _ = common.Green.Println("✓ Logged in")
-			if status.UserID != "" {
-				fmt.Printf("  User:         %s\n", status.UserID)
-			}
-
-			// Try to get org details from server for richer display
-			orgLabel := status.OrgID
-			orgCount := 0
 			ctx, cancel := common.CreateContext()
 			defer cancel()
-			if session, sErr := authSvc.GetCurrentSession(ctx); sErr == nil {
-				if session.CurrentOrg != "" {
-					orgLabel = session.CurrentOrg
-					// Find the org name from relations
-					for _, rel := range session.Relations {
-						if rel.OrgPublicID == session.CurrentOrg && rel.OrgName != "" {
-							orgLabel = formatOrgLabel(session.CurrentOrg, rel.OrgName)
-							break
-						}
+			session, err := authSvc.GetCurrentSession(ctx)
+			if err != nil {
+				return wrapDashboardError(err)
+			}
+
+			orgLabel := status.OrgID
+			if session.CurrentOrg != "" {
+				orgLabel = session.CurrentOrg
+				for _, rel := range session.Relations {
+					if rel.OrgPublicID == session.CurrentOrg && rel.OrgName != "" {
+						orgLabel = formatOrgLabel(session.CurrentOrg, rel.OrgName)
+						break
 					}
 				}
-				orgCount = len(session.Relations)
+			}
+
+			_, _ = common.Green.Println("✓ Logged in")
+			userID := status.UserID
+			if userID == "" {
+				userID = session.User.PublicID
+			}
+			if userID != "" {
+				fmt.Printf("  User:         %s\n", userID)
 			}
 			if orgLabel != "" {
 				fmt.Printf("  Organization: %s\n", orgLabel)
 			}
-			if orgCount > 1 {
-				fmt.Printf("  Total orgs:   %d (switch with: nylas dashboard orgs switch)\n", orgCount)
+			if len(session.Relations) > 1 {
+				fmt.Printf("  Total orgs:   %d (switch with: nylas dashboard orgs switch)\n", len(session.Relations))
 			}
 			fmt.Printf("  Org token:    %s\n", presentAbsent(status.HasOrgToken))
 

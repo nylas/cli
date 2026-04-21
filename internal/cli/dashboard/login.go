@@ -117,7 +117,10 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 		mfaOrg := orgPublicID
 		if mfaOrg == "" && len(mfa.Organizations) > 0 {
 			if len(mfa.Organizations) > 1 {
-				mfaOrg = selectOrg(mfa.Organizations)
+				mfaOrg, err = selectOrg(mfa.Organizations)
+				if err != nil {
+					return wrapDashboardError(err)
+				}
 			} else {
 				mfaOrg = mfa.Organizations[0].PublicID
 			}
@@ -136,6 +139,7 @@ func runEmailLogin(userFlag, passFlag, orgPublicID string) error {
 	}
 
 	if err := persistActiveOrg(authSvc, auth, orgPublicID); err != nil {
+		rollbackPostAuthFailure(authSvc)
 		return wrapDashboardError(err)
 	}
 

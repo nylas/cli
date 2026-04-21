@@ -6,9 +6,10 @@ import (
 
 func newRegisterCmd() *cobra.Command {
 	var (
-		google    bool
-		microsoft bool
-		github    bool
+		google              bool
+		microsoft           bool
+		github              bool
+		acceptPrivacyPolicy bool
 	)
 
 	cmd := &cobra.Command{
@@ -27,7 +28,10 @@ Email/password registration is temporarily disabled. Use SSO instead.`,
   nylas dashboard register --microsoft
 
   # GitHub SSO
-  nylas dashboard register --github`,
+  nylas dashboard register --github
+
+  # Non-interactive registration
+  nylas dashboard register --google --accept-privacy-policy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			method, err := resolveAuthMethod(google, microsoft, github, false, "register")
 			if err != nil {
@@ -36,7 +40,7 @@ Email/password registration is temporarily disabled. Use SSO instead.`,
 
 			switch method {
 			case methodGoogle, methodMicrosoft, methodGitHub:
-				return runSSORegister(method)
+				return runSSORegister(method, acceptPrivacyPolicy)
 			default:
 				return dashboardError("invalid selection", "Choose a valid SSO provider")
 			}
@@ -46,12 +50,13 @@ Email/password registration is temporarily disabled. Use SSO instead.`,
 	cmd.Flags().BoolVar(&google, "google", false, "Register with Google SSO")
 	cmd.Flags().BoolVar(&microsoft, "microsoft", false, "Register with Microsoft SSO")
 	cmd.Flags().BoolVar(&github, "github", false, "Register with GitHub SSO")
+	cmd.Flags().BoolVar(&acceptPrivacyPolicy, "accept-privacy-policy", false, "Confirm that you accept the Nylas Privacy Policy")
 
 	return cmd
 }
 
-func runSSORegister(provider string) error {
-	if err := acceptPrivacyPolicy(); err != nil {
+func runSSORegister(provider string, acceptedPrivacyPolicy bool) error {
+	if err := acceptPrivacyPolicy(acceptedPrivacyPolicy); err != nil {
 		return err
 	}
 	return runSSO(provider, "register", true)
