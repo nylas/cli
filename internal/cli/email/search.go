@@ -16,6 +16,12 @@ type messagesClient interface {
 	GetMessagesWithCursor(ctx context.Context, grantID string, params *domain.MessageQueryParams) (*domain.MessageListResponse, error)
 }
 
+var withSearchClient = func(args []string, fn func(context.Context, messagesClient, string) (struct{}, error)) (struct{}, error) {
+	return common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+		return fn(ctx, client, grantID)
+	})
+}
+
 func newSearchCmd() *cobra.Command {
 	var (
 		limit         int
@@ -28,7 +34,6 @@ func newSearchCmd() *cobra.Command {
 		unread        bool
 		starred       bool
 		inFolder      string
-		jsonOutput    bool
 	)
 
 	cmd := &cobra.Command{
@@ -59,7 +64,7 @@ Examples:
 			query := args[0]
 			remainingArgs := args[1:]
 
-			_, err := common.WithClient(remainingArgs, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			_, err := withSearchClient(remainingArgs, func(ctx context.Context, client messagesClient, grantID string) (struct{}, error) {
 				// maxItems >= 0 triggers auto-pagination; < 0 means single-page fetch
 				maxItems := -1
 				if limit > common.MaxAPILimit {
@@ -118,21 +123,7 @@ Examples:
 					return struct{}{}, common.WrapSearchError("messages", err)
 				}
 
-				if jsonOutput {
-					return struct{}{}, common.PrintJSON(messages)
-				}
-
-				if len(messages) == 0 {
-					common.PrintEmptyStateWithHint("messages", "try different search terms")
-					return struct{}{}, nil
-				}
-
-				fmt.Printf("Found %d messages:\n\n", len(messages))
-				for i, msg := range messages {
-					printMessageSummary(msg, i+1)
-				}
-
-				return struct{}{}, nil
+				return struct{}{}, writeSearchOutput(cmd, messages)
 			})
 			return err
 		},
@@ -148,7 +139,6 @@ Examples:
 	cmd.Flags().BoolVar(&unread, "unread", false, "Only unread messages")
 	cmd.Flags().BoolVar(&starred, "starred", false, "Only starred messages")
 	cmd.Flags().StringVar(&inFolder, "in", "", "Filter by folder (e.g., INBOX, SENT)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -182,4 +172,22 @@ func fetchMessages(ctx context.Context, client messagesClient, grantID string, p
 // parseDate parses a date string in YYYY-MM-DD format using local timezone.
 func parseDate(s string) (time.Time, error) {
 	return time.ParseInLocation("2006-01-02", s, time.Local)
+}
+
+func writeSearchOutput(cmd *cobra.Command, messages []domain.Message) error {
+	if common.IsStructuredOutput(cmd) {
+		return common.GetOutputWriter(cmd).WriteList(messages, nil)
+	}
+
+	if len(messages) == 0 {
+		common.PrintEmptyStateWithHint("messages", "try different search terms")
+		return nil
+	}
+
+	fmt.Printf("Found %d messages:\n\n", len(messages))
+	for i, msg := range messages {
+		printMessageSummary(msg, i+1)
+	}
+
+	return nil
 }

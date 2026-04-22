@@ -1,16 +1,23 @@
 package email
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/nylas/cli/internal/cli/common"
+	clitestutil "github.com/nylas/cli/internal/cli/testutil"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/spf13/cobra"
 )
 
 type stubMessagesClient struct {
@@ -124,4 +131,125 @@ func makeMessages(count int, prefix string) []domain.Message {
 		messages[i] = domain.Message{ID: prefix + "-" + strconv.Itoa(i)}
 	}
 	return messages
+}
+
+func TestWriteSearchOutput(t *testing.T) {
+	t.Run("json output uses shared writer", func(t *testing.T) {
+		cmd := newSearchOutputTestCommand()
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"--json"})
+		require.NoError(t, cmd.Execute())
+
+		messages := []domain.Message{{ID: "msg-1"}, {ID: "msg-2"}}
+		require.NoError(t, writeSearchOutput(cmd, messages))
+
+		var got []domain.Message
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+		assert.Len(t, got, 2)
+		assert.Equal(t, "msg-1", got[0].ID)
+	})
+
+	t.Run("yaml output uses shared writer", func(t *testing.T) {
+		cmd := newSearchOutputTestCommand()
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"--format", "yaml"})
+		require.NoError(t, cmd.Execute())
+
+		messages := []domain.Message{{ID: "msg-1"}}
+		require.NoError(t, writeSearchOutput(cmd, messages))
+
+		var got []domain.Message
+		require.NoError(t, yaml.Unmarshal(stdout.Bytes(), &got))
+		assert.Len(t, got, 1)
+		assert.Equal(t, "msg-1", got[0].ID)
+	})
+
+	t.Run("quiet output emits ids only", func(t *testing.T) {
+		cmd := newSearchOutputTestCommand()
+
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetArgs([]string{"--quiet"})
+		require.NoError(t, cmd.Execute())
+
+		messages := []domain.Message{{ID: "msg-1"}, {ID: "msg-2"}}
+		require.NoError(t, writeSearchOutput(cmd, messages))
+
+		lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+		assert.Equal(t, []string{"msg-1", "msg-2"}, lines)
+	})
+
+	t.Run("default output remains human readable", func(t *testing.T) {
+		messages := []domain.Message{{ID: "msg-1", Subject: "Project update"}}
+		cmd := &cobra.Command{
+			Use:           "search",
+			SilenceErrors: true,
+			SilenceUsage:  true,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return writeSearchOutput(cmd, messages)
+			},
+		}
+		common.AddOutputFlags(cmd)
+
+		stdout, _, err := clitestutil.ExecuteCommand(cmd)
+		require.NoError(t, err)
+
+		output := stdout
+		assert.Contains(t, output, "Found 1 messages")
+		assert.Contains(t, output, "Project update")
+	})
+}
+
+func TestSearchCommandStructuredOutputUsesInheritedFlags(t *testing.T) {
+	original := withSearchClient
+	defer func() {
+		withSearchClient = original
+	}()
+
+	withSearchClient = func(args []string, fn func(context.Context, messagesClient, string) (struct{}, error)) (struct{}, error) {
+		client := &stubMessagesClient{
+			getMessagesWithParamsFunc: func(_ context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
+				assert.Equal(t, "grant-123", grantID)
+				assert.Equal(t, "project update", params.Subject)
+				return []domain.Message{{ID: "msg-1"}}, nil
+			},
+		}
+
+		return fn(context.Background(), client, "grant-123")
+	}
+
+	root := &cobra.Command{
+		Use:           "test",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+	}
+	common.AddOutputFlags(root)
+	root.AddCommand(newSearchCmd())
+
+	stdout, stderr, err := clitestutil.ExecuteCommand(root, "search", "project update", "--json")
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(stderr))
+	assert.NotContains(t, stdout, "Found 1 messages")
+
+	var messages []domain.Message
+	require.NoError(t, json.Unmarshal([]byte(stdout), &messages))
+	require.Len(t, messages, 1)
+	assert.Equal(t, "msg-1", messages[0].ID)
+}
+
+func newSearchOutputTestCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "search",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+	common.AddOutputFlags(cmd)
+	return cmd
 }

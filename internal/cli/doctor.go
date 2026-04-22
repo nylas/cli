@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -26,6 +27,44 @@ type CheckResult struct {
 	Detail  string
 }
 
+type doctorCheck struct {
+	spinnerMessage string
+	run            func() CheckResult
+}
+
+type doctorEnvironment struct {
+	Platform  string `json:"platform,omitempty" yaml:"platform,omitempty"`
+	GoVersion string `json:"go_version,omitempty" yaml:"go_version,omitempty"`
+	ConfigDir string `json:"config_dir,omitempty" yaml:"config_dir,omitempty"`
+}
+
+type doctorCheckOutput struct {
+	Name    string `json:"name" yaml:"name"`
+	Status  string `json:"status" yaml:"status"`
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+	Detail  string `json:"detail,omitempty" yaml:"detail,omitempty"`
+}
+
+type doctorSummary struct {
+	OK            int    `json:"ok" yaml:"ok"`
+	Warning       int    `json:"warning" yaml:"warning"`
+	Error         int    `json:"error" yaml:"error"`
+	Skipped       int    `json:"skipped" yaml:"skipped"`
+	Total         int    `json:"total" yaml:"total"`
+	OverallStatus string `json:"overall_status" yaml:"overall_status"`
+}
+
+type doctorReport struct {
+	Environment     *doctorEnvironment  `json:"environment,omitempty" yaml:"environment,omitempty"`
+	Checks          []doctorCheckOutput `json:"checks" yaml:"checks"`
+	Summary         doctorSummary       `json:"summary" yaml:"summary"`
+	Recommendations []string            `json:"recommendations,omitempty" yaml:"recommendations,omitempty"`
+}
+
+func (r doctorReport) QuietField() string {
+	return r.Summary.OverallStatus
+}
+
 // CheckStatus represents the status of a check.
 type CheckStatus int
 
@@ -35,6 +74,44 @@ const (
 	CheckStatusError
 	CheckStatusSkipped
 )
+
+var doctorChecks = []doctorCheck{
+	{
+		spinnerMessage: "Checking configuration...",
+		run:            checkConfig,
+	},
+	{
+		spinnerMessage: "Checking secret store...",
+		run:            checkSecretStore,
+	},
+	{
+		spinnerMessage: "Checking API credentials...",
+		run:            checkAPICredentials,
+	},
+	{
+		spinnerMessage: "Checking network connectivity...",
+		run:            checkNetworkConnectivity,
+	},
+	{
+		spinnerMessage: "Checking grants...",
+		run:            checkGrants,
+	},
+}
+
+func (s CheckStatus) String() string {
+	switch s {
+	case CheckStatusOK:
+		return "ok"
+	case CheckStatusWarning:
+		return "warning"
+	case CheckStatusError:
+		return "error"
+	case CheckStatusSkipped:
+		return "skipped"
+	default:
+		return "unknown"
+	}
+}
 
 func newDoctorCmd() *cobra.Command {
 	var verbose bool
@@ -55,7 +132,7 @@ Examples:
   nylas doctor
   nylas doctor --verbose`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDoctor(verbose)
+			return runDoctor(cmd, verbose)
 		},
 	}
 
@@ -64,107 +141,184 @@ Examples:
 	return cmd
 }
 
-func runDoctor(verbose bool) error {
-	_, _ = common.Bold.Println("Nylas CLI Health Check")
-	fmt.Println()
+func runDoctor(cmd *cobra.Command, verbose bool) error {
+	if isDoctorStructuredOutput(cmd) {
+		results := runDoctorChecks(false, nil)
+		if err := common.GetOutputWriter(cmd).Write(buildDoctorReport(results, verbose)); err != nil {
+			return err
+		}
+		return doctorResultsError(results)
+	}
 
-	results := []CheckResult{}
+	w := cmd.OutOrStdout()
+	_, _ = common.Bold.Fprintln(w, "Nylas CLI Health Check")
+	_, _ = fmt.Fprintln(w)
 
 	// Show environment info
 	if verbose {
-		_, _ = common.Dim.Printf("  Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
-		_, _ = common.Dim.Printf("  Go Version: %s\n", runtime.Version())
-		_, _ = common.Dim.Printf("  Config Dir: %s\n", config.DefaultConfigDir())
-		fmt.Println()
+		env := currentDoctorEnvironment()
+		_, _ = common.Dim.Fprintf(w, "  Platform: %s\n", env.Platform)
+		_, _ = common.Dim.Fprintf(w, "  Go Version: %s\n", env.GoVersion)
+		_, _ = common.Dim.Fprintf(w, "  Config Dir: %s\n", env.ConfigDir)
+		_, _ = fmt.Fprintln(w)
 	}
 
-	// 1. Check configuration file
-	configResult, _ := common.RunWithSpinnerResult("Checking configuration...", func() (CheckResult, error) {
-		return checkConfig(), nil
+	results := runDoctorChecks(true, func(result CheckResult) {
+		printCheckResult(w, result, verbose)
 	})
-	results = append(results, configResult)
-	printCheckResult(configResult, verbose)
-
-	// 2. Check secret store
-	secretResult, _ := common.RunWithSpinnerResult("Checking secret store...", func() (CheckResult, error) {
-		return checkSecretStore(), nil
-	})
-	results = append(results, secretResult)
-	printCheckResult(secretResult, verbose)
-
-	// 3. Check API credentials
-	apiKeyResult, _ := common.RunWithSpinnerResult("Checking API credentials...", func() (CheckResult, error) {
-		return checkAPICredentials(), nil
-	})
-	results = append(results, apiKeyResult)
-	printCheckResult(apiKeyResult, verbose)
-
-	// 4. Check network connectivity
-	networkResult, _ := common.RunWithSpinnerResult("Checking network connectivity...", func() (CheckResult, error) {
-		return checkNetworkConnectivity(), nil
-	})
-	results = append(results, networkResult)
-	printCheckResult(networkResult, verbose)
-
-	// 5. Check grants
-	grantsResult, _ := common.RunWithSpinnerResult("Checking grants...", func() (CheckResult, error) {
-		return checkGrants(), nil
-	})
-	results = append(results, grantsResult)
-	printCheckResult(grantsResult, verbose)
 
 	// Summary
-	fmt.Println()
-	_, _ = common.Bold.Println("Summary")
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
+	_, _ = common.Bold.Fprintln(w, "Summary")
+	_, _ = fmt.Fprintln(w)
 
-	okCount := 0
-	warnCount := 0
-	errCount := 0
+	summary := summarizeDoctorResults(results)
+	recommendations := doctorRecommendations(results)
 
-	for _, r := range results {
-		switch r.Status {
-		case CheckStatusOK:
-			okCount++
-		case CheckStatusWarning:
-			warnCount++
-		case CheckStatusError:
-			errCount++
+	if summary.Error > 0 {
+		_, _ = common.Red.Fprintf(w, "  %d error(s), %d warning(s), %d passed\n", summary.Error, summary.Warning, summary.OK)
+		_, _ = fmt.Fprintln(w)
+		_, _ = common.Cyan.Fprintln(w, "  Recommendations:")
+		for _, recommendation := range recommendations {
+			_, _ = fmt.Fprintf(w, "    - %s\n", recommendation)
 		}
-	}
-
-	if errCount > 0 {
-		_, _ = common.Red.Printf("  %d error(s), %d warning(s), %d passed\n", errCount, warnCount, okCount)
-		fmt.Println()
-		_, _ = common.Cyan.Println("  Recommendations:")
-		for _, r := range results {
-			if r.Status == CheckStatusError && r.Detail != "" {
-				fmt.Printf("    - %s\n", r.Detail)
-			}
-		}
-	} else if warnCount > 0 {
-		_, _ = common.Yellow.Printf("  %d warning(s), %d passed\n", warnCount, okCount)
-		fmt.Println()
-		_, _ = common.Cyan.Println("  Recommendations:")
-		for _, r := range results {
-			if r.Status == CheckStatusWarning && r.Detail != "" {
-				fmt.Printf("    - %s\n", r.Detail)
-			}
+	} else if summary.Warning > 0 {
+		_, _ = common.Yellow.Fprintf(w, "  %d warning(s), %d passed\n", summary.Warning, summary.OK)
+		_, _ = fmt.Fprintln(w)
+		_, _ = common.Cyan.Fprintln(w, "  Recommendations:")
+		for _, recommendation := range recommendations {
+			_, _ = fmt.Fprintf(w, "    - %s\n", recommendation)
 		}
 	} else {
-		_, _ = common.Green.Printf("  All %d checks passed!\n", okCount)
+		_, _ = common.Green.Fprintf(w, "  All %d checks passed!\n", summary.OK)
 	}
 
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
 
-	if errCount > 0 {
-		return fmt.Errorf("%d health check(s) failed", errCount)
+	return doctorResultsError(results)
+}
+
+func isDoctorStructuredOutput(cmd *cobra.Command) bool {
+	return common.IsStructuredOutput(cmd)
+}
+
+func currentDoctorEnvironment() doctorEnvironment {
+	return doctorEnvironment{
+		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		GoVersion: runtime.Version(),
+		ConfigDir: config.DefaultConfigDir(),
+	}
+}
+
+func runDoctorChecks(useSpinner bool, onResult func(CheckResult)) []CheckResult {
+	results := make([]CheckResult, 0, len(doctorChecks))
+
+	for _, check := range doctorChecks {
+		result := runDoctorCheck(check, useSpinner)
+		results = append(results, result)
+
+		if onResult != nil {
+			onResult(result)
+		}
 	}
 
+	return results
+}
+
+func runDoctorCheck(check doctorCheck, useSpinner bool) CheckResult {
+	if !useSpinner {
+		return check.run()
+	}
+
+	result, _ := common.RunWithSpinnerResult(check.spinnerMessage, func() (CheckResult, error) {
+		return check.run(), nil
+	})
+
+	return result
+}
+
+func buildDoctorReport(results []CheckResult, verbose bool) doctorReport {
+	checks := make([]doctorCheckOutput, 0, len(results))
+	for _, result := range results {
+		checks = append(checks, doctorCheckOutput{
+			Name:    result.Name,
+			Status:  result.Status.String(),
+			Message: result.Message,
+			Detail:  result.Detail,
+		})
+	}
+
+	report := doctorReport{
+		Checks:          checks,
+		Summary:         summarizeDoctorResults(results),
+		Recommendations: doctorRecommendations(results),
+	}
+
+	if verbose {
+		env := currentDoctorEnvironment()
+		report.Environment = &env
+	}
+
+	return report
+}
+
+func summarizeDoctorResults(results []CheckResult) doctorSummary {
+	summary := doctorSummary{
+		Total: len(results),
+	}
+
+	for _, result := range results {
+		switch result.Status {
+		case CheckStatusOK:
+			summary.OK++
+		case CheckStatusWarning:
+			summary.Warning++
+		case CheckStatusError:
+			summary.Error++
+		case CheckStatusSkipped:
+			summary.Skipped++
+		}
+	}
+
+	switch {
+	case summary.Error > 0:
+		summary.OverallStatus = CheckStatusError.String()
+	case summary.Warning > 0:
+		summary.OverallStatus = CheckStatusWarning.String()
+	case summary.OK > 0:
+		summary.OverallStatus = CheckStatusOK.String()
+	default:
+		summary.OverallStatus = CheckStatusSkipped.String()
+	}
+
+	return summary
+}
+
+func doctorRecommendations(results []CheckResult) []string {
+	targetStatus := CheckStatusWarning
+	if summarizeDoctorResults(results).Error > 0 {
+		targetStatus = CheckStatusError
+	}
+
+	recommendations := make([]string, 0)
+	for _, result := range results {
+		if result.Status == targetStatus && result.Detail != "" {
+			recommendations = append(recommendations, result.Detail)
+		}
+	}
+
+	return recommendations
+}
+
+func doctorResultsError(results []CheckResult) error {
+	summary := summarizeDoctorResults(results)
+	if summary.Error > 0 {
+		return fmt.Errorf("%d health check(s) failed", summary.Error)
+	}
 	return nil
 }
 
-func printCheckResult(r CheckResult, verbose bool) {
+func printCheckResult(w io.Writer, r CheckResult, verbose bool) {
 	var icon string
 	var colorFn *color.Color
 
@@ -183,14 +337,14 @@ func printCheckResult(r CheckResult, verbose bool) {
 		colorFn = common.Dim
 	}
 
-	_, _ = colorFn.Printf("  %s %s", icon, r.Name)
+	_, _ = colorFn.Fprintf(w, "  %s %s", icon, r.Name)
 	if r.Message != "" {
-		_, _ = common.Dim.Printf(" - %s", r.Message)
+		_, _ = common.Dim.Fprintf(w, " - %s", r.Message)
 	}
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
 
 	if verbose && r.Detail != "" {
-		_, _ = common.Dim.Printf("    %s\n", r.Detail)
+		_, _ = common.Dim.Fprintf(w, "    %s\n", r.Detail)
 	}
 }
 

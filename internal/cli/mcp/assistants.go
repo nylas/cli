@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -121,25 +120,7 @@ func (a Assistant) IsConfigured() bool {
 		return false
 	}
 
-	// #nosec G304 -- configPath from GetConfigPath() returns validated assistant config paths
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return false
-	}
-
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
-		return false
-	}
-
-	// Check if mcpServers.nylas exists
-	mcpServers, ok := config["mcpServers"].(map[string]any)
-	if !ok {
-		return false
-	}
-
-	_, hasNylas := mcpServers["nylas"]
-	return hasNylas
+	return inspectAssistantConfig(a, configPath).HasNylas
 }
 
 // GetAssistantByID returns an assistant by ID.

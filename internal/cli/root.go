@@ -19,6 +19,7 @@ var rootCmd = &cobra.Command{
   nylas email list       List recent emails
   nylas calendar events  Upcoming events
   nylas contacts list    List contacts
+  nylas commands --json  Machine-readable command tree
 
 Documentation: https://cli.nylas.com/`,
 	SilenceUsage:  true,
@@ -96,6 +97,9 @@ func printWelcome() {
 	_, _ = common.Dim.Print("nylas --help")
 	fmt.Println("              All commands")
 	fmt.Print("  ")
+	_, _ = common.Dim.Print("nylas commands --json")
+	fmt.Println("     Machine-readable command tree")
+	fmt.Print("  ")
 	_, _ = common.Dim.Println("https://cli.nylas.com     Documentation")
 	fmt.Println()
 }
@@ -122,6 +126,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().String("config", "", "Custom config file path")
 
+	rootCmd.AddCommand(newCommandsCmd())
 	rootCmd.AddCommand(newVersionCmd())
 
 	// Initialize audit logging hooks

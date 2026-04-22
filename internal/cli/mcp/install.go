@@ -187,35 +187,18 @@ func installForAssistant(a Assistant, binaryPath string) error {
 	}
 
 	// Read existing config or create new
-	config := make(map[string]any)
-	// #nosec G304 -- configPath from Assistant.GetConfigPath() returns validated AI assistant config paths
-	if data, err := os.ReadFile(configPath); err == nil {
-		if err := json.Unmarshal(data, &config); err != nil {
-			return fmt.Errorf("parsing existing config: %w", err)
-		}
+	config, err := loadConfigIfExists(configPath)
+	if err != nil {
+		return fmt.Errorf("parsing existing config: %w", err)
 	}
 
-	// Get or create mcpServers section
-	mcpServers, ok := config["mcpServers"].(map[string]any)
-	if !ok {
-		mcpServers = make(map[string]any)
-	}
-
-	// Add nylas server config
-	mcpServers["nylas"] = map[string]any{
+	setAssistantServer(config, a, nylasServerName, map[string]any{
 		"command": binaryPath,
 		"args":    []string{"mcp", "serve"},
-	}
-
-	config["mcpServers"] = mcpServers
+	})
 
 	// Write config
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encoding config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := writeConfig(configPath, config); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 

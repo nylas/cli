@@ -1,9 +1,7 @@
 package mcp
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/spf13/cobra"
@@ -61,19 +59,14 @@ func runUninstall(assistantID string, uninstallAll bool) error {
 			continue
 		}
 
-		// Check if config exists
-		if !a.IsConfigured() {
+		configState := inspectAssistantConfig(a, configPath)
+		if !configState.HasNylas {
 			if !uninstallAll {
-				_, _ = common.Yellow.Printf("  ! %s: not configured\n", a.Name)
-			}
-			continue
-		}
-
-		// Check if nylas is in the config
-		hasNylas, _ := checkNylasInConfig(configPath)
-		if !hasNylas {
-			if !uninstallAll {
-				_, _ = common.Yellow.Printf("  ! %s: nylas not found in config\n", a.Name)
+				msg := "not configured"
+				if configState.ConfigFileExists {
+					msg = "nylas not found in config"
+				}
+				_, _ = common.Yellow.Printf("  ! %s: %s\n", a.Name, msg)
 			}
 			continue
 		}
@@ -100,40 +93,15 @@ func uninstallFromAssistant(a Assistant) error {
 	configPath := a.GetConfigPath()
 
 	// Read existing config
-	// #nosec G304 -- configPath from Assistant.GetConfigPath() returns validated AI assistant config paths
-	data, err := os.ReadFile(configPath)
+	config, err := loadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("reading config: %w", err)
 	}
 
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("parsing config: %w", err)
-	}
-
-	// Get mcpServers section
-	mcpServers, ok := config["mcpServers"].(map[string]any)
-	if !ok {
-		return nil // No mcpServers section
-	}
-
-	// Remove nylas entry
-	delete(mcpServers, "nylas")
-
-	// If mcpServers is now empty, remove it entirely
-	if len(mcpServers) == 0 {
-		delete(config, "mcpServers")
-	} else {
-		config["mcpServers"] = mcpServers
-	}
+	removeAssistantServer(config, a, nylasServerName)
 
 	// Write config back
-	data, err = json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encoding config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := writeConfig(configPath, config); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 
