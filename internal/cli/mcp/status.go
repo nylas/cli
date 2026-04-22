@@ -1,13 +1,30 @@
 package mcp
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/spf13/cobra"
 )
+
+type assistantStatus struct {
+	Name             string `json:"name" yaml:"name"`
+	ID               string `json:"id" yaml:"id"`
+	Status           string `json:"status" yaml:"status"`
+	ConfigPath       string `json:"config_path,omitempty" yaml:"config_path,omitempty"`
+	ProjectConfig    bool   `json:"project_config" yaml:"project_config"`
+	Supported        bool   `json:"supported" yaml:"supported"`
+	Installed        bool   `json:"installed" yaml:"installed"`
+	ConfigFileExists bool   `json:"config_file_exists" yaml:"config_file_exists"`
+	Configured       bool   `json:"configured" yaml:"configured"`
+	BinaryPath       string `json:"binary_path,omitempty" yaml:"binary_path,omitempty"`
+	SchemaKey        string `json:"schema_key,omitempty" yaml:"schema_key,omitempty"`
+}
+
+func (s assistantStatus) QuietField() string {
+	return s.ID
+}
 
 func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -19,87 +36,98 @@ This command checks which AI assistants have Nylas MCP configured and
 displays the configuration path for each.`,
 		Example: `  nylas mcp status`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus()
+			return runStatus(cmd)
 		},
 	}
 
 	return cmd
 }
 
-func runStatus() error {
-	fmt.Println("MCP Installation Status:")
-	fmt.Println()
-
-	for _, a := range Assistants {
-		configPath := a.GetConfigPath()
-		if configPath == "" {
-			_, _ = common.HiBlack.Printf("  - %-16s  unsupported on this platform\n", a.Name)
-			continue
-		}
-
-		// Check if app is installed
-		if !a.IsProjectConfig() && !a.IsInstalled() {
-			_, _ = common.HiBlack.Printf("  - %-16s  application not installed\n", a.Name)
-			continue
-		}
-
-		// Check if config file exists
-		if !a.IsConfigured() {
-			_, _ = common.Yellow.Printf("  ○ %-16s  ", a.Name)
-			fmt.Printf("not configured  %s\n", configPath)
-			continue
-		}
-
-		// Check if nylas is in the config
-		hasNylas, binaryPath := checkNylasInConfig(configPath)
-		if !hasNylas {
-			_, _ = common.Yellow.Printf("  ○ %-16s  ", a.Name)
-			fmt.Printf("config exists, nylas not added  %s\n", configPath)
-			continue
-		}
-
-		_, _ = common.Green.Printf("  ✓ %-16s  ", a.Name)
-		fmt.Printf("configured  %s\n", configPath)
-		if binaryPath != "" {
-			_, _ = common.HiBlack.Printf("                       binary: %s\n", binaryPath)
-		}
+func runStatus(cmd *cobra.Command) error {
+	statuses := collectAssistantStatuses(Assistants)
+	if common.IsStructuredOutput(cmd) {
+		return common.GetOutputWriter(cmd).WriteList(statuses, nil)
 	}
 
-	fmt.Println()
-	fmt.Println("Legend:")
-	_, _ = common.Green.Print("  ✓")
-	fmt.Println(" Nylas MCP configured")
-	_, _ = common.Yellow.Print("  ○")
-	fmt.Println(" Available but not configured")
-	_, _ = common.HiBlack.Print("  -")
-	fmt.Println(" Not available")
-
+	renderHumanStatus(cmd.OutOrStdout(), statuses)
 	return nil
 }
 
-// checkNylasInConfig checks if nylas is configured in the MCP config file.
-func checkNylasInConfig(configPath string) (bool, string) {
-	// #nosec G304 -- configPath from Assistant.GetConfigPath() returns validated AI assistant config paths
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return false, ""
+func collectAssistantStatuses(assistants []Assistant) []assistantStatus {
+	statuses := make([]assistantStatus, 0, len(assistants))
+
+	for _, a := range assistants {
+		statuses = append(statuses, getAssistantStatus(a))
 	}
 
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
-		return false, ""
+	return statuses
+}
+
+func getAssistantStatus(a Assistant) assistantStatus {
+	configPath := a.GetConfigPath()
+	status := assistantStatus{
+		Name:          a.Name,
+		ID:            a.ID,
+		Status:        "unsupported",
+		ConfigPath:    configPath,
+		ProjectConfig: a.IsProjectConfig(),
 	}
 
-	mcpServers, ok := config["mcpServers"].(map[string]any)
-	if !ok {
-		return false, ""
+	if configPath == "" {
+		return status
 	}
 
-	nylas, ok := mcpServers["nylas"].(map[string]any)
-	if !ok {
-		return false, ""
+	status.Supported = true
+	status.Installed = true
+
+	if !a.IsProjectConfig() && !a.IsInstalled() {
+		status.Status = "not_installed"
+		status.Installed = false
+		return status
 	}
 
-	binaryPath, _ := nylas["command"].(string)
-	return true, binaryPath
+	configState := inspectAssistantConfig(a, configPath)
+	status.ConfigFileExists = configState.ConfigFileExists
+	status.Configured = configState.HasNylas
+	status.BinaryPath = configState.BinaryPath
+	status.SchemaKey = configState.SchemaKey
+
+	if configState.HasNylas {
+		status.Status = "configured"
+		return status
+	}
+
+	status.Status = "not_configured"
+	return status
+}
+
+func renderHumanStatus(w io.Writer, statuses []assistantStatus) {
+	_, _ = fmt.Fprintln(w, "MCP Installation Status:")
+	_, _ = fmt.Fprintln(w)
+
+	for _, status := range statuses {
+		switch status.Status {
+		case "unsupported":
+			_, _ = fmt.Fprintf(w, "  - %-16s  unsupported on this platform\n", status.Name)
+		case "not_installed":
+			_, _ = fmt.Fprintf(w, "  - %-16s  application not installed\n", status.Name)
+		case "configured":
+			_, _ = fmt.Fprintf(w, "  ✓ %-16s  configured  %s\n", status.Name, status.ConfigPath)
+			if status.BinaryPath != "" {
+				_, _ = fmt.Fprintf(w, "                       binary: %s\n", status.BinaryPath)
+			}
+		default:
+			message := "not configured"
+			if status.ConfigFileExists {
+				message = "config exists, nylas not added"
+			}
+			_, _ = fmt.Fprintf(w, "  ○ %-16s  %s  %s\n", status.Name, message, status.ConfigPath)
+		}
+	}
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Legend:")
+	_, _ = fmt.Fprintln(w, "  ✓ Nylas MCP configured")
+	_, _ = fmt.Fprintln(w, "  ○ Available but not configured")
+	_, _ = fmt.Fprintln(w, "  - Not available")
 }

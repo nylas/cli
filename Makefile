@@ -120,17 +120,27 @@ test-air-integration:
 # Integration tests (requires NYLAS_API_KEY and NYLAS_GRANT_ID env vars)
 # Uses 10 minute timeout to prevent hanging on slow LLM calls
 # Output saved to test-integration.txt
+# Set NYLAS_TEST_SKIP_AGENT=true to skip TestCLI_Agent* when those already ran
 # NYLAS_DISABLE_KEYRING=true prevents keychain popup and skips tests that need local grant store
 # Rate limiting: 1 RPS with burst of 3 to stay well under Nylas API limits
 # -p 1: Run test packages sequentially to prevent rate limit issues
 test-integration:
 	@go clean -testcache
 	@bash -o pipefail -c '\
-		NYLAS_DISABLE_KEYRING=true \
-		NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
-		NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
-		NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
-		go test ./... -tags=integration -v -timeout 10m -p 1 2>&1 | tee test-integration.txt \
+		skip_agent=$$(printf "%s" "$${NYLAS_TEST_SKIP_AGENT:-}" | tr "[:upper:]" "[:lower:]"); \
+		if [ "$$skip_agent" = "1" ] || [ "$$skip_agent" = "true" ]; then \
+			NYLAS_DISABLE_KEYRING=true \
+			NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+			NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+			NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+			go test -tags=integration -v -timeout 10m -p 1 -skip TestCLI_Agent ./... 2>&1 | tee test-integration.txt; \
+		else \
+			NYLAS_DISABLE_KEYRING=true \
+			NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+			NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+			NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+			go test -tags=integration -v -timeout 10m -p 1 ./... 2>&1 | tee test-integration.txt; \
+		fi \
 	'
 
 # Integration tests excluding slow LLM-dependent tests (for when Ollama is slow/unavailable)
@@ -338,6 +348,18 @@ ci-full:
 	@: > ci-full.txt
 	@bash -o pipefail -c '\
 		set -eu; \
+		cleanup_needed=0; \
+		run_cleanup() { \
+			if [ "$$cleanup_needed" -eq 1 ]; then \
+				echo ""; \
+				echo "================================="; \
+				echo "Cleaning up test resources..."; \
+				echo "================================="; \
+				$(MAKE) --no-print-directory test-cleanup || true; \
+				cleanup_needed=0; \
+			fi; \
+		}; \
+		trap '"'"'status=$$?; run_cleanup; trap - EXIT; exit $$status'"'"' EXIT; \
 		exec > >(tee -a ci-full.txt) 2>&1; \
 		$(MAKE) --no-print-directory ci; \
 		echo ""; \
@@ -349,18 +371,18 @@ ci-full:
 		echo "================================="; \
 		echo "Running Agent Integration Checks..."; \
 		echo "================================="; \
+		: "$${NYLAS_API_KEY:?NYLAS_API_KEY is required for agent integration tests}"; \
+		: "$${NYLAS_GRANT_ID:?NYLAS_GRANT_ID is required for agent integration tests}"; \
+		: "$${NYLAS_AGENT_DOMAIN:?NYLAS_AGENT_DOMAIN is required for agent integration tests}"; \
+		cleanup_needed=1; \
 		$(MAKE) --no-print-directory test-integration-agent; \
 		echo ""; \
 		echo "================================="; \
 		echo "Running Integration Tests..."; \
 		echo "================================="; \
-		$(MAKE) --no-print-directory test-integration; \
+		NYLAS_TEST_SKIP_AGENT=true $(MAKE) --no-print-directory test-integration; \
 		$(MAKE) --no-print-directory test-air-integration; \
-		echo ""; \
-		echo "================================="; \
-		echo "Cleaning up test resources..."; \
-		echo "================================="; \
-		$(MAKE) --no-print-directory test-cleanup; \
+		run_cleanup; \
 		echo ""; \
 		echo "================================="; \
 		echo "✓ Full CI pipeline completed!"; \
