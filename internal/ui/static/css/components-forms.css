@@ -206,6 +206,17 @@
     margin-bottom: 8px;
 }
 
+.field.is-hidden {
+    display: none;
+}
+
+.setup-help {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
 .input-wrapper,
 .select-wrapper {
     position: relative;
@@ -288,6 +299,24 @@
 }
 
 .error-msg.visible { display: block; }
+
+.warning-msg {
+    display: none;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 10px;
+    color: #fbbf24;
+    font-size: 14px;
+    text-align: left;
+}
+
+.warning-msg.visible { display: block; }
+
+.overview-warning {
+    margin-bottom: 24px;
+}
 
 /* Primary Button */
 .btn-primary {

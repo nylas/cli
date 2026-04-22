@@ -82,6 +82,15 @@ test.describe('Folder Navigation', () => {
     }
   });
 
+  test('Archive folder is visible inline without a More dropdown', async ({ page }) => {
+    const folderList = page.locator(selectors.email.folderList);
+
+    await page.waitForTimeout(2000);
+
+    await expect(folderList.locator('.folder-item:has-text("Archive")')).toBeVisible();
+    await expect(folderList.locator('.folder-item:has-text("More")')).toHaveCount(0);
+  });
+
   test('folders show unread count badge', async ({ page }) => {
     const folderList = page.locator(selectors.email.folderList);
     const folders = folderList.locator(selectors.email.folderItem);
@@ -98,4 +107,3 @@ test.describe('Folder Navigation', () => {
     }
   });
 });
-

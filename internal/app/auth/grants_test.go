@@ -56,7 +56,7 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 		assert.Equal(t, "grant-1", defaultID)
 	})
 
-	t.Run("succeeds even if config save fails", func(t *testing.T) {
+	t.Run("returns error if config save fails and leaves keyring unchanged", func(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := &failingSaveConfigStore{config: &domain.Config{DefaultGrant: "grant-1"}}
 		client := nylas.NewMockClient()
@@ -67,15 +67,13 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 
 		svc := NewGrantService(client, grantStore, configStore)
 
-		// Should succeed - keyring is authoritative, config save failure is non-fatal
 		err := svc.SwitchGrant("grant-2")
 
-		require.NoError(t, err)
+		require.Error(t, err)
 
-		// Verify keyring was updated
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
-		assert.Equal(t, "grant-2", defaultID)
+		assert.Equal(t, "grant-1", defaultID)
 	})
 }
 
@@ -148,6 +146,7 @@ func TestGrantService_AddGrant(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-1", defaultID)
+		assert.Equal(t, "grant-1", configStore.config.DefaultGrant)
 	})
 
 	t.Run("auto-sets first grant as default", func(t *testing.T) {
@@ -166,6 +165,7 @@ func TestGrantService_AddGrant(t *testing.T) {
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-1", defaultID)
+		assert.Equal(t, "grant-1", configStore.config.DefaultGrant)
 	})
 
 	t.Run("does not override existing default", func(t *testing.T) {

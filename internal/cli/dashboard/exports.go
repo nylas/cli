@@ -26,9 +26,10 @@ func AcceptPrivacyPolicy() error {
 	return acceptPrivacyPolicy(false)
 }
 
-// ActivateAPIKey stores an API key in the keyring and configures the CLI (exported for setup wizard).
-func ActivateAPIKey(apiKey, clientID, region string) error {
-	return activateAPIKey(apiKey, clientID, region)
+// ActivateAPIKey stores an API key in the keyring and configures the CLI
+// (exported for setup wizard).
+func ActivateAPIKey(apiKey, clientID, region, orgID string) error {
+	return activateAPIKey(apiKey, clientID, region, orgID)
 }
 
 // GetActiveOrgID retrieves the active organization ID (exported for setup wizard).

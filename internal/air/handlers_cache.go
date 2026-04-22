@@ -472,30 +472,10 @@ func (s *Server) updateCacheSettings(w http.ResponseWriter, r *http.Request) {
 
 // getCurrentUserEmail returns the current user's email address.
 func (s *Server) getCurrentUserEmail() string {
-	if s.grantStore == nil {
-		return ""
-	}
-
-	defaultID, err := s.grantStore.GetDefaultGrant()
+	grant, err := s.resolveDefaultGrantInfo()
 	if err != nil {
 		return ""
 	}
 
-	grants, err := s.grantStore.ListGrants()
-	if err != nil {
-		return ""
-	}
-
-	for _, g := range grants {
-		if g.ID == defaultID {
-			return g.Email
-		}
-	}
-
-	// Fall back to first grant
-	if len(grants) > 0 {
-		return grants[0].Email
-	}
-
-	return ""
+	return grant.Email
 }

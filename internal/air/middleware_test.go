@@ -309,7 +309,7 @@ func TestMethodOverrideMiddleware_OnlyOverridesPOST(t *testing.T) {
 }
 
 // TestCORSMiddleware_SetsHeaders tests CORS headers.
-func TestCORSMiddleware_SetsHeaders(t *testing.T) {
+func TestCORSMiddleware_ReflectsSameOrigin(t *testing.T) {
 	t.Parallel()
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -317,6 +317,8 @@ func TestCORSMiddleware_SetsHeaders(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "http://localhost:7365")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -325,9 +327,10 @@ func TestCORSMiddleware_SetsHeaders(t *testing.T) {
 		header   string
 		expected string
 	}{
-		{"Access-Control-Allow-Origin", "*"},
+		{"Access-Control-Allow-Origin", "http://localhost:7365"},
 		{"Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"},
 		{"Access-Control-Max-Age", "86400"},
+		{"Vary", "Origin"},
 	}
 
 	for _, tt := range tests {
@@ -339,7 +342,7 @@ func TestCORSMiddleware_SetsHeaders(t *testing.T) {
 }
 
 // TestCORSMiddleware_HandlesPreflightRequests tests OPTIONS preflight.
-func TestCORSMiddleware_HandlesPreflightRequests(t *testing.T) {
+func TestCORSMiddleware_RejectsCrossOriginPreflight(t *testing.T) {
 	t.Parallel()
 
 	handlerCalled := false
@@ -349,16 +352,89 @@ func TestCORSMiddleware_HandlesPreflightRequests(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "https://evil.example")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected status 204 for OPTIONS, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected status 403 for cross-origin OPTIONS, got %d", w.Code)
 	}
 
 	if handlerCalled {
 		t.Error("expected handler not to be called for OPTIONS preflight")
+	}
+}
+
+func TestHostValidationMiddleware_RejectsNonLoopbackHost(t *testing.T) {
+	t.Parallel()
+
+	handlerCalled := false
+	handler := HostValidationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Host = "evil.example:7365"
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", w.Code)
+	}
+	if handlerCalled {
+		t.Fatal("expected non-loopback host to be rejected before handler execution")
+	}
+}
+
+func TestOriginProtectionMiddleware_AllowsSameOriginMutation(t *testing.T) {
+	t.Parallel()
+
+	handlerCalled := false
+	handler := OriginProtectionMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "http://localhost:7365")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+	if !handlerCalled {
+		t.Error("expected same-origin POST to reach the handler")
+	}
+}
+
+func TestOriginProtectionMiddleware_BlocksCrossOriginMutation(t *testing.T) {
+	t.Parallel()
+
+	handlerCalled := false
+	handler := OriginProtectionMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "https://evil.example")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected status 403, got %d", w.Code)
+	}
+	if handlerCalled {
+		t.Error("expected cross-origin POST to be rejected before handler execution")
 	}
 }
 
@@ -368,22 +444,26 @@ func TestMiddlewareChain_OrderMatters(t *testing.T) {
 
 	var executionOrder []string
 
-	handler := CORSMiddleware(
-		SecurityHeadersMiddleware(
-			CompressionMiddleware(
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					executionOrder = append(executionOrder, "handler")
-					w.WriteHeader(http.StatusOK)
-				}))))
+	handler := HostValidationMiddleware(
+		CORSMiddleware(
+			OriginProtectionMiddleware(
+				SecurityHeadersMiddleware(
+					CompressionMiddleware(
+						http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							executionOrder = append(executionOrder, "handler")
+							w.WriteHeader(http.StatusOK)
+						}))))))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "http://localhost:7365")
 	req.Header.Set("Accept-Encoding", "gzip")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
 
 	// Verify CORS headers (outermost middleware)
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if w.Header().Get("Access-Control-Allow-Origin") != "http://localhost:7365" {
 		t.Error("expected CORS headers to be set")
 	}
 

@@ -221,7 +221,7 @@ func handleAPIKeyDelivery(apiKey, appID, region, delivery string) error {
 
 	switch choice {
 	case "activate":
-		if err := activateAPIKey(apiKey, appID, region); err != nil {
+		if err := activateAPIKey(apiKey, appID, region, ""); err != nil {
 			_, _ = common.Yellow.Printf("  Could not activate: %v\n", err)
 			return nil
 		}
@@ -356,7 +356,11 @@ func tempSecretPattern(filename string) string {
 }
 
 // activateAPIKey stores the API key and configures the CLI to use it.
-func activateAPIKey(apiKey, clientID, region string) error {
+func activateAPIKey(apiKey, clientID, region, orgID string) error {
+	if strings.TrimSpace(clientID) == "" {
+		return fmt.Errorf("client ID is required to activate an API key")
+	}
+
 	configStore := config.NewDefaultFileStore()
 	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
 	if err != nil {
@@ -364,7 +368,7 @@ func activateAPIKey(apiKey, clientID, region string) error {
 	}
 
 	configSvc := authapp.NewConfigService(configStore, secretStore)
-	return configSvc.SetupConfig(region, clientID, "", apiKey, "")
+	return configSvc.SetupConfig(region, clientID, "", apiKey, orgID)
 }
 
 // toAPIKeyRows converts API keys to flat display rows.

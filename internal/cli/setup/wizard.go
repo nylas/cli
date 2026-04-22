@@ -18,6 +18,7 @@ import (
 // wizardOpts holds the options parsed from CLI flags.
 type wizardOpts struct {
 	apiKey    string
+	clientID  string
 	region    string
 	google    bool
 	microsoft bool
@@ -36,6 +37,16 @@ const (
 const (
 	stepTotal = 4
 	divider   = "──────────────────────────────────────────"
+)
+
+var (
+	verifyAPIKeyFn             = verifyAPIKey
+	resolveAPIKeyApplicationFn = ResolveAPIKeyApplication
+	ensureSetupCallbackURIFn   = ensureSetupCallbackURI
+	activateAPIKeyFn           = dashboard.ActivateAPIKey
+	getSetupStatusFn           = GetSetupStatus
+	stepGrantSyncFn            = stepGrantSync
+	printCompleteFn            = printComplete
 )
 
 func runWizard(opts wizardOpts) error {
@@ -91,10 +102,7 @@ func runWizard(opts wizardOpts) error {
 // runNonInteractive handles the --api-key flag path with no prompts.
 func runNonInteractive(opts wizardOpts, status SetupStatus) error {
 	if status.HasAPIKey {
-		_, _ = common.Green.Println("  ✓ API key already configured")
-		stepGrantSync(&status)
-		printComplete()
-		return nil
+		_, _ = common.Yellow.Println("  Updating existing API key configuration")
 	}
 
 	region := opts.region
@@ -107,7 +115,7 @@ func runNonInteractive(opts wizardOpts, status SetupStatus) error {
 	fmt.Println()
 	var verifyErr error
 	_ = common.RunWithSpinner("Verifying API key...", func() error {
-		verifyErr = verifyAPIKey(apiKey, region)
+		verifyErr = verifyAPIKeyFn(apiKey, region)
 		return verifyErr
 	})
 	if verifyErr != nil {
@@ -116,16 +124,25 @@ func runNonInteractive(opts wizardOpts, status SetupStatus) error {
 	}
 	_, _ = common.Green.Println("  ✓ API key is valid")
 
-	if err := dashboard.ActivateAPIKey(apiKey, "", region); err != nil {
+	selection, err := resolveAPIKeyApplicationFn(apiKey, region, opts.clientID, false)
+	if err != nil {
+		return err
+	}
+
+	if err := ensureSetupCallbackURIFn(apiKey, selection.ClientID, region); err != nil {
+		return err
+	}
+
+	if err := activateAPIKeyFn(apiKey, selection.ClientID, region, selection.OrgID); err != nil {
 		common.PrintError("Could not activate API key: %v", err)
 		return err
 	}
 	_, _ = common.Green.Println("  ✓ Configuration saved")
 
 	// Refresh status after activation.
-	status = GetSetupStatus()
-	stepGrantSync(&status)
-	printComplete()
+	status = getSetupStatusFn()
+	stepGrantSyncFn(&status)
+	printCompleteFn()
 	return nil
 }
 
@@ -157,7 +174,7 @@ func stepAccount(opts wizardOpts, status *SetupStatus) error {
 	case pathLogin:
 		return accountSSO(opts, "login")
 	case pathAPIKey:
-		return accountAPIKey(status)
+		return accountAPIKey(opts, status)
 	}
 	return nil
 }
@@ -197,7 +214,7 @@ func accountSSO(opts wizardOpts, mode string) error {
 }
 
 // accountAPIKey handles the "I have an API key" path.
-func accountAPIKey(status *SetupStatus) error {
+func accountAPIKey(opts wizardOpts, status *SetupStatus) error {
 	apiKeyRaw, err := common.PasswordPrompt("API Key")
 	if err != nil {
 		return fmt.Errorf("failed to read API key: %w", err)
@@ -226,7 +243,14 @@ func accountAPIKey(status *SetupStatus) error {
 		return verifyErr
 	}
 
-	if err := dashboard.ActivateAPIKey(apiKey, "", region); err != nil {
+	selection, err := ResolveAPIKeyApplication(apiKey, region, opts.clientID, true)
+	if err != nil {
+		return err
+	}
+	if err := ensureSetupCallbackURI(apiKey, selection.ClientID, region); err != nil {
+		return err
+	}
+	if err := dashboard.ActivateAPIKey(apiKey, selection.ClientID, region, selection.OrgID); err != nil {
 		return fmt.Errorf("could not activate API key: %w", err)
 	}
 
@@ -352,7 +376,10 @@ func stepAPIKey(status *SetupStatus) error {
 
 	// Activate the key directly (no 3-option menu in the wizard).
 	err = common.RunWithSpinner("Activating API key...", func() error {
-		return dashboard.ActivateAPIKey(key.APIKey, status.ActiveAppID, status.ActiveAppRegion)
+		if err := ensureSetupCallbackURI(key.APIKey, status.ActiveAppID, status.ActiveAppRegion); err != nil {
+			return err
+		}
+		return dashboard.ActivateAPIKey(key.APIKey, status.ActiveAppID, status.ActiveAppRegion, "")
 	})
 	if err != nil {
 		return err

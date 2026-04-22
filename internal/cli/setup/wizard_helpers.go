@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nylas/cli/internal/adapters/config"
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/cli/common"
@@ -11,6 +12,8 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
+
+var setupCallbackProvisioner = EnsureOAuthCallbackURI
 
 // printComplete prints the final success message.
 func printComplete() {
@@ -156,6 +159,44 @@ func verifyAPIKey(apiKey, region string) error {
 
 	_, err := client.ListApplications(ctx)
 	return err
+}
+
+func ensureSetupCallbackURI(apiKey, clientID, region string) error {
+	if strings.TrimSpace(clientID) == "" {
+		return fmt.Errorf("client ID is required to configure the OAuth callback URI")
+	}
+
+	configStore := config.NewDefaultFileStore()
+	cfg, err := configStore.Load()
+	if err != nil || cfg == nil {
+		cfg = domain.DefaultConfig()
+	}
+
+	result, err := setupCallbackProvisioner(apiKey, clientID, region, cfg.CallbackPort)
+	if err != nil {
+		printCallbackURIManualInstructions(result.RequiredURI, err)
+		return nil
+	}
+
+	switch {
+	case result.AlreadyExists:
+		_, _ = common.Green.Println("  ✓ Callback URI already configured")
+	case result.Created:
+		_, _ = common.Green.Printf("  ✓ Added callback URI: %s\n", result.RequiredURI)
+	}
+
+	return nil
+}
+
+func printCallbackURIManualInstructions(requiredCallbackURI string, err error) {
+	fmt.Println()
+	fmt.Println("Setting up callback URI for OAuth authentication...")
+	_, _ = common.Yellow.Printf("  Could not add callback URI automatically: %v\n", err)
+	fmt.Printf("  Please add this callback URI manually in the Nylas dashboard:\n")
+	fmt.Printf("    %s\n", requiredCallbackURI)
+	fmt.Println()
+	fmt.Printf("  Dashboard: https://dashboard.nylas.com/applications\n")
+	fmt.Printf("  Navigate to: Your App → Settings → Callback URIs → Add URI\n")
 }
 
 // sanitizeAPIKey removes invisible characters from a pasted API key.

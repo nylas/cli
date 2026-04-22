@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -139,23 +140,52 @@ func (s *GrantService) SwitchGrantByEmail(email string) error {
 	return s.setDefaultGrant(info.ID)
 }
 
-// setDefaultGrant updates the default grant in both keyring and config file.
-func (s *GrantService) setDefaultGrant(grantID string) error {
-	// Update keyring
-	if err := s.grantStore.SetDefaultGrant(grantID); err != nil {
+// PersistDefaultGrant updates both the config file and grant store so all
+// callers observe the same default grant value.
+func PersistDefaultGrant(config ports.ConfigStore, grantStore ports.GrantStore, grantID string) error {
+	var (
+		cfgToSave    *domain.Config
+		rollbackCfg  *domain.Config
+		configLoaded bool
+	)
+
+	if config != nil {
+		cfg, err := config.Load()
+		if err == nil && cfg != nil {
+			configLoaded = true
+			rollbackCfg = cloneConfig(cfg)
+			cfgToSave = cloneConfig(cfg)
+		} else {
+			cfgToSave = domain.DefaultConfig()
+		}
+
+		cfgToSave.DefaultGrant = grantID
+		if err := config.Save(cfgToSave); err != nil {
+			return err
+		}
+	}
+
+	if err := grantStore.SetDefaultGrant(grantID); err != nil {
+		if config == nil {
+			return err
+		}
+
+		restoreCfg := rollbackCfg
+		if !configLoaded || restoreCfg == nil {
+			restoreCfg = domain.DefaultConfig()
+		}
+		if rollbackErr := config.Save(restoreCfg); rollbackErr != nil {
+			return errors.Join(err, rollbackErr)
+		}
 		return err
 	}
 
-	// Update config file
-	cfg, err := s.config.Load()
-	if err != nil {
-		// Non-fatal: keyring is the authoritative source
-		return nil
-	}
-	cfg.DefaultGrant = grantID
-	_ = s.config.Save(cfg) // Ignore save errors, keyring is authoritative
-
 	return nil
+}
+
+// setDefaultGrant updates the default grant in both keyring and config file.
+func (s *GrantService) setDefaultGrant(grantID string) error {
+	return PersistDefaultGrant(s.config, s.grantStore, grantID)
 }
 
 // ValidateGrant checks if a grant is valid.
@@ -186,12 +216,12 @@ func (s *GrantService) AddGrant(grantID, email string, provider domain.Provider,
 
 	// Set as default if requested or if this is the first grant
 	if setDefault {
-		return s.grantStore.SetDefaultGrant(grantID)
+		return s.setDefaultGrant(grantID)
 	}
 
 	// Auto-set as default if no default exists
 	if _, err := s.grantStore.GetDefaultGrant(); err == domain.ErrNoDefaultGrant {
-		return s.grantStore.SetDefaultGrant(grantID)
+		return s.setDefaultGrant(grantID)
 	}
 
 	return nil

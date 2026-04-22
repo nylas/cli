@@ -142,19 +142,23 @@ func TestIntegration_Middleware_CORS(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := CORSMiddleware(mux)
+	handler := HostValidationMiddleware(CORSMiddleware(mux))
 
 	// Test regular request
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "http://localhost:7365")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Error("expected Access-Control-Allow-Origin: *")
+	if w.Header().Get("Access-Control-Allow-Origin") != "http://localhost:7365" {
+		t.Error("expected reflected same-origin Access-Control-Allow-Origin header")
 	}
 
 	// Test OPTIONS preflight
 	reqOptions := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	reqOptions.Host = "localhost:7365"
+	reqOptions.Header.Set("Origin", "http://localhost:7365")
 	wOptions := httptest.NewRecorder()
 	handler.ServeHTTP(wOptions, reqOptions)
 
@@ -164,6 +168,16 @@ func TestIntegration_Middleware_CORS(t *testing.T) {
 
 	if wOptions.Header().Get("Access-Control-Allow-Methods") == "" {
 		t.Error("OPTIONS should include Access-Control-Allow-Methods")
+	}
+
+	reqCrossOrigin := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	reqCrossOrigin.Host = "localhost:7365"
+	reqCrossOrigin.Header.Set("Origin", "https://evil.example")
+	wCrossOrigin := httptest.NewRecorder()
+	handler.ServeHTTP(wCrossOrigin, reqCrossOrigin)
+
+	if wCrossOrigin.Code != http.StatusForbidden {
+		t.Errorf("cross-origin OPTIONS should return 403, got %d", wCrossOrigin.Code)
 	}
 
 	t.Log("✓ CORS headers working correctly")
@@ -203,13 +217,17 @@ func TestIntegration_Middleware_FullStack(t *testing.T) {
 	})
 
 	// Apply full middleware stack (same order as server.go)
-	handler := CORSMiddleware(
-		SecurityHeadersMiddleware(
-			CompressionMiddleware(
-				CacheMiddleware(
-					PerformanceMonitoringMiddleware(mux)))))
+	handler := HostValidationMiddleware(
+		CORSMiddleware(
+			OriginProtectionMiddleware(
+				SecurityHeadersMiddleware(
+					CompressionMiddleware(
+						CacheMiddleware(
+							PerformanceMonitoringMiddleware(mux)))))))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Host = "localhost:7365"
+	req.Header.Set("Origin", "http://localhost:7365")
 	req.Header.Set("Accept-Encoding", "gzip")
 	w := httptest.NewRecorder()
 
@@ -217,7 +235,7 @@ func TestIntegration_Middleware_FullStack(t *testing.T) {
 
 	// Verify all middleware features are active
 	checks := map[string]func() bool{
-		"CORS":        func() bool { return w.Header().Get("Access-Control-Allow-Origin") == "*" },
+		"CORS":        func() bool { return w.Header().Get("Access-Control-Allow-Origin") == "http://localhost:7365" },
 		"Security":    func() bool { return w.Header().Get("X-Frame-Options") == "SAMEORIGIN" },
 		"Compression": func() bool { return w.Header().Get("Content-Encoding") == "gzip" },
 		"Cache":       func() bool { return w.Header().Get("Cache-Control") == "no-cache, no-store, must-revalidate" },

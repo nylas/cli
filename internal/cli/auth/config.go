@@ -103,14 +103,14 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				} else if len(apps) == 1 {
 					// Single app - auto-select
 					app := apps[0]
-					clientID = getAppClientID(app)
+					clientID = setup.AppClientID(app)
 					orgID = app.OrganizationID
-					_, _ = common.Green.Printf("  ✓ Found application: %s\n", getAppDisplayName(app))
+					_, _ = common.Green.Printf("  ✓ Found application: %s\n", setup.AppDisplayName(app))
 				} else {
 					// Multiple apps - let user choose
 					fmt.Printf("  Found %d applications:\n\n", len(apps))
 					for i, app := range apps {
-						fmt.Printf("  [%d] %s\n", i+1, getAppDisplayName(app))
+						fmt.Printf("  [%d] %s\n", i+1, setup.AppDisplayName(app))
 					}
 					fmt.Println()
 					fmt.Print("Select application (1-", len(apps), "): ")
@@ -123,9 +123,9 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 					}
 
 					app := apps[selected-1]
-					clientID = getAppClientID(app)
+					clientID = setup.AppClientID(app)
 					orgID = app.OrganizationID
-					_, _ = common.Green.Printf("  ✓ Selected: %s\n", getAppDisplayName(app))
+					_, _ = common.Green.Printf("  ✓ Selected: %s\n", setup.AppDisplayName(app))
 				}
 			}
 
@@ -146,63 +146,25 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 
 			// Load config to get callback port
 			cfg, err := configStore.Load()
-			if err != nil {
+			if err != nil || cfg == nil {
 				_, _ = common.Yellow.Printf("  Warning: Could not load config: %v\n", err)
+				cfg = domain.DefaultConfig()
 			}
 
 			// Ensure callback URI exists in the application
-			if cfg != nil {
-				// Get callback port from config (defaults to 9007)
-				callbackPort := cfg.CallbackPort
-				if callbackPort == 0 {
-					callbackPort = 9007
-				}
-
-				requiredCallbackURI := fmt.Sprintf("http://localhost:%d/callback", callbackPort)
-
-				client := nylasadapter.NewHTTPClient()
-				client.SetRegion(region)
-				client.SetCredentials(clientID, "", apiKey)
-
-				// List existing callback URIs via dedicated endpoint
-				ctx, cancel := common.CreateContext()
-				existingURIs, err := client.ListCallbackURIs(ctx)
-				cancel()
-
-				hasCallbackURI := false
-				if err == nil {
-					for _, cb := range existingURIs {
-						if cb.URL == requiredCallbackURI {
-							hasCallbackURI = true
-							break
-						}
-					}
-				}
-
+			callbackResult, callbackErr := setup.EnsureOAuthCallbackURI(apiKey, clientID, region, cfg.CallbackPort)
+			fmt.Println()
+			if callbackErr != nil {
+				_, _ = common.Yellow.Printf("  Could not add callback URI automatically: %v\n", callbackErr)
+				fmt.Printf("  Please add this callback URI manually in the Nylas dashboard:\n")
+				fmt.Printf("    %s\n", callbackResult.RequiredURI)
 				fmt.Println()
-				if !hasCallbackURI {
-					fmt.Println("Setting up callback URI for OAuth authentication...")
-
-					ctx, cancel := common.CreateContext()
-					_, err := client.CreateCallbackURI(ctx, &domain.CreateCallbackURIRequest{
-						URL:      requiredCallbackURI,
-						Platform: "web",
-					})
-					cancel()
-
-					if err != nil {
-						_, _ = common.Yellow.Printf("  Could not add callback URI automatically: %v\n", err)
-						fmt.Printf("  Please add this callback URI manually in the Nylas dashboard:\n")
-						fmt.Printf("    %s\n", requiredCallbackURI)
-						fmt.Println()
-						fmt.Printf("  Dashboard: https://dashboard.nylas.com/applications\n")
-						fmt.Printf("  Navigate to: Your App → Settings → Callback URIs → Add URI\n")
-					} else {
-						_, _ = common.Green.Printf("  ✓ Added callback URI: %s\n", requiredCallbackURI)
-					}
-				} else {
-					_, _ = common.Green.Println("✓ Callback URI already configured")
-				}
+				fmt.Printf("  Dashboard: https://dashboard.nylas.com/applications\n")
+				fmt.Printf("  Navigate to: Your App → Settings → Callback URIs → Add URI\n")
+			} else if callbackResult.Created {
+				_, _ = common.Green.Printf("  ✓ Added callback URI: %s\n", callbackResult.RequiredURI)
+			} else if callbackResult.AlreadyExists {
+				_, _ = common.Green.Println("✓ Callback URI already configured")
 			}
 
 			// Auto-detect existing grants from Nylas API
@@ -276,37 +238,6 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset all configuration")
 
 	return cmd
-}
-
-// getAppClientID returns the client ID for an application.
-// It checks both ID and ApplicationID fields since the API may use either.
-func getAppClientID(app domain.Application) string {
-	if app.ApplicationID != "" {
-		return app.ApplicationID
-	}
-	return app.ID
-}
-
-// getAppDisplayName returns a human-readable display name for an application.
-func getAppDisplayName(app domain.Application) string {
-	clientID := getAppClientID(app)
-	env := app.Environment
-	if env == "" {
-		env = "production"
-	}
-
-	region := app.Region
-	if region == "" {
-		region = "us"
-	}
-
-	// Truncate client ID for display if too long
-	displayID := clientID
-	if len(displayID) > 20 {
-		displayID = displayID[:17] + "..."
-	}
-
-	return fmt.Sprintf("%s (%s, %s)", displayID, env, region)
 }
 
 // sanitizeAPIKey removes all characters that are invalid in HTTP headers.

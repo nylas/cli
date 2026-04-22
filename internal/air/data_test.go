@@ -20,6 +20,21 @@ func TestBuildMockPageData(t *testing.T) {
 	if data.UserAvatar == "" {
 		t.Error("expected non-empty UserAvatar")
 	}
+	if !data.Configured {
+		t.Error("expected mock page data to be configured")
+	}
+	if data.Provider != "nylas" {
+		t.Errorf("expected provider 'nylas', got %s", data.Provider)
+	}
+	if data.DefaultGrantID == "" {
+		t.Error("expected non-empty DefaultGrantID")
+	}
+	if len(data.Grants) != 1 {
+		t.Fatalf("expected exactly 1 mock grant, got %d", len(data.Grants))
+	}
+	if !data.Grants[0].IsDefault {
+		t.Error("expected mock grant to be the default")
+	}
 
 	// UI state
 	if data.ActiveView != "email" {

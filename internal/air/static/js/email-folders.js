@@ -1,5 +1,7 @@
 /* Email Folders - Folder management */
-Object.assign(EmailListManager, {
+const EmailFoldersManager = typeof EmailListManager !== 'undefined' ? EmailListManager : {};
+
+Object.assign(EmailFoldersManager, {
 async loadFolders() {
     try {
         const data = await AirAPI.getFolders();
@@ -23,13 +25,10 @@ findFolderByName(name) {
     return this.folders.find(f => (f.name || '').toLowerCase() === lowerName);
 },
 
-renderFolders(folders) {
-    const folderList = document.getElementById('folderList') || document.querySelector('.folder-group');
-    if (!folderList || folders.length === 0) return;
-
+getVisibleFolders(folders) {
     // Primary folder names to show directly (in order)
     // Use names instead of IDs to support both Google (ID=INBOX) and Microsoft (ID=long-string, name=Inbox)
-    const primaryFolderNames = ['inbox', 'starred', 'sent', 'sent items', 'draft', 'drafts', 'trash', 'deleted items', 'spam', 'junk email'];
+    const primaryFolderNames = ['inbox', 'starred', 'sent', 'sent items', 'draft', 'drafts', 'archive', 'trash', 'deleted items', 'spam', 'junk', 'junk email'];
 
     // Helper to get normalized folder name for comparison
     const getNormalizedName = (folder) => {
@@ -54,8 +53,9 @@ renderFolders(folders) {
         if (name === 'starred' || id === 'starred') return 1;
         if (name === 'sent' || name === 'sent items' || id === 'sent') return 2;
         if (name === 'draft' || name === 'drafts' || id === 'draft') return 3;
-        if (name === 'trash' || name === 'deleted items' || id === 'trash') return 4;
-        if (name === 'spam' || name === 'junk email' || id === 'spam') return 5;
+        if (name === 'archive' || id === 'archive') return 4;
+        if (name === 'trash' || name === 'deleted items' || id === 'trash') return 5;
+        if (name === 'spam' || name === 'junk' || name === 'junk email' || id === 'spam' || id === 'junk') return 6;
         return 99;
     };
 
@@ -90,10 +90,17 @@ renderFolders(folders) {
     // Sort other folders alphabetically
     otherFolders.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 
+    return [...primaryFolders, ...otherFolders];
+},
+
+renderFolders(folders) {
+    const folderList = document.getElementById('folderList') || document.querySelector('.folder-group');
+    if (!folderList) return;
+
+    const visibleFolders = this.getVisibleFolders(folders);
     folderList.innerHTML = '';
 
-    // Render primary folders
-    primaryFolders.forEach(folder => {
+    visibleFolders.forEach(folder => {
         const folderName = (folder.name || '').toLowerCase();
         const folderId = (folder.id || '').toLowerCase();
         // Check if this folder is the current one, or if it's inbox and no folder is selected yet
@@ -102,55 +109,6 @@ renderFolders(folders) {
         const item = this.createFolderElement(folder, isActive);
         folderList.appendChild(item);
     });
-
-    // Add "More" dropdown if there are other folders
-    if (otherFolders.length > 0) {
-        const moreContainer = this.createMoreDropdown(otherFolders);
-        folderList.appendChild(moreContainer);
-    }
-},
-
-createMoreDropdown(folders) {
-    const container = document.createElement('div');
-    container.className = 'folder-more-container';
-
-    const trigger = document.createElement('div');
-    trigger.className = 'folder-item folder-more-trigger';
-    trigger.innerHTML = `
-        <span class="folder-icon">📂</span>
-        <span>More</span>
-        <span class="folder-count">${folders.length}</span>
-        <svg class="folder-more-arrow" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="m6 9 6 6 6-6"/>
-        </svg>
-    `;
-
-    const dropdown = document.createElement('div');
-    dropdown.className = 'folder-more-dropdown hidden';
-
-    folders.forEach(folder => {
-        const item = this.createFolderElement(folder, false);
-        item.classList.add('folder-dropdown-item');
-        dropdown.appendChild(item);
-    });
-
-    trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dropdown.classList.toggle('hidden');
-        trigger.classList.toggle('expanded');
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!container.contains(e.target)) {
-            dropdown.classList.add('hidden');
-            trigger.classList.remove('expanded');
-        }
-    });
-
-    container.appendChild(trigger);
-    container.appendChild(dropdown);
-    return container;
 },
 
 createFolderElement(folder, isActive = false) {
@@ -164,6 +122,7 @@ createFolderElement(folder, isActive = false) {
         'trash': '🗑️',
         'deleted items': '🗑️',
         'spam': '⚠️',
+        'junk': '⚠️',
         'junk email': '⚠️',
         'starred': '⭐',
         'snoozed': '🕐',
@@ -206,3 +165,7 @@ escapeHtml(str) {
     return div.innerHTML;
 },
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = EmailFoldersManager;
+}

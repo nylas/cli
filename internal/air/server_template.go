@@ -4,8 +4,6 @@ import (
 	"html/template"
 	"net/http"
 	"sync"
-
-	"github.com/nylas/cli/internal/domain"
 )
 
 // handleIndex renders the main page.
@@ -60,60 +58,31 @@ func (s *Server) buildPageData() PageData {
 	}
 
 	// Get real grants filtered to providers supported by Air.
-	// Also used to determine if configured (need API key AND at least one grant)
-	grants, err := s.grantStore.ListGrants()
-	hasGrants := err == nil && len(grants) > 0
-	data.Configured = data.HasAPIKey && hasGrants
+	supportedGrants, err := s.listSupportedGrants()
+	data.Configured = data.HasAPIKey && err == nil && len(supportedGrants) > 0
 
-	if hasGrants {
-		// Filter to supported providers only
-		var supportedGrants []domain.GrantInfo
-		for _, g := range grants {
-			if g.Provider.IsSupportedByAir() {
-				supportedGrants = append(supportedGrants, g)
-			}
+	if len(supportedGrants) > 0 {
+		defaultGrant, defaultErr := s.resolveDefaultGrantInfo()
+
+		if defaultErr == nil {
+			data.UserEmail = defaultGrant.Email
+			data.UserName = extractName(defaultGrant.Email)
+			data.UserAvatar = initials(defaultGrant.Email)
+			data.DefaultGrantID = defaultGrant.ID
+			data.Provider = string(defaultGrant.Provider)
 		}
 
-		if len(supportedGrants) > 0 {
-			// Get default grant ID
-			defaultID, _ := s.grantStore.GetDefaultGrant()
-
-			// Check if default is a supported provider, otherwise use first supported account
-			defaultIsSupported := false
-			for _, g := range supportedGrants {
-				if g.ID == defaultID {
-					defaultIsSupported = true
-					break
-				}
-			}
-			if !defaultIsSupported {
-				defaultID = supportedGrants[0].ID
-			}
-
-			// Find default grant info
-			for _, g := range supportedGrants {
-				if g.ID == defaultID {
-					data.UserEmail = g.Email
-					data.UserName = extractName(g.Email)
-					data.UserAvatar = initials(g.Email)
-					data.DefaultGrantID = g.ID
-					data.Provider = string(g.Provider)
-					break
-				}
-			}
-
-			// Build grants list for UI (supported providers only)
-			data.Grants = make([]GrantInfo, 0, len(supportedGrants))
-			for _, g := range supportedGrants {
-				data.Grants = append(data.Grants, GrantInfo{
-					ID:        g.ID,
-					Email:     g.Email,
-					Provider:  string(g.Provider),
-					IsDefault: g.ID == defaultID,
-				})
-			}
-			data.AccountsCount = len(supportedGrants)
+		// Build grants list for UI (supported providers only)
+		data.Grants = make([]GrantInfo, 0, len(supportedGrants))
+		for _, g := range supportedGrants {
+			data.Grants = append(data.Grants, GrantInfo{
+				ID:        g.ID,
+				Email:     g.Email,
+				Provider:  string(g.Provider),
+				IsDefault: defaultErr == nil && g.ID == defaultGrant.ID,
+			})
 		}
+		data.AccountsCount = len(supportedGrants)
 	}
 
 	return data
