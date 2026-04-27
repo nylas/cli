@@ -1,9 +1,10 @@
 package auth
 
 import (
-	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/nylas/cli/internal/cli/testutil"
 )
 
 func TestScopesCmd(t *testing.T) {
@@ -41,20 +42,14 @@ func TestScopesCmd(t *testing.T) {
 				t.Skip(tt.skipReason)
 			}
 
-			cmd := newScopesCmd()
-			buf := new(bytes.Buffer)
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-			cmd.SetArgs(tt.args)
-
-			err := cmd.Execute()
+			stdout, stderr, err := testutil.ExecuteSubCommand(newScopesCmd(), tt.args...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newScopesCmd() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr {
-				output := buf.String()
+				output := stdout + stderr
 				for _, want := range tt.wantOutput {
 					if !strings.Contains(output, want) {
 						t.Errorf("newScopesCmd() output = %v, want to contain %v", output, want)

@@ -11,10 +11,9 @@ import (
 
 func newPolicyCreateCmd() *cobra.Command {
 	var (
-		name       string
-		data       string
-		dataFile   string
-		jsonOutput bool
+		name     string
+		data     string
+		dataFile string
 	)
 
 	cmd := &cobra.Command{
@@ -34,14 +33,13 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return runPolicyCreate(payload, jsonOutput)
+			return runPolicyCreate(payload, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Policy name")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -57,7 +55,7 @@ func runPolicyCreate(payload map[string]any, jsonOutput bool) error {
 			return struct{}{}, common.PrintJSON(policy)
 		}
 
-		printSuccess("Policy created successfully!")
+		common.PrintSuccess("Policy created successfully!")
 		fmt.Println()
 		printPolicyDetails(*policy)
 		return struct{}{}, nil
@@ -68,10 +66,9 @@ func runPolicyCreate(payload map[string]any, jsonOutput bool) error {
 
 func newPolicyUpdateCmd() *cobra.Command {
 	var (
-		name       string
-		data       string
-		dataFile   string
-		jsonOutput bool
+		name     string
+		data     string
+		dataFile string
 	)
 
 	cmd := &cobra.Command{
@@ -95,14 +92,13 @@ Examples:
 			if len(payload) == 0 {
 				return common.NewUserError("policy update requires at least one field", "Use --name, --data, or --data-file")
 			}
-			return runPolicyUpdate(args[0], payload, jsonOutput)
+			return runPolicyUpdate(args[0], payload, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Updated policy name")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

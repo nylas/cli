@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,10 +20,10 @@ func TestTriggersCommand(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "events")
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
+	t.Run("format_flag_inherited_from_root", func(t *testing.T) {
+		root := testutil.NewTestRoot(cmd)
+		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "text", flag.DefValue)
 	})
 
 	t.Run("has_category_flag", func(t *testing.T) {
@@ -120,8 +121,9 @@ func TestWebhookCommandHelp(t *testing.T) {
 }
 
 func TestWebhookListHelp(t *testing.T) {
-	cmd := NewWebhookCmd()
-	stdout, _, err := executeCommand(cmd, "list", "--help")
+	webhookCmd := NewWebhookCmd()
+	root := testutil.NewTestRoot(webhookCmd)
+	stdout, _, err := executeCommand(root, "webhook", "list", "--help")
 
 	assert.NoError(t, err)
 	assert.Contains(t, stdout, "list")
@@ -140,8 +142,9 @@ func TestWebhookCreateHelp(t *testing.T) {
 }
 
 func TestWebhookTriggersHelp(t *testing.T) {
-	cmd := NewWebhookCmd()
-	stdout, _, err := executeCommand(cmd, "triggers", "--help")
+	webhookCmd := NewWebhookCmd()
+	root := testutil.NewTestRoot(webhookCmd)
+	stdout, _, err := executeCommand(root, "webhook", "triggers", "--help")
 
 	assert.NoError(t, err)
 	assert.Contains(t, stdout, "triggers")

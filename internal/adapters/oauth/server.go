@@ -52,8 +52,11 @@ func (s *CallbackServer) Start() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	// Bind to loopback only. The browser performing the OAuth flow runs on
+	// the same machine; exposing the callback to the LAN would let an
+	// attacker race the legitimate browser callback.
 	var err error
-	s.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.port))
+	s.listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}

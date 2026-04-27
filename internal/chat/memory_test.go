@@ -266,9 +266,17 @@ func TestMemoryStore_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error for non-existent conversation", func(t *testing.T) {
-		err := store.Delete("conv_nonexistent")
+		// Use a well-formed ID that simply doesn't exist on disk so we
+		// exercise the not-found path rather than the format validator.
+		err := store.Delete("conv_0123456789abcdef")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "conversation not found")
+	})
+
+	t.Run("returns error for invalid conversation ID format", func(t *testing.T) {
+		err := store.Delete("../../etc/passwd")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid conversation ID")
 	})
 }
 

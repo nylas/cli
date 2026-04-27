@@ -69,7 +69,7 @@ By default, you'll be prompted for confirmation. Use --force to skip the prompt.
 				return common.WrapDeleteError("template", err)
 			}
 
-			printSuccess("Template %q deleted successfully", tpl.Name)
+			common.PrintSuccess("Template %q deleted successfully", tpl.Name)
 			return nil
 		},
 	}

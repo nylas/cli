@@ -39,6 +39,19 @@ getAvatarImageUrl(name, email, size = 80) {
     const bgColor = this.getAvatarColor(name || '').replace('#', '');
     // UI Avatars API generates professional-looking avatars
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${bgColor}&color=fff&size=${size}&font-size=0.4&bold=true`;
+},
+
+bindAvatarFallbacks(container) {
+    if (!container) return;
+    container.querySelectorAll('img[data-fallback-src]').forEach(img => {
+        if (img.dataset.fallbackBound === 'true') return;
+        img.dataset.fallbackBound = 'true';
+        img.addEventListener('error', () => {
+            const fallbackSrc = img.dataset.fallbackSrc;
+            if (!fallbackSrc || img.src === fallbackSrc) return;
+            img.src = fallbackSrc;
+        }, { once: true });
+    });
 }
 });
 

@@ -1,10 +1,10 @@
 {{define "modals_settings"}}
 <!-- Settings Modal -->
-<div class="settings-overlay" id="settingsOverlay" data-testid="settings-overlay" onclick="closeSettingsOnOverlay(event)">
+<div class="settings-overlay" id="settingsOverlay" data-testid="settings-overlay" data-action="close-settings-overlay">
     <div class="settings-modal">
         <div class="settings-header">
             <h2>Settings</h2>
-            <button class="settings-close-btn" data-testid="settings-close" onclick="toggleSettings()">
+            <button class="settings-close-btn" data-testid="settings-close" data-action="toggle-settings">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
@@ -47,7 +47,7 @@
                     <!-- Sources will be rendered by JavaScript -->
                 </div>
 
-                <button class="settings-add-source-btn" onclick="openAddNotetakerSourceModal()">
+                <button class="settings-add-source-btn" data-action="open-notetaker-source-modal">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M12 5v14m-7-7h14"/>
                     </svg>
@@ -65,50 +65,50 @@
                 <div class="settings-subsection">
                     <div class="settings-label">Theme Mode</div>
                     <div class="theme-toggle-group">
-                        <button class="theme-btn" data-theme="light" onclick="setTheme('light')">Light</button>
-                        <button class="theme-btn active" data-theme="dark" onclick="setTheme('dark')">Dark</button>
-                        <button class="theme-btn" data-theme="system" onclick="setTheme('system')">System</button>
+                        <button class="theme-btn" data-theme="light" data-action="set-theme">Light</button>
+                        <button class="theme-btn active" data-theme="dark" data-action="set-theme">Dark</button>
+                        <button class="theme-btn" data-theme="system" data-action="set-theme">System</button>
                     </div>
                 </div>
             </div>
         </div>
         <div class="settings-footer">
-            <button class="settings-reset-btn" onclick="resetSettings()">Reset to Defaults</button>
-            <button class="settings-save-btn" onclick="saveSettings()">Save Changes</button>
+            <button class="settings-reset-btn" data-action="reset-settings">Reset to Defaults</button>
+            <button class="settings-save-btn" data-action="save-settings">Save Changes</button>
         </div>
     </div>
 </div>
 
 <!-- Snooze Picker Modal -->
-<div class="snooze-picker-overlay hidden" id="snoozePickerOverlay" onclick="if(event.target === this) closeSnoozeModal()">
+<div class="snooze-picker-overlay hidden" id="snoozePickerOverlay" data-action="close-snooze-overlay">
     <div class="snooze-picker-modal">
         <div class="snooze-picker-header">
             <h3>Snooze until...</h3>
-            <button class="snooze-picker-close" onclick="closeSnoozeModal()">×</button>
+            <button class="snooze-picker-close" data-action="close-snooze-modal">×</button>
         </div>
         <div class="snooze-options">
-            <button class="snooze-option" onclick="snoozeEmail('later_today')">
+            <button class="snooze-option" data-action="snooze-email" data-snooze-option="later_today">
                 <span class="snooze-option-icon">🌆</span>
                 <div class="snooze-option-text">
                     <span class="snooze-option-label">Later today</span>
                     <span class="snooze-option-time" id="snoozeLaterToday">6:00 PM</span>
                 </div>
             </button>
-            <button class="snooze-option" onclick="snoozeEmail('tomorrow')">
+            <button class="snooze-option" data-action="snooze-email" data-snooze-option="tomorrow">
                 <span class="snooze-option-icon">🌅</span>
                 <div class="snooze-option-text">
                     <span class="snooze-option-label">Tomorrow</span>
                     <span class="snooze-option-time" id="snoozeTomorrow">9:00 AM</span>
                 </div>
             </button>
-            <button class="snooze-option" onclick="snoozeEmail('next_week')">
+            <button class="snooze-option" data-action="snooze-email" data-snooze-option="next_week">
                 <span class="snooze-option-icon">📅</span>
                 <div class="snooze-option-text">
                     <span class="snooze-option-label">Next week</span>
                     <span class="snooze-option-time" id="snoozeNextWeek">Monday 9:00 AM</span>
                 </div>
             </button>
-            <button class="snooze-option" onclick="snoozeEmail('weekend')">
+            <button class="snooze-option" data-action="snooze-email" data-snooze-option="weekend">
                 <span class="snooze-option-icon">🏖️</span>
                 <div class="snooze-option-text">
                     <span class="snooze-option-label">This weekend</span>
@@ -117,7 +117,7 @@
             </button>
         </div>
         <div class="snooze-custom">
-            <button class="snooze-custom-btn" onclick="openCustomSnooze()">
+            <button class="snooze-custom-btn" data-action="open-custom-snooze">
                 <span>📆</span> Pick date & time
             </button>
         </div>
@@ -125,28 +125,28 @@
 </div>
 
 <!-- Send Later Picker Modal -->
-<div class="send-later-overlay hidden" id="sendLaterOverlay" onclick="if(event.target === this) closeSendLaterModal()">
+<div class="send-later-overlay hidden" id="sendLaterOverlay" data-action="close-send-later-overlay">
     <div class="send-later-modal">
         <div class="send-later-header">
             <h3>Schedule send</h3>
-            <button class="send-later-close" onclick="closeSendLaterModal()">×</button>
+            <button class="send-later-close" data-action="close-send-later-modal">×</button>
         </div>
         <div class="send-later-options">
-            <button class="send-later-option" onclick="scheduleSend('tomorrow_morning')">
+            <button class="send-later-option" data-action="schedule-send" data-send-option="tomorrow_morning">
                 <span class="send-later-icon">🌅</span>
                 <div class="send-later-text">
                     <span class="send-later-label">Tomorrow morning</span>
                     <span class="send-later-time">8:00 AM</span>
                 </div>
             </button>
-            <button class="send-later-option" onclick="scheduleSend('tomorrow_afternoon')">
+            <button class="send-later-option" data-action="schedule-send" data-send-option="tomorrow_afternoon">
                 <span class="send-later-icon">🌇</span>
                 <div class="send-later-text">
                     <span class="send-later-label">Tomorrow afternoon</span>
                     <span class="send-later-time">1:00 PM</span>
                 </div>
             </button>
-            <button class="send-later-option" onclick="scheduleSend('next_monday')">
+            <button class="send-later-option" data-action="schedule-send" data-send-option="next_monday">
                 <span class="send-later-icon">📅</span>
                 <div class="send-later-text">
                     <span class="send-later-label">Monday morning</span>
@@ -160,99 +160,21 @@
                 <input type="date" id="sendLaterDate" class="send-later-date-input">
                 <input type="time" id="sendLaterTime" class="send-later-time-input" value="09:00">
             </div>
-            <button class="send-later-schedule-btn" onclick="scheduleCustomSend()">
+            <button class="send-later-schedule-btn" data-action="schedule-custom-send">
                 Schedule
             </button>
         </div>
     </div>
 </div>
 
-<script>
-// Snooze Modal Functions
-function closeSnoozeModal() {
-    document.getElementById('snoozePickerOverlay').classList.add('hidden');
-}
-
-function openSnoozeModal(emailId) {
-    window.snoozeEmailId = emailId;
-    updateSnoozeTimes();
-    document.getElementById('snoozePickerOverlay').classList.remove('hidden');
-}
-
-function updateSnoozeTimes() {
-    const now = new Date();
-
-    // Later today (6 PM)
-    const laterToday = new Date(now);
-    laterToday.setHours(18, 0, 0, 0);
-    if (laterToday <= now) laterToday.setDate(laterToday.getDate() + 1);
-    document.getElementById('snoozeLaterToday').textContent = laterToday.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    // Tomorrow (9 AM)
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0);
-    document.getElementById('snoozeTomorrow').textContent = 'Tomorrow ' + tomorrow.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    // Next week (Monday 9 AM)
-    const nextWeek = new Date(now);
-    const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
-    nextWeek.setDate(nextWeek.getDate() + daysUntilMonday);
-    nextWeek.setHours(9, 0, 0, 0);
-    document.getElementById('snoozeNextWeek').textContent = 'Monday ' + nextWeek.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    // Weekend (Saturday 10 AM)
-    const weekend = new Date(now);
-    const daysUntilSat = (6 - now.getDay() + 7) % 7 || 7;
-    weekend.setDate(weekend.getDate() + daysUntilSat);
-    weekend.setHours(10, 0, 0, 0);
-    document.getElementById('snoozeWeekend').textContent = 'Sat ' + weekend.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function snoozeEmail(option) {
-    console.log('Snoozing email:', window.snoozeEmailId, 'until:', option);
-    showToast('Email snoozed', 'success');
-    closeSnoozeModal();
-}
-
-function openCustomSnooze() {
-    console.log('Opening custom snooze picker');
-}
-
-// Send Later Modal Functions
-function closeSendLaterModal() {
-    document.getElementById('sendLaterOverlay').classList.add('hidden');
-}
-
-function openSendLaterModal() {
-    // Set default date to tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    document.getElementById('sendLaterDate').value = tomorrow.toISOString().split('T')[0];
-    document.getElementById('sendLaterOverlay').classList.remove('hidden');
-}
-
-function scheduleSend(option) {
-    console.log('Scheduling send:', option);
-    showToast('Email scheduled', 'success');
-    closeSendLaterModal();
-}
-
-function scheduleCustomSend() {
-    const date = document.getElementById('sendLaterDate').value;
-    const time = document.getElementById('sendLaterTime').value;
-    console.log('Scheduling custom send:', date, time);
-    showToast('Email scheduled for ' + new Date(date + 'T' + time).toLocaleString(), 'success');
-    closeSendLaterModal();
-}
-</script>
+<!-- Snooze/SendLater helpers are now in /js/modals-settings.js -->
 
 <!-- Add Notetaker Source Modal -->
-<div class="notetaker-source-modal-overlay hidden" id="notetakerSourceModal" onclick="if(event.target === this) closeNotetakerSourceModal()">
+<div class="notetaker-source-modal-overlay hidden" id="notetakerSourceModal" data-action="close-notetaker-source-overlay">
     <div class="notetaker-source-modal">
         <div class="notetaker-source-modal-header">
             <h3 id="notetakerSourceModalTitle">Add Notetaker Source</h3>
-            <button class="notetaker-source-modal-close" onclick="closeNotetakerSourceModal()">×</button>
+            <button class="notetaker-source-modal-close" data-action="close-notetaker-source-modal">×</button>
         </div>
         <div class="notetaker-source-modal-body">
             <input type="hidden" id="notetakerSourceEditIndex" value="-1">
@@ -273,8 +195,8 @@ function scheduleCustomSend() {
             </div>
         </div>
         <div class="notetaker-source-modal-footer">
-            <button class="btn-secondary" onclick="closeNotetakerSourceModal()">Cancel</button>
-            <button class="btn-primary" onclick="saveNotetakerSource()">Save</button>
+            <button class="btn-secondary" data-action="close-notetaker-source-modal">Cancel</button>
+            <button class="btn-primary" data-action="save-notetaker-source">Save</button>
         </div>
     </div>
 </div>

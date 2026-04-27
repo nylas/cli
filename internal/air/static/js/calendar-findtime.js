@@ -149,7 +149,7 @@ const FindTimeModal = {
             <div class="modal find-time-modal">
                 <div class="modal-header">
                     <h2>Find Available Time</h2>
-                    <button class="modal-close" onclick="FindTimeModal.close()">&times;</button>
+                    <button class="modal-close" data-action="find-time-close">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
@@ -168,7 +168,7 @@ const FindTimeModal = {
                             <option value="120">2 hours</option>
                         </select>
                     </div>
-                    <button id="findTimeSearchBtn" class="btn btn-primary" onclick="FindTimeModal.search()">
+                    <button id="findTimeSearchBtn" class="btn btn-primary" data-action="find-time-search">
                         Find Available Times
                     </button>
                     <div id="findTimeResults" class="find-time-results">
@@ -178,8 +178,8 @@ const FindTimeModal = {
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="FindTimeModal.close()">Cancel</button>
-                    <button id="findTimeCreateBtn" class="btn btn-primary" onclick="FindTimeModal.createEvent()" disabled>
+                    <button class="btn btn-secondary" data-action="find-time-close">Cancel</button>
+                    <button id="findTimeCreateBtn" class="btn btn-primary" data-action="find-time-create-event" disabled>
                         Create Event
                     </button>
                 </div>

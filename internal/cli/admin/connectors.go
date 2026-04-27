@@ -29,8 +29,6 @@ func newConnectorsCmd() *cobra.Command {
 }
 
 func newConnectorListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -44,7 +42,7 @@ func newConnectorListCmd() *cobra.Command {
 				}
 				connectors = common.FilterVisibleConnectors(connectors)
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(connectors)
 				}
 
@@ -68,14 +66,10 @@ func newConnectorListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newConnectorShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <connector-id>",
 		Short: "Show connector details",
@@ -92,7 +86,7 @@ func newConnectorShowCmd() *cobra.Command {
 					return struct{}{}, common.NewUserError("connector not found", "The inbox connector is no longer supported")
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(connector)
 				}
 
@@ -128,8 +122,6 @@ func newConnectorShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

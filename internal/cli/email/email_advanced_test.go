@@ -163,9 +163,9 @@ func TestHelperFunctions(t *testing.T) {
 			expected string
 		}{
 			{500, "500 B"},
-			{1024, "1.0 KB"},
+			{1024, "1 KB"},
 			{1536, "1.5 KB"},
-			{1048576, "1.0 MB"},
+			{1048576, "1 MB"},
 		}
 
 		for _, tt := range tests {
@@ -317,6 +317,18 @@ func TestParseScheduleTime(t *testing.T) {
 		expected := time.Now().AddDate(0, 0, 1)
 		assert.Equal(t, expected.Day(), result.Day())
 		assert.Equal(t, 14, result.Hour())
+	})
+
+	t.Run("rolls_past_bare_time_to_tomorrow", func(t *testing.T) {
+		now := time.Now()
+		result, err := parseScheduleTime("12:00am")
+		assert.NoError(t, err)
+		assert.True(t, result.After(now))
+		expected := now.AddDate(0, 0, 1)
+		assert.Equal(t, expected.Year(), result.Year())
+		assert.Equal(t, expected.YearDay(), result.YearDay())
+		assert.Equal(t, 0, result.Hour())
+		assert.Equal(t, 0, result.Minute())
 	})
 
 	t.Run("parses_datetime_format", func(t *testing.T) {

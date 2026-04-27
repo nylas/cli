@@ -149,7 +149,7 @@ func TestHandleConversationByID(t *testing.T) {
 			name:           "GET returns 404 for non-existent conversation",
 			method:         http.MethodGet,
 			setupConv:      false,
-			urlPath:        "/api/conversations/nonexistent",
+			urlPath:        "/api/conversations/conv_0123456789abcdef",
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, body string) {
 				assert.Contains(t, body, "Conversation not found")
@@ -162,7 +162,17 @@ func TestHandleConversationByID(t *testing.T) {
 			urlPath:        "/api/conversations/",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, body string) {
-				assert.Contains(t, body, "conversation ID required")
+				assert.Contains(t, body, "invalid conversation ID")
+			},
+		},
+		{
+			name:           "GET returns 400 for path traversal attempt",
+			method:         http.MethodGet,
+			setupConv:      false,
+			urlPath:        "/api/conversations/..%2F..%2Fetc%2Fpasswd",
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, body string) {
+				assert.Contains(t, body, "invalid conversation ID")
 			},
 		},
 		{
@@ -182,7 +192,7 @@ func TestHandleConversationByID(t *testing.T) {
 			name:           "DELETE returns 404 for non-existent conversation",
 			method:         http.MethodDelete,
 			setupConv:      false,
-			urlPath:        "/api/conversations/nonexistent",
+			urlPath:        "/api/conversations/conv_0123456789abcdef",
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, body string) {
 				assert.Contains(t, body, "Failed to delete conversation")
@@ -195,7 +205,17 @@ func TestHandleConversationByID(t *testing.T) {
 			urlPath:        "/api/conversations/",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, body string) {
-				assert.Contains(t, body, "conversation ID required")
+				assert.Contains(t, body, "invalid conversation ID")
+			},
+		},
+		{
+			name:           "DELETE returns 400 for path traversal attempt",
+			method:         http.MethodDelete,
+			setupConv:      false,
+			urlPath:        "/api/conversations/..%2F..%2Fsecrets",
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, body string) {
+				assert.Contains(t, body, "invalid conversation ID")
 			},
 		},
 		{

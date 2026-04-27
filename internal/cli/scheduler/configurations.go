@@ -29,8 +29,6 @@ func newConfigurationsCmd() *cobra.Command {
 }
 
 func newConfigListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -43,7 +41,7 @@ func newConfigListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("configurations", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(configs)
 				}
 
@@ -67,14 +65,10 @@ func newConfigListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newConfigShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <config-id>",
 		Short: "Show scheduler configuration details",
@@ -88,7 +82,7 @@ func newConfigShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("configuration", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(config)
 				}
 
@@ -99,8 +93,6 @@ func newConfigShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -113,7 +105,6 @@ func newConfigCreateCmd() *cobra.Command {
 		title        string
 		description  string
 		location     string
-		jsonOutput   bool
 	)
 	flags := &configFlags{}
 
@@ -170,7 +161,7 @@ When both are provided, flags override file values.`,
 					return struct{}{}, common.WrapCreateError("configuration", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(config)
 				}
 
@@ -192,7 +183,6 @@ When both are provided, flags override file values.`,
 	cmd.Flags().StringVar(&title, "title", "", "Event title")
 	cmd.Flags().StringVar(&description, "description", "", "Event description")
 	cmd.Flags().StringVar(&location, "location", "", "Event location")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	registerConfigFlags(cmd, flags)
 
@@ -205,7 +195,6 @@ func newConfigUpdateCmd() *cobra.Command {
 		duration    int
 		title       string
 		description string
-		jsonOutput  bool
 	)
 	flags := &configFlags{}
 
@@ -248,7 +237,7 @@ When both are provided, flags override file values.`,
 					return struct{}{}, common.WrapUpdateError("configuration", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(config)
 				}
 
@@ -264,7 +253,6 @@ When both are provided, flags override file values.`,
 	cmd.Flags().IntVar(&duration, "duration", 0, "Meeting duration in minutes")
 	cmd.Flags().StringVar(&title, "title", "", "Event title")
 	cmd.Flags().StringVar(&description, "description", "", "Event description")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	registerConfigFlags(cmd, flags)
 

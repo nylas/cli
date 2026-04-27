@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -52,7 +53,7 @@ func (c *HTTPClient) ListNotetakers(ctx context.Context, grantID string, params 
 		params.Limit = 10
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/notetakers", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/notetakers", c.baseURL, url.PathEscape(grantID))
 	queryURL := NewQueryBuilder().
 		AddInt("limit", params.Limit).
 		Add("page_token", params.PageToken).
@@ -71,7 +72,7 @@ func (c *HTTPClient) ListNotetakers(ctx context.Context, grantID string, params 
 
 // GetNotetaker retrieves a single notetaker by ID.
 func (c *HTTPClient) GetNotetaker(ctx context.Context, grantID, notetakerID string) (*domain.Notetaker, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, grantID, notetakerID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
 
 	var result struct {
 		Data notetakerResponse `json:"data"`
@@ -86,7 +87,7 @@ func (c *HTTPClient) GetNotetaker(ctx context.Context, grantID, notetakerID stri
 
 // CreateNotetaker creates a new notetaker to join a meeting.
 func (c *HTTPClient) CreateNotetaker(ctx context.Context, grantID string, req *domain.CreateNotetakerRequest) (*domain.Notetaker, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers", c.baseURL, url.PathEscape(grantID))
 
 	payload := map[string]any{
 		"meeting_link": req.MeetingLink,
@@ -126,13 +127,13 @@ func (c *HTTPClient) CreateNotetaker(ctx context.Context, grantID string, req *d
 
 // DeleteNotetaker deletes/cancels a notetaker.
 func (c *HTTPClient) DeleteNotetaker(ctx context.Context, grantID, notetakerID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, grantID, notetakerID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
 	return c.doDelete(ctx, queryURL)
 }
 
 // GetNotetakerMedia retrieves the media (recording/transcript) for a notetaker.
 func (c *HTTPClient) GetNotetakerMedia(ctx context.Context, grantID, notetakerID string) (*domain.MediaData, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s/media", c.baseURL, grantID, notetakerID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s/media", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
 
 	var result struct {
 		Data struct {

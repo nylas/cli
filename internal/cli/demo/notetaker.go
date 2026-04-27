@@ -328,31 +328,17 @@ func printDemoNotetakerFull(nt domain.Notetaker, media *domain.MediaData) {
 
 		if media.Recording != nil {
 			fmt.Printf("  Recording:  %s\n", media.Recording.ContentType)
-			fmt.Printf("              Size: %s\n", formatDemoSize(media.Recording.Size))
+			fmt.Printf("              Size: %s\n", common.FormatSize(media.Recording.Size))
 			_, _ = common.Dim.Printf("              URL: %s\n", media.Recording.URL)
 		}
 
 		if media.Transcript != nil {
 			fmt.Printf("  Transcript: %s\n", media.Transcript.ContentType)
-			fmt.Printf("              Size: %s\n", formatDemoSize(media.Transcript.Size))
+			fmt.Printf("              Size: %s\n", common.FormatSize(media.Transcript.Size))
 			_, _ = common.Dim.Printf("              URL: %s\n", media.Transcript.URL)
 		}
 	}
 
 	fmt.Println("────────────────────────────────────────────────────")
 	fmt.Println()
-}
-
-// formatDemoSize formats a file size in bytes to a human-readable string.
-func formatDemoSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

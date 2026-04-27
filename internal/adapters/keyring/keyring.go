@@ -3,6 +3,7 @@ package keyring
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/nylas/cli/internal/domain"
@@ -28,7 +29,7 @@ func (k *SystemKeyring) Set(key, value string) error {
 // Get retrieves a secret value for the given key.
 func (k *SystemKeyring) Get(key string) (string, error) {
 	value, err := keyring.Get(serviceName, key)
-	if err == keyring.ErrNotFound {
+	if errors.Is(err, keyring.ErrNotFound) {
 		return "", domain.ErrSecretNotFound
 	}
 	return value, err
@@ -97,23 +98,40 @@ func NewSecretStore(configDir string) (ports.SecretStore, error) {
 		return nil, err
 	}
 
-	// Migrate credentials from file store to keyring
-	if apiKey != "" {
-		_ = kr.Set(ports.KeyAPIKey, apiKey)
-	}
-	if clientID, err := fileStore.Get(ports.KeyClientID); err == nil && clientID != "" {
-		_ = kr.Set(ports.KeyClientID, clientID)
-	}
-	if clientSecret, err := fileStore.Get(ports.KeyClientSecret); err == nil && clientSecret != "" {
-		_ = kr.Set(ports.KeyClientSecret, clientSecret)
+	// Migrate credentials from file store to keyring. Keep going on per-key
+	// failures so a single broken entry doesn't block the rest of the move,
+	// but surface the failures so the user knows something didn't migrate.
+	var migrationErrs []error
+	migrate := func(key, value string) {
+		if value == "" {
+			return
+		}
+		if err := kr.Set(key, value); err != nil {
+			migrationErrs = append(migrationErrs, fmt.Errorf("migrate %s: %w", key, err))
+		}
 	}
 
-	// Migrate grants data
-	if grants, err := fileStore.Get("grants"); err == nil && grants != "" {
-		_ = kr.Set("grants", grants)
+	migrate(ports.KeyAPIKey, apiKey)
+	if clientID, err := fileStore.Get(ports.KeyClientID); err == nil {
+		migrate(ports.KeyClientID, clientID)
 	}
-	if defaultGrant, err := fileStore.Get("default_grant"); err == nil && defaultGrant != "" {
-		_ = kr.Set("default_grant", defaultGrant)
+	if clientSecret, err := fileStore.Get(ports.KeyClientSecret); err == nil {
+		migrate(ports.KeyClientSecret, clientSecret)
+	}
+	if grants, err := fileStore.Get("grants"); err == nil {
+		migrate("grants", grants)
+	}
+	if defaultGrant, err := fileStore.Get("default_grant"); err == nil {
+		migrate("default_grant", defaultGrant)
+	}
+
+	if len(migrationErrs) > 0 {
+		// Print to stderr but do not fail — the keyring is usable even with
+		// partial migration; users may need to re-run `nylas auth config`.
+		fmt.Fprintf(os.Stderr, "warning: %d secrets failed to migrate from file store to keyring; re-run `nylas auth config` to retry\n", len(migrationErrs))
+		for _, e := range migrationErrs {
+			fmt.Fprintf(os.Stderr, "  - %v\n", e)
+		}
 	}
 
 	return kr, nil

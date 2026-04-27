@@ -58,32 +58,32 @@ renderEmailDetail(email) {
             </div>
         </div>
         <div class="email-detail-actions">
-            <button class="action-btn" onclick="EmailListManager.replyToEmail('${email.id}')" title="Reply">
+            <button class="action-btn" data-action="reply-email" data-email-id="${escapeHtml(email.id)}" title="Reply">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-5 5v-5z"/>
                 </svg>
                 Reply
             </button>
-            <button class="action-btn" onclick="EmailListManager.toggleStar('${email.id}')" title="Star">
+            <button class="action-btn" data-action="toggle-star" data-email-id="${escapeHtml(email.id)}" title="Star">
                 <svg width="16" height="16" fill="${email.starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
                 ${email.starred ? 'Starred' : 'Star'}
             </button>
-            <button class="action-btn" onclick="EmailListManager.archiveEmail('${email.id}')" title="Archive">
+            <button class="action-btn" data-action="archive-email" data-email-id="${escapeHtml(email.id)}" title="Archive">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <rect x="2" y="4" width="20" height="5" rx="1"/>
                     <path d="M4 9v9a2 2 0 002 2h12a2 2 0 002-2V9M10 13h4"/>
                 </svg>
                 Archive
             </button>
-            <button class="action-btn" onclick="EmailListManager.deleteEmail('${email.id}')" title="Delete">
+            <button class="action-btn" data-action="delete-email" data-email-id="${escapeHtml(email.id)}" title="Delete">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                 </svg>
                 Delete
             </button>
-            <button class="action-btn ai-btn" id="summarizeBtn-${email.id}" onclick="EmailListManager.summarizeWithAI('${email.id}')" title="Summarize with AI">
+            <button class="action-btn ai-btn" id="summarizeBtn-${escapeHtml(email.id)}" data-action="summarize-email" data-email-id="${escapeHtml(email.id)}" title="Summarize with AI">
                 <svg class="ai-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/>
                     <path d="M12 6v6l4 2"/>
@@ -96,8 +96,8 @@ renderEmailDetail(email) {
                 <span class="ai-btn-text">✨ Summarize</span>
             </button>
         </div>
-        <div class="smart-replies-container" id="smartReplies-${email.id}">
-            <button class="smart-replies-trigger" onclick="EmailListManager.loadSmartReplies('${email.id}')">
+        <div class="smart-replies-container" id="smartReplies-${escapeHtml(email.id)}">
+            <button class="smart-replies-trigger" data-action="load-smart-replies" data-email-id="${escapeHtml(email.id)}">
                 <span class="smart-replies-icon">💬</span>
                 <span>Get smart reply suggestions</span>
             </button>
@@ -447,4 +447,38 @@ formatSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 },
 
+});
+
+// Single delegated listener for all email-detail action buttons and smart-reply triggers.
+// Installed once at module load; covers buttons rendered by renderEmailDetail and email-ai.js.
+document.addEventListener('click', function (e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const action = target.dataset.action;
+    const emailId = target.dataset.emailId;
+    switch (action) {
+        case 'reply-email':
+            EmailListManager.replyToEmail(emailId);
+            break;
+        case 'toggle-star':
+            EmailListManager.toggleStar(emailId);
+            break;
+        case 'archive-email':
+            EmailListManager.archiveEmail(emailId);
+            break;
+        case 'delete-email':
+            EmailListManager.deleteEmail(emailId);
+            break;
+        case 'summarize-email':
+            EmailListManager.summarizeWithAI(emailId);
+            break;
+        case 'load-smart-replies':
+            EmailListManager.loadSmartReplies(emailId);
+            break;
+        case 'use-smart-reply': {
+            const replyIndex = parseInt(target.dataset.replyIndex, 10);
+            EmailListManager.useSmartReply(emailId, replyIndex);
+            break;
+        }
+    }
 });

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -93,7 +94,7 @@ func (c *HTTPClient) UpdateAgentAccount(ctx context.Context, grantID, email, app
 		return nil, fmt.Errorf("%w: grant is not a nylas agent account (provider=%s)", domain.ErrInvalidGrant, grant.Provider)
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 	settings := make(map[string]any)
 	settings["email"] = email
 	if grant.Settings.PolicyID != "" {

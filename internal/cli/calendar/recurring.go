@@ -35,7 +35,6 @@ func newRecurringListCmd() *cobra.Command {
 	var (
 		calendarID string
 		grantID    string
-		jsonOutput bool
 		limit      int
 		startUnix  int64
 		endUnix    int64
@@ -76,7 +75,7 @@ The master event ID is the ID of the parent recurring event.`,
 					return struct{}{}, common.WrapFetchError("recurring event instances", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(os.Stdout).Encode(instances)
 				}
 
@@ -105,7 +104,6 @@ The master event ID is the ID of the parent recurring event.`,
 
 	cmd.Flags().StringVarP(&calendarID, "calendar", "c", "", "Calendar ID (required)")
 	cmd.Flags().StringVarP(&grantID, "grant", "g", "", "Grant ID (uses default if not specified)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum number of instances to retrieve")
 	cmd.Flags().Int64Var(&startUnix, "start", 0, "Start time (Unix timestamp)")
 	cmd.Flags().Int64Var(&endUnix, "end", 0, "End time (Unix timestamp)")
@@ -124,7 +122,6 @@ func newRecurringUpdateCmd() *cobra.Command {
 		location    string
 		startTime   string
 		endTime     string
-		jsonOutput  bool
 	)
 
 	cmd := &cobra.Command{
@@ -185,7 +182,7 @@ This creates an exception for that particular instance.`,
 					return struct{}{}, common.WrapUpdateError("recurring event instance", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(os.Stdout).Encode(event)
 				}
 
@@ -212,7 +209,6 @@ This creates an exception for that particular instance.`,
 	cmd.Flags().StringVar(&location, "location", "", "New location for this instance")
 	cmd.Flags().StringVar(&startTime, "start", "", "New start time (RFC3339 format)")
 	cmd.Flags().StringVar(&endTime, "end", "", "New end time (RFC3339 format)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	_ = cmd.MarkFlagRequired("calendar") // Hardcoded flag name, won't fail
 
 	return cmd

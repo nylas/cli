@@ -456,6 +456,7 @@ func FormatParticipants(participants []domain.EmailParticipant) string {
 }
 
 // FormatSize formats a file size in bytes to a human-readable string.
+// Whole-number results drop the trailing ".0" (e.g. "1 KB" not "1.0 KB").
 func FormatSize(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -466,7 +467,8 @@ func FormatSize(bytes int64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	num := strings.TrimSuffix(fmt.Sprintf("%.1f", float64(bytes)/float64(div)), ".0")
+	return fmt.Sprintf("%s %cB", num, "KMGTPE"[exp])
 }
 
 // PrintEmptyState prints a consistent "no items found" message.

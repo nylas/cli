@@ -7,7 +7,7 @@
             <h1 class="rules-policy-page-title">Policy &amp; Rules</h1>
             <p class="rules-policy-page-subtitle">Mailbox controls exposed by this Nylas-managed account.</p>
         </div>
-        <button class="btn-secondary" type="button" onclick="showView('email')" data-testid="rules-policy-back">
+        <button class="btn-secondary" type="button" data-action="show-email-view" data-testid="rules-policy-back">
             Back to Email
         </button>
     </div>
@@ -18,7 +18,7 @@
                     <h2 id="policiesSectionTitle" class="rules-policy-title">Policies</h2>
                     <p class="rules-policy-subtitle">Managed mailbox policies available for this Nylas account.</p>
                 </div>
-                <button class="btn-secondary" type="button" onclick="RulesPolicyManager.refreshPolicies()">Refresh</button>
+                <button class="btn-secondary" type="button" data-action="rules-refresh-policies">Refresh</button>
             </div>
             <div class="rules-policy-list" id="policyList">
                 <div class="empty-state">
@@ -35,7 +35,7 @@
                     <h2 id="rulesSectionTitle" class="rules-policy-title">Rules</h2>
                     <p class="rules-policy-subtitle">Inbound processing rules configured for this Nylas account.</p>
                 </div>
-                <button class="btn-secondary" type="button" onclick="RulesPolicyManager.refreshRules()">Refresh</button>
+                <button class="btn-secondary" type="button" data-action="rules-refresh-rules">Refresh</button>
             </div>
             <div class="rules-policy-list" id="ruleList">
                 <div class="empty-state">

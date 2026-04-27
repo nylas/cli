@@ -10,8 +10,6 @@ import (
 )
 
 func newShowCmd() *cobra.Command {
-	var outputJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "show <notetaker-id> [grant-id]",
 		Short: "Show notetaker details",
@@ -31,7 +29,7 @@ func newShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("notetaker", err)
 				}
 
-				if outputJSON {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(notetaker)
 				}
 
@@ -88,8 +86,6 @@ func newShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

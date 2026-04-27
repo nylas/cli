@@ -13,7 +13,6 @@ func newConvertCmd() *cobra.Command {
 		fromZone string
 		toZone   string
 		timeStr  string
-		jsonOut  bool
 	)
 
 	cmd := &cobra.Command{
@@ -37,14 +36,13 @@ Examples:
   # Output as JSON
   nylas timezone convert --from PST --to IST --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runConvert(fromZone, toZone, timeStr, jsonOut)
+			return runConvert(fromZone, toZone, timeStr, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&fromZone, "from", "", "Source time zone (IANA name or abbreviation)")
 	cmd.Flags().StringVar(&toZone, "to", "", "Target time zone (IANA name or abbreviation)")
 	cmd.Flags().StringVar(&timeStr, "time", "", "Time to convert (RFC3339 format, defaults to now)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")

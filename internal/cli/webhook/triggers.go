@@ -2,20 +2,15 @@ package webhook
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newTriggersCmd() *cobra.Command {
-	var (
-		format   string
-		category string
-	)
+	var category string
 
 	cmd := &cobra.Command{
 		Use:     "triggers",
@@ -51,26 +46,26 @@ Use these values when creating or updating webhooks.`,
 				}
 			}
 
-			switch format {
-			case "json":
-				return common.PrintJSON(categories)
-			case "yaml":
-				return yaml.NewEncoder(os.Stdout).Encode(categories)
-			case "list":
-				// Flat list format
+			// "list" is a special flat format unique to this command.
+			format, _ := cmd.Flags().GetString("format")
+			if format == "list" {
 				for _, triggers := range categories {
 					for _, t := range triggers {
 						fmt.Println(t)
 					}
 				}
 				return nil
-			default:
-				return displayTriggerCategories(categories)
 			}
+
+			if common.IsStructuredOutput(cmd) {
+				out := common.GetOutputWriter(cmd)
+				return out.Write(categories)
+			}
+
+			return displayTriggerCategories(categories)
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json, yaml, list)")
 	cmd.Flags().StringVarP(&category, "category", "c", "", "Filter by category (grant, message, thread, event, contact, calendar, folder, notetaker)")
 
 	return cmd

@@ -19,7 +19,6 @@ func newCreateCmd() *cobra.Command {
 		meetingLink string
 		joinTime    string
 		botName     string
-		outputJSON  bool
 	)
 
 	cmd := &cobra.Command{
@@ -80,7 +79,7 @@ record the meeting, and generate a transcript when complete.`,
 					return struct{}{}, common.WrapCreateError("notetaker", err)
 				}
 
-				if outputJSON {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(notetaker)
 				}
 
@@ -102,7 +101,6 @@ record the meeting, and generate a transcript when complete.`,
 	cmd.Flags().StringVarP(&meetingLink, "meeting-link", "m", "", "Meeting URL (Zoom, Google Meet, or Teams)")
 	cmd.Flags().StringVarP(&joinTime, "join-time", "j", "", "When to join (e.g., '2024-01-15 14:00', 'tomorrow 9am', '30m')")
 	cmd.Flags().StringVar(&botName, "bot-name", "", "Custom name for the notetaker bot")
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	_ = cmd.MarkFlagRequired("meeting-link") // Hardcoded flag name, won't fail
 

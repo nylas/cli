@@ -231,30 +231,30 @@ renderPendingContent(nt) {
 renderActions(nt) {
     if (nt.isExternal && nt.externalUrl) {
         return `
-            <button class="btn-primary" onclick="window.open('${nt.externalUrl}', '_blank')">
+            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${this.escapeHtml(nt.externalUrl)}">
                 🔗 Open in Nylas Notebook
             </button>
         `;
     }
     if (nt.state === 'complete' || nt.state === 'completed') {
         return `
-            <button class="btn-primary" onclick="NotetakerModule.playRecording('${nt.id}')">
+            <button class="btn-primary" data-action="notetaker-play" data-not-id="${this.escapeHtml(nt.id)}">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Play Recording
             </button>
-            <button class="btn-secondary" onclick="NotetakerModule.viewTranscript('${nt.id}')">
+            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${this.escapeHtml(nt.id)}">
                 📝 View Transcript
             </button>
-            <button class="btn-secondary" onclick="NotetakerModule.summarize('${nt.id}')">
+            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${this.escapeHtml(nt.id)}">
                 ✨ AI Summary
             </button>
         `;
     }
     if (nt.state === 'scheduled') {
         return `
-            <button class="btn-danger" onclick="NotetakerModule.cancel('${nt.id}')">
+            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${this.escapeHtml(nt.id)}">
                 ❌ Cancel Recording
             </button>
         `;

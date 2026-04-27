@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -22,7 +23,7 @@ type attachmentResponse struct {
 
 // GetAttachment retrieves attachment metadata.
 func (c *HTTPClient) GetAttachment(ctx context.Context, grantID, messageID, attachmentID string) (*domain.Attachment, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/attachments/%s", c.baseURL, grantID, messageID, attachmentID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/attachments/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID), url.PathEscape(attachmentID))
 
 	var result struct {
 		Data attachmentResponse `json:"data"`
@@ -44,7 +45,7 @@ func (c *HTTPClient) GetAttachment(ctx context.Context, grantID, messageID, atta
 
 // DownloadAttachment downloads attachment content.
 func (c *HTTPClient) DownloadAttachment(ctx context.Context, grantID, messageID, attachmentID string) (io.ReadCloser, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/attachments/%s/download", c.baseURL, grantID, messageID, attachmentID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/attachments/%s/download", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID), url.PathEscape(attachmentID))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {

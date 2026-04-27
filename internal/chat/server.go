@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/ports"
+	"github.com/nylas/cli/internal/webguard"
 )
 
 //go:embed static/css/*.css static/js/*.js
@@ -109,9 +110,14 @@ func (s *Server) Start() error {
 	// Index page
 	mux.HandleFunc("/", s.handleIndex)
 
+	// Wrap with loopback-only host validation and same-origin protection so
+	// that DNS-rebinding and cross-origin pages cannot drive the chat API.
+	handler := webguard.HostValidationMiddleware(
+		webguard.OriginProtectionMiddleware(mux))
+
 	server := &http.Server{
 		Addr:              s.addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		WriteTimeout:      360 * time.Second, // long for SSE streaming + approval gating
 		IdleTimeout:       120 * time.Second,

@@ -14,25 +14,13 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
-func printError(format string, args ...any) {
-	common.PrintError(format, args...)
-}
-
-func printSuccess(format string, args ...any) {
-	common.PrintSuccess(format, args...)
-}
-
-func formatStatus(status string) string {
-	return common.FormatGrantStatus(status)
-}
-
 func printAgentSummary(account domain.AgentAccount, index int) {
 	createdStr := common.FormatTimeAgo(account.CreatedAt.Time)
 	fmt.Printf("%d. %-40s %s  %s\n",
 		index+1,
 		common.Cyan.Sprint(account.Email),
 		common.Dim.Sprint(createdStr),
-		formatStatus(account.GrantStatus),
+		common.FormatGrantStatus(account.GrantStatus),
 	)
 	_, _ = common.Dim.Printf("   ID: %s\n", account.ID)
 }
@@ -44,7 +32,7 @@ func printAgentDetails(account domain.AgentAccount) {
 	fmt.Printf("ID:           %s\n", account.ID)
 	fmt.Printf("Provider:     %s\n", account.Provider.DisplayName())
 	fmt.Printf("Email:        %s\n", account.Email)
-	fmt.Printf("Status:       %s\n", formatStatus(account.GrantStatus))
+	fmt.Printf("Status:       %s\n", common.FormatGrantStatus(account.GrantStatus))
 	if account.CredentialID != "" {
 		fmt.Printf("Credential:   %s\n", account.CredentialID)
 	}

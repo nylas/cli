@@ -18,8 +18,6 @@ type statusResult struct {
 }
 
 func newStatusCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show agent connector status",
@@ -29,11 +27,9 @@ Examples:
   nylas agent status
   nylas agent status --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus(jsonOutput)
+			return runStatus(common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

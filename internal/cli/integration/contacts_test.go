@@ -381,24 +381,25 @@ func TestCLI_ContactsSearch_Email(t *testing.T) {
 		})
 	}
 
-	// Wait for contact to sync
-	time.Sleep(2 * time.Second)
-
-	// Search by email
+	// Search by email. Google Contacts' search index is eventually consistent
+	// after a create, so retry with a short backoff before failing.
 	t.Run("search by email", func(t *testing.T) {
-		stdout, stderr, err := runCLI("contacts", "search", "--email", contactEmail, testGrantID)
-		skipIfProviderNotSupported(t, stderr)
-
-		if err != nil {
-			t.Fatalf("contacts search --email failed: %v\nstderr: %s", err, stderr)
+		var stdout, stderr string
+		var err error
+		const attempts = 6
+		for i := 0; i < attempts; i++ {
+			time.Sleep(2 * time.Second)
+			stdout, stderr, err = runCLIWithRateLimit(t, "contacts", "search", "--email", contactEmail, testGrantID)
+			skipIfProviderNotSupported(t, stderr)
+			if err != nil {
+				t.Fatalf("contacts search --email failed: %v\nstderr: %s", err, stderr)
+			}
+			if strings.Contains(stdout, contactEmail) && strings.Contains(stdout, contactFirstName) {
+				t.Logf("contacts search --email output:\n%s", stdout)
+				return
+			}
 		}
-
-		// Should find the contact
-		if !strings.Contains(stdout, contactEmail) || !strings.Contains(stdout, contactFirstName) {
-			t.Errorf("Expected to find contact with email %s, got: %s", contactEmail, stdout)
-		}
-
-		t.Logf("contacts search --email output:\n%s", stdout)
+		t.Errorf("Expected to find contact with email %s after %d attempts, got: %s", contactEmail, attempts, stdout)
 	})
 }
 

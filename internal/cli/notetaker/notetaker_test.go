@@ -79,10 +79,6 @@ func TestListCommand(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestShowCommand(t *testing.T) {
@@ -97,10 +93,6 @@ func TestShowCommand(t *testing.T) {
 		assert.Contains(t, cmd.Short, "notetaker")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestCreateCommand(t *testing.T) {
@@ -130,10 +122,6 @@ func TestCreateCommand(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestDeleteCommand(t *testing.T) {
@@ -162,11 +150,6 @@ func TestMediaCommand(t *testing.T) {
 
 	t.Run("command_name", func(t *testing.T) {
 		assert.Equal(t, "media <notetaker-id> [grant-id]", cmd.Use)
-	})
-
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
 	})
 
 	t.Run("has_long_description_with_info", func(t *testing.T) {
@@ -242,8 +225,8 @@ func TestNotetakerCommandHelp(t *testing.T) {
 }
 
 func TestNotetakerListHelp(t *testing.T) {
-	cmd := NewNotetakerCmd()
-	stdout, _, err := executeCommand(cmd, "list", "--help")
+	root := testutil.NewTestRoot(NewNotetakerCmd())
+	stdout, _, err := executeCommand(root, "notetaker", "list", "--help")
 
 	assert.NoError(t, err)
 	assert.Contains(t, stdout, "list")
@@ -264,8 +247,8 @@ func TestNotetakerCreateHelp(t *testing.T) {
 }
 
 func TestNotetakerMediaHelp(t *testing.T) {
-	cmd := NewNotetakerCmd()
-	stdout, _, err := executeCommand(cmd, "media", "--help")
+	root := testutil.NewTestRoot(NewNotetakerCmd())
+	stdout, _, err := executeCommand(root, "notetaker", "media", "--help")
 
 	assert.NoError(t, err)
 	assert.Contains(t, stdout, "media")

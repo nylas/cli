@@ -338,3 +338,110 @@ func signWebhookPayload(secret string, payload []byte) string {
 	_, _ = mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }
+
+// TestServer_HandleWebhook_RejectsOversizedBody verifies the body-size cap
+// rejects payloads larger than the configured limit before allocating
+// gigabytes of RAM. This is the gate that prevents a malicious sender on
+// a public tunnel URL from driving the receiver out of memory.
+func TestServer_HandleWebhook_RejectsOversizedBody(t *testing.T) {
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+
+	// 2 MiB — twice the cap.
+	oversized := bytes.Repeat([]byte("A"), 2<<20)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(oversized))
+	rec := httptest.NewRecorder()
+	server.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code,
+		"oversized body must be rejected with 413, got %d", rec.Code)
+}
+
+// TestServer_HandleWebhook_DropsOldEvents_ReplayWindow exercises the
+// MaxEventAge gate. With MaxEventAge configured, an event whose
+// CloudEvents `time` field is older than the window is rejected as a
+// replay even when the HMAC verifies — bound to a captured signature, an
+// attacker would otherwise be able to replay a single signed body
+// indefinitely.
+func TestServer_HandleWebhook_DropsOldEvents_ReplayWindow(t *testing.T) {
+	secret := "test-secret"
+	server := NewServer(ports.WebhookServerConfig{
+		Port:          0,
+		Path:          "/webhook",
+		WebhookSecret: secret,
+		MaxEventAge:   30 * time.Second,
+	})
+
+	// Body with a `time` field 5 minutes in the past.
+	oldTime := time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339)
+	body := []byte(`{"id":"evt_1","type":"message.created","time":"` + oldTime + `"}`)
+	sig := signWebhookPayload(secret, body)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-Nylas-Signature", sig)
+	rec := httptest.NewRecorder()
+	server.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code,
+		"stale event must be rejected as replay, got %d", rec.Code)
+}
+
+// TestServer_HandleWebhook_AcceptsRecentEvents_ReplayWindow is the
+// positive twin of the replay test: a signed event with a fresh `time`
+// passes the gate.
+func TestServer_HandleWebhook_AcceptsRecentEvents_ReplayWindow(t *testing.T) {
+	secret := "test-secret"
+	server := NewServer(ports.WebhookServerConfig{
+		Port:          0,
+		Path:          "/webhook",
+		WebhookSecret: secret,
+		MaxEventAge:   60 * time.Second,
+	})
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	body := []byte(`{"id":"evt_2","type":"message.created","time":"` + now + `"}`)
+	sig := signWebhookPayload(secret, body)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-Nylas-Signature", sig)
+	rec := httptest.NewRecorder()
+	server.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "fresh event must be accepted")
+}
+
+// TestServer_HandleHealth_SurfacesEventsDropped confirms the health
+// response includes the events_dropped counter so operators can detect a
+// slow consumer without parsing logs.
+func TestServer_HandleHealth_SurfacesEventsDropped(t *testing.T) {
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	server.mu.Lock()
+	server.stats.EventsDropped = 7
+	server.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	server.handleHealth(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Contains(t, body, "events_dropped")
+	assert.Equal(t, float64(7), body["events_dropped"])
+}
+
+// TestServer_StartBindsLoopbackOnly asserts the listener address is on a
+// loopback interface — guards against an accidental change from
+// 127.0.0.1: to :PORT (which would let any host on the LAN forge events).
+func TestServer_StartBindsLoopbackOnly(t *testing.T) {
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	require.NoError(t, server.Start(context.Background()))
+	defer func() { _ = server.Stop() }()
+
+	addr := server.listener.Addr().String()
+	host, _, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
+	ip := net.ParseIP(host)
+	require.NotNil(t, ip, "could not parse listener host as IP: %s", host)
+	assert.True(t, ip.IsLoopback(), "listener bound to non-loopback address: %s", addr)
+}

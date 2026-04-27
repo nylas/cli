@@ -59,10 +59,7 @@ func AppDisplayName(app domain.Application) string {
 		region = "us"
 	}
 
-	displayID := clientID
-	if len(displayID) > 20 {
-		displayID = displayID[:17] + "..."
-	}
+	displayID := common.Truncate(clientID, 20)
 
 	return fmt.Sprintf("%s (%s, %s)", displayID, env, region)
 }

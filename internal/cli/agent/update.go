@@ -11,10 +11,7 @@ import (
 )
 
 func newUpdateCmd() *cobra.Command {
-	var (
-		jsonOutput  bool
-		appPassword string
-	)
+	var appPassword string
 
 	cmd := &cobra.Command{
 		Use:   "update [agent-id|email]",
@@ -34,12 +31,11 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return runUpdate(identifier, appPassword, jsonOutput)
+			return runUpdate(identifier, appPassword, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&appPassword, "app-password", "", "Rotate or add the IMAP/SMTP app password")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -47,7 +43,7 @@ Examples:
 func runUpdate(identifier, appPassword string, jsonOutput bool) error {
 	appPassword = strings.TrimSpace(appPassword)
 	if err := validateAgentAppPassword(appPassword); err != nil {
-		printError(err.Error())
+		common.PrintError(err.Error())
 		return err
 	}
 	if appPassword == "" {

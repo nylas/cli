@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -19,7 +18,6 @@ func newUpdateCmd() *cobra.Command {
 		triggers     []string
 		notifyEmails []string
 		status       string
-		format       string
 	)
 
 	cmd := &cobra.Command{
@@ -115,10 +113,9 @@ You can update the URL, triggers, description, notification emails, or status.`,
 					return struct{}{}, common.WrapUpdateError("webhook", err)
 				}
 
-				if format == "json" {
-					enc := json.NewEncoder(cmd.OutOrStdout())
-					enc.SetIndent("", "  ")
-					return struct{}{}, enc.Encode(webhook)
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(webhook)
 				}
 
 				fmt.Printf("%s Webhook updated successfully!\n", common.Green.Sprint("✓"))
@@ -145,7 +142,6 @@ You can update the URL, triggers, description, notification emails, or status.`,
 	cmd.Flags().StringSliceVarP(&triggers, "triggers", "t", nil, "New trigger types (comma-separated or multiple flags)")
 	cmd.Flags().StringSliceVarP(&notifyEmails, "notify", "n", nil, "New notification email addresses")
 	cmd.Flags().StringVarP(&status, "status", "s", "", "New status (active or inactive)")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json)")
 
 	return cmd
 }

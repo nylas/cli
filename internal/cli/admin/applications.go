@@ -29,8 +29,6 @@ func newApplicationsCmd() *cobra.Command {
 }
 
 func newAppListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -43,7 +41,7 @@ func newAppListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("applications", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(apps)
 				}
 
@@ -74,14 +72,10 @@ func newAppListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newAppShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <app-id>",
 		Short: "Show application details",
@@ -95,7 +89,7 @@ func newAppShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("application", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(app)
 				}
 
@@ -128,8 +122,6 @@ func newAppShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

@@ -80,7 +80,7 @@ Examples:
 			}
 
 			removeGrantLocally(grantID)
-			printSuccess("Agent account %s deleted successfully!", account.Email)
+			common.PrintSuccess("Agent account %s deleted successfully!", account.Email)
 			return nil
 		},
 	}

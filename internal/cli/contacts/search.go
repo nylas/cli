@@ -23,7 +23,6 @@ func newSearchCmd() *cobra.Command {
 		group       string
 		hasEmail    bool
 		limit       int
-		jsonOutput  bool
 	)
 
 	cmd := &cobra.Command{
@@ -72,7 +71,7 @@ text searches, use the regular list command with additional filtering.`,
 					filtered = append(filtered, contact)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					encoder := json.NewEncoder(os.Stdout)
 					encoder.SetIndent("", "  ")
 					return struct{}{}, encoder.Encode(filtered)
@@ -110,7 +109,6 @@ text searches, use the regular list command with additional filtering.`,
 	cmd.Flags().StringVar(&group, "group", "", "Filter by contact group ID")
 	cmd.Flags().BoolVar(&hasEmail, "has-email", false, "Only show contacts with email addresses")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 50, "Maximum number of contacts to retrieve")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

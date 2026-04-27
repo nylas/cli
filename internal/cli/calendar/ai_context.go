@@ -22,7 +22,6 @@ func newAnalyzeThreadCmd() *cobra.Command {
 		includeTime   bool
 		createMeeting bool
 		provider      string
-		jsonOutput    bool
 	)
 
 	cmd := &cobra.Command{
@@ -96,7 +95,7 @@ This command uses AI to:
 				}
 
 				// Output results
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					enc := json.NewEncoder(cmd.OutOrStdout())
 					enc.SetIndent("", "  ")
 					return struct{}{}, enc.Encode(analysis)
@@ -121,7 +120,6 @@ This command uses AI to:
 	cmd.Flags().BoolVar(&includeTime, "time", false, "Suggest best meeting time")
 	cmd.Flags().BoolVar(&createMeeting, "create-meeting", false, "Create meeting event after analysis")
 	cmd.Flags().StringVar(&provider, "provider", "", "AI provider to use (ollama, claude, openai, groq)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -288,7 +286,7 @@ func displayAgenda(agenda *domain.MeetingAgenda) {
 }
 
 // createMeetingFromAnalysis creates a calendar event based on the analysis.
-func createMeetingFromAnalysis(ctx context.Context, client any, grantID string, analysis *domain.EmailThreadAnalysis) error {
+func createMeetingFromAnalysis(_ context.Context, _ any, _ string, analysis *domain.EmailThreadAnalysis) error {
 	fmt.Printf("Creating meeting from analysis...\n\n")
 
 	// Extract required participants

@@ -14,7 +14,6 @@ func newEventsShowCmd() *cobra.Command {
 		calendarID string
 		targetTZ   string
 		showTZ     bool
-		jsonOutput bool
 	)
 
 	cmd := &cobra.Command{
@@ -61,7 +60,7 @@ Examples:
 					return struct{}{}, common.WrapGetError("event", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(event)
 				}
 
@@ -182,7 +181,6 @@ Examples:
 	cmd.Flags().StringVarP(&calendarID, "calendar", "c", "", "Calendar ID (defaults to primary)")
 	cmd.Flags().StringVar(&targetTZ, "timezone", "", "Display times in this timezone (e.g., America/Los_Angeles). Defaults to local timezone.")
 	cmd.Flags().BoolVar(&showTZ, "show-tz", false, "Show timezone abbreviations (e.g., PST, EST)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

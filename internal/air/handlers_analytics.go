@@ -1,10 +1,11 @@
 package air
 
 import (
-	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // EmailAnalytics represents email analytics data
@@ -121,10 +122,7 @@ func (s *Server) handleGetAnalyticsDashboard(w http.ResponseWriter, r *http.Requ
 	aStore.mu.RLock()
 	defer aStore.mu.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(aStore.analytics); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, aStore.analytics)
 }
 
 // handleGetAnalyticsTrends returns email trends
@@ -144,10 +142,7 @@ func (s *Server) handleGetAnalyticsTrends(w http.ResponseWriter, r *http.Request
 		"dailyVolume":  aStore.analytics.DailyVolume,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
 // handleGetFocusTimeSuggestions returns suggested focus time blocks
@@ -198,10 +193,7 @@ func (s *Server) handleGetFocusTimeSuggestions(w http.ResponseWriter, r *http.Re
 		Score:     90,
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(suggestions); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, suggestions)
 }
 
 // handleGetProductivityStats returns productivity metrics
@@ -219,10 +211,7 @@ func (s *Server) handleGetProductivityStats(w http.ResponseWriter, r *http.Reque
 		"emailsProcessed": aStore.analytics.TotalArchived + aStore.analytics.TotalDeleted,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
 // RecordEmailReceived records a received email

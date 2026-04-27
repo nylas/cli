@@ -42,7 +42,6 @@ func TestCreateCmd(t *testing.T) {
 	cmd := newCreateCmd()
 
 	assert.Equal(t, "create <email>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "provider=nylas")
@@ -68,7 +67,6 @@ func TestGetCmd(t *testing.T) {
 	cmd := newGetCmd()
 
 	assert.Equal(t, "get [agent-id|email]", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Contains(t, cmd.Long, "grant ID or by email address")
 	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
 }
@@ -77,7 +75,6 @@ func TestUpdateCmd(t *testing.T) {
 	cmd := newUpdateCmd()
 
 	assert.Equal(t, "update [agent-id|email]", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
 	assert.Contains(t, cmd.Long, "mutable settings")
 	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
@@ -137,7 +134,6 @@ func TestPolicyListCmd(t *testing.T) {
 	cmd := newPolicyListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.Contains(t, cmd.Long, "provider=nylas account")
 	assert.Contains(t, cmd.Flags().Lookup("all").Usage, "provider=nylas accounts")
@@ -147,7 +143,6 @@ func TestPolicyReadCmd(t *testing.T) {
 	cmd := newPolicyReadCmd()
 
 	assert.Equal(t, "read <policy-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Contains(t, cmd.Long, "Read details for a single policy")
 }
 
@@ -155,7 +150,6 @@ func TestRuleListCmd(t *testing.T) {
 	cmd := newRuleListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "default grant")
@@ -165,7 +159,6 @@ func TestRuleReadCmd(t *testing.T) {
 	cmd := newRuleReadCmd()
 
 	assert.Equal(t, "read <rule-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "Read details for a single rule")

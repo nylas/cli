@@ -12,8 +12,6 @@ import (
 )
 
 func newScopesCmd() *cobra.Command {
-	var outputJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "scopes [grant-id]",
 		Short: "Show OAuth scopes for a grant",
@@ -79,7 +77,7 @@ If no grant ID is provided, shows scopes for the currently active grant.`,
 				Scopes:   grant.Scope,
 			}
 
-			if outputJSON {
+			if common.IsJSON(cmd) {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(result)
@@ -108,8 +106,6 @@ If no grant ID is provided, shows scopes for the currently active grant.`,
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

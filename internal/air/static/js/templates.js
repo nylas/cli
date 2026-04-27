@@ -34,6 +34,17 @@ const TemplatesManager = {
         }
     },
 
+    bindCreateTemplateForm(modal) {
+        const form = modal?.querySelector('.template-form');
+        if (!form || form.dataset.boundSubmit === 'true') return;
+
+        form.dataset.boundSubmit = 'true';
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            this.save();
+        });
+    },
+
     filter(query) {
         const templatesList = document.getElementById('templatesList');
         if (!templatesList) return;
@@ -146,14 +157,14 @@ const TemplatesManager = {
             picker.innerHTML = `
                 <div class="templates-header">
                     <h4>Email Templates</h4>
-                    <button class="templates-close" onclick="TemplatesManager.close()">&times;</button>
+                    <button class="templates-close" data-action="templates-close">&times;</button>
                 </div>
                 <div class="templates-search">
                     <input type="text" id="templatesSearch" placeholder="Search templates...">
                 </div>
                 <div class="templates-list" id="templatesList"></div>
                 <div class="templates-footer">
-                    <button class="btn-primary" onclick="TemplatesManager.showCreate()">+ Create Template</button>
+                    <button class="btn-primary" data-action="templates-show-create">+ Create Template</button>
                 </div>
             `;
             document.body.appendChild(picker);
@@ -181,7 +192,7 @@ const TemplatesManager = {
         }
 
         templatesList.innerHTML = this.templates.map(t => `
-            <div class="template-item" data-id="${t.id}" onclick="TemplatesManager.insertTemplate('${t.id}')">
+            <div class="template-item" data-action="insert-template" data-template-id="${this.escapeHtml(t.id)}">
                 <div class="template-name">${this.escapeHtml(t.name)}</div>
                 <div class="template-preview">${this.escapeHtml((t.body || '').substring(0, 100))}${(t.body || '').length > 100 ? '...' : ''}</div>
             </div>
@@ -243,8 +254,8 @@ const TemplatesManager = {
                     </div>
                 `).join('')}
                 <div class="variables-actions">
-                    <button class="btn-secondary" onclick="TemplatesManager.cancelVariables()">Cancel</button>
-                    <button class="btn-primary" onclick="TemplatesManager.applyVariables()">Apply</button>
+                    <button class="btn-secondary" data-action="templates-cancel-variables">Cancel</button>
+                    <button class="btn-primary" data-action="templates-apply-variables">Apply</button>
                 </div>
             </div>
         `;
@@ -290,7 +301,7 @@ const TemplatesManager = {
             modal.innerHTML = `
                 <div class="create-template">
                     <h3>Create Template</h3>
-                    <form class="template-form" onsubmit="event.preventDefault(); TemplatesManager.save()">
+                    <form class="template-form">
                         <div class="form-field">
                             <label for="templateName">Template Name</label>
                             <input type="text" id="templateName" placeholder="e.g., Meeting Follow-up" required>
@@ -314,7 +325,7 @@ const TemplatesManager = {
                             <textarea id="templateBody" placeholder="Hi {{name}},&#10;&#10;Use {{variable}} for dynamic content..." required></textarea>
                         </div>
                         <div class="template-actions">
-                            <button type="button" class="btn-secondary" onclick="TemplatesManager.hideCreate()">Cancel</button>
+                            <button type="button" class="btn-secondary" data-action="templates-hide-create">Cancel</button>
                             <button type="submit" class="btn-primary">Save Template</button>
                         </div>
                     </form>
@@ -322,6 +333,7 @@ const TemplatesManager = {
             `;
             document.body.appendChild(modal);
         }
+        this.bindCreateTemplateForm(modal);
 
         // Clear form fields
         const nameInput = document.getElementById('templateName');
@@ -391,3 +403,11 @@ window.UndoSendManager = UndoSendManager;
 window.TemplatesManager = TemplatesManager;
 
 console.log('%c🚀 Productivity module loaded', 'color: #22c55e;');
+
+// Single delegated listener for template list items rendered by renderTemplatesList.
+// Installed once at module load; no per-render handler attachment needed.
+document.addEventListener('click', function (e) {
+    const target = e.target.closest('[data-action="insert-template"]');
+    if (!target) return;
+    TemplatesManager.insertTemplate(target.dataset.templateId);
+});

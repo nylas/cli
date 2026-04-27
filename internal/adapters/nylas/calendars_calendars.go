@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -12,7 +13,7 @@ func (c *HTTPClient) GetCalendars(ctx context.Context, grantID string) ([]domain
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data []calendarResponse `json:"data"`
@@ -33,7 +34,7 @@ func (c *HTTPClient) GetCalendar(ctx context.Context, grantID, calendarID string
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, grantID, calendarID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(calendarID))
 
 	var result struct {
 		Data calendarResponse `json:"data"`
@@ -52,7 +53,7 @@ func (c *HTTPClient) CreateCalendar(ctx context.Context, grantID string, req *do
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars", c.baseURL, url.PathEscape(grantID))
 
 	payload := map[string]any{
 		"name": req.Name,
@@ -92,7 +93,7 @@ func (c *HTTPClient) UpdateCalendar(ctx context.Context, grantID, calendarID str
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, grantID, calendarID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(calendarID))
 
 	payload := make(map[string]any)
 	if req.Name != nil {
@@ -135,7 +136,7 @@ func (c *HTTPClient) DeleteCalendar(ctx context.Context, grantID, calendarID str
 	if err := validateRequired("calendar ID", calendarID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, grantID, calendarID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/calendars/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(calendarID))
 	return c.doDelete(ctx, queryURL)
 }
 

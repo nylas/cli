@@ -30,7 +30,7 @@ resetMultiInputs() {
                 <option value="work">Work</option>
                 <option value="other">Other</option>
             </select>
-            <button type="button" class="contact-add-btn" onclick="ContactsManager.addEmailRow()">+</button>
+            <button type="button" class="contact-add-btn" data-action="contact-add-email-row">+</button>
         </div>
     `;
 
@@ -45,7 +45,7 @@ resetMultiInputs() {
                 <option value="work">Work</option>
                 <option value="other">Other</option>
             </select>
-            <button type="button" class="contact-add-btn" onclick="ContactsManager.addPhoneRow()">+</button>
+            <button type="button" class="contact-add-btn" data-action="contact-add-phone-row">+</button>
         </div>
     `;
 },
@@ -61,7 +61,7 @@ addEmailRow() {
             <option value="work">Work</option>
             <option value="other">Other</option>
         </select>
-        <button type="button" class="contact-remove-btn" onclick="this.parentElement.remove()">−</button>
+        <button type="button" class="contact-remove-btn" data-action="contact-remove-row">−</button>
     `;
     container.appendChild(row);
 },
@@ -78,7 +78,7 @@ addPhoneRow() {
             <option value="work">Work</option>
             <option value="other">Other</option>
         </select>
-        <button type="button" class="contact-remove-btn" onclick="this.parentElement.remove()">−</button>
+        <button type="button" class="contact-remove-btn" data-action="contact-remove-row">−</button>
     `;
     container.appendChild(row);
 },

@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net/mail"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +29,6 @@ func newSendCmd() *cobra.Command {
 	var trackLinks bool
 	var trackLabel string
 	var metadata []string
-	var jsonOutput bool
 	var sign bool
 	var gpgKeyID string
 	var listGPGKeys bool
@@ -117,6 +114,7 @@ Supports hosted templates:
   nylas email send --to user@example.com --subject "Invoice" --metadata campaign=q4 --metadata type=invoice`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonOutput := common.IsJSON(cmd)
 			// Handle --list-gpg-keys early (no client needed)
 			if listGPGKeys {
 				return handleListGPGKeys(cmd.Context())
@@ -397,17 +395,17 @@ Supports hosted templates:
 				}
 
 				if !scheduledTime.IsZero() {
-					printSuccess("Email scheduled successfully! Message ID: %s", msg.ID)
+					common.PrintSuccess("Email scheduled successfully! Message ID: %s", msg.ID)
 					fmt.Printf("Scheduled to send: %s\n", scheduledTime.Format(common.DisplayWeekdayFullWithTZ))
 				} else {
 					if sign && encrypt {
-						printSuccess("Signed and encrypted email sent successfully! Message ID: %s", msg.ID)
+						common.PrintSuccess("Signed and encrypted email sent successfully! Message ID: %s", msg.ID)
 					} else if encrypt {
-						printSuccess("Encrypted email sent successfully! Message ID: %s", msg.ID)
+						common.PrintSuccess("Encrypted email sent successfully! Message ID: %s", msg.ID)
 					} else if sign {
-						printSuccess("Signed email sent successfully! Message ID: %s", msg.ID)
+						common.PrintSuccess("Signed email sent successfully! Message ID: %s", msg.ID)
 					} else {
-						printSuccess("Email sent successfully! Message ID: %s", msg.ID)
+						common.PrintSuccess("Email sent successfully! Message ID: %s", msg.ID)
 					}
 				}
 				return struct{}{}, nil
@@ -438,7 +436,6 @@ Supports hosted templates:
 	cmd.Flags().BoolVar(&trackLinks, "track-links", false, "Track link clicks")
 	cmd.Flags().StringVar(&trackLabel, "track-label", "", "Label for tracking (used to group tracked emails)")
 	cmd.Flags().StringSliceVar(&metadata, "metadata", nil, "Custom metadata as key=value (can be repeated)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&sign, "sign", false, "Sign email with GPG (uses default key from git config)")
 	cmd.Flags().StringVar(&gpgKeyID, "gpg-key", "", "Specific GPG key ID to use for signing")
 	cmd.Flags().BoolVar(&listGPGKeys, "list-gpg-keys", false, "List available GPG signing keys and exit")
@@ -454,196 +451,4 @@ Supports hosted templates:
 	cmd.Flags().BoolVar(&templateOpts.Strict, "template-strict", true, "Fail if a hosted template references missing variables")
 
 	return cmd
-}
-
-func getGrantForSend(ctx context.Context, client ports.NylasClient, grantID string) (*domain.Grant, error) {
-	grant, err := client.GetGrant(ctx, grantID)
-	if err != nil {
-		return nil, common.WrapGetError("grant", err)
-	}
-	return grant, nil
-}
-
-func sendMessageForGrant(
-	ctx context.Context,
-	client ports.NylasClient,
-	grantID string,
-	grant *domain.Grant,
-	req *domain.SendMessageRequest,
-) (*domain.Message, error) {
-	if isManagedTransactionalGrant(grant) {
-		emailDomain := common.ExtractDomain(grant.Email)
-		if emailDomain == "" {
-			return nil, common.NewUserError(
-				"could not extract domain from grant email",
-				"Ensure the grant has a valid email address",
-			)
-		}
-		req.From = []domain.EmailParticipant{{Email: grant.Email}}
-		return client.SendTransactionalMessage(ctx, emailDomain, req)
-	}
-
-	return client.SendMessage(ctx, grantID, req)
-}
-
-func shouldUseInteractiveSendMode(
-	interactive bool,
-	to []string,
-	subject, body string,
-	templateOpts hostedTemplateSendOptions,
-) bool {
-	if interactive {
-		return true
-	}
-	if templateOpts.TemplateID != "" {
-		return len(to) == 0 && !templateOpts.RenderOnly
-	}
-	return len(to) == 0 && subject == "" && body == ""
-}
-
-// parseEmails parses a comma-separated list of emails.
-func parseEmails(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-// parseContacts converts email strings to EmailParticipant objects with validation.
-func parseContacts(emails []string) ([]domain.EmailParticipant, error) {
-	contacts := make([]domain.EmailParticipant, len(emails))
-	for i, email := range emails {
-		email = strings.TrimSpace(email)
-		if email == "" {
-			return nil, common.NewInputError("email address cannot be empty")
-		}
-
-		// Try parsing as RFC 5322 address (handles "Name <email>" format)
-		addr, err := mail.ParseAddress(email)
-		if err == nil {
-			contacts[i] = domain.EmailParticipant{Name: addr.Name, Email: addr.Address}
-		} else {
-			// Check if it's a plain email without angle brackets
-			if !strings.Contains(email, "@") {
-				return nil, common.NewInputError(fmt.Sprintf("invalid email address: %s", email))
-			}
-			// Basic validation for plain email
-			if strings.Count(email, "@") != 1 {
-				return nil, common.NewInputError(fmt.Sprintf("invalid email address: %s", email))
-			}
-			contacts[i] = domain.EmailParticipant{Email: email}
-		}
-	}
-	return contacts, nil
-}
-
-// errScheduleInPast is returned when the scheduled time is in the past.
-var errScheduleInPast = common.NewUserError("scheduled time is in the past", "Specify a future time")
-
-// parseScheduleTime parses various time formats for scheduling.
-func parseScheduleTime(input string) (time.Time, error) {
-	now := time.Now()
-	input = strings.TrimSpace(input)
-	lower := strings.ToLower(input)
-
-	// Try Unix timestamp first
-	if ts, err := strconv.ParseInt(input, 10, 64); err == nil && ts > 1000000000 {
-		t := time.Unix(ts, 0)
-		if t.Before(now) {
-			return time.Time{}, errScheduleInPast
-		}
-		return t, nil
-	}
-
-	// Duration formats: 30m, 2h, 1d
-	if len(input) >= 2 {
-		numStr := input[:len(input)-1]
-		unit := input[len(input)-1:]
-		if num, err := strconv.Atoi(numStr); err == nil {
-			switch unit {
-			case "m":
-				return now.Add(time.Duration(num) * time.Minute), nil
-			case "h":
-				return now.Add(time.Duration(num) * time.Hour), nil
-			case "d":
-				return now.AddDate(0, 0, num), nil
-			}
-		}
-	}
-
-	// "tomorrow" keyword
-	if strings.HasPrefix(lower, "tomorrow") {
-		tomorrow := now.AddDate(0, 0, 1)
-		rest := strings.TrimPrefix(lower, "tomorrow")
-		rest = strings.TrimSpace(rest)
-		if rest == "" {
-			// Default to 9am tomorrow
-			return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 9, 0, 0, 0, now.Location()), nil
-		}
-		// Parse time part
-		if t, err := common.ParseTimeOfDay(rest); err == nil {
-			return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), nil
-		}
-	}
-
-	// "today" keyword
-	if strings.HasPrefix(lower, "today") {
-		rest := strings.TrimPrefix(lower, "today")
-		rest = strings.TrimSpace(rest)
-		if rest == "" {
-			return time.Time{}, common.NewInputError("please specify a time, e.g., 'today 3pm'")
-		}
-		if t, err := common.ParseTimeOfDay(rest); err == nil {
-			result := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-			if result.Before(now) {
-				return time.Time{}, errScheduleInPast
-			}
-			return result, nil
-		}
-	}
-
-	// Try standard date/time formats
-	formats := []string{
-		"2006-01-02 15:04",
-		"2006-01-02T15:04",
-		"2006-01-02 3:04pm",
-		"2006-01-02 3:04PM",
-		"Jan 2 15:04",
-		"Jan 2 3:04pm",
-		"Jan 2, 2006 15:04",
-		"Jan 2, 2006 3:04pm",
-	}
-
-	for _, format := range formats {
-		if t, err := time.ParseInLocation(format, input, now.Location()); err == nil {
-			// If year wasn't specified, use current year
-			if t.Year() == 0 {
-				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-			}
-			if t.Before(now) {
-				return time.Time{}, errScheduleInPast
-			}
-			return t, nil
-		}
-	}
-
-	// Try just time of day (today or tomorrow)
-	if t, err := common.ParseTimeOfDay(lower); err == nil {
-		result := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-		if result.Before(now) {
-			// If time is in the past, assume tomorrow
-			result = result.AddDate(0, 0, 1)
-		}
-		return result, nil
-	}
-
-	return time.Time{}, common.NewInputError(fmt.Sprintf("could not parse time format: %s", input))
 }

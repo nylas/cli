@@ -47,7 +47,7 @@ that your webhook endpoint is properly configured and receiving events.`,
 					return client.SendWebhookTestEvent(ctx, webhookURL)
 				})
 				if err != nil {
-					return struct{}{}, common.NewUserError("Failed to send test event: "+err.Error(),
+					return struct{}{}, common.NewUserError(fmt.Sprintf("Failed to send test event: %v", err),
 						"Check that the URL is correct and accessible. Ensure your endpoint is publicly reachable")
 				}
 
@@ -67,10 +67,7 @@ that your webhook endpoint is properly configured and receiving events.`,
 }
 
 func newTestPayloadCmd() *cobra.Command {
-	var (
-		format      string
-		triggerType string
-	)
+	var triggerType string
 
 	cmd := &cobra.Command{
 		Use:   "payload [trigger-type]",
@@ -134,28 +131,20 @@ so you can properly handle them in your application.`,
 					return client.GetWebhookMockPayload(ctx, triggerType)
 				})
 				if err != nil {
-					return struct{}{}, common.NewUserError("Failed to get mock payload: "+err.Error(),
+					return struct{}{}, common.NewUserError(fmt.Sprintf("Failed to get mock payload: %v", err),
 						"Check the trigger type is valid")
 				}
 
 				fmt.Printf("Mock payload for '%s':\n\n", triggerType)
 
-				switch format {
-				case "json":
-					enc := json.NewEncoder(os.Stdout)
-					enc.SetIndent("", "  ")
-					return struct{}{}, enc.Encode(payload)
-				default:
-					enc := json.NewEncoder(os.Stdout)
-					enc.SetIndent("", "  ")
-					return struct{}{}, enc.Encode(payload)
-				}
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return struct{}{}, enc.Encode(payload)
 			})
 			return err
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "json", "Output format (json)")
 	cmd.Flags().StringVarP(&triggerType, "trigger", "t", "", "Trigger type")
 
 	return cmd

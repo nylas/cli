@@ -22,7 +22,6 @@ func newUpdateCmd() *cobra.Command {
 		notes       string
 		emails      []string
 		phones      []string
-		jsonOutput  bool
 	)
 
 	cmd := &cobra.Command{
@@ -105,7 +104,7 @@ Examples:
 				return common.WrapUpdateError("contact", err)
 			}
 
-			if jsonOutput {
+			if common.IsJSON(cmd) {
 				return common.PrintJSON(contact)
 			}
 
@@ -132,7 +131,6 @@ Examples:
 	cmd.Flags().StringVar(&notes, "notes", "", "Notes")
 	cmd.Flags().StringArrayVar(&emails, "email", nil, "Email address (can be used multiple times)")
 	cmd.Flags().StringArrayVar(&phones, "phone", nil, "Phone number (can be used multiple times)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

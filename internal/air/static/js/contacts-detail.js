@@ -17,7 +17,7 @@ renderContactDetail(contact) {
             <div class="contact-detail-avatar">
                 <img src="${photoUrl}"
                      alt="${this.escapeHtml(displayName)}"
-                     onerror="this.onerror=null; this.src='${fallbackUrl}';" />
+                     data-fallback-src="${this.escapeHtml(fallbackUrl)}" />
             </div>
             <div class="contact-detail-name">${this.escapeHtml(displayName)}</div>
             ${contact.job_title ?
@@ -26,13 +26,13 @@ renderContactDetail(contact) {
         </div>
 
         <div class="contact-detail-actions">
-            <button class="action-btn primary" onclick="ContactsManager.emailContact('${contact.id}')">
+            <button class="action-btn primary" data-action="email-contact" data-contact-id="${this.escapeHtml(contact.id)}">
                 <span>✉️</span> Email
             </button>
-            <button class="action-btn" onclick="ContactsManager.editContact('${contact.id}')">
+            <button class="action-btn" data-action="edit-contact" data-contact-id="${this.escapeHtml(contact.id)}">
                 <span>✏️</span> Edit
             </button>
-            <button class="action-btn" onclick="ContactsManager.deleteContact('${contact.id}')">
+            <button class="action-btn" data-action="delete-contact" data-contact-id="${this.escapeHtml(contact.id)}">
                 <span>🗑️</span> Delete
             </button>
         </div>
@@ -45,6 +45,7 @@ renderContactDetail(contact) {
             ${this.renderBirthdaySection(contact.birthday)}
         </div>
     `;
+    this.bindAvatarFallbacks(container);
 },
 
 renderEmailSection(emails) {
@@ -123,4 +124,25 @@ renderBirthdaySection(birthday) {
         </div>
     `;
 },
+});
+
+// Single delegated listener for contact-detail action buttons rendered by renderContactDetail.
+// Installed once at module load; replaces per-render onclick attributes.
+document.addEventListener('click', function (e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const action = target.dataset.action;
+    const contactId = target.dataset.contactId;
+    if (!contactId) return;
+    switch (action) {
+        case 'email-contact':
+            ContactsManager.emailContact(contactId);
+            break;
+        case 'edit-contact':
+            ContactsManager.editContact(contactId);
+            break;
+        case 'delete-contact':
+            ContactsManager.deleteContact(contactId);
+            break;
+    }
 });

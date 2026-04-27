@@ -48,8 +48,8 @@ async editContact(contactId) {
                         <option value="other" ${e.type === 'other' ? 'selected' : ''}>Other</option>
                     </select>
                     ${i === 0 ?
-                        '<button type="button" class="contact-add-btn" onclick="ContactsManager.addEmailRow()">+</button>' :
-                        '<button type="button" class="contact-remove-btn" onclick="this.parentElement.remove()">−</button>'}
+                        '<button type="button" class="contact-add-btn" data-action="contact-add-email-row">+</button>' :
+                        '<button type="button" class="contact-remove-btn" data-action="contact-remove-row">−</button>'}
                 </div>
             `).join('');
         } else {
@@ -69,8 +69,8 @@ async editContact(contactId) {
                         <option value="other" ${p.type === 'other' ? 'selected' : ''}>Other</option>
                     </select>
                     ${i === 0 ?
-                        '<button type="button" class="contact-add-btn" onclick="ContactsManager.addPhoneRow()">+</button>' :
-                        '<button type="button" class="contact-remove-btn" onclick="this.parentElement.remove()">−</button>'}
+                        '<button type="button" class="contact-add-btn" data-action="contact-add-phone-row">+</button>' :
+                        '<button type="button" class="contact-remove-btn" data-action="contact-remove-row">−</button>'}
                 </div>
             `).join('');
         }

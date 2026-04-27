@@ -5,12 +5,12 @@
         <!-- Header with tabs -->
         <div class="nt-header">
             <div class="nt-tabs">
-                <button class="nt-tab active" data-filter="past" onclick="filterNotetakers('past', this)">Past</button>
-                <button class="nt-tab" data-filter="upcoming" onclick="filterNotetakers('upcoming', this)">Upcoming</button>
+                <button class="nt-tab active" data-filter="past" data-action="filter-notetakers">Past</button>
+                <button class="nt-tab" data-filter="upcoming" data-action="filter-notetakers">Upcoming</button>
             </div>
             <div class="nt-actions">
-                <button class="btn-secondary" onclick="refreshNotetakers()">↻ Refresh</button>
-                <button class="btn-primary" onclick="openJoinMeetingModal()">+ Join Meeting</button>
+                <button class="btn-secondary" data-action="refresh-notetakers">↻ Refresh</button>
+                <button class="btn-primary" data-action="open-join-meeting-modal">+ Join Meeting</button>
             </div>
         </div>
 
@@ -21,7 +21,7 @@
                 <div class="nt-empty-icon">🎙️</div>
                 <h3>No recordings yet</h3>
                 <p>Join a meeting to start recording</p>
-                <button class="btn-primary" onclick="openJoinMeetingModal()">+ Join Meeting</button>
+                <button class="btn-primary" data-action="open-join-meeting-modal">+ Join Meeting</button>
             </div>
             <!-- Cards rendered by JS -->
         </div>
@@ -33,7 +33,7 @@
     <div class="modal" role="dialog" aria-labelledby="joinMeetingTitle" style="max-width: 500px;">
         <div class="modal-header">
             <h2 id="joinMeetingTitle">Join Meeting with Notetaker</h2>
-            <button class="modal-close" onclick="closeJoinMeetingModal()" aria-label="Close">
+            <button class="modal-close" data-action="close-join-meeting-modal" aria-label="Close">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
@@ -69,8 +69,8 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn-secondary" onclick="closeJoinMeetingModal()">Cancel</button>
-            <button class="btn-primary" onclick="joinMeeting()">
+            <button class="btn-secondary" data-action="close-join-meeting-modal">Cancel</button>
+            <button class="btn-primary" data-action="join-meeting">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M15 10l5 5-5 5"/>
                     <path d="M4 4v7a4 4 0 0 0 4 4h12"/>

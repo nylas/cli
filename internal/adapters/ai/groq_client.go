@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/nylas/cli/internal/domain"
@@ -48,92 +47,14 @@ func (c *GroqClient) Chat(ctx context.Context, req *domain.ChatRequest) (*domain
 	return c.ChatWithTools(ctx, req, nil)
 }
 
-// ChatWithTools sends a chat request with function calling.
+// ChatWithTools sends a chat request with function calling. Groq exposes the
+// OpenAI /v1/chat/completions surface, so this delegates to the shared
+// pipeline.
 func (c *GroqClient) ChatWithTools(ctx context.Context, req *domain.ChatRequest, tools []domain.Tool) (*domain.ChatResponse, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("groq API key not configured")
 	}
-
-	// Prepare Groq request (OpenAI-compatible format)
-	groqReq := map[string]any{
-		"model":    c.GetModel(req.Model),
-		"messages": ConvertMessagesToMaps(req.Messages),
-	}
-
-	if req.MaxTokens > 0 {
-		groqReq["max_tokens"] = req.MaxTokens
-	}
-
-	if req.Temperature > 0 {
-		groqReq["temperature"] = req.Temperature
-	}
-
-	// Tools support
-	if len(tools) > 0 {
-		groqReq["tools"] = ConvertToolsOpenAIFormat(tools)
-		groqReq["tool_choice"] = "auto"
-	}
-
-	// Send request using base client
-	var groqResp struct {
-		Choices []struct {
-			Message struct {
-				Role      string `json:"role"`
-				Content   string `json:"content"`
-				ToolCalls []struct {
-					ID       string `json:"id"`
-					Type     string `json:"type"`
-					Function struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					} `json:"function"`
-				} `json:"tool_calls,omitempty"`
-			} `json:"message"`
-		} `json:"choices"`
-		Model string `json:"model"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-	}
-
-	headers := map[string]string{
-		"Authorization": "Bearer " + c.apiKey,
-	}
-
-	if err := c.DoJSONRequestAndDecode(ctx, "POST", "/chat/completions", groqReq, headers, &groqResp); err != nil {
-		return nil, err
-	}
-
-	if len(groqResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from Groq")
-	}
-
-	response := &domain.ChatResponse{
-		Content:  groqResp.Choices[0].Message.Content,
-		Model:    groqResp.Model,
-		Provider: "groq",
-		Usage: domain.TokenUsage{
-			PromptTokens:     groqResp.Usage.PromptTokens,
-			CompletionTokens: groqResp.Usage.CompletionTokens,
-			TotalTokens:      groqResp.Usage.TotalTokens,
-		},
-	}
-
-	// Convert tool calls if present
-	for _, tc := range groqResp.Choices[0].Message.ToolCalls {
-		var args map[string]any
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
-			response.ToolCalls = append(response.ToolCalls, domain.ToolCall{
-				ID:        tc.ID,
-				Function:  tc.Function.Name,
-				Arguments: args,
-			})
-		}
-	}
-
-	return response, nil
+	return c.OpenAICompatibleChat(ctx, "groq", req, tools)
 }
 
 // StreamChat streams chat responses.

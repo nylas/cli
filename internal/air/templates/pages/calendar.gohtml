@@ -3,7 +3,7 @@
 <div class="calendar-view" id="calendarView" data-air-view="calendar" data-testid="calendar-view">
     <!-- Calendar Sidebar -->
     <aside class="sidebar">
-        <button class="compose-btn" data-testid="new-event-btn" onclick="alert('Create Event')">
+        <button class="compose-btn" data-testid="new-event-btn" data-action="create-event">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M12 5v14m-7-7h14"/>
             </svg>
@@ -48,7 +48,7 @@
 
         <div class="sidebar-title">AI Features</div>
         <div class="folder-group">
-            <div class="folder-item" onclick="openFindTimeModal()">
+            <div class="folder-item" data-action="open-find-time-modal">
                 <span class="folder-icon">🎯</span>
                 <span>Find Time</span>
             </div>

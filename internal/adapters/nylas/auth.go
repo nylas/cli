@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -87,7 +88,7 @@ func (c *HTTPClient) ListGrants(ctx context.Context) ([]domain.Grant, error) {
 
 // GetGrant retrieves a specific grant.
 func (c *HTTPClient) GetGrant(ctx context.Context, grantID string) (*domain.Grant, error) {
-	queryURL := c.baseURL + "/v3/grants/" + grantID
+	queryURL := c.baseURL + "/v3/grants/" + url.PathEscape(grantID)
 
 	var result struct {
 		Data domain.Grant `json:"data"`
@@ -101,7 +102,7 @@ func (c *HTTPClient) GetGrant(ctx context.Context, grantID string) (*domain.Gran
 
 // RevokeGrant revokes a grant.
 func (c *HTTPClient) RevokeGrant(ctx context.Context, grantID string) error {
-	req, err := http.NewRequestWithContext(ctx, "DELETE", c.baseURL+"/v3/grants/"+grantID, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", c.baseURL+"/v3/grants/"+url.PathEscape(grantID), nil)
 	if err != nil {
 		return err
 	}

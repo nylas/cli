@@ -154,9 +154,12 @@ func TestPatternLearner_SaveLoadPatterns(t *testing.T) {
 	ctx := context.Background()
 	learner := &PatternLearner{}
 
-	t.Run("SavePatterns returns nil (stub)", func(t *testing.T) {
+	t.Run("SavePatterns returns not implemented error", func(t *testing.T) {
+		// SavePatterns is a stub; returning a real error keeps a caller
+		// from mistaking the no-op for a successful persist.
 		err := learner.SavePatterns(ctx, &SchedulingPatterns{})
-		assert.NoError(t, err)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not yet implemented")
 	})
 
 	t.Run("LoadPatterns returns not implemented error", func(t *testing.T) {

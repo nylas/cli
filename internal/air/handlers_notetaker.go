@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // States to filter out from notetaker list
@@ -124,10 +125,7 @@ func (s *Server) handleListNotetakers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
 // domainToNotetakerResponse converts a domain.Notetaker to NotetakerResponse
@@ -205,10 +203,7 @@ func (s *Server) handleCreateNotetaker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(domainToNotetakerResponse(nt)); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, domainToNotetakerResponse(nt))
 }
 
 // handleGetNotetaker returns a single notetaker from the Nylas API
@@ -233,10 +228,7 @@ func (s *Server) handleGetNotetaker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(domainToNotetakerResponse(nt)); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, domainToNotetakerResponse(nt))
 }
 
 // handleGetNotetakerMedia returns media for a notetaker from the Nylas API
@@ -273,10 +265,7 @@ func (s *Server) handleGetNotetakerMedia(w http.ResponseWriter, r *http.Request)
 		media.TranscriptSize = mediaData.Transcript.Size
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(media); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, media)
 }
 
 // handleDeleteNotetaker cancels a notetaker via the Nylas API

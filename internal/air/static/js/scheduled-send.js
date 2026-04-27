@@ -136,7 +136,7 @@ const ScheduledSendManager = {
                     <input type="text" id="scheduleInput" placeholder="e.g., tomorrow 2pm, next friday, in 3 hours">
                 </div>
                 <div class="schedule-actions">
-                    <button class="btn-secondary" onclick="this.closest('.schedule-picker-modal').remove()">Cancel</button>
+                    <button class="btn-secondary" data-action="schedule-picker-cancel">Cancel</button>
                     <button class="btn-primary" id="scheduleConfirm">Schedule</button>
                 </div>
             </div>

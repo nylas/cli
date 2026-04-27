@@ -55,10 +55,6 @@ func TestSearchCmd(t *testing.T) {
 		assert.Equal(t, "50", flag.DefValue)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestPhotoCmd(t *testing.T) {
@@ -116,11 +112,6 @@ func TestPhotoDownloadCmd(t *testing.T) {
 		flag := cmd.Flags().ShorthandLookup("o")
 		assert.NotNil(t, flag)
 		assert.Equal(t, "output", flag.Name)
-	})
-
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
 	})
 
 	t.Run("requires_args", func(t *testing.T) {

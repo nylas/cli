@@ -33,7 +33,7 @@ func fetchEventByID(ctx context.Context, client ports.NylasClient, grantID, even
 // findRescheduleSuggestions finds alternative times for rescheduling
 func findRescheduleSuggestions(
 	ctx context.Context,
-	client ports.NylasClient,
+	_ ports.NylasClient,
 	resolver *analytics.ConflictResolver,
 	grantID string,
 	event *domain.Event,
@@ -246,7 +246,7 @@ func applyReschedule(
 	event *domain.Event,
 	option domain.RescheduleOption,
 	notify bool,
-	reason string,
+	_ string,
 ) (*domain.RescheduleResult, error) {
 	// Find which calendar the event belongs to
 	calendars, err := client.GetCalendars(ctx, grantID)

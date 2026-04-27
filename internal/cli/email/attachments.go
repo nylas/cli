@@ -189,7 +189,7 @@ func newAttachmentsDownloadCmd() *cobra.Command {
 					return struct{}{}, common.WrapWriteError("file", err)
 				}
 
-				printSuccess("Downloaded %s (%s) to %s", attachment.Filename, common.FormatSize(written), finalOutputPath)
+				common.PrintSuccess("Downloaded %s (%s) to %s", attachment.Filename, common.FormatSize(written), finalOutputPath)
 				return struct{}{}, nil
 			})
 			return err

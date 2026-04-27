@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 const smartComposeTimeout = 5 * time.Second
@@ -42,11 +44,7 @@ func (s *Server) handleAIComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Text == "" {
-		w.Header().Set("Content-Type", "application/json")
-		resp := CompleteResponse{Suggestion: "", Confidence: 0}
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			http.Error(w, "Failed to encode", http.StatusInternalServerError)
-		}
+		httputil.WriteJSON(w, http.StatusOK, CompleteResponse{Suggestion: "", Confidence: 0})
 		return
 	}
 
@@ -56,14 +54,10 @@ func (s *Server) handleAIComplete(w http.ResponseWriter, r *http.Request) {
 
 	suggestion := getAICompletion(r.Context(), req.Text, req.MaxLength)
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := CompleteResponse{
+	httputil.WriteJSON(w, http.StatusOK, CompleteResponse{
 		Suggestion: suggestion,
 		Confidence: 0.8,
-	}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 // getAICompletion gets completion from Claude via CLI
@@ -175,10 +169,7 @@ func (s *Server) handleNLSearch(w http.ResponseWriter, r *http.Request) {
 
 	result := parseNaturalLanguageSearch(req.Query)
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, result)
 }
 
 // parseNaturalLanguageSearch converts NL query to search params

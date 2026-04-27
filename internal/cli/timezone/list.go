@@ -11,8 +11,7 @@ import (
 
 func newListCmd() *cobra.Command {
 	var (
-		filter  string
-		jsonOut bool
+		filter string
 	)
 
 	cmd := &cobra.Command{
@@ -35,12 +34,11 @@ Examples:
   # Output as JSON
   nylas timezone list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(filter, jsonOut)
+			return runList(filter, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&filter, "filter", "", "Filter zones by name (case-insensitive)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	return cmd
 }

@@ -17,7 +17,7 @@ const SnoozeManager = {
         picker.innerHTML = `
             <div class="snooze-header">
                 <span class="snooze-title">Snooze until...</span>
-                <button class="snooze-close" onclick="SnoozeManager.hidePicker()">&times;</button>
+                <button class="snooze-close" data-action="snooze-picker-close">&times;</button>
             </div>
             <div class="snooze-options">
                 <button class="snooze-option" data-duration="later">
@@ -53,7 +53,7 @@ const SnoozeManager = {
             </div>
             <div class="snooze-custom">
                 <input type="text" id="snoozeCustom" placeholder="Or type: 2h, 3d, next tuesday...">
-                <button class="snooze-custom-btn" onclick="SnoozeManager.snoozeCustom()">Snooze</button>
+                <button class="snooze-custom-btn" data-action="snooze-picker-custom">Snooze</button>
             </div>
         `;
 

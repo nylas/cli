@@ -250,14 +250,65 @@ func TestEncryptedFileStore_RequiresPassphraseForWrites(t *testing.T) {
 		t.Cleanup(func() { _ = os.Setenv(fileStorePassphraseEnv, orig) })
 	}
 
+	// Fresh install: no legacy file, no passphrase. Construction succeeds so
+	// callers can probe the empty store, but Set must fail with a clear
+	// message pointing at NYLAS_FILE_STORE_PASSPHRASE.
 	store, err := NewEncryptedFileStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewEncryptedFileStore failed: %v", err)
+		t.Fatalf("NewEncryptedFileStore should not fail on a fresh install: %v", err)
 	}
 
-	err = store.Set("api_key", "value")
+	if err := store.Set("api_key", "value"); err == nil {
+		t.Fatal("Set succeeded without passphrase on fresh install")
+	} else if !strings.Contains(err.Error(), fileStorePassphraseEnv) {
+		t.Fatalf("Set error %q does not mention %s", err.Error(), fileStorePassphraseEnv)
+	}
+}
+
+// TestEncryptedFileStore_RefusesWriteWhenLegacyExistsNoPassphrase verifies that
+// when a legacy .secrets.enc exists but no passphrase is set, writes are refused
+// with a migration-required error.
+func TestEncryptedFileStore_RefusesWriteWhenLegacyExistsNoPassphrase(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	legacyKey, err := deriveLegacyKey()
+	if err != nil {
+		t.Fatalf("deriveLegacyKey failed: %v", err)
+	}
+	legacyCiphertext, err := encryptWithKey(legacyKey, []byte(`{"api_key":"old-value"}`))
+	if err != nil {
+		t.Fatalf("encryptWithKey failed: %v", err)
+	}
+	secretsPath := filepath.Join(tmpDir, ".secrets.enc")
+	if err := os.WriteFile(secretsPath, legacyCiphertext, 0600); err != nil {
+		t.Fatalf("failed to write legacy file: %v", err)
+	}
+
+	orig := os.Getenv(fileStorePassphraseEnv)
+	if orig != "" {
+		_ = os.Unsetenv(fileStorePassphraseEnv)
+		t.Cleanup(func() { _ = os.Setenv(fileStorePassphraseEnv, orig) })
+	}
+
+	// Legacy file exists → construction should succeed (store is openable).
+	store, err := NewEncryptedFileStore(tmpDir)
+	if err != nil {
+		t.Fatalf("NewEncryptedFileStore failed when legacy file exists: %v", err)
+	}
+
+	// Read must fail with migration-required error, not silently succeed.
+	_, err = store.Get("api_key")
 	if err == nil {
-		t.Fatal("Set succeeded without passphrase")
+		t.Fatal("Get succeeded without passphrase on legacy file — migration gate not enforced")
+	}
+	if !strings.Contains(err.Error(), fileStorePassphraseEnv) {
+		t.Fatalf("Get error %q does not mention %s", err.Error(), fileStorePassphraseEnv)
+	}
+
+	// Write must also fail with migration-required error.
+	err = store.Set("api_key", "new-value")
+	if err == nil {
+		t.Fatal("Set succeeded without passphrase on legacy file")
 	}
 	if !strings.Contains(err.Error(), fileStorePassphraseEnv) {
 		t.Fatalf("Set error %q does not mention %s", err.Error(), fileStorePassphraseEnv)
@@ -542,4 +593,137 @@ func TestConcurrentAccess(t *testing.T) {
 	for err := range errChan {
 		t.Errorf("Concurrent access error: %v", err)
 	}
+}
+
+// TestEncryptedFileStore_MigratesOnFirstGet verifies that the one-shot migration
+// happens on the first Get, not only after a subsequent Set.
+// After Get returns the plaintext, the on-disk file must already be re-encrypted
+// with the passphrase-derived key and must no longer be decryptable by the legacy key.
+func TestEncryptedFileStore_MigratesOnFirstGet(t *testing.T) {
+	tmpDir := t.TempDir()
+	passphrase := setFileStorePassphrase(t)
+
+	legacyKey, err := deriveLegacyKey()
+	if err != nil {
+		t.Fatalf("deriveLegacyKey failed: %v", err)
+	}
+
+	legacyCiphertext, err := encryptWithKey(legacyKey, []byte(`{"migrate_key":"migrate_value"}`))
+	if err != nil {
+		t.Fatalf("encryptWithKey failed: %v", err)
+	}
+
+	secretsPath := filepath.Join(tmpDir, ".secrets.enc")
+	if err := os.WriteFile(secretsPath, legacyCiphertext, 0600); err != nil {
+		t.Fatalf("failed to write legacy secrets file: %v", err)
+	}
+
+	store, err := NewEncryptedFileStore(tmpDir)
+	if err != nil {
+		t.Fatalf("NewEncryptedFileStore failed: %v", err)
+	}
+
+	// First Get — should trigger migration inline.
+	value, err := store.Get("migrate_key")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if value != "migrate_value" {
+		t.Fatalf("Get returned %q, want %q", value, "migrate_value")
+	}
+
+	// After Get, the on-disk file must already use the passphrase-derived key.
+	data, err := os.ReadFile(secretsPath)
+	if err != nil {
+		t.Fatalf("failed to read secrets file after migration: %v", err)
+	}
+
+	// Legacy key must no longer decrypt the file.
+	if _, err := decryptWithKey(legacyKey, data); err == nil {
+		t.Fatal("on-disk file is still decryptable with the legacy key after Get-triggered migration")
+	}
+
+	// Passphrase-derived key must decrypt successfully.
+	saltData, err := os.ReadFile(filepath.Join(tmpDir, ".secrets.salt"))
+	if err != nil {
+		t.Fatalf("failed to read salt file: %v", err)
+	}
+	decodedSalt, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(saltData)))
+	if err != nil {
+		t.Fatalf("failed to decode salt: %v", err)
+	}
+	if _, err := decryptWithKey(derivePassphraseKey([]byte(passphrase), decodedSalt), data); err != nil {
+		t.Fatalf("failed to decrypt migrated file with passphrase-derived key: %v", err)
+	}
+}
+
+// TestDetectKeyType verifies the detectKeyType helper across the expected states.
+func TestDetectKeyType(t *testing.T) {
+	t.Run("none_when_no_file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setFileStorePassphrase(t)
+
+		store, err := NewEncryptedFileStore(tmpDir)
+		// Fresh install with passphrase set — construction should succeed.
+		if err != nil {
+			t.Fatalf("NewEncryptedFileStore failed: %v", err)
+		}
+		// No file written yet.
+		kt, err := store.detectKeyType()
+		if err != nil {
+			t.Fatalf("detectKeyType failed: %v", err)
+		}
+		if kt != fileStoreKeyNone {
+			t.Fatalf("detectKeyType = %d, want fileStoreKeyNone (%d)", kt, fileStoreKeyNone)
+		}
+	})
+
+	t.Run("passphrase_only_after_write", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setFileStorePassphrase(t)
+
+		store, err := NewEncryptedFileStore(tmpDir)
+		if err != nil {
+			t.Fatalf("NewEncryptedFileStore failed: %v", err)
+		}
+		if err := store.Set("k", "v"); err != nil {
+			t.Fatalf("Set failed: %v", err)
+		}
+		kt, err := store.detectKeyType()
+		if err != nil {
+			t.Fatalf("detectKeyType failed: %v", err)
+		}
+		if kt != fileStoreKeyPassphraseOnly {
+			t.Fatalf("detectKeyType = %d, want fileStoreKeyPassphraseOnly (%d)", kt, fileStoreKeyPassphraseOnly)
+		}
+	})
+
+	t.Run("legacy_only_before_migration", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setFileStorePassphrase(t)
+
+		legacyKey, err := deriveLegacyKey()
+		if err != nil {
+			t.Fatalf("deriveLegacyKey failed: %v", err)
+		}
+		ct, err := encryptWithKey(legacyKey, []byte(`{"k":"v"}`))
+		if err != nil {
+			t.Fatalf("encryptWithKey failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, ".secrets.enc"), ct, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		store, err := NewEncryptedFileStore(tmpDir)
+		if err != nil {
+			t.Fatalf("NewEncryptedFileStore failed: %v", err)
+		}
+		kt, err := store.detectKeyType()
+		if err != nil {
+			t.Fatalf("detectKeyType failed: %v", err)
+		}
+		if kt != fileStoreKeyLegacyOnly {
+			t.Fatalf("detectKeyType = %d, want fileStoreKeyLegacyOnly (%d)", kt, fileStoreKeyLegacyOnly)
+		}
+	})
 }

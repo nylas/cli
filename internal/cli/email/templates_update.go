@@ -86,7 +86,7 @@ re-extracted from the updated subject and body.`,
 			}
 
 			// Success output
-			printSuccess("Template updated successfully!")
+			common.PrintSuccess("Template updated successfully!")
 			fmt.Printf("\n  ID:        %s\n", updated.ID)
 			fmt.Printf("  Name:      %s\n", updated.Name)
 			fmt.Printf("  Subject:   %s\n", updated.Subject)

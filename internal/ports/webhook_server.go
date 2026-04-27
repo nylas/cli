@@ -27,12 +27,20 @@ type WebhookServerConfig struct {
 	Path           string // Webhook endpoint path (default: /webhook)
 	WebhookSecret  string // For signature verification
 	TunnelProvider string // cloudflared, ngrok, or empty for no tunnel
+	// MaxEventAge bounds how stale an event's `time` field (CloudEvents) can
+	// be before the server rejects it as a replay. Zero disables the check.
+	// Only applied when WebhookSecret is set; without HMAC the timestamp
+	// would be attacker-controlled anyway.
+	MaxEventAge time.Duration
 }
 
 // WebhookServerStats holds server statistics.
 type WebhookServerStats struct {
 	StartedAt      time.Time
 	EventsReceived int
+	// EventsDropped counts events the server discarded because the events
+	// channel was full. Operators can use this to detect a slow consumer.
+	EventsDropped  int
 	LastEventAt    time.Time
 	PublicURL      string
 	LocalURL       string

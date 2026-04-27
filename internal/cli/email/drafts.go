@@ -66,23 +66,16 @@ func newDraftsListCmd() *cobra.Command {
 					if len(d.To) > 0 {
 						toStr = common.FormatParticipants(d.To)
 					}
-					if len(toStr) > 23 {
-						toStr = toStr[:20] + "..."
-					}
+					toStr = common.Truncate(toStr, 23)
 
 					subj := d.Subject
 					if subj == "" {
 						subj = "(no subject)"
 					}
-					if len(subj) > 33 {
-						subj = subj[:30] + "..."
-					}
+					subj = common.Truncate(subj, 33)
 
 					// Show first 12 chars of ID
-					idShort := d.ID
-					if len(idShort) > 12 {
-						idShort = idShort[:12] + "..."
-					}
+					idShort := common.Truncate(d.ID, 15)
 
 					dateStr := common.FormatTimeAgo(d.UpdatedAt)
 
@@ -182,7 +175,7 @@ func newDraftsCreateCmd() *cobra.Command {
 					return struct{}{}, common.WrapCreateError("draft", err)
 				}
 
-				printSuccess("Draft created! ID: %s", draft.ID)
+				common.PrintSuccess("Draft created! ID: %s", draft.ID)
 				if len(draft.Attachments) > 0 {
 					fmt.Printf("  Attachments: %d\n", len(draft.Attachments))
 				}
@@ -377,7 +370,7 @@ func newDraftsSendCmd() *cobra.Command {
 					return struct{}{}, common.WrapSendError("draft", err)
 				}
 
-				printSuccess("Draft sent! Message ID: %s", msg.ID)
+				common.PrintSuccess("Draft sent! Message ID: %s", msg.ID)
 				return struct{}{}, nil
 			})
 			return err

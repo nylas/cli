@@ -130,7 +130,7 @@ func printMessageSummary(msg domain.Message, index int) {
 }
 
 // printMessageSummaryWithID prints a single-line message summary, optionally with ID.
-func printMessageSummaryWithID(msg domain.Message, index int, showID bool) {
+func printMessageSummaryWithID(msg domain.Message, _ int, showID bool) {
 	status := " "
 	if msg.Unread {
 		status = common.Cyan.Sprint("●")
@@ -141,15 +141,9 @@ func printMessageSummaryWithID(msg domain.Message, index int, showID bool) {
 		star = common.Yellow.Sprint("★")
 	}
 
-	from := common.FormatParticipants(msg.From)
-	if len(from) > 20 {
-		from = from[:17] + "..."
-	}
+	from := common.Truncate(common.FormatParticipants(msg.From), 20)
 
-	subject := msg.Subject
-	if len(subject) > 40 {
-		subject = subject[:37] + "..."
-	}
+	subject := common.Truncate(msg.Subject, 40)
 
 	dateStr := common.FormatTimeAgo(msg.Date)
 	if len(dateStr) > 12 {
@@ -163,10 +157,4 @@ func printMessageSummaryWithID(msg domain.Message, index int, showID bool) {
 	} else {
 		fmt.Printf("%s %s %-20s %-40s %s\n", status, star, from, subject, common.Dim.Sprint(dateStr))
 	}
-}
-
-// printSuccess prints a success message in green.
-// Delegates to common.PrintSuccess for consistent success formatting.
-func printSuccess(format string, args ...any) {
-	common.PrintSuccess(format, args...)
 }

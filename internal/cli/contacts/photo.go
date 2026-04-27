@@ -27,7 +27,6 @@ func newPhotoCmd() *cobra.Command {
 
 func newPhotoDownloadCmd() *cobra.Command {
 	var outputFile string
-	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "download <contact-id>",
@@ -66,7 +65,7 @@ and saves it to a file or displays the Base64 data.`,
 
 					fmt.Printf("Profile picture saved to: %s\n", outputFile)
 					fmt.Printf("Size: %d bytes\n", len(imageData))
-				} else if jsonOutput {
+				} else if common.IsJSON(cmd) {
 					// Print as JSON
 					fmt.Printf(`{"contact_id":"%s","picture":"%s"}`+"\n", contactID, contact.Picture)
 				} else {
@@ -83,7 +82,6 @@ and saves it to a file or displays the Base64 data.`,
 	}
 
 	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file path (decodes and saves image)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

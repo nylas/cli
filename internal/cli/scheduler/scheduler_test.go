@@ -82,10 +82,6 @@ func TestConfigListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestConfigShowCmd(t *testing.T) {
@@ -95,10 +91,6 @@ func TestConfigShowCmd(t *testing.T) {
 		assert.Equal(t, "show <config-id>", cmd.Use)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestConfigCreateCmd(t *testing.T) {
@@ -277,10 +269,6 @@ func TestSessionShowCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 // Bookings Tests
@@ -324,10 +312,6 @@ func TestBookingListCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Flags().Lookup("config-id"))
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestBookingShowCmd(t *testing.T) {
@@ -337,10 +321,6 @@ func TestBookingShowCmd(t *testing.T) {
 		assert.Equal(t, "show <booking-id>", cmd.Use)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestBookingConfirmCmd(t *testing.T) {
@@ -504,10 +484,6 @@ func TestPageListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestPageShowCmd(t *testing.T) {
@@ -517,10 +493,6 @@ func TestPageShowCmd(t *testing.T) {
 		assert.Equal(t, "show <page-id>", cmd.Use)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestPageCreateCmd(t *testing.T) {

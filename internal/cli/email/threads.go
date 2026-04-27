@@ -224,7 +224,7 @@ func newThreadsMarkCmd() *cobra.Command {
 					status = append(status, "unstarred")
 				}
 
-				printSuccess("Thread %s: %s (subject: %s)", threadID[:12]+"...", fmt.Sprintf("%v", status), thread.Subject)
+				common.PrintSuccess("Thread %s: %s (subject: %s)", common.Truncate(threadID, 15), fmt.Sprintf("%v", status), thread.Subject)
 				return struct{}{}, nil
 			})
 			return err
@@ -278,7 +278,7 @@ func newThreadsDeleteCmd() *cobra.Command {
 					return struct{}{}, common.WrapDeleteError("thread", err)
 				}
 
-				printSuccess("Thread deleted")
+				common.PrintSuccess("Thread deleted")
 				return struct{}{}, nil
 			})
 			return err

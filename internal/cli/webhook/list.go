@@ -15,7 +15,6 @@ import (
 )
 
 func newListCmd() *cobra.Command {
-	var format string
 	var fullIDs bool
 
 	cmd := &cobra.Command{
@@ -32,28 +31,11 @@ Shows webhook ID, description, URL, status, and trigger types.`,
   nylas webhook list --full-ids
 
   # List in JSON format
-  nylas webhook list --format json
+  nylas --format json webhook list
 
   # List in YAML format
-  nylas webhook list --format yaml`,
+  nylas --format yaml webhook list`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check if we should use structured output from global flags
-			if common.IsJSON(cmd) {
-				_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-					webhooks, err := common.RunWithSpinnerResult("Fetching webhooks...", func() ([]domain.Webhook, error) {
-						return client.ListWebhooks(ctx)
-					})
-					if err != nil {
-						return struct{}{}, common.WrapListError("webhooks", err)
-					}
-
-					out := common.GetOutputWriter(cmd)
-					return struct{}{}, out.Write(webhooks)
-				})
-				return err
-			}
-
-			// Use WithClientNoGrant for all output formats
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				webhooks, err := common.RunWithSpinnerResult("Fetching webhooks...", func() ([]domain.Webhook, error) {
 					return client.ListWebhooks(ctx)
@@ -62,27 +44,28 @@ Shows webhook ID, description, URL, status, and trigger types.`,
 					return struct{}{}, common.WrapListError("webhooks", err)
 				}
 
+				// CSV is a special format not handled by the global writer; check it first.
+				format, _ := cmd.Flags().GetString("format")
+				if format == "csv" {
+					return struct{}{}, outputCSV(webhooks)
+				}
+
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(webhooks)
+				}
+
 				if len(webhooks) == 0 {
 					common.PrintEmptyStateWithHint("webhooks", "Create one with: nylas webhook create --url <URL> --triggers <triggers>")
 					return struct{}{}, nil
 				}
 
-				switch format {
-				case "json":
-					return struct{}{}, outputJSON(webhooks)
-				case "yaml":
-					return struct{}{}, outputYAML(webhooks)
-				case "csv":
-					return struct{}{}, outputCSV(webhooks)
-				default:
-					return struct{}{}, outputTable(webhooks, fullIDs)
-				}
+				return struct{}{}, outputTable(webhooks, fullIDs)
 			})
 			return err
 		},
 	}
 
-	cmd.Flags().StringVarP(&format, "format", "f", "table", "Output format (table, json, yaml, csv)")
 	cmd.Flags().BoolVar(&fullIDs, "full-ids", false, "Show full webhook IDs (useful for copy/paste)")
 
 	return cmd

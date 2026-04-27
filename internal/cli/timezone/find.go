@@ -18,7 +18,6 @@ func newFindMeetingCmd() *cobra.Command {
 		startDateStr    string
 		endDateStr      string
 		excludeWeekends bool
-		jsonOut         bool
 	)
 
 	cmd := &cobra.Command{
@@ -58,7 +57,7 @@ Examples:
     --exclude-weekends`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runFindMeeting(zonesStr, durationStr, startHour, endHour,
-				startDateStr, endDateStr, excludeWeekends, jsonOut)
+				startDateStr, endDateStr, excludeWeekends, common.IsJSON(cmd))
 		},
 	}
 
@@ -69,7 +68,6 @@ Examples:
 	cmd.Flags().StringVar(&startDateStr, "start-date", "", "Start date for search (YYYY-MM-DD, defaults to today)")
 	cmd.Flags().StringVar(&endDateStr, "end-date", "", "End date for search (YYYY-MM-DD, defaults to 7 days from start)")
 	cmd.Flags().BoolVar(&excludeWeekends, "exclude-weekends", false, "Exclude Saturday and Sunday")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	_ = cmd.MarkFlagRequired("zones")
 

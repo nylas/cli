@@ -117,7 +117,7 @@ func newSignaturesCreateCmd() *cobra.Command {
 					out := common.GetOutputWriter(cmd)
 					return struct{}{}, out.Write(signature)
 				}
-				printSuccess("Signature created successfully!")
+				common.PrintSuccess("Signature created successfully!")
 				fmt.Printf("  ID:      %s\n", signature.ID)
 				fmt.Printf("  Name:    %s\n", signature.Name)
 				if preview := signaturePreview(signature.Body); preview != "" {
@@ -169,7 +169,7 @@ func newSignaturesUpdateCmd() *cobra.Command {
 					out := common.GetOutputWriter(cmd)
 					return struct{}{}, out.Write(signature)
 				}
-				printSuccess("Signature updated successfully!")
+				common.PrintSuccess("Signature updated successfully!")
 				fmt.Printf("  ID:      %s\n", signature.ID)
 				fmt.Printf("  Name:    %s\n", signature.Name)
 				if preview := signaturePreview(signature.Body); preview != "" {
@@ -216,7 +216,7 @@ func newSignaturesDeleteCmd() *cobra.Command {
 				if err := client.DeleteSignature(ctx, grantID, signatureID); err != nil {
 					return struct{}{}, common.WrapDeleteError("signature", err)
 				}
-				printSuccess("Signature deleted successfully!")
+				common.PrintSuccess("Signature deleted successfully!")
 				return struct{}{}, nil
 			})
 			return err

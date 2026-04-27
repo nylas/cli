@@ -29,8 +29,6 @@ func newPagesCmd() *cobra.Command {
 }
 
 func newPageListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -43,7 +41,7 @@ func newPageListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("pages", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(pages)
 				}
 
@@ -66,14 +64,10 @@ func newPageListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newPageShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <page-id>",
 		Short: "Show scheduler page details",
@@ -87,7 +81,7 @@ func newPageShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("page", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(page)
 				}
 
@@ -104,8 +98,6 @@ func newPageShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

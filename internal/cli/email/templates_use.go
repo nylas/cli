@@ -21,7 +21,6 @@ func newTemplatesUseCmd() *cobra.Command {
 	var vars []string
 	var preview bool
 	var noConfirm bool
-	var jsonOutput bool
 	var signatureID string
 
 	cmd := &cobra.Command{
@@ -46,6 +45,7 @@ Use --preview to see the expanded template without sending.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateID := args[0]
+			jsonOutput := common.IsJSON(cmd)
 
 			// Validation
 			if len(to) == 0 {
@@ -168,7 +168,7 @@ Use --preview to see the expanded template without sending.`,
 					return struct{}{}, common.PrintJSON(msg)
 				}
 
-				printSuccess("Email sent successfully! Message ID: %s", msg.ID)
+				common.PrintSuccess("Email sent successfully! Message ID: %s", msg.ID)
 				return struct{}{}, nil
 			})
 
@@ -182,7 +182,6 @@ Use --preview to see the expanded template without sending.`,
 	cmd.Flags().StringSliceVar(&vars, "var", nil, "Variable values as key=value (can be repeated)")
 	cmd.Flags().BoolVarP(&preview, "preview", "p", false, "Preview the expanded template without sending")
 	cmd.Flags().BoolVarP(&noConfirm, "yes", "y", false, "Skip confirmation prompt")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().StringVar(&signatureID, "signature-id", "", "Stored signature ID to append when sending")
 
 	return cmd

@@ -83,11 +83,6 @@ func TestAppListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "false", flag.DefValue)
-	})
 }
 
 func TestAppShowCmd(t *testing.T) {
@@ -101,10 +96,6 @@ func TestAppShowCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestAppCreateCmd(t *testing.T) {
@@ -224,10 +215,6 @@ func TestConnectorListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestConnectorShowCmd(t *testing.T) {
@@ -241,10 +228,6 @@ func TestConnectorShowCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestConnectorCreateCmd(t *testing.T) {
@@ -356,10 +339,6 @@ func TestCredentialListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestCredentialShowCmd(t *testing.T) {
@@ -373,10 +352,6 @@ func TestCredentialShowCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestCredentialCreateCmd(t *testing.T) {
@@ -479,11 +454,6 @@ func TestGrantListCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Flags().Lookup("status"))
 		assert.NotNil(t, cmd.Flags().Lookup("limit"))
 		assert.NotNil(t, cmd.Flags().Lookup("offset"))
-	})
-
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
 	})
 
 	t.Run("has_correct_limit_default", func(t *testing.T) {

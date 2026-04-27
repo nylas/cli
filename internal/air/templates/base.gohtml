@@ -41,59 +41,8 @@
             <p id="initStatus" style="font-family:ui-monospace,monospace; font-size:12px; color:#71717a; margin:0; letter-spacing:0.5px;">Preparing workspace</p>
         </div>
     </div>
-    <script>
-        // Cache initialization overlay - runs immediately, before any other scripts
-        (function() {
-            var params = new URLSearchParams(window.location.search);
-            if (params.get('init') === '1') {
-                var overlay = document.getElementById('initOverlay');
-                var progressBar = document.getElementById('initProgressBar');
-                var statusText = document.getElementById('initStatus');
-
-                // Show overlay immediately with flex display
-                overlay.style.display = 'flex';
-
-                var statuses = [
-                    'Preparing workspace',
-                    'Clearing old data',
-                    'Setting up folders',
-                    'Connecting to API',
-                    'Loading preferences',
-                    'Almost ready...'
-                ];
-
-                var progress = 0;
-                var statusIndex = 0;
-                var duration = 3000; // 3 seconds
-                var interval = 50;   // Update every 50ms
-                var steps = duration / interval;
-                var increment = 100 / steps;
-
-                var timer = setInterval(function() {
-                    progress += increment;
-                    progressBar.style.width = Math.min(progress, 100) + '%';
-
-                    // Update status text at intervals
-                    var newIndex = Math.floor((progress / 100) * statuses.length);
-                    if (newIndex !== statusIndex && newIndex < statuses.length) {
-                        statusIndex = newIndex;
-                        statusText.textContent = statuses[statusIndex];
-                    }
-
-                    if (progress >= 100) {
-                        clearInterval(timer);
-                        statusText.textContent = 'Ready!';
-
-                        // Remove init param and refresh
-                        setTimeout(function() {
-                            var newUrl = window.location.origin + window.location.pathname;
-                            window.location.replace(newUrl);
-                        }, 300);
-                    }
-                }, interval);
-            }
-        })();
-    </script>
+    <!-- Cache initialization overlay runs before any other scripts -->
+    <script src="/js/cache-init.js"></script>
 
     <!-- Skip Navigation Link for Accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -123,7 +72,10 @@
     <!-- JavaScript (load order matters) -->
     <!-- 1. Utilities and helpers -->
     <script src="/js/utils.js"></script>
+    <script src="/js/event-delegation.js"></script>
     <script src="/js/settings.js"></script>
+    <script src="/js/modals-navigation.js"></script>
+    <script src="/js/modals-settings.js"></script>
 
     <!-- 2. Core API client (required by domain modules) - Modular Architecture -->
     <script src="/js/api-core.js"></script>
@@ -209,6 +161,9 @@
     <script src="/js/app-accessibility.js"></script>
     <script src="/js/app-account.js"></script>
     <script src="/js/app-init.js"></script>
+
+    <!-- Event delegation action registrations (must be last) -->
+    <script src="/js/actions-registry.js"></script>
 </body>
 </html>
 {{end}}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // Bundle represents an email bundle/category
@@ -156,10 +158,7 @@ func (s *Server) handleGetBundles(w http.ResponseWriter, r *http.Request) {
 		bundles = append(bundles, b)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(bundles); err != nil {
-		http.Error(w, "Failed to encode bundles", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, bundles)
 }
 
 // handleBundleCategorize assigns an email to a bundle
@@ -187,11 +186,7 @@ func (s *Server) handleBundleCategorize(w http.ResponseWriter, r *http.Request) 
 		bundleStore.mu.Unlock()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"bundleId": bundleID}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"bundleId": bundleID})
 }
 
 // categorizeEmail determines which bundle an email belongs to
@@ -295,10 +290,7 @@ func (s *Server) handleUpdateBundle(w http.ResponseWriter, r *http.Request) {
 		existing.LastUpdated = time.Now()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(bundle); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, bundle)
 }
 
 // handleGetBundleEmails returns emails for a specific bundle
@@ -319,8 +311,5 @@ func (s *Server) handleGetBundleEmails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(emailIDs); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, emailIDs)
 }

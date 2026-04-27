@@ -29,8 +29,6 @@ func newCallbackURIsCmd() *cobra.Command {
 }
 
 func newCallbackURIListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -43,7 +41,7 @@ func newCallbackURIListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("callback URIs", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(uris)
 				}
 
@@ -70,14 +68,10 @@ func newCallbackURIListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newCallbackURIShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <uri-id>",
 		Short: "Show callback URI details",
@@ -91,7 +85,7 @@ func newCallbackURIShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("callback URI", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(uri)
 				}
 
@@ -105,8 +99,6 @@ func newCallbackURIShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

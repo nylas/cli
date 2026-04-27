@@ -13,9 +13,8 @@ import (
 
 func newRuleListCmd() *cobra.Command {
 	var (
-		jsonOutput bool
-		allRules   bool
-		policyID   string
+		allRules bool
+		policyID string
 	)
 
 	cmd := &cobra.Command{
@@ -37,11 +36,10 @@ Examples:
 			if allRules && policyID != "" {
 				return common.NewUserError("cannot combine --all with --policy-id", "Use either --all or --policy-id")
 			}
-			return runRuleList(jsonOutput, allRules, policyID)
+			return runRuleList(common.IsJSON(cmd), allRules, policyID)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&allRules, "all", false, "List all rules reachable from provider=nylas policies")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the rule list to")
 
@@ -178,9 +176,8 @@ func collectPolicyScopedRules(policy *domain.Policy, accounts []policyAgentAccou
 
 func newRuleGetCmd() *cobra.Command {
 	var (
-		jsonOutput bool
-		allRules   bool
-		policyID   string
+		allRules bool
+		policyID string
 	)
 
 	cmd := &cobra.Command{
@@ -202,11 +199,10 @@ Examples:
 			if allRules && policyID != "" {
 				return common.NewUserError("cannot combine --all with --policy-id", "Use either --all or --policy-id")
 			}
-			return runRuleGet(args[0], jsonOutput, allRules, policyID)
+			return runRuleGet(args[0], common.IsJSON(cmd), allRules, policyID)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&allRules, "all", false, "Search across all provider=nylas policies")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the rule lookup to")
 
@@ -215,9 +211,8 @@ Examples:
 
 func newRuleReadCmd() *cobra.Command {
 	var (
-		jsonOutput bool
-		allRules   bool
-		policyID   string
+		allRules bool
+		policyID string
 	)
 
 	cmd := &cobra.Command{
@@ -235,11 +230,10 @@ Examples:
 			if allRules && policyID != "" {
 				return common.NewUserError("cannot combine --all with --policy-id", "Use either --all or --policy-id")
 			}
-			return runRuleGet(args[0], jsonOutput, allRules, policyID)
+			return runRuleGet(args[0], common.IsJSON(cmd), allRules, policyID)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&allRules, "all", false, "Search across all provider=nylas policies")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the rule lookup to")
 

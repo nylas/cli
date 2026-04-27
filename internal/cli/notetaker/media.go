@@ -11,8 +11,6 @@ import (
 )
 
 func newMediaCmd() *cobra.Command {
-	var outputJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "media <notetaker-id> [grant-id]",
 		Short: "Get notetaker media (recording and transcript)",
@@ -38,7 +36,7 @@ Note: Media URLs have an expiration time. Download them promptly.`,
 					return struct{}{}, common.WrapGetError("notetaker media", err)
 				}
 
-				if outputJSON {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(media)
 				}
 
@@ -87,8 +85,6 @@ Note: Media URLs have an expiration time. Download them promptly.`,
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

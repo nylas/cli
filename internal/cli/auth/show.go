@@ -15,8 +15,6 @@ import (
 )
 
 func newShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show [grant-id]",
 		Short: "Show detailed grant information",
@@ -91,7 +89,7 @@ Information includes:
 				return common.WrapGetError("grant details", err)
 			}
 
-			if jsonOutput {
+			if common.IsJSON(cmd) {
 				return common.PrintJSON(grant)
 			}
 
@@ -147,8 +145,6 @@ Information includes:
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

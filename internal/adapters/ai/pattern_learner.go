@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -151,6 +152,7 @@ func (p *PatternLearner) fetchHistoricalEvents(ctx context.Context, req *LearnPa
 	}
 
 	allEvents := []domain.Event{}
+	skipped := []string{}
 
 	// Fetch events from each calendar
 	for _, calendar := range calendars {
@@ -161,11 +163,24 @@ func (p *PatternLearner) fetchHistoricalEvents(ctx context.Context, req *LearnPa
 		})
 
 		if err != nil {
-			// Skip calendar if error (might be read-only, etc.)
+			// Some calendars are read-only or temporarily unavailable. Record
+			// the skip with the underlying error so the caller (and test
+			// harness) can see analysis was partial — silently dropping the
+			// calendar gives the user "patterns" computed from incomplete
+			// data and no way to know.
+			skipped = append(skipped, fmt.Sprintf("%s: %v", calendar.ID, err))
 			continue
 		}
 
 		allEvents = append(allEvents, events...)
+	}
+
+	if len(skipped) > 0 {
+		// Log to stderr; downstream callers that already check for
+		// PartialAnalysis on the returned struct (set below) get the same
+		// signal without depending on a logger interface.
+		fmt.Fprintf(os.Stderr, "warn: pattern analysis skipped %d calendar(s): %s\n",
+			len(skipped), strings.Join(skipped, "; "))
 	}
 
 	// Filter out recurring events if not requested
@@ -184,7 +199,7 @@ func (p *PatternLearner) fetchHistoricalEvents(ctx context.Context, req *LearnPa
 }
 
 // calculateAnalysisPeriod calculates the actual period analyzed.
-func (p *PatternLearner) calculateAnalysisPeriod(events []domain.Event, requestedDays int) AnalysisPeriod {
+func (p *PatternLearner) calculateAnalysisPeriod(events []domain.Event, _ int) AnalysisPeriod {
 	if len(events) == 0 {
 		return AnalysisPeriod{}
 	}
@@ -320,10 +335,10 @@ func (p *PatternLearner) buildPatternContext(events []domain.Event, acceptance [
 }
 
 // SavePatterns saves learned patterns (stub for future storage implementation).
+// Returns an error rather than nil so callers can't mistake the no-op for a
+// successful persist — pairs with LoadPatterns which already errors.
 func (p *PatternLearner) SavePatterns(ctx context.Context, patterns *SchedulingPatterns) error {
-	// Future: Save to local storage/database
-	// For now, this is a no-op
-	return nil
+	return fmt.Errorf("pattern storage not yet implemented")
 }
 
 // LoadPatterns loads previously learned patterns (stub for future storage implementation).

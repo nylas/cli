@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -44,7 +45,7 @@ func (c *HTTPClient) GetWebhook(ctx context.Context, webhookID string) (*domain.
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, webhookID)
+	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, url.PathEscape(webhookID))
 
 	var result struct {
 		Data webhookResponse `json:"data"`
@@ -83,7 +84,7 @@ func (c *HTTPClient) UpdateWebhook(ctx context.Context, webhookID string, req *d
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, webhookID)
+	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, url.PathEscape(webhookID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req)
 	if err != nil {
@@ -106,7 +107,7 @@ func (c *HTTPClient) DeleteWebhook(ctx context.Context, webhookID string) error 
 	if err := validateRequired("webhook ID", webhookID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, webhookID)
+	queryURL := fmt.Sprintf("%s/v3/webhooks/%s", c.baseURL, url.PathEscape(webhookID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -119,7 +120,7 @@ func (c *HTTPClient) RotateWebhookSecret(
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/webhooks/rotate-secret/%s", c.baseURL, webhookID)
+	queryURL := fmt.Sprintf("%s/v3/webhooks/rotate-secret/%s", c.baseURL, url.PathEscape(webhookID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, nil)
 	if err != nil {

@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -61,7 +62,7 @@ func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Prov
 }
 
 func (c *HTTPClient) getManagedGrant(ctx context.Context, grantID string) (*managedGrantResponse, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data managedGrantResponse `json:"data"`

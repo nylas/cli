@@ -430,10 +430,10 @@ const CommandPalette = {
         ];
 
         modal.innerHTML = `
-            <div class="modal shortcuts-modal" onclick="event.stopPropagation()">
+            <div class="modal shortcuts-modal" data-action="cmd-shortcuts-stop-propagation">
                 <div class="modal-header">
                     <h3>⌨️ Keyboard Shortcuts</h3>
-                    <button class="close-btn" onclick="document.getElementById('shortcutsHelpModal').classList.add('hidden')">&times;</button>
+                    <button class="close-btn" data-action="cmd-shortcuts-close">&times;</button>
                 </div>
                 <div class="modal-body shortcuts-body">
                     ${shortcutGroups.map(group => `

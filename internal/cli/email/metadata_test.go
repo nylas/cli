@@ -48,13 +48,6 @@ func TestMetadataShowCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("has json flag", func(t *testing.T) {
-		cmd := newMetadataShowCmd()
-		flag := cmd.Flags().Lookup("json")
-		if flag == nil {
-			t.Error("expected --json flag to exist")
-		}
-	})
 }
 
 func TestMetadataInfoCommand(t *testing.T) {

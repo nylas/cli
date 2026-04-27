@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,12 +10,9 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newShowCmd() *cobra.Command {
-	var format string
-
 	cmd := &cobra.Command{
 		Use:   "show <webhook-id>",
 		Short: "Show webhook details",
@@ -41,22 +37,15 @@ status, and notification settings.`,
 					return struct{}{}, common.WrapGetError("webhook", err)
 				}
 
-				switch format {
-				case "json":
-					enc := json.NewEncoder(cmd.OutOrStdout())
-					enc.SetIndent("", "  ")
-					return struct{}{}, enc.Encode(webhook)
-				case "yaml":
-					return struct{}{}, yaml.NewEncoder(cmd.OutOrStdout()).Encode(webhook)
-				default:
-					return struct{}{}, displayWebhookDetails(webhook)
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(webhook)
 				}
+				return struct{}{}, displayWebhookDetails(webhook)
 			})
 			return err
 		},
 	}
-
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json, yaml)")
 
 	return cmd
 }
