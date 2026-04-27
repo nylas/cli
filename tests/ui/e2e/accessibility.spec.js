@@ -110,17 +110,14 @@ test.describe('Button Accessibility', () => {
   test('navigation buttons are accessible', async ({ page }, testInfo) => {
     await skipIfNotConfigured(page, testInfo);
 
-    // Overview button
-    const overviewBtn = page.getByRole('button', { name: /Overview/i });
-    await expect(overviewBtn).toBeVisible();
+    // Scope to the nav landmark and use exact names so account buttons
+    // in the dashboard (e.g. "ACCOUNT 23@qasim.nylas.email") don't match
+    // the broader regexes via substring.
+    const nav = page.getByRole('navigation');
 
-    // Auth button
-    const authBtn = page.getByRole('button', { name: /Auth/i });
-    await expect(authBtn).toBeVisible();
-
-    // Email button
-    const emailBtn = page.getByRole('button', { name: /Email/i });
-    await expect(emailBtn).toBeVisible();
+    await expect(nav.getByRole('button', { name: /^Overview$/ })).toBeVisible();
+    await expect(nav.getByRole('button', { name: /^Auth$/ })).toBeVisible();
+    await expect(nav.getByRole('button', { name: /^Email$/ })).toBeVisible();
   });
 
   test('dropdown buttons have accessible names', async ({ page }, testInfo) => {
