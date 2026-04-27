@@ -95,8 +95,10 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	// May modify tunnelType/webhookSecret/allowUnsigned, or signal that the
 	// user wants to exit (e.g. cloudflared not installed and they declined
 	// loopback-only).
+	interactive := term.IsTerminal(int(os.Stdin.Fd()))
 	resolvedTunnel, resolvedSecret, resolvedAllowUnsigned, exit, err := preflightTunnelChoice(
 		newStdinPrompter(),
+		interactive,
 		tunnelType, noTunnel, quiet, jsonOutput, webhookSecret, allowUnsigned,
 	)
 	if err != nil {
@@ -238,6 +240,15 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	return nil
 }
 
+// Test seams: package vars so unit tests can override host-state probes
+// without a real cloudflared binary or brew. Production calls go through
+// the real adapters by default.
+var (
+	cloudflaredInstalled = tunnel.IsCloudflaredInstalled
+	cloudflaredViaBrew   = canInstallCloudflaredViaBrew
+	installCloudflaredFn = installCloudflaredViaBrew
+)
+
 // preflightTunnelChoice walks the user through enabling a cloudflared tunnel
 // when no explicit --tunnel/--no-tunnel choice was made on an interactive
 // terminal. The returned (tunnelType, secret, allowUnsigned) reflect the
@@ -245,8 +256,10 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 // starting the server (the user declined to continue or cancelled a prompt).
 //
 // The preflight is intentionally skipped in scripted modes (--quiet, --json,
-// non-TTY stdin, --no-tunnel set, --tunnel already set) so that automation
-// keeps the previous behaviour.
+// interactive=false, --no-tunnel set, --tunnel already set) so that
+// automation keeps the previous behaviour. `interactive` is passed in by the
+// caller — runServer resolves it from term.IsTerminal(os.Stdin.Fd()), tests
+// pass true — so the function itself stays testable without a real TTY.
 //
 // Any prompt error (including io.EOF from Ctrl-D) aborts the preflight by
 // returning exit=true. We deliberately do NOT default to the safer-looking
@@ -255,6 +268,7 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 // system state without explicit consent.
 func preflightTunnelChoice(
 	prompter preflightPrompter,
+	interactive bool,
 	tunnelType string,
 	noTunnel, quiet, jsonOutput bool,
 	secret string,
@@ -263,18 +277,18 @@ func preflightTunnelChoice(
 	if tunnelType != "" || noTunnel || quiet || jsonOutput {
 		return tunnelType, secret, allowUnsigned, false, nil
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if !interactive {
 		return tunnelType, secret, allowUnsigned, false, nil
 	}
 
-	if !tunnel.IsCloudflaredInstalled() {
+	if !cloudflaredInstalled() {
 		_, _ = common.Yellow.Println("⚠ cloudflared is not installed.")
 		fmt.Println("  Nylas delivers webhooks to public URLs, so a loopback-only")
 		fmt.Println("  server cannot receive events from Nylas.")
 		fmt.Println()
 
 		installed := false
-		if canInstallCloudflaredViaBrew() {
+		if cloudflaredViaBrew() {
 			confirmInstall, err := prompter.Confirm("Install cloudflared via brew now?", true)
 			if err != nil {
 				// Cancelled before deciding — abort cleanly. Notably, do NOT
@@ -283,10 +297,10 @@ func preflightTunnelChoice(
 				return tunnelType, secret, allowUnsigned, true, nil
 			}
 			if confirmInstall {
-				if err := installCloudflaredViaBrew(); err != nil {
+				if err := installCloudflaredFn(); err != nil {
 					_, _ = common.Red.Printf("  brew install cloudflared failed: %v\n", err)
 					fmt.Println()
-				} else if tunnel.IsCloudflaredInstalled() {
+				} else if cloudflaredInstalled() {
 					_, _ = common.Green.Println("✓ cloudflared installed.")
 					fmt.Println()
 					installed = true

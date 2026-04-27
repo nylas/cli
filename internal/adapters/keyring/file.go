@@ -124,9 +124,16 @@ func (f *EncryptedFileStore) Set(key, value string) error {
 }
 
 // Get retrieves a secret value for the given key.
+//
+// Holds the exclusive lock — not RLock — because loadSecrets→decrypt may
+// run migrateToPassphrase on legacy data, which writes BOTH .secrets.salt
+// and .secrets.enc. Two concurrent first-readers under RLock can interleave
+// those writes and leave a salt/ciphertext pair that no longer decrypts.
+// CLI workloads aren't read-heavy, so serializing reads is the right
+// trade for guaranteed migration correctness.
 func (f *EncryptedFileStore) Get(key string) (string, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
 	secrets, err := f.loadSecrets()
 	if err != nil {

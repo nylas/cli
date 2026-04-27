@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -295,13 +296,25 @@ func checkGrants() CheckResult {
 
 	apiKey, apiErr := secretStore.Get(ports.KeyAPIKey)
 	clientID, cidErr := secretStore.Get(ports.KeyClientID)
-	clientSecret, csErr := secretStore.Get(ports.KeyClientSecret)
-	if apiErr != nil || cidErr != nil || csErr != nil {
+	if apiErr != nil || cidErr != nil {
 		return CheckResult{
 			Name:    "Grants",
 			Status:  CheckStatusError,
 			Message: fmt.Sprintf("%d grant(s), credentials missing", len(grants)),
-			Detail:  "One or more credentials are missing from the keyring. Run 'nylas auth config'.",
+			Detail:  "API key or client ID is missing from the keyring. Run 'nylas auth config'.",
+		}
+	}
+
+	// client_secret is optional in this codebase (see auth/config.go,
+	// auth/show.go, auth/helpers.go) — only some flows need it. Treat
+	// "not found" as empty; surface only real keyring failures.
+	clientSecret, csErr := secretStore.Get(ports.KeyClientSecret)
+	if csErr != nil && !errors.Is(csErr, domain.ErrSecretNotFound) {
+		return CheckResult{
+			Name:    "Grants",
+			Status:  CheckStatusError,
+			Message: fmt.Sprintf("%d grant(s), keyring read failed", len(grants)),
+			Detail:  fmt.Sprintf("Reading client_secret from the keyring failed: %v", csErr),
 		}
 	}
 

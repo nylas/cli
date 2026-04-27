@@ -45,7 +45,9 @@ func (m *mockPrompter) Password(message string) (string, error) {
 
 // TestPreflightTunnelChoice_BypassedInScriptedModes confirms the preflight
 // returns immediately (no prompting, no tunnel change) whenever the caller
-// has already made an explicit choice or is running non-interactively.
+// has already made an explicit choice. interactive=true is used here so the
+// test verifies the *flag-based* short-circuits (--tunnel/--no-tunnel/
+// --quiet/--json) — the non-interactive bypass is covered separately below.
 func TestPreflightTunnelChoice_BypassedInScriptedModes(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -63,7 +65,7 @@ func TestPreflightTunnelChoice_BypassedInScriptedModes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := &mockPrompter{}
 			gotTunnel, gotSecret, gotAllow, exit, err := preflightTunnelChoice(
-				p, tc.tunnelType, tc.noTunnel, tc.quiet, tc.jsonOutput, "", false,
+				p, true /* interactive */, tc.tunnelType, tc.noTunnel, tc.quiet, tc.jsonOutput, "", false,
 			)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -85,19 +87,48 @@ func TestPreflightTunnelChoice_BypassedInScriptedModes(t *testing.T) {
 	}
 }
 
+// TestPreflightTunnelChoice_NonInteractiveBypass confirms that when stdin is
+// not a TTY (interactive=false), the preflight returns without prompting,
+// regardless of which flags are set. This is the contract that scripts and
+// CI runs depend on.
+func TestPreflightTunnelChoice_NonInteractiveBypass(t *testing.T) {
+	p := &mockPrompter{}
+	gotTunnel, gotSecret, gotAllow, exit, err := preflightTunnelChoice(
+		p, false /* interactive */, "", false, false, false, "", false,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exit {
+		t.Fatalf("non-interactive bypass must not request exit")
+	}
+	if gotTunnel != "" || gotSecret != "" || gotAllow {
+		t.Fatalf("non-interactive bypass must not modify any value: tunnel=%q secret=%q allow=%v",
+			gotTunnel, gotSecret, gotAllow)
+	}
+	if p.tConfirms != 0 || p.tPasswords != 0 {
+		t.Fatalf("non-interactive bypass must not prompt (got %d confirms, %d passwords)",
+			p.tConfirms, p.tPasswords)
+	}
+}
+
+// stubCloudflaredInstalled overrides the package-level cloudflared probe so
+// these tests can exercise the secret/unsigned prompts without depending on
+// a real cloudflared binary on the test host.
+func stubCloudflaredInstalled(t *testing.T, installed bool) {
+	t.Helper()
+	prev := cloudflaredInstalled
+	cloudflaredInstalled = func() bool { return installed }
+	t.Cleanup(func() { cloudflaredInstalled = prev })
+}
+
 // TestPreflightTunnelChoice_EOFOnSecretDoesNotEnableUnsigned verifies that
 // pressing Ctrl-D at the secret prompt aborts the preflight rather than
 // silently flipping the user into --allow-unsigned. This is the security
 // gate that makes the empty-input → unsigned shortcut safe: cancellation
 // must NEVER be misread as consent.
-//
-// The test only runs end-to-end when the preflight is actually entered,
-// which requires a TTY. Skip otherwise so CI doesn't fail on the non-TTY
-// short-circuit at the top of preflightTunnelChoice.
 func TestPreflightTunnelChoice_EOFOnSecretDoesNotEnableUnsigned(t *testing.T) {
-	if !isTerminalStdin() {
-		t.Skip("preflight skips non-TTY stdin; covered by TestPreflightTunnelChoice_BypassedInScriptedModes")
-	}
+	stubCloudflaredInstalled(t, true)
 
 	p := &mockPrompter{
 		confirms: []confirmResp{
@@ -108,7 +139,7 @@ func TestPreflightTunnelChoice_EOFOnSecretDoesNotEnableUnsigned(t *testing.T) {
 		},
 	}
 
-	tunnelType, secret, allow, exit, err := preflightTunnelChoice(p, "", false, false, false, "", false)
+	tunnelType, secret, allow, exit, err := preflightTunnelChoice(p, true /* interactive */, "", false, false, false, "", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,9 +160,7 @@ func TestPreflightTunnelChoice_EOFOnSecretDoesNotEnableUnsigned(t *testing.T) {
 // allowUnsigned when the user explicitly confirms the insecure choice at
 // a second confirm prompt. Saying "no" at that gate exits cleanly.
 func TestPreflightTunnelChoice_EmptySecretRequiresExplicitUnsignedConfirm(t *testing.T) {
-	if !isTerminalStdin() {
-		t.Skip("requires TTY to enter preflight")
-	}
+	stubCloudflaredInstalled(t, true)
 
 	p := &mockPrompter{
 		confirms: []confirmResp{
@@ -143,7 +172,7 @@ func TestPreflightTunnelChoice_EmptySecretRequiresExplicitUnsignedConfirm(t *tes
 		},
 	}
 
-	_, _, allow, exit, err := preflightTunnelChoice(p, "", false, false, false, "", false)
+	_, _, allow, exit, err := preflightTunnelChoice(p, true /* interactive */, "", false, false, false, "", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,15 +184,35 @@ func TestPreflightTunnelChoice_EmptySecretRequiresExplicitUnsignedConfirm(t *tes
 	}
 }
 
-// isTerminalStdin reports whether stdin is a TTY. The preflight's non-TTY
-// short-circuit makes the rest of the function unreachable in a typical
-// `go test` run, so we use this to skip the TTY-only paths.
-func isTerminalStdin() bool {
-	// We deliberately do not import golang.org/x/term here — the function
-	// exists only to skip tests, and importing term in a test file pulls
-	// in additional build dependencies that are already exercised by the
-	// production code path.
-	return false
+// TestPreflightTunnelChoice_EmptySecretWithExplicitConfirmEnablesUnsigned
+// is the positive twin of the test above: when the user explicitly answers
+// "yes" at the unsigned-confirm gate, allowUnsigned must be set.
+func TestPreflightTunnelChoice_EmptySecretWithExplicitConfirmEnablesUnsigned(t *testing.T) {
+	stubCloudflaredInstalled(t, true)
+
+	p := &mockPrompter{
+		confirms: []confirmResp{
+			{value: true, err: nil}, // "Enable cloudflared tunnel?"
+			{value: true, err: nil}, // "Accept unsigned events on the public tunnel?"
+		},
+		passwords: []passwordResp{
+			{value: "", err: nil},
+		},
+	}
+
+	got, _, allow, exit, err := preflightTunnelChoice(p, true /* interactive */, "", false, false, false, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exit {
+		t.Fatalf("explicit yes at unsigned-confirm gate must NOT request exit")
+	}
+	if !allow {
+		t.Fatalf("explicit yes at unsigned-confirm gate must enable allowUnsigned")
+	}
+	if got != "cloudflared" {
+		t.Fatalf("tunnel type: want cloudflared, got %q", got)
+	}
 }
 
 // TestPreflightTunnelChoice_TunnelMutexErrorAtRunServer is a smoke test for
