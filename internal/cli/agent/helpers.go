@@ -99,13 +99,25 @@ func resolveAgentID(ctx context.Context, client ports.NylasClient, identifier st
 	if err != nil {
 		return "", err
 	}
-	for _, account := range accounts {
-		if strings.EqualFold(account.Email, identifier) {
-			return account.ID, nil
-		}
+	if account := findAgentAccountByEmail(accounts, identifier); account != nil {
+		return account.ID, nil
+	}
+
+	defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+	if defaultAccount != nil && strings.EqualFold(defaultAccount.Email, identifier) {
+		return defaultAccount.ID, nil
 	}
 
 	return "", common.NewUserError("agent account not found", fmt.Sprintf("No agent account found for email %s", identifier))
+}
+
+func findAgentAccountByEmail(accounts []domain.AgentAccount, email string) *domain.AgentAccount {
+	for i := range accounts {
+		if strings.EqualFold(accounts[i].Email, email) {
+			return &accounts[i]
+		}
+	}
+	return nil
 }
 
 func getAgentIdentifier(args []string) (string, error) {

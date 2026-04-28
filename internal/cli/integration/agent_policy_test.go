@@ -206,10 +206,6 @@ func TestCLI_AgentPolicyList_ShowsAttachedAgentAccount(t *testing.T) {
 	createdPolicy = policy
 
 	createdAccount = createAgentWithPolicyForTest(t, email, createdPolicy.ID)
-	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list", email)
-	}
-
 	env["NYLAS_GRANT_ID"] = createdAccount.ID
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list")
@@ -284,9 +280,7 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 	createdPolicy = policy
 
 	createdAccount = createAgentWithPolicyForTest(t, email, createdPolicy.ID)
-	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list", email)
-	}
+	env["NYLAS_GRANT_ID"] = createdAccount.ID
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "delete", createdPolicy.ID, "--yes")
 	if err == nil {

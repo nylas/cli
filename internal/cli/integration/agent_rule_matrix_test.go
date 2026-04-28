@@ -242,9 +242,6 @@ func setupRuleMatrixScope(t *testing.T, prefix string) *ruleMatrixScope {
 
 	email := newAgentTestEmail(t, prefix)
 	account := createAgentWithPolicyForTest(t, email, policy.ID)
-	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list", email)
-	}
 	env["NYLAS_GRANT_ID"] = account.ID
 
 	scope := &ruleMatrixScope{

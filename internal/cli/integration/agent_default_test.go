@@ -27,12 +27,10 @@ func TestCLI_AgentUpdate_UsesDefaultGrant(t *testing.T) {
 		if created == nil {
 			return
 		}
-		if exists, account := waitForAgentByEmail(t, client, email, true); exists {
-			acquireRateLimit(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_ = client.DeleteAgentAccount(ctx, account.ID)
-		}
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = client.DeleteAgentAccount(ctx, created.ID)
 	})
 
 	acquireRateLimit(t)

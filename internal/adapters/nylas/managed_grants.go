@@ -24,14 +24,26 @@ type agentSettingsPayload struct {
 	PolicyID string `json:"policy_id,omitempty"`
 }
 
+// maxManagedGrantPages caps pagination so a misbehaving server can't
+// trap us in an unbounded loop of fresh-but-empty cursors.
+const maxManagedGrantPages = 1000
+
+// listManagedGrants returns every grant whose provider matches `provider`.
+//
+// We deliberately do NOT pass `provider=<name>` as a server-side filter:
+// the server-side filtered listing has been observed to lag freshly-
+// created managed grants by tens of seconds (>70s in the worst case),
+// while the unfiltered listing surfaces new grants almost immediately.
+// Trade ~4x more page bytes (typical tenants have <100 grants) for
+// freshness and predictability. We filter to `provider` client-side.
 func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Provider) ([]managedGrantResponse, error) {
 	baseURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
 	pageToken := ""
 	grants := make([]managedGrantResponse, 0)
 
+	seenCursors := make(map[string]struct{})
 	for {
 		queryURL := NewQueryBuilder().
-			Add("provider", string(provider)).
 			Add("page_token", pageToken).
 			BuildURL(baseURL)
 
@@ -54,6 +66,13 @@ func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Prov
 		}
 		if result.NextCursor == pageToken {
 			return nil, fmt.Errorf("failed to paginate managed grants: repeated cursor %q", result.NextCursor)
+		}
+		if _, seen := seenCursors[result.NextCursor]; seen {
+			return nil, fmt.Errorf("failed to paginate managed grants: cursor cycle detected near %q", result.NextCursor)
+		}
+		seenCursors[result.NextCursor] = struct{}{}
+		if len(seenCursors) > maxManagedGrantPages {
+			return nil, fmt.Errorf("failed to paginate managed grants: exceeded max page count (%d)", maxManagedGrantPages)
 		}
 		pageToken = result.NextCursor
 	}

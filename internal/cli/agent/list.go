@@ -34,6 +34,10 @@ func runList(jsonOutput bool) error {
 		if err != nil {
 			return struct{}{}, common.WrapListError("agent accounts", err)
 		}
+		defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+		if defaultAccount != nil {
+			accounts = upsertAgentAccount(accounts, *defaultAccount)
+		}
 
 		if jsonOutput {
 			return struct{}{}, common.PrintJSON(accounts)

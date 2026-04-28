@@ -44,7 +44,10 @@ func TestListAgentAccounts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "nylas", r.URL.Query().Get("provider"))
+		// listManagedGrants intentionally does NOT pass provider= as a
+		// server-side filter — the filtered listing has been observed to
+		// lag freshly-created managed grants. We filter client-side.
+		assert.Equal(t, "", r.URL.Query().Get("provider"))
 
 		response := map[string]any{
 			"data": []map[string]any{
@@ -58,6 +61,13 @@ func TestListAgentAccounts(t *testing.T) {
 						"policy_id": "policy-123",
 					},
 					"created_at": time.Now().Unix(),
+				},
+				// Mix in a non-nylas grant — the client must filter it out.
+				{
+					"id":           "google-001",
+					"email":        "user@gmail.com",
+					"provider":     "google",
+					"grant_status": "valid",
 				},
 			},
 		}
@@ -73,7 +83,7 @@ func TestListAgentAccounts(t *testing.T) {
 
 	accounts, err := client.ListAgentAccounts(context.Background())
 	require.NoError(t, err)
-	require.Len(t, accounts, 1)
+	require.Len(t, accounts, 1, "non-nylas grants must be filtered client-side")
 	assert.Equal(t, "agent-001", accounts[0].ID)
 	assert.Equal(t, "agent@example.com", accounts[0].Email)
 	assert.Equal(t, "policy-123", accounts[0].Settings.PolicyID)
@@ -84,7 +94,8 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "nylas", r.URL.Query().Get("provider"))
+		// No server-side provider filter — see TestListAgentAccounts.
+		assert.Equal(t, "", r.URL.Query().Get("provider"))
 
 		requests++
 		var response map[string]any

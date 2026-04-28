@@ -148,11 +148,14 @@ func findExistingAgentAccountByEmail(ctx context.Context, client ports.AgentClie
 		return nil, err
 	}
 
-	for _, account := range accounts {
-		if strings.EqualFold(account.Email, email) {
-			accountCopy := account
-			return &accountCopy, nil
-		}
+	if account := findAgentAccountByEmail(accounts, email); account != nil {
+		accountCopy := *account
+		return &accountCopy, nil
+	}
+
+	defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+	if defaultAccount != nil && strings.EqualFold(defaultAccount.Email, email) {
+		return defaultAccount, nil
 	}
 
 	return nil, nil

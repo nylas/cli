@@ -41,17 +41,11 @@ Examples:
 func runPolicyList(jsonOutput, allPolicies bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 		if allPolicies {
-			policies, err := client.ListPolicies(ctx)
+			scope, err := loadAgentPolicyScope(ctx, client)
 			if err != nil {
-				return struct{}{}, common.WrapListError("policies", err)
+				return struct{}{}, err
 			}
-
-			accounts, err := client.ListAgentAccounts(ctx)
-			if err != nil {
-				return struct{}{}, common.WrapListError("agent accounts", err)
-			}
-			refsByPolicyID := buildPolicyAccountRefs(accounts)
-			policies = filterPoliciesWithAgentAccounts(policies, refsByPolicyID)
+			policies := scope.AgentPolicies
 
 			if jsonOutput {
 				return struct{}{}, common.PrintJSON(policies)
@@ -64,7 +58,7 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 
 			_, _ = common.BoldWhite.Printf("Policies (%d)\n\n", len(policies))
 			for i, policy := range policies {
-				printPolicySummary(policy, i, refsByPolicyID[policy.ID])
+				printPolicySummary(policy, i, scope.PolicyRefsByID[policy.ID])
 			}
 			fmt.Println()
 			return struct{}{}, nil
