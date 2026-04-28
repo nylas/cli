@@ -73,16 +73,7 @@ func createGrantService() (*authapp.GrantService, *authapp.ConfigService, error)
 	}
 
 	configSvc := authapp.NewConfigService(configStore, secretStore)
-
-	// Create Nylas client
-	client := nylasadapter.NewHTTPClient()
-
-	// Set credentials if available
-	cfg, _ := configStore.Load()
-	client.SetRegion(cfg.Region)
-
-	apiKey, clientID, clientSecret := getCredentialsWithEnvFallback(secretStore)
-	client.SetCredentials(clientID, clientSecret, apiKey)
+	client := createConfiguredNylasClient(configStore, secretStore)
 
 	return authapp.NewGrantService(client, grantStore, configStore), configSvc, nil
 }
@@ -104,22 +95,30 @@ func createAuthService() (*authapp.Service, *authapp.ConfigService, error) {
 	}
 
 	configSvc := authapp.NewConfigService(configStore, secretStore)
-
-	// Create Nylas client
-	client := nylasadapter.NewHTTPClient()
-
-	// Set credentials if available
-	cfg, _ := configStore.Load()
-	client.SetRegion(cfg.Region)
-
-	apiKey, clientID, clientSecret := getCredentialsWithEnvFallback(secretStore)
-	client.SetCredentials(clientID, clientSecret, apiKey)
+	client := createConfiguredNylasClient(configStore, secretStore)
 
 	// Create OAuth server
+	cfg, _ := configStore.Load()
 	oauthServer := oauth.NewCallbackServer(cfg.CallbackPort)
 
 	// Create browser
 	browserAdapter := browser.NewDefaultBrowser()
 
 	return authapp.NewService(client, grantStore, configStore, oauthServer, browserAdapter), configSvc, nil
+}
+
+func createConfiguredNylasClient(configStore ports.ConfigStore, secretStore ports.SecretStore) *nylasadapter.HTTPClient {
+	client := nylasadapter.NewHTTPClient()
+
+	cfg, _ := configStore.Load()
+	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+		client.SetBaseURL(cfg.API.BaseURL)
+	} else if cfg != nil {
+		client.SetRegion(cfg.Region)
+	}
+
+	apiKey, clientID, clientSecret := getCredentialsWithEnvFallback(secretStore)
+	client.SetCredentials(clientID, clientSecret, apiKey)
+
+	return client
 }

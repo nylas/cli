@@ -56,7 +56,7 @@ func TestServer_StartStop(t *testing.T) {
 
 	// Server should be running
 	localURL := server.GetLocalURL()
-	assert.Contains(t, localURL, "/webhook")
+	assert.Equal(t, fmt.Sprintf("http://127.0.0.1:%d/webhook", port), localURL)
 
 	// Stop the server
 	err = server.Stop()
@@ -86,7 +86,7 @@ func TestServer_GetStats(t *testing.T) {
 	})
 
 	stats := server.GetStats()
-	assert.Equal(t, "http://localhost:3001/webhook", stats.LocalURL)
+	assert.Equal(t, "http://127.0.0.1:3001/webhook", stats.LocalURL)
 	assert.Equal(t, 0, stats.EventsReceived)
 }
 
@@ -319,7 +319,7 @@ func TestServer_GetLocalURL(t *testing.T) {
 	})
 
 	url := server.GetLocalURL()
-	assert.Equal(t, "http://localhost:8080/api/hooks", url)
+	assert.Equal(t, "http://127.0.0.1:8080/api/hooks", url)
 }
 
 func TestServer_GetPublicURL(t *testing.T) {
@@ -330,7 +330,7 @@ func TestServer_GetPublicURL(t *testing.T) {
 
 	// Without tunnel, public URL equals local URL
 	url := server.GetPublicURL()
-	assert.Equal(t, "http://localhost:8080/webhook", url)
+	assert.Equal(t, "http://127.0.0.1:8080/webhook", url)
 }
 
 func signWebhookPayload(secret string, payload []byte) string {

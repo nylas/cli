@@ -243,6 +243,12 @@ func TestWebhookServerConfigLeavesReplayWindowDisabledWithoutSecret(t *testing.T
 	}
 }
 
+func TestWebhookTunnelLocalURLUsesIPv4Loopback(t *testing.T) {
+	if got := webhookTunnelLocalURL(3000); got != "http://127.0.0.1:3000" {
+		t.Fatalf("webhookTunnelLocalURL() = %q, want IPv4 loopback URL", got)
+	}
+}
+
 func errorMessageContains(err error, substr string) bool {
 	if err == nil {
 		return false

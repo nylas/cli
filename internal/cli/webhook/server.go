@@ -141,7 +141,7 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 					"Install it with: brew install cloudflared (macOS) or see https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/",
 				)
 			}
-			localURL := fmt.Sprintf("http://localhost:%d", port)
+			localURL := webhookTunnelLocalURL(port)
 			t := tunnel.NewCloudflaredTunnel(localURL)
 			server.SetTunnel(t)
 		default:
@@ -248,6 +248,10 @@ func newWebhookServerConfig(port int, path, tunnelType, webhookSecret string) po
 		config.MaxEventAge = defaultSignedWebhookMaxEventAge
 	}
 	return config
+}
+
+func webhookTunnelLocalURL(port int) string {
+	return webhookserver.LocalBaseURL(port)
 }
 
 // Test seams: package vars so unit tests can override host-state probes

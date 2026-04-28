@@ -28,6 +28,17 @@ const (
 	maxConcurrentHandlers = 32
 )
 
+// LocalBaseURL returns the loopback URL used by the webhook receiver and
+// local tunnels. It intentionally uses IPv4 loopback because the server binds
+// to 127.0.0.1, not localhost's platform-dependent IPv4/IPv6 resolution.
+func LocalBaseURL(port int) string {
+	return fmt.Sprintf("http://127.0.0.1:%d", port)
+}
+
+func localEndpointURL(port int, path string) string {
+	return LocalBaseURL(port) + path
+}
+
 // rootTemplate renders the webhook server landing page. html/template HTML-
 // escapes every value, preventing PublicURL (and any future user-derived
 // fields) from breaking out of the document.
@@ -89,7 +100,7 @@ func NewServer(config ports.WebhookServerConfig) *Server {
 		events:       make(chan *ports.WebhookEvent, 100),
 		handlerSlots: make(chan struct{}, maxConcurrentHandlers),
 		stats: ports.WebhookServerStats{
-			LocalURL: fmt.Sprintf("http://localhost:%d%s", config.Port, config.Path),
+			LocalURL: localEndpointURL(config.Port, config.Path),
 		},
 	}
 }
@@ -116,7 +127,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	// Start listener bound to loopback only. Tunnels (cloudflared, ngrok)
-	// connect to localhost — there is no use case for accepting webhooks
+	// connect to 127.0.0.1 — there is no use case for accepting webhooks
 	// directly from the LAN, and binding to 0.0.0.0 would let any host on
 	// the local network forge webhook events.
 	var err error
@@ -128,7 +139,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.startedAt = time.Now()
 	s.mu.Lock()
 	s.stats.StartedAt = s.startedAt
-	s.stats.LocalURL = fmt.Sprintf("http://localhost:%d%s", s.config.Port, s.config.Path)
+	s.stats.LocalURL = localEndpointURL(s.config.Port, s.config.Path)
 	s.mu.Unlock()
 
 	// Start HTTP server in goroutine
@@ -138,7 +149,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start tunnel if configured
 	if s.tunnel != nil {
-		localURL := fmt.Sprintf("http://localhost:%d", s.config.Port)
 		publicURL, err := s.tunnel.Start(ctx)
 		if err != nil {
 			_ = s.Stop() // Ignore stop error - we're returning tunnel start error
@@ -150,8 +160,6 @@ func (s *Server) Start(ctx context.Context) error {
 		s.stats.TunnelProvider = s.config.TunnelProvider
 		s.stats.TunnelStatus = string(s.tunnel.Status())
 		s.mu.Unlock()
-
-		_ = localURL // used by tunnel
 	}
 
 	return nil

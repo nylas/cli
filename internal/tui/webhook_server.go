@@ -174,7 +174,7 @@ func (v *WebhookServerView) startServer() {
 
 	// Set up tunnel if enabled
 	if v.tunnelEnabled {
-		localURL := fmt.Sprintf("http://localhost:%d", v.port)
+		localURL := webhookserver.LocalBaseURL(v.port)
 		t := tunnel.NewCloudflaredTunnel(localURL)
 		v.server.SetTunnel(t)
 	}
@@ -262,7 +262,7 @@ func (v *WebhookServerView) renderStatus() {
 	_, _ = fmt.Fprintf(v.statusPanel, "  [%s]Port:[-]    [%s]%d[-]\n", muted, value, v.port)
 
 	// URLs
-	localURL := fmt.Sprintf("http://localhost:%d/webhook", v.port)
+	localURL := webhookserver.LocalBaseURL(v.port) + "/webhook"
 	_, _ = fmt.Fprintf(v.statusPanel, "  [%s]Local:[-]   [%s]%s[-]\n", muted, value, localURL)
 
 	// Tunnel status
