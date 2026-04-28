@@ -213,6 +213,9 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 
 			fmt.Println()
 			fmt.Printf("Added %d grant(s). Run 'nylas auth list' to see all accounts.\n", len(result.ValidGrants))
+			if result.Truncated {
+				_, _ = common.Yellow.Printf("  Note: capped at %d grants — additional grants on the server were not synced to keep keyring storage bounded.\n", setup.MaxSyncedGrants)
+			}
 
 			// Update config file with default grant and grants list
 			cfg.DefaultGrant = defaultGrantID

@@ -434,7 +434,7 @@ func TestServer_HandleHealth_SurfacesEventsDropped(t *testing.T) {
 // loopback interface — guards against an accidental change from
 // 127.0.0.1: to :PORT (which would let any host on the LAN forge events).
 func TestServer_StartBindsLoopbackOnly(t *testing.T) {
-	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	server := NewServer(ports.WebhookServerConfig{Port: reserveTCPPort(t), Path: "/webhook"})
 	require.NoError(t, server.Start(context.Background()))
 	defer func() { _ = server.Stop() }()
 

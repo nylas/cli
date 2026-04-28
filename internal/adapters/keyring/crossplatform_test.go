@@ -265,10 +265,10 @@ func TestEncryptedFileStore_RequiresPassphraseForWrites(t *testing.T) {
 	}
 }
 
-// TestEncryptedFileStore_RefusesWriteWhenLegacyExistsNoPassphrase verifies that
-// when a legacy .secrets.enc exists but no passphrase is set, writes are refused
-// with a migration-required error.
-func TestEncryptedFileStore_RefusesWriteWhenLegacyExistsNoPassphrase(t *testing.T) {
+// TestEncryptedFileStore_ReadsLegacyWithoutPassphraseButRefusesWrite verifies
+// that existing fallback-store users are not locked out of read-only commands
+// after upgrade, while writes still require the passphrase migration path.
+func TestEncryptedFileStore_ReadsLegacyWithoutPassphraseButRefusesWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	legacyKey, err := deriveLegacyKey()
@@ -296,13 +296,13 @@ func TestEncryptedFileStore_RefusesWriteWhenLegacyExistsNoPassphrase(t *testing.
 		t.Fatalf("NewEncryptedFileStore failed when legacy file exists: %v", err)
 	}
 
-	// Read must fail with migration-required error, not silently succeed.
-	_, err = store.Get("api_key")
-	if err == nil {
-		t.Fatal("Get succeeded without passphrase on legacy file — migration gate not enforced")
+	// Read-only commands must continue to work against the legacy file.
+	value, err := store.Get("api_key")
+	if err != nil {
+		t.Fatalf("Get failed without passphrase on legacy file: %v", err)
 	}
-	if !strings.Contains(err.Error(), fileStorePassphraseEnv) {
-		t.Fatalf("Get error %q does not mention %s", err.Error(), fileStorePassphraseEnv)
+	if value != "old-value" {
+		t.Fatalf("Get returned %q, want old-value", value)
 	}
 
 	// Write must also fail with migration-required error.

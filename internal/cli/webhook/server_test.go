@@ -229,6 +229,20 @@ func TestPreflightTunnelChoice_TunnelMutexErrorAtRunServer(t *testing.T) {
 	}
 }
 
+func TestWebhookServerConfigEnablesReplayWindowForSignedEvents(t *testing.T) {
+	config := newWebhookServerConfig(3000, "/webhook", "cloudflared", "secret")
+	if config.MaxEventAge != defaultSignedWebhookMaxEventAge {
+		t.Fatalf("MaxEventAge = %v, want %v", config.MaxEventAge, defaultSignedWebhookMaxEventAge)
+	}
+}
+
+func TestWebhookServerConfigLeavesReplayWindowDisabledWithoutSecret(t *testing.T) {
+	config := newWebhookServerConfig(3000, "/webhook", "cloudflared", "")
+	if config.MaxEventAge != 0 {
+		t.Fatalf("MaxEventAge = %v, want disabled", config.MaxEventAge)
+	}
+}
+
 func errorMessageContains(err error, substr string) bool {
 	if err == nil {
 		return false

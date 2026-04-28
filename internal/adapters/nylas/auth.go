@@ -72,18 +72,12 @@ func (c *HTTPClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVe
 	}, nil
 }
 
-// ListGrants lists all grants for the application.
+// ListGrants lists all grants for the application, transparently
+// following next_cursor pagination so callers always see the complete
+// result set. The Nylas v3 default page size (10) would otherwise
+// silently truncate accounts with more than ten grants.
 func (c *HTTPClient) ListGrants(ctx context.Context) ([]domain.Grant, error) {
-	queryURL := c.baseURL + "/v3/grants"
-
-	var result struct {
-		Data []domain.Grant `json:"data"`
-	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return c.ListAllGrants(ctx, nil)
 }
 
 // GetGrant retrieves a specific grant.

@@ -104,7 +104,7 @@ func TestEnsureOAuthCallbackURI_ReturnsAlreadyExists(t *testing.T) {
 
 	client := &testAPIKeySetupClient{
 		callbackURIs: []domain.CallbackURI{
-			{ID: "cb-1", URL: "http://localhost:9007/callback", Platform: "web"},
+			{ID: "cb-1", URL: "http://127.0.0.1:9007/callback", Platform: "web"},
 		},
 	}
 
@@ -139,7 +139,7 @@ func TestEnsureOAuthCallbackURI_CreatesMissingURI(t *testing.T) {
 	if len(client.createdRequests) != 1 {
 		t.Fatalf("expected one create callback request, got %d", len(client.createdRequests))
 	}
-	if got := client.createdRequests[0].URL; got != "http://localhost:9007/callback" {
-		t.Fatalf("expected callback URI %q, got %q", "http://localhost:9007/callback", got)
+	if got := client.createdRequests[0].URL; got != "http://127.0.0.1:9007/callback" {
+		t.Fatalf("expected callback URI %q, got %q", "http://127.0.0.1:9007/callback", got)
 	}
 }

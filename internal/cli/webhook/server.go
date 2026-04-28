@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -19,6 +20,8 @@ import (
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
+
+const defaultSignedWebhookMaxEventAge = 5 * time.Minute
 
 func newServerCmd() *cobra.Command {
 	var (
@@ -123,13 +126,7 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		)
 	}
 
-	// Create server config
-	config := ports.WebhookServerConfig{
-		Port:           port,
-		Path:           path,
-		WebhookSecret:  webhookSecret,
-		TunnelProvider: tunnelType,
-	}
+	config := newWebhookServerConfig(port, path, tunnelType, webhookSecret)
 
 	// Create webhook server
 	server := webhookserver.NewServer(config)
@@ -238,6 +235,19 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	}
 
 	return nil
+}
+
+func newWebhookServerConfig(port int, path, tunnelType, webhookSecret string) ports.WebhookServerConfig {
+	config := ports.WebhookServerConfig{
+		Port:           port,
+		Path:           path,
+		WebhookSecret:  webhookSecret,
+		TunnelProvider: tunnelType,
+	}
+	if webhookSecret != "" {
+		config.MaxEventAge = defaultSignedWebhookMaxEventAge
+	}
+	return config
 }
 
 // Test seams: package vars so unit tests can override host-state probes

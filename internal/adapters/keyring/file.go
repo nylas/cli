@@ -37,9 +37,8 @@ const (
 //
 // REQUIREMENT: NYLAS_FILE_STORE_PASSPHRASE must be set before using this store
 // on a fresh install. Existing installations that used the legacy machine-derived
-// key will be migrated automatically the first time NYLAS_FILE_STORE_PASSPHRASE
-// is supplied. If the environment variable is unset and no legacy file exists,
-// construction fails immediately.
+// key remain readable without a passphrase for backward compatibility, and will
+// be migrated automatically the first time NYLAS_FILE_STORE_PASSPHRASE is supplied.
 //
 // To avoid the file store entirely, leave NYLAS_DISABLE_KEYRING unset and let
 // the system keyring be used, or run `nylas auth config` to reconfigure.
@@ -310,8 +309,9 @@ func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 //
 // Passphrase rules enforced here:
 //   - If passphrase is set: encrypt with the passphrase-derived key.
-//   - If passphrase is unset AND a legacy file exists: refuse — the caller must
-//     set NYLAS_FILE_STORE_PASSPHRASE so the migration path in decrypt can run first.
+//   - If passphrase is unset AND a legacy file exists: refuse writes until the
+//     caller sets NYLAS_FILE_STORE_PASSPHRASE so the migration path in decrypt
+//     can re-encrypt before mutation.
 //   - If passphrase is unset AND no legacy file: refuse — this is a new install
 //     that should never have been constructed (NewEncryptedFileStore checks this).
 func (f *EncryptedFileStore) encrypt(plaintext []byte) ([]byte, error) {
@@ -344,7 +344,8 @@ func (f *EncryptedFileStore) encrypt(plaintext []byte) ([]byte, error) {
 // Decryption order:
 //  1. Passphrase key (if passphrase is set) — normal path.
 //  2. Legacy key (migration master key or machine-derived key):
-//     - If passphrase is NOT set: return an error requiring the user to set it.
+//     - If passphrase is NOT set: return plaintext for read-only backward
+//     compatibility. Writes still fail in encrypt until a passphrase is set.
 //     - If passphrase IS set: re-encrypt with the passphrase key (one-shot
 //     migration), print a notice to stderr, and return the plaintext.
 //  3. Neither key works: return an error.
@@ -367,12 +368,7 @@ func (f *EncryptedFileStore) decrypt(data []byte) ([]byte, error) {
 	if plaintext, legacyKey, ok := f.tryLegacyDecrypt(data); ok {
 		_ = legacyKey // used only for the migration path below
 		if len(f.passphrase) == 0 {
-			// Legacy decryption succeeded but no passphrase — block to force migration.
-			return nil, fmt.Errorf(
-				"encrypted file store requires %s to migrate from the legacy machine-derived key. "+
-					"Set it and re-run, or run `nylas auth config` to switch to the system keyring",
-				fileStorePassphraseEnv,
-			)
+			return plaintext, nil
 		}
 
 		// Passphrase is available — perform one-shot migration.

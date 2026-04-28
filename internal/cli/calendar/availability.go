@@ -131,6 +131,7 @@ Shows busy time slots within the specified time range.`,
 	cmd.Flags().StringVarP(&start, "start", "s", "", "Start time (default: now)")
 	cmd.Flags().StringVar(&end, "end", "", "End time")
 	cmd.Flags().StringVarP(&duration, "duration", "d", "", "Duration from start (e.g., '8h', '1d', '7d')")
+	cmd.Flags().StringP("format", "f", "text", "Output format (text, json, yaml)")
 
 	return cmd
 }
@@ -229,6 +230,7 @@ This searches for time slots when all participants are free.`,
 	cmd.Flags().StringVar(&end, "end", "", "End time for search (default: 7 days from start)")
 	cmd.Flags().IntVarP(&durationMins, "duration", "d", 30, "Meeting duration in minutes")
 	cmd.Flags().IntVarP(&intervalMins, "interval", "i", 15, "Search interval in minutes")
+	cmd.Flags().StringP("format", "f", "text", "Output format (text, json, yaml)")
 
 	_ = cmd.MarkFlagRequired("participants")
 

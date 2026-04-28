@@ -135,7 +135,7 @@ func resolveAPIKeyApplication(
 	}, nil
 }
 
-// EnsureOAuthCallbackURI provisions the expected localhost callback URI for the
+// EnsureOAuthCallbackURI provisions the expected loopback callback URI for the
 // selected application when it does not already exist.
 func EnsureOAuthCallbackURI(apiKey, clientID, region string, callbackPort int) (*CallbackURIProvisionResult, error) {
 	return ensureOAuthCallbackURI(apiKey, clientID, region, callbackPort, newAPIKeySetupClient)
@@ -151,7 +151,7 @@ func ensureOAuthCallbackURI(
 	}
 
 	result := &CallbackURIProvisionResult{
-		RequiredURI: fmt.Sprintf("http://localhost:%d/callback", callbackPort),
+		RequiredURI: fmt.Sprintf("http://127.0.0.1:%d/callback", callbackPort),
 	}
 	if strings.TrimSpace(clientID) == "" {
 		return result, fmt.Errorf("client ID is required to configure the OAuth callback URI")

@@ -71,6 +71,12 @@ func TestFreeBusyCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
+	t.Run("format_flag_preserves_shorthand", func(t *testing.T) {
+		flag := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "format", flag.Name)
+	})
+
 	t.Run("has_examples", func(t *testing.T) {
 		assert.NotEmpty(t, cmd.Example)
 		assert.Contains(t, cmd.Example, "availability check")
@@ -115,6 +121,12 @@ func TestFindSlotsCmd(t *testing.T) {
 		root := testutil.NewTestRoot(cmd)
 		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
+	})
+
+	t.Run("format_flag_preserves_shorthand", func(t *testing.T) {
+		flag := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "format", flag.Name)
 	})
 
 	t.Run("has_examples", func(t *testing.T) {

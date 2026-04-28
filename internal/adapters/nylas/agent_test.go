@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -96,10 +97,26 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		// No server-side provider filter — see TestListAgentAccounts.
 		assert.Equal(t, "", r.URL.Query().Get("provider"))
+		assert.Equal(t, "", r.URL.Query().Get("page_token"))
+		assert.Equal(t, strconv.Itoa(grantPageSize), r.URL.Query().Get("limit"))
 
 		requests++
 		var response map[string]any
-		if r.URL.Query().Get("page_token") == "" {
+		switch r.URL.Query().Get("offset") {
+		case "":
+			page := make([]map[string]any, grantPageSize)
+			for i := range page {
+				page[i] = map[string]any{
+					"id":           "google-" + strconv.Itoa(i),
+					"email":        "user" + strconv.Itoa(i) + "@gmail.com",
+					"provider":     "google",
+					"grant_status": "valid",
+				}
+			}
+			response = map[string]any{
+				"data": page,
+			}
+		case strconv.Itoa(grantPageSize):
 			response = map[string]any{
 				"data": []map[string]any{
 					{
@@ -108,13 +125,6 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 						"provider":     "nylas",
 						"grant_status": "valid",
 					},
-				},
-				"next_cursor": "cursor-2",
-			}
-		} else {
-			assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
-			response = map[string]any{
-				"data": []map[string]any{
 					{
 						"id":           "agent-002",
 						"email":        "second@example.com",
@@ -123,6 +133,8 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 					},
 				},
 			}
+		default:
+			t.Fatalf("unexpected offset %q", r.URL.Query().Get("offset"))
 		}
 
 		w.Header().Set("Content-Type", "application/json")

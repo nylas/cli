@@ -396,83 +396,69 @@ func (c *HTTPClient) DeleteCredential(ctx context.Context, credentialID string) 
 
 // Admin Grant Operations
 
-// maxGrantPages caps the number of pages ListAllGrants will fetch even
-// when the server keeps returning fresh next_cursor values. It's a
-// safety ceiling above any realistic grant count — the cycle detector
-// catches the typical misbehaviour, but a server that hands out
-// distinct-but-empty pages forever still needs a hard stop.
+// grantPageSize is the per-request page size used when walking grants.
+// The Nylas v3 /v3/grants endpoint accepts limit values up to 200 and
+// defaults to 10 — using the maximum minimises the number of round-trips
+// when paginating large result sets.
+const grantPageSize = 200
+
+// maxGrantPages caps the number of pages ListAllGrants will fetch as a
+// hard safety ceiling. At grantPageSize=200 this allows up to 200,000
+// grants — well above any realistic tenant.
 const maxGrantPages = 1000
 
 // ListAllGrants retrieves all grants matching the optional filters,
-// transparently following next_cursor pagination so callers always see the
+// transparently walking offset/limit pagination so callers always see the
 // complete result set.
 //
-// When params.Limit is positive, at most that many grants are returned and
-// pagination stops once the cap is reached. When params is nil or Limit is
-// zero, every page is fetched.
+// The Nylas v3 /v3/grants endpoint is offset-paginated (limit, offset),
+// not cursor-paginated — its response does not include next_cursor — so
+// pagination stops when a page returns fewer than grantPageSize grants.
+//
+// When params.Limit is positive, at most that many grants are returned
+// and pagination stops once the cap is reached. When params is nil or
+// Limit is zero, every page is fetched.
 func (c *HTTPClient) ListAllGrants(ctx context.Context, params *domain.GrantsQueryParams) ([]domain.Grant, error) {
 	baseURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
 
-	limit := 0
+	maxResults := 0
 	connectorID := ""
 	status := ""
 	offset := 0
 	if params != nil {
-		limit = params.Limit
+		maxResults = params.Limit
 		connectorID = params.ConnectorID
 		status = params.Status
 		offset = params.Offset
 	}
 
-	pageToken := ""
 	grants := make([]domain.Grant, 0)
-	// seenCursors guards against cycles longer than length 1 (the simple
-	// `result.NextCursor == pageToken` case is checked separately).
-	seenCursors := make(map[string]struct{})
-	for {
-		qb := NewQueryBuilder().
-			AddInt("limit", limit).
+	for range maxGrantPages {
+		queryURL := NewQueryBuilder().
+			AddInt("limit", grantPageSize).
+			AddInt("offset", offset).
 			Add("connector_id", connectorID).
 			Add("status", status).
-			AddInt("offset", offset).
-			Add("page_token", pageToken)
-		queryURL := qb.BuildURL(baseURL)
+			BuildURL(baseURL)
 
 		var result struct {
-			Data       []domain.Grant `json:"data"`
-			NextCursor string         `json:"next_cursor,omitempty"`
+			Data []domain.Grant `json:"data"`
 		}
 		if err := c.doGet(ctx, queryURL, &result); err != nil {
 			return nil, err
 		}
 
 		grants = append(grants, result.Data...)
-		if limit > 0 && len(grants) >= limit {
-			return grants[:limit], nil
+		if maxResults > 0 && len(grants) >= maxResults {
+			return grants[:maxResults], nil
 		}
-
-		if result.NextCursor == "" {
+		// Last page: server returned fewer than a full page.
+		if len(result.Data) < grantPageSize {
 			return grants, nil
 		}
-		if result.NextCursor == pageToken {
-			return nil, fmt.Errorf("failed to paginate grants: repeated cursor %q", result.NextCursor)
-		}
-		// Detect cycles longer than length 1 (e.g. A → B → A) and bound the
-		// total number of pages we'll walk so a misbehaving server can't
-		// trap us in an unbounded loop. Cap at 1000 pages — well above
-		// realistic grant counts but a hard ceiling on the worst case.
-		if _, seen := seenCursors[result.NextCursor]; seen {
-			return nil, fmt.Errorf("failed to paginate grants: cursor cycle detected near %q", result.NextCursor)
-		}
-		seenCursors[result.NextCursor] = struct{}{}
-		if len(seenCursors) > maxGrantPages {
-			return nil, fmt.Errorf("failed to paginate grants: exceeded max page count (%d)", maxGrantPages)
-		}
-		pageToken = result.NextCursor
-		// offset only meaningful on the first request; the API uses cursors
-		// to advance from there.
-		offset = 0
+		offset += len(result.Data)
 	}
+	return nil, fmt.Errorf("failed to paginate grants: exceeded max page count (%d)", maxGrantPages)
 }
 
 // GetGrantStats retrieves grant statistics.

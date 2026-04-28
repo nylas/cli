@@ -94,7 +94,7 @@ func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState stri
 
 // GetRedirectURI returns the redirect URI for OAuth.
 func (s *CallbackServer) GetRedirectURI() string {
-	return fmt.Sprintf("http://localhost:%d/callback", s.port)
+	return fmt.Sprintf("http://127.0.0.1:%d/callback", s.port)
 }
 
 func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) {

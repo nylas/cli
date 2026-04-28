@@ -24,10 +24,6 @@ type agentSettingsPayload struct {
 	PolicyID string `json:"policy_id,omitempty"`
 }
 
-// maxManagedGrantPages caps pagination so a misbehaving server can't
-// trap us in an unbounded loop of fresh-but-empty cursors.
-const maxManagedGrantPages = 1000
-
 // listManagedGrants returns every grant whose provider matches `provider`.
 //
 // We deliberately do NOT pass `provider=<name>` as a server-side filter:
@@ -38,18 +34,17 @@ const maxManagedGrantPages = 1000
 // freshness and predictability. We filter to `provider` client-side.
 func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Provider) ([]managedGrantResponse, error) {
 	baseURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
-	pageToken := ""
+	offset := 0
 	grants := make([]managedGrantResponse, 0)
 
-	seenCursors := make(map[string]struct{})
-	for {
+	for range maxGrantPages {
 		queryURL := NewQueryBuilder().
-			Add("page_token", pageToken).
+			AddInt("limit", grantPageSize).
+			AddInt("offset", offset).
 			BuildURL(baseURL)
 
 		var result struct {
-			Data       []managedGrantResponse `json:"data"`
-			NextCursor string                 `json:"next_cursor,omitempty"`
+			Data []managedGrantResponse `json:"data"`
 		}
 		if err := c.doGet(ctx, queryURL, &result); err != nil {
 			return nil, err
@@ -61,23 +56,12 @@ func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Prov
 			}
 		}
 
-		if result.NextCursor == "" {
-			break
+		if len(result.Data) < grantPageSize {
+			return grants, nil
 		}
-		if result.NextCursor == pageToken {
-			return nil, fmt.Errorf("failed to paginate managed grants: repeated cursor %q", result.NextCursor)
-		}
-		if _, seen := seenCursors[result.NextCursor]; seen {
-			return nil, fmt.Errorf("failed to paginate managed grants: cursor cycle detected near %q", result.NextCursor)
-		}
-		seenCursors[result.NextCursor] = struct{}{}
-		if len(seenCursors) > maxManagedGrantPages {
-			return nil, fmt.Errorf("failed to paginate managed grants: exceeded max page count (%d)", maxManagedGrantPages)
-		}
-		pageToken = result.NextCursor
+		offset += len(result.Data)
 	}
-
-	return grants, nil
+	return nil, fmt.Errorf("failed to paginate managed grants: exceeded max page count (%d)", maxGrantPages)
 }
 
 func (c *HTTPClient) getManagedGrant(ctx context.Context, grantID string) (*managedGrantResponse, error) {

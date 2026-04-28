@@ -39,12 +39,12 @@ func TestCallbackServer_GetRedirectURI(t *testing.T) {
 		{
 			name: "default port",
 			port: 8080,
-			want: "http://localhost:8080/callback",
+			want: "http://127.0.0.1:8080/callback",
 		},
 		{
 			name: "custom port",
 			port: 9000,
-			want: "http://localhost:9000/callback",
+			want: "http://127.0.0.1:9000/callback",
 		},
 	}
 
