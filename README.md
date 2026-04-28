@@ -149,7 +149,7 @@ Step-by-step tutorials on [cli.nylas.com](https://cli.nylas.com/guides):
 
 ## Configuration
 
-Credentials are stored in your system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager). Nothing is written to plain-text files.
+Credentials are stored in your system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager). Non-secret grant metadata, such as account email/provider and the local default grant, is cached separately for fast local lookup.
 
 ```bash
 nylas auth status    # Check what's configured

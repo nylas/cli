@@ -73,17 +73,18 @@ var rootTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 
 // Server implements the WebhookServer interface.
 type Server struct {
-	config       ports.WebhookServerConfig
-	server       *http.Server
-	listener     net.Listener
-	tunnel       ports.Tunnel
-	events       chan *ports.WebhookEvent
-	handlers     []ports.WebhookEventHandler
-	handlerSlots chan struct{}
-	stats        ports.WebhookServerStats
-	mu           sync.RWMutex
-	startedAt    time.Time
-	closeOnce    sync.Once
+	config         ports.WebhookServerConfig
+	server         *http.Server
+	listener       net.Listener
+	tunnel         ports.Tunnel
+	events         chan *ports.WebhookEvent
+	handlers       []ports.WebhookEventHandler
+	handlerSlots   chan struct{}
+	seenSignatures map[string]time.Time
+	stats          ports.WebhookServerStats
+	mu             sync.RWMutex
+	startedAt      time.Time
+	closeOnce      sync.Once
 }
 
 // NewServer creates a new webhook server.
@@ -96,9 +97,10 @@ func NewServer(config ports.WebhookServerConfig) *Server {
 	}
 
 	return &Server{
-		config:       config,
-		events:       make(chan *ports.WebhookEvent, 100),
-		handlerSlots: make(chan struct{}, maxConcurrentHandlers),
+		config:         config,
+		events:         make(chan *ports.WebhookEvent, 100),
+		handlerSlots:   make(chan struct{}, maxConcurrentHandlers),
+		seenSignatures: make(map[string]time.Time),
 		stats: ports.WebhookServerStats{
 			LocalURL: localEndpointURL(config.Port, config.Path),
 		},
@@ -326,11 +328,10 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Replay protection. The signature has already been verified above
-		// (or is absent — see comment on MaxEventAge). When configured, we
-		// reject events whose CloudEvents `time` field is older than the
-		// allowed skew, which prevents an attacker who captured a single
-		// signed body from replaying it forever.
+		// Replay protection. The signature has already been verified above.
+		// When configured, reject events whose CloudEvents `time` field is
+		// older than the allowed skew. Payloads without `time` are covered
+		// by the signed-body dedupe below.
 		if s.config.WebhookSecret != "" && s.config.MaxEventAge > 0 {
 			if rawTime, ok := payload["time"].(string); ok {
 				eventTime, terr := time.Parse(time.RFC3339, rawTime)
@@ -345,6 +346,12 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	if s.shouldSuppressSignedReplay(signature, time.Now()) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Duplicate webhook ignored"))
+		return
 	}
 
 	// Update stats
@@ -447,4 +454,27 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 // verifySignature verifies the webhook signature using HMAC-SHA256.
 func (s *Server) verifySignature(payload []byte, signature string) bool {
 	return VerifySignature(payload, signature, s.config.WebhookSecret)
+}
+
+func (s *Server) shouldSuppressSignedReplay(signature string, now time.Time) bool {
+	if s.config.WebhookSecret == "" || s.config.MaxEventAge <= 0 || signature == "" {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoff := now.Add(-s.config.MaxEventAge)
+	for key, seenAt := range s.seenSignatures {
+		if seenAt.Before(cutoff) {
+			delete(s.seenSignatures, key)
+		}
+	}
+
+	if seenAt, ok := s.seenSignatures[signature]; ok && !seenAt.Before(cutoff) {
+		return true
+	}
+
+	s.seenSignatures[signature] = now
+	return false
 }

@@ -151,7 +151,7 @@ func ensureOAuthCallbackURI(
 	}
 
 	result := &CallbackURIProvisionResult{
-		RequiredURI: fmt.Sprintf("http://127.0.0.1:%d/callback", callbackPort),
+		RequiredURI: fmt.Sprintf("http://localhost:%d/callback", callbackPort),
 	}
 	if strings.TrimSpace(clientID) == "" {
 		return result, fmt.Errorf("client ID is required to configure the OAuth callback URI")

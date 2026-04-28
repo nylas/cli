@@ -64,7 +64,7 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 - **Timezone Support**: Offline utilities + calendar integration ✅
 - **Email Signing**: GPG/PGP email signing (RFC 3156 PGP/MIME) ✅
 - **AI Chat**: Web-based chat interface using locally installed AI agents ✅
-- **Credential Storage**: System keyring (see below)
+- **Credential Storage**: System keyring for secrets; file-backed grant cache for non-secret grant metadata (see below)
 - **Web UI**: Air - browser-based interface (localhost:7365)
 
 **Details:** See `docs/ARCHITECTURE.md`
@@ -84,13 +84,16 @@ make ci        # Runs: fmt → vet → lint → test-unit → test-race → secu
 
 ---
 
-## Credential Storage (Keyring)
+## Credential Storage
 
-Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config`.
+Secrets are stored in the system keyring (service: `"nylas"`) via `nylas auth config`.
+Grant metadata and the local default grant are stored outside the keyring in the grant cache.
 
-**Key files:** `internal/ports/secrets.go` (constants), `internal/adapters/keyring/` (implementation), `internal/app/auth/config.go` (setup)
+**Key files:** `internal/ports/secrets.go` (constants), `internal/adapters/keyring/` (secret storage), `internal/adapters/grantcache/` (grant metadata cache), `internal/app/auth/config.go` (setup)
 
-**Keys:** `client_id`, `api_key`, `client_secret`, `org_id`, `grants`, `default_grant`, `grant_token_<id>`
+**Secret keys:** `client_id`, `api_key`, `client_secret`, `org_id`
+
+**Grant cache:** non-secret grant ID, email, provider, and default grant at `filepath.Join(os.UserCacheDir(), "nylas", "grants.json")`
 
 **Disable keyring:** `NYLAS_DISABLE_KEYRING=true` (falls back to encrypted file at `~/.config/nylas/`)
 
@@ -110,9 +113,11 @@ Credentials stored in system keyring (service: `"nylas"`) via `nylas auth config
 - `internal/ports/output.go` - OutputWriter interface for pluggable formatting
 - `internal/adapters/output/` - Table, JSON, YAML, Quiet output adapters
 - `internal/httputil/` - HTTP response helpers (WriteJSON, LimitedBody, DecodeJSON)
+- `internal/adapters/grantcache/` - File-backed local grant metadata/default cache
 - `internal/adapters/gpg/` - GPG/PGP email signing service (2026)
 - `internal/adapters/mime/` - RFC 3156 PGP/MIME message builder (2026)
 - `internal/chat/` - AI chat interface with local agent support (2026)
+- `internal/webguard/` - Shared localhost web UI request guards
 - `internal/cli/setup/` - First-time setup wizard (`nylas init`)
 
 **Full inventory:** `docs/ARCHITECTURE.md`

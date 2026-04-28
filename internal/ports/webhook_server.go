@@ -27,10 +27,12 @@ type WebhookServerConfig struct {
 	Path           string // Webhook endpoint path (default: /webhook)
 	WebhookSecret  string // For signature verification
 	TunnelProvider string // cloudflared, ngrok, or empty for no tunnel
-	// MaxEventAge bounds how stale an event's `time` field (CloudEvents) can
-	// be before the server rejects it as a replay. Zero disables the check.
-	// Only applied when WebhookSecret is set; without HMAC the timestamp
-	// would be attacker-controlled anyway.
+	// MaxEventAge bounds replay protection for signed webhooks. If a JSON
+	// payload has a CloudEvents `time` field, events outside this skew are
+	// rejected. Signed payloads without `time` are deduplicated by signature
+	// within this window. Zero disables the check.
+	// Only applied when WebhookSecret is set; without HMAC the timestamp and
+	// signature would be attacker-controlled anyway.
 	MaxEventAge time.Duration
 }
 

@@ -18,6 +18,7 @@ internal/
     ai/                       # AI providers (Claude, OpenAI, Groq, Ollama)
     analytics/                # Focus optimizer, meeting scorer
     keyring/                  # Secret storage
+    grantcache/               # Non-secret local grant metadata/default cache
     config/                   # Configuration validation
     mcp/                      # MCP proxy server
     slack/                    # Slack API client
@@ -26,6 +27,7 @@ internal/
     browser/                  # Browser automation
     tunnel/                   # Cloudflare tunnel
     webhookserver/            # Webhook server
+  webguard/                   # Shared localhost web UI request guards
   cli/                        # CLI commands
     common/                   # Shared helpers (client, context, errors, flags, format, html, timeutil)
     admin/                    # API key management
@@ -182,14 +184,15 @@ url := qb.BuildURL(baseURL)
    - `utilities.go` - Utilities interface
    - `webhook_server.go` - Webhook server interface
 
-3. **Adapters** (`internal/adapters/`) - 12 adapter directories
+3. **Adapters** (`internal/adapters/`) - 13 adapter directories
 
    | Adapter | Files | Purpose |
    |---------|-------|---------|
    | `nylas/` | 94 | Nylas API client (messages, calendars, contacts, events) |
    | `ai/` | 24 | AI clients (Claude, OpenAI, Groq, Ollama), email analyzer |
    | `analytics/` | 14 | Focus optimizer, conflict resolver, meeting scorer |
-   | `keyring/` | 6 | Credential storage (system keyring, file-based) |
+   | `keyring/` | 8 | Secret storage (system keyring, encrypted file fallback) |
+   | `grantcache/` | 2 | Non-secret local grant metadata/default cache |
    | `mcp/` | 8 | MCP proxy server for AI assistants |
    | `slack/` | 21 | Slack API client (channels, messages, users) |
    | `config/` | 5 | Configuration validation |

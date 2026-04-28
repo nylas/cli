@@ -410,6 +410,45 @@ func TestServer_HandleWebhook_AcceptsRecentEvents_ReplayWindow(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code, "fresh event must be accepted")
 }
 
+func TestServer_HandleWebhook_DeduplicatesSignedPayloadWithoutTime(t *testing.T) {
+	secret := "test-secret"
+	server := NewServer(ports.WebhookServerConfig{
+		Port:          0,
+		Path:          "/webhook",
+		WebhookSecret: secret,
+		MaxEventAge:   60 * time.Second,
+	})
+
+	body := []byte(`{"id":"evt_without_time","type":"message.created"}`)
+	sig := signWebhookPayload(secret, body)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-Nylas-Signature", sig)
+	rec := httptest.NewRecorder()
+	server.handleWebhook(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code, "first signed event must be accepted")
+	assert.Equal(t, 1, server.GetStats().EventsReceived)
+
+	select {
+	case <-server.Events():
+	default:
+		t.Fatal("expected first signed event to be queued")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-Nylas-Signature", sig)
+	rec = httptest.NewRecorder()
+	server.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "duplicate signed event should be acknowledged without processing")
+	assert.Equal(t, 1, server.GetStats().EventsReceived, "duplicate signed body must not be counted as a new event")
+	select {
+	case event := <-server.Events():
+		t.Fatalf("duplicate signed event was queued: %+v", event)
+	default:
+	}
+}
+
 // TestServer_HandleHealth_SurfacesEventsDropped confirms the health
 // response includes the events_dropped counter so operators can detect a
 // slow consumer without parsing logs.

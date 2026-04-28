@@ -60,5 +60,5 @@ func (m *MockServer) WaitForCallback(ctx context.Context, expectedState string) 
 
 // GetRedirectURI returns the redirect URI.
 func (m *MockServer) GetRedirectURI() string {
-	return "http://127.0.0.1:8080/callback"
+	return "http://localhost:8080/callback"
 }

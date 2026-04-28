@@ -4,9 +4,11 @@ package oauth
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,14 +17,15 @@ import (
 
 // CallbackServer implements the OAuth callback server.
 type CallbackServer struct {
-	port     int
-	server   *http.Server
-	listener net.Listener
-	codeChan chan string
-	errChan  chan error
-	once     sync.Once
-	mu       sync.RWMutex
-	state    string
+	port      int
+	server    *http.Server
+	listener  net.Listener
+	listeners []net.Listener
+	codeChan  chan string
+	errChan   chan error
+	once      sync.Once
+	mu        sync.RWMutex
+	state     string
 }
 
 // NewCallbackServer creates a new callback server.
@@ -52,22 +55,71 @@ func (s *CallbackServer) Start() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Bind to loopback only. The browser performing the OAuth flow runs on
-	// the same machine; exposing the callback to the LAN would let an
-	// attacker race the legitimate browser callback.
-	var err error
-	s.listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
+	// Bind to loopback only. The browser follows the advertised localhost
+	// redirect URI, which can resolve to either IPv4 or IPv6 loopback
+	// depending on host configuration. Listen on both loopback families when
+	// available without accepting LAN traffic.
+	listeners, port, err := listenLoopback(s.port)
 	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
+	s.port = port
+	s.listeners = listeners
+	s.listener = listeners[0]
 
-	go func() {
-		if err := s.server.Serve(s.listener); err != http.ErrServerClosed {
-			s.errChan <- err
-		}
-	}()
+	for _, listener := range listeners {
+		go s.serve(listener)
+	}
 
 	return nil
+}
+
+func listenLoopback(port int) ([]net.Listener, int, error) {
+	ipv4, err := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	actualPort := port
+	if actualPort == 0 {
+		tcpAddr, ok := ipv4.Addr().(*net.TCPAddr)
+		if !ok {
+			_ = ipv4.Close()
+			return nil, 0, fmt.Errorf("unexpected listener address type %T", ipv4.Addr())
+		}
+		actualPort = tcpAddr.Port
+	}
+
+	listeners := []net.Listener{ipv4}
+	ipv6, err := net.Listen("tcp6", fmt.Sprintf("[::1]:%d", actualPort))
+	if err != nil {
+		if !isIPv6LoopbackUnavailable(err) {
+			_ = ipv4.Close()
+			return nil, 0, fmt.Errorf("failed to start IPv6 callback listener on port %d: %w", actualPort, err)
+		}
+		return listeners, actualPort, nil
+	}
+
+	return append(listeners, ipv6), actualPort, nil
+}
+
+func isIPv6LoopbackUnavailable(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "address family not supported") ||
+		strings.Contains(msg, "cannot assign requested address") ||
+		strings.Contains(msg, "can't assign requested address") ||
+		strings.Contains(msg, "protocol not available")
+}
+
+func (s *CallbackServer) serve(listener net.Listener) {
+	if err := s.server.Serve(listener); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) &&
+		!errors.Is(err, net.ErrClosed) {
+		select {
+		case s.errChan <- err:
+		default:
+		}
+	}
 }
 
 // Stop stops the callback server.
@@ -94,7 +146,7 @@ func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState stri
 
 // GetRedirectURI returns the redirect URI for OAuth.
 func (s *CallbackServer) GetRedirectURI() string {
-	return fmt.Sprintf("http://127.0.0.1:%d/callback", s.port)
+	return fmt.Sprintf("http://localhost:%d/callback", s.port)
 }
 
 func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) {
