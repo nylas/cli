@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/nylas/cli/internal/adapters/nylas"
@@ -9,8 +11,97 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGrantService_ListGrantsUsesLiveAPIAndRefreshesLocalCache(t *testing.T) {
+	grantStore := newMockGrantStore()
+	configStore := newMockConfigStore()
+	client := nylas.NewMockClient()
+
+	grantStore.grants["stale-local"] = domain.GrantInfo{
+		ID:       "stale-local",
+		Email:    "stale@example.com",
+		Provider: domain.ProviderGoogle,
+	}
+	grantStore.defaultGrant = "grant-2"
+	client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+		return []domain.Grant{
+			{ID: "grant-1", Email: "one@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+			{ID: "grant-2", Email: "two@example.com", Provider: domain.ProviderMicrosoft, GrantStatus: "invalid"},
+		}, nil
+	}
+
+	svc := NewGrantService(client, grantStore, configStore)
+
+	got, err := svc.ListGrants(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.True(t, client.ListGrantsCalled)
+	assert.Equal(t, "grant-1", got[0].ID)
+	assert.Equal(t, "valid", got[0].Status)
+	assert.False(t, got[0].IsDefault)
+	assert.Equal(t, "grant-2", got[1].ID)
+	assert.Equal(t, "invalid", got[1].Status)
+	assert.True(t, got[1].IsDefault)
+
+	assert.NotContains(t, grantStore.grants, "stale-local")
+	assert.Equal(t, domain.GrantInfo{
+		ID:       "grant-1",
+		Email:    "one@example.com",
+		Provider: domain.ProviderGoogle,
+	}, grantStore.grants["grant-1"])
+	assert.Equal(t, domain.GrantInfo{
+		ID:       "grant-2",
+		Email:    "two@example.com",
+		Provider: domain.ProviderMicrosoft,
+	}, grantStore.grants["grant-2"])
+}
+
+func TestGrantService_ListGrantsLiveFailureDoesNotReturnLocalStaleData(t *testing.T) {
+	grantStore := newMockGrantStore()
+	configStore := newMockConfigStore()
+	client := nylas.NewMockClient()
+	networkErr := errors.New("network down")
+
+	grantStore.grants["stale-local"] = domain.GrantInfo{
+		ID:       "stale-local",
+		Email:    "stale@example.com",
+		Provider: domain.ProviderGoogle,
+	}
+	client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+		return nil, networkErr
+	}
+
+	svc := NewGrantService(client, grantStore, configStore)
+
+	got, err := svc.ListGrants(context.Background())
+	require.ErrorIs(t, err, networkErr)
+	assert.Nil(t, got)
+}
+
+func TestGrantService_ListGrantsClearsStaleConfigDefault(t *testing.T) {
+	grantStore := newMockGrantStore()
+	configStore := newMockConfigStore()
+	configStore.config.DefaultGrant = "missing-default"
+	client := nylas.NewMockClient()
+	client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+		return []domain.Grant{
+			{ID: "grant-1", Email: "one@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+		}, nil
+	}
+
+	svc := NewGrantService(client, grantStore, configStore)
+
+	got, err := svc.ListGrants(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.False(t, got[0].IsDefault)
+	assert.Empty(t, configStore.config.DefaultGrant)
+	defaultGrant, err := grantStore.GetDefaultGrant()
+	assert.Empty(t, defaultGrant)
+	assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
+}
+
 func TestGrantService_SwitchGrant(t *testing.T) {
-	t.Run("updates both keyring and config file", func(t *testing.T) {
+	t.Run("updates both local cache and config file", func(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := newMockConfigStore()
 		client := nylas.NewMockClient()
@@ -27,7 +118,7 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 
 		require.NoError(t, err)
 
-		// Verify keyring was updated
+		// Verify local cache was updated
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
@@ -40,6 +131,9 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := newMockConfigStore()
 		client := nylas.NewMockClient()
+		client.GetGrantFunc = func(ctx context.Context, grantID string) (*domain.Grant, error) {
+			return nil, domain.ErrGrantNotFound
+		}
 
 		grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
 		grantStore.defaultGrant = "grant-1"
@@ -56,7 +150,7 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 		assert.Equal(t, "grant-1", defaultID)
 	})
 
-	t.Run("returns error if config save fails and leaves keyring unchanged", func(t *testing.T) {
+	t.Run("returns error if config save fails and leaves local cache unchanged", func(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := &failingSaveConfigStore{config: &domain.Config{DefaultGrant: "grant-1"}}
 		client := nylas.NewMockClient()
@@ -78,7 +172,7 @@ func TestGrantService_SwitchGrant(t *testing.T) {
 }
 
 func TestGrantService_SwitchGrantByEmail(t *testing.T) {
-	t.Run("updates both keyring and config file", func(t *testing.T) {
+	t.Run("updates both local cache and config file", func(t *testing.T) {
 		grantStore := newMockGrantStore()
 		configStore := newMockConfigStore()
 		client := nylas.NewMockClient()
@@ -88,6 +182,12 @@ func TestGrantService_SwitchGrantByEmail(t *testing.T) {
 		grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "user2@example.com"}
 		grantStore.defaultGrant = "grant-1"
 		configStore.config.DefaultGrant = "grant-1"
+		client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+			return []domain.Grant{
+				{ID: "grant-1", Email: "user1@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+				{ID: "grant-2", Email: "user2@example.com", Provider: domain.ProviderMicrosoft, GrantStatus: "valid"},
+			}, nil
+		}
 
 		svc := NewGrantService(client, grantStore, configStore)
 
@@ -95,7 +195,7 @@ func TestGrantService_SwitchGrantByEmail(t *testing.T) {
 
 		require.NoError(t, err)
 
-		// Verify keyring was updated
+		// Verify local cache was updated
 		defaultID, err := grantStore.GetDefaultGrant()
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
@@ -111,6 +211,11 @@ func TestGrantService_SwitchGrantByEmail(t *testing.T) {
 
 		grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}
 		grantStore.defaultGrant = "grant-1"
+		client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+			return []domain.Grant{
+				{ID: "grant-1", Email: "user1@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+			}, nil
+		}
 
 		svc := NewGrantService(client, grantStore, configStore)
 

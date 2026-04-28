@@ -118,12 +118,6 @@ func NewSecretStore(configDir string) (ports.SecretStore, error) {
 	if clientSecret, err := fileStore.Get(ports.KeyClientSecret); err == nil {
 		migrate(ports.KeyClientSecret, clientSecret)
 	}
-	if grants, err := fileStore.Get("grants"); err == nil {
-		migrate("grants", grants)
-	}
-	if defaultGrant, err := fileStore.Get("default_grant"); err == nil {
-		migrate("default_grant", defaultGrant)
-	}
 
 	if len(migrationErrs) > 0 {
 		// Print to stderr but do not fail — the keyring is usable even with

@@ -10,6 +10,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/webguard"
 )
@@ -32,7 +33,7 @@ type Server struct {
 func NewServer(addr string) *Server {
 	configStore := config.NewDefaultFileStore()
 	secretStore, _ := keyring.NewSecretStore(config.DefaultConfigDir())
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, _ := common.NewDefaultGrantStore()
 	configSvc := authapp.NewConfigService(configStore, secretStore)
 
 	// Load templates

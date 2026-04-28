@@ -22,12 +22,15 @@
             min-width: 320px;
             width: max-content;
             max-width: min(92vw, 480px);
+            max-height: min(80vh, calc(100vh - 96px));
             background: var(--bg-elevated);
             border: 1px solid var(--border);
             border-radius: 12px;
             box-shadow: var(--shadow-lg);
             z-index: 1000;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
 
         .account-dropdown.hidden {

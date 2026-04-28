@@ -1,9 +1,15 @@
 package config
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	configadapter "github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetFieldValue(t *testing.T) {
@@ -273,6 +279,34 @@ func TestSetConfigValue(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetCommandDefaultGrantUpdatesGrantCache(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "config-home"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tempDir, "cache-home"))
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "test-passphrase")
+
+	originalStore := configStore
+	configStore = configadapter.NewDefaultFileStore()
+	t.Cleanup(func() { configStore = originalStore })
+
+	require.NoError(t, configStore.Save(domain.DefaultConfig()))
+
+	cmd := newSetCmd()
+	cmd.SetArgs([]string{"default_grant", "grant_abc123"})
+	require.NoError(t, cmd.Execute())
+
+	cfg, err := configStore.Load()
+	require.NoError(t, err)
+	require.Equal(t, "grant_abc123", cfg.DefaultGrant)
+
+	grantStore, err := common.NewDefaultGrantStore()
+	require.NoError(t, err)
+	defaultGrant, err := grantStore.GetDefaultGrant()
+	require.NoError(t, err)
+	require.Equal(t, "grant_abc123", defaultGrant)
 }
 
 func TestSetConfigValue_RoundTrip(t *testing.T) {

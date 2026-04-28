@@ -9,6 +9,7 @@ import (
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/adapters/oauth"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -21,7 +22,10 @@ func createDependencies() (ports.ConfigStore, ports.SecretStore, ports.GrantStor
 		return nil, nil, nil, err
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	return configStore, secretStore, grantStore, nil
 }

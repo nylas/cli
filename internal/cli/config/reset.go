@@ -64,7 +64,10 @@ To reset only part of the CLI:
 			_, _ = common.Green.Println("  ✓ Dashboard session cleared")
 
 			// 3. Clear grants
-			grantStore := keyring.NewGrantStore(secretStore)
+			grantStore, err := common.NewDefaultGrantStore()
+			if err != nil {
+				return fmt.Errorf("access grant store: %w", err)
+			}
 			if err := grantStore.ClearGrants(); err != nil {
 				return fmt.Errorf("clear grants: %w", err)
 			}

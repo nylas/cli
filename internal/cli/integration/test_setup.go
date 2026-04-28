@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/nylas"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"gopkg.in/yaml.v3"
 )
@@ -220,27 +220,19 @@ func newSeededGrantStoreEnv(t *testing.T, grant domain.GrantInfo) map[string]str
 	t.Helper()
 
 	configHome := t.TempDir()
-	configDir := filepath.Join(configHome, "nylas")
+	cacheHome := filepath.Join(configHome, "cache")
 	passphrase := "integration-test-file-store-passphrase"
 
-	originalPassphrase, hadOriginalPassphrase := os.LookupEnv("NYLAS_FILE_STORE_PASSPHRASE")
-	if err := os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", passphrase); err != nil {
-		t.Fatalf("failed to set seeded grant-store passphrase: %v", err)
-	}
-	defer func() {
-		if hadOriginalPassphrase {
-			_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", originalPassphrase)
-			return
-		}
-		_ = os.Unsetenv("NYLAS_FILE_STORE_PASSPHRASE")
-	}()
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", passphrase)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+	t.Setenv("HOME", configHome)
 
-	store, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
 		t.Fatalf("failed to create seeded grant store: %v", err)
 	}
-
-	grantStore := keyring.NewGrantStore(store)
 	if err := grantStore.SaveGrant(grant); err != nil {
 		t.Fatalf("failed to seed grant store: %v", err)
 	}
@@ -250,6 +242,7 @@ func newSeededGrantStoreEnv(t *testing.T, grant domain.GrantInfo) map[string]str
 		"NYLAS_DISABLE_KEYRING":       "true",
 		"NYLAS_FILE_STORE_PASSPHRASE": passphrase,
 		"XDG_CONFIG_HOME":             configHome,
+		"XDG_CACHE_HOME":              cacheHome,
 		"HOME":                        configHome,
 	}
 }

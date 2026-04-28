@@ -32,6 +32,7 @@ func TestIntegration_GetGrantID_PrefersStoredDefaultOverConfig(t *testing.T) {
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 	origFileStorePassphrase := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
 	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	origXDGCacheHome := os.Getenv("XDG_CACHE_HOME")
 	origHome := os.Getenv("HOME")
 
 	defer func() {
@@ -39,12 +40,15 @@ func TestIntegration_GetGrantID_PrefersStoredDefaultOverConfig(t *testing.T) {
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfigHome)
+		setEnvOrUnset("XDG_CACHE_HOME", origXDGCacheHome)
 		setEnvOrUnset("HOME", origHome)
 	}()
 
 	tempDir := t.TempDir()
 	configHome := filepath.Join(tempDir, "xdg")
+	cacheHome := filepath.Join(tempDir, "cache")
 	_ = os.Setenv("XDG_CONFIG_HOME", configHome)
+	_ = os.Setenv("XDG_CACHE_HOME", cacheHome)
 	_ = os.Setenv("HOME", tempDir)
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
 	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "integration-test-file-store-passphrase")
@@ -60,11 +64,10 @@ func TestIntegration_GetGrantID_PrefersStoredDefaultOverConfig(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	secretStore, err := keyring.NewEncryptedFileStore(filepath.Dir(configPath))
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
-		t.Fatalf("failed to create secret store: %v", err)
+		t.Fatalf("failed to create grant store: %v", err)
 	}
-	grantStore := keyring.NewGrantStore(secretStore)
 	if err := grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}); err != nil {
 		t.Fatalf("failed to save grant: %v", err)
 	}
@@ -81,11 +84,12 @@ func TestIntegration_GetGrantID_PrefersStoredDefaultOverConfig(t *testing.T) {
 	}
 }
 
-func TestIntegration_GetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testing.T) {
+func TestIntegration_GetGrantID_FallsBackToConfigWhenLegacyStoreLocked(t *testing.T) {
 	origGrantID := os.Getenv("NYLAS_GRANT_ID")
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 	origFileStorePassphrase := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
 	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	origXDGCacheHome := os.Getenv("XDG_CACHE_HOME")
 	origHome := os.Getenv("HOME")
 
 	defer func() {
@@ -93,13 +97,16 @@ func TestIntegration_GetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testin
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfigHome)
+		setEnvOrUnset("XDG_CACHE_HOME", origXDGCacheHome)
 		setEnvOrUnset("HOME", origHome)
 	}()
 
 	tempDir := t.TempDir()
 	configHome := filepath.Join(tempDir, "xdg")
+	cacheHome := filepath.Join(tempDir, "cache")
 	configDir := filepath.Join(configHome, "nylas")
 	_ = os.Setenv("XDG_CONFIG_HOME", configHome)
+	_ = os.Setenv("XDG_CACHE_HOME", cacheHome)
 	_ = os.Setenv("HOME", tempDir)
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
 	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "integration-test-file-store-passphrase")
@@ -118,25 +125,21 @@ func TestIntegration_GetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testin
 	if err != nil {
 		t.Fatalf("failed to create secret store: %v", err)
 	}
-	grantStore := keyring.NewGrantStore(secretStore)
-	if err := grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}); err != nil {
-		t.Fatalf("failed to save grant: %v", err)
+	if err := secretStore.Set("grants", `[{"id":"stored-default","email":"active@example.com","provider":"google"}]`); err != nil {
+		t.Fatalf("failed to save legacy grants: %v", err)
 	}
-	if err := grantStore.SetDefaultGrant("stored-default"); err != nil {
-		t.Fatalf("failed to set default grant: %v", err)
+	if err := secretStore.Set("default_grant", "stored-default"); err != nil {
+		t.Fatalf("failed to save legacy default grant: %v", err)
 	}
 
 	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "")
 
 	grantID, err := common.GetGrantID(nil)
-	if err == nil {
-		t.Fatalf("expected GetGrantID to fail, got %q", grantID)
+	if err != nil {
+		t.Fatalf("GetGrantID failed: %v", err)
 	}
-	if grantID != "" {
-		t.Fatalf("grantID = %q, want empty string", grantID)
-	}
-	if !strings.Contains(err.Error(), "NYLAS_FILE_STORE_PASSPHRASE") {
-		t.Fatalf("error %q does not mention NYLAS_FILE_STORE_PASSPHRASE", err.Error())
+	if grantID != "stale-config-grant" {
+		t.Fatalf("grantID = %q, want %q", grantID, "stale-config-grant")
 	}
 }
 
@@ -146,11 +149,26 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 	}
 
 	origFileStorePassphrase := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
-	defer setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
+	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
+	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	origXDGCacheHome := os.Getenv("XDG_CACHE_HOME")
+	origHome := os.Getenv("HOME")
+	defer func() {
+		setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
+		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
+		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfigHome)
+		setEnvOrUnset("XDG_CACHE_HOME", origXDGCacheHome)
+		setEnvOrUnset("HOME", origHome)
+	}()
 	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "integration-test-file-store-passphrase")
+	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
 
 	tempDir := t.TempDir()
 	configHome := filepath.Join(tempDir, "xdg")
+	cacheHome := filepath.Join(tempDir, "cache")
+	_ = os.Setenv("XDG_CONFIG_HOME", configHome)
+	_ = os.Setenv("XDG_CACHE_HOME", cacheHome)
+	_ = os.Setenv("HOME", tempDir)
 	configPath := filepath.Join(configHome, "nylas", "config.yaml")
 	configStore := config.NewFileStore(configPath)
 	if err := configStore.Save(&domain.Config{
@@ -164,11 +182,10 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	secretStore, err := keyring.NewEncryptedFileStore(filepath.Dir(configPath))
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
-		t.Fatalf("failed to create secret store: %v", err)
+		t.Fatalf("failed to create grant store: %v", err)
 	}
-	grantStore := keyring.NewGrantStore(secretStore)
 	if err := grantStore.SaveGrant(domain.GrantInfo{ID: "grant-1", Email: "user1@example.com"}); err != nil {
 		t.Fatalf("failed to save first grant: %v", err)
 	}
@@ -180,10 +197,12 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 	}
 
 	stdout, stderr, err := runCLIWithOverrides(30*time.Second, map[string]string{
-		"XDG_CONFIG_HOME": configHome,
-		"HOME":            tempDir,
-		"NYLAS_API_KEY":   "",
-		"NYLAS_GRANT_ID":  "",
+		"XDG_CONFIG_HOME":       configHome,
+		"XDG_CACHE_HOME":        cacheHome,
+		"HOME":                  tempDir,
+		"NYLAS_DISABLE_KEYRING": "true",
+		"NYLAS_API_KEY":         "",
+		"NYLAS_GRANT_ID":        "",
 	}, "auth", "remove", "grant-1")
 	if err != nil {
 		t.Fatalf("auth remove failed: %v\nstderr: %s", err, stderr)
@@ -220,44 +239,32 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 	}
 }
 
-func TestCLI_AuthList_RequiresFileStorePassphrase(t *testing.T) {
+func TestCLI_AuthList_DoesNotRequireFileStorePassphrase(t *testing.T) {
 	if testBinary == "" {
 		t.Skip("CLI binary not found")
 	}
 
-	origFileStorePassphrase := os.Getenv("NYLAS_FILE_STORE_PASSPHRASE")
-	defer setEnvOrUnset("NYLAS_FILE_STORE_PASSPHRASE", origFileStorePassphrase)
-	_ = os.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "integration-test-file-store-passphrase")
-
 	tempDir := t.TempDir()
 	configHome := filepath.Join(tempDir, "xdg")
-	configDir := filepath.Join(configHome, "nylas")
-
-	secretStore, err := keyring.NewEncryptedFileStore(configDir)
-	if err != nil {
-		t.Fatalf("failed to create secret store: %v", err)
-	}
-	grantStore := keyring.NewGrantStore(secretStore)
-	if err := grantStore.SaveGrant(domain.GrantInfo{
-		ID:       "grant-locked",
-		Email:    "locked@example.com",
-		Provider: domain.ProviderGoogle,
-	}); err != nil {
-		t.Fatalf("failed to save grant: %v", err)
-	}
+	cacheHome := filepath.Join(tempDir, "cache")
 
 	stdout, stderr, err := runCLIWithOverrides(30*time.Second, map[string]string{
 		"XDG_CONFIG_HOME":             configHome,
+		"XDG_CACHE_HOME":              cacheHome,
 		"HOME":                        tempDir,
-		"NYLAS_API_KEY":               "",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_API_KEY":               "invalid-api-key",
 		"NYLAS_GRANT_ID":              "",
 		"NYLAS_FILE_STORE_PASSPHRASE": "",
 	}, "auth", "list")
 	if err == nil {
-		t.Fatalf("expected auth list to fail without passphrase\nstdout: %s\nstderr: %s", stdout, stderr)
+		t.Fatalf("expected auth list to fail with invalid API key\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
-	if !strings.Contains(stderr, "NYLAS_FILE_STORE_PASSPHRASE") {
-		t.Fatalf("stderr %q does not mention NYLAS_FILE_STORE_PASSPHRASE", stderr)
+	if strings.Contains(stderr, "NYLAS_FILE_STORE_PASSPHRASE") {
+		t.Fatalf("auth list should not require file-store passphrase, stderr: %q", stderr)
+	}
+	if !strings.Contains(stderr, "access credential") && !strings.Contains(stderr, "API key") {
+		t.Fatalf("stderr %q does not mention API credential failure", stderr)
 	}
 }
 

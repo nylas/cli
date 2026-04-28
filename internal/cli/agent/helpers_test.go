@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,31 +184,28 @@ func setupAgentIdentifierTestEnv(t *testing.T) string {
 
 func seedAgentIdentifierDefaultGrant(t *testing.T, configDir string, grant domain.GrantInfo) {
 	t.Helper()
+	_ = configDir
 
-	secretStore, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := common.NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	require.NoError(t, grantStore.SaveGrant(grant))
 	require.NoError(t, grantStore.SetDefaultGrant(grant.ID))
 }
 
 func seedAgentIdentifierStoredGrant(t *testing.T, configDir string, grant domain.GrantInfo) {
 	t.Helper()
+	_ = configDir
 
-	secretStore, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := common.NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	require.NoError(t, grantStore.SaveGrant(grant))
 }
 
 func seedAgentIdentifierDefaultGrantOnly(t *testing.T, configDir, grantID string) {
 	t.Helper()
+	_ = configDir
 
-	secretStore, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := common.NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	require.NoError(t, grantStore.SetDefaultGrant(grantID))
 }

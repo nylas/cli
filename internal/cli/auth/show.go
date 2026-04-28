@@ -70,11 +70,10 @@ Information includes:
 				grantID = args[0]
 			} else {
 				// Need to access local grant store for default grant
-				secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+				grantStore, err = createGrantStore()
 				if err != nil {
 					return fmt.Errorf("no default grant set: specify a grant ID or run 'nylas auth login'")
 				}
-				grantStore = keyring.NewGrantStore(secretStore)
 				grantID, err = grantStore.GetDefaultGrant()
 				if err != nil {
 					return fmt.Errorf("no default grant set: specify a grant ID or run 'nylas auth login'")

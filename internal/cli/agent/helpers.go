@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 
-	config "github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -153,12 +151,10 @@ func getRequiredAgentIdentifier(args []string) (string, error) {
 }
 
 func resolveDefaultAgentGrantID() (string, error) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
 		return "", err
 	}
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	grants, err := grantStore.ListGrants()
 	if err != nil {
 		return "", err

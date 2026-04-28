@@ -419,7 +419,11 @@ func stepGrantSync(status *SetupStatus) {
 	cfg, _ := configStore.Load()
 	region := cfg.Region
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		_, _ = common.Yellow.Printf("  Could not access grant store: %v\n", err)
+		return
+	}
 
 	var result *SyncResult
 	err = common.RunWithSpinner("Checking for existing email accounts...", func() error {

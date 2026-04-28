@@ -2,9 +2,13 @@ package auth
 
 import (
 	"bytes"
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/fatih/color"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/spf13/cobra"
@@ -241,6 +245,72 @@ func TestListCommand(t *testing.T) {
 	})
 }
 
+func TestRenderGrantListTableAlignsLongEmails(t *testing.T) {
+	previousNoColor := color.NoColor
+	color.NoColor = true
+	t.Cleanup(func() { color.NoColor = previousNoColor })
+
+	grants := []domain.GrantStatus{
+		{
+			ID:        "41a67550-0709-4267-807a-52cda0a9bf8d",
+			Email:     "it-policy-create-1776588891312441000@qasim.nylas.email",
+			Provider:  domain.ProviderNylas,
+			Status:    "valid",
+			IsDefault: true,
+		},
+		{
+			ID:       "502466cb-a962-4091-b06e-61233be77747",
+			Email:    "8@qasim.nylas.email",
+			Provider: domain.ProviderNylas,
+			Status:   "valid",
+		},
+	}
+
+	var buf bytes.Buffer
+	renderGrantListTable(&buf, grants, false)
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("rendered %d lines, want 3:\n%s", len(lines), buf.String())
+	}
+
+	providerCol := strings.Index(lines[0], "PROVIDER")
+	statusCol := strings.Index(lines[0], "STATUS")
+	defaultCol := strings.Index(lines[0], "DEFAULT")
+	defaultRuneCol := runeIndex(lines[0], "DEFAULT")
+	if providerCol < 0 || statusCol < 0 || defaultCol < 0 {
+		t.Fatalf("header missing expected columns: %q", lines[0])
+	}
+
+	for _, line := range lines[1:] {
+		if got := strings.Index(line, "Nylas"); got != providerCol {
+			t.Fatalf("provider column starts at %d, want %d\nheader: %q\nrow:    %q", got, providerCol, lines[0], line)
+		}
+		if got := strings.Index(line, "✓ valid"); got != statusCol {
+			t.Fatalf("status column starts at %d, want %d\nheader: %q\nrow:    %q", got, statusCol, lines[0], line)
+		}
+	}
+	if got := runeLastIndex(lines[1], "✓"); got != defaultRuneCol {
+		t.Fatalf("default marker starts at %d, want %d\nheader: %q\nrow:    %q", got, defaultRuneCol, lines[0], lines[1])
+	}
+}
+
+func runeIndex(s, substr string) int {
+	idx := strings.Index(s, substr)
+	if idx < 0 {
+		return -1
+	}
+	return len([]rune(s[:idx]))
+}
+
+func runeLastIndex(s, substr string) int {
+	idx := strings.LastIndex(s, substr)
+	if idx < 0 {
+		return -1
+	}
+	return len([]rune(s[:idx]))
+}
+
 // TestSwitchCommand tests the switch subcommand.
 func TestSwitchCommand(t *testing.T) {
 	cmd := newSwitchCmd()
@@ -425,6 +495,46 @@ func TestRemoveCommandHelp(t *testing.T) {
 	// Should explain it's local only
 	if !bytes.Contains([]byte(stdout), []byte("local")) {
 		t.Error("Help should mention 'local' to clarify scope")
+	}
+}
+
+func TestRemoveCommandDoesNotRequireSecretStore(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tempDir, "cache"))
+	t.Setenv("HOME", tempDir)
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "short")
+	t.Setenv("NYLAS_API_KEY", "")
+	t.Setenv("NYLAS_GRANT_ID", "")
+
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		t.Fatalf("seed grant store: %v", err)
+	}
+	grant := domain.GrantInfo{
+		ID:       "grant-local-only",
+		Email:    "local@example.com",
+		Provider: domain.ProviderGoogle,
+	}
+	if err := grantStore.SaveGrant(grant); err != nil {
+		t.Fatalf("seed grant: %v", err)
+	}
+	if err := grantStore.SetDefaultGrant(grant.ID); err != nil {
+		t.Fatalf("seed default grant: %v", err)
+	}
+
+	cmd := newRemoveCmd()
+	stdout, stderr, err := executeCommand(cmd, grant.ID)
+	if err != nil {
+		t.Fatalf("remove should not require secret-store access: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+
+	if _, err := grantStore.GetGrant(grant.ID); !errors.Is(err, domain.ErrGrantNotFound) {
+		t.Fatalf("removed grant lookup error = %v, want ErrGrantNotFound", err)
+	}
+	if defaultGrant, err := grantStore.GetDefaultGrant(); !errors.Is(err, domain.ErrNoDefaultGrant) {
+		t.Fatalf("default grant = %q, err = %v, want ErrNoDefaultGrant", defaultGrant, err)
 	}
 }
 

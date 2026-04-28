@@ -30,6 +30,19 @@ func (m *mockGrantStore) SaveGrant(info domain.GrantInfo) error {
 	return nil
 }
 
+func (m *mockGrantStore) ReplaceGrants(grants []domain.GrantInfo) error {
+	m.grants = make(map[string]domain.GrantInfo, len(grants))
+	for _, grant := range grants {
+		m.grants[grant.ID] = grant
+	}
+	if m.defaultGrant != "" {
+		if _, ok := m.grants[m.defaultGrant]; !ok {
+			m.defaultGrant = ""
+		}
+	}
+	return nil
+}
+
 func (m *mockGrantStore) GetGrant(grantID string) (*domain.GrantInfo, error) {
 	if grant, ok := m.grants[grantID]; ok {
 		return &grant, nil

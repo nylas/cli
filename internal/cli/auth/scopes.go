@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/cli/common"
 )
 
@@ -46,14 +45,9 @@ If no grant ID is provided, shows scopes for the currently active grant.`,
 			if len(args) > 0 {
 				grantID = args[0]
 			} else {
-				configStore := config.NewDefaultFileStore()
-				cfg, err := configStore.Load()
+				grantID, err = common.GetGrantID(args)
 				if err != nil {
-					return fmt.Errorf("no grant ID provided and no configuration found")
-				}
-				grantID = cfg.DefaultGrant
-				if grantID == "" {
-					return fmt.Errorf("no grant ID provided and no default grant configured")
+					return err
 				}
 			}
 

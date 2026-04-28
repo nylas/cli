@@ -184,17 +184,23 @@ func TestGetGrantID_EmptyArgs(t *testing.T) {
 	origGrantID := os.Getenv("NYLAS_GRANT_ID")
 	origDisableKeyring := os.Getenv("NYLAS_DISABLE_KEYRING")
 	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	origXDGCacheHome := os.Getenv("XDG_CACHE_HOME")
+	origHome := os.Getenv("HOME")
 
 	// Restore after test
 	defer func() {
 		setEnvOrUnset("NYLAS_GRANT_ID", origGrantID)
 		setEnvOrUnset("NYLAS_DISABLE_KEYRING", origDisableKeyring)
 		setEnvOrUnset("XDG_CONFIG_HOME", origXDGConfigHome)
+		setEnvOrUnset("XDG_CACHE_HOME", origXDGCacheHome)
+		setEnvOrUnset("HOME", origHome)
 	}()
 
 	// Use temp directory to isolate from real config file
 	tempDir := t.TempDir()
 	_ = os.Setenv("XDG_CONFIG_HOME", tempDir)
+	_ = os.Setenv("XDG_CACHE_HOME", filepath.Join(tempDir, "cache"))
+	_ = os.Setenv("HOME", tempDir)
 	_ = os.Unsetenv("NYLAS_GRANT_ID")
 	_ = os.Setenv("NYLAS_DISABLE_KEYRING", "true")
 
@@ -249,9 +255,8 @@ func TestGetGrantID_PrefersStoredDefaultOverStaleConfig(t *testing.T) {
 		Grants:       []domain.GrantInfo{{ID: "stale-config-grant", Email: "stale@example.com"}},
 	}))
 
-	secretStore, err := keyring.NewEncryptedFileStore(filepath.Join(configHome, "nylas"))
+	grantStore, err := NewDefaultGrantStore()
 	require.NoError(t, err)
-	grantStore := keyring.NewGrantStore(secretStore)
 	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}))
 	require.NoError(t, grantStore.SetDefaultGrant("stored-default"))
 
@@ -260,11 +265,10 @@ func TestGetGrantID_PrefersStoredDefaultOverStaleConfig(t *testing.T) {
 	assert.Equal(t, "stored-default", grantID)
 }
 
-func TestGetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testing.T) {
+func TestGetGrantID_FallsBackToConfigWhenLegacyStoreLocked(t *testing.T) {
 	configDir := seedLockedFileStore(t, func(store *keyring.EncryptedFileStore) {
-		grantStore := keyring.NewGrantStore(store)
-		require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "stored-default", Email: "active@example.com"}))
-		require.NoError(t, grantStore.SetDefaultGrant("stored-default"))
+		require.NoError(t, store.Set("grants", `[{"id":"stored-default","email":"active@example.com","provider":"google"}]`))
+		require.NoError(t, store.Set("default_grant", "stored-default"))
 	})
 
 	configStore := config.NewFileStore(filepath.Join(configDir, "config.yaml"))
@@ -276,10 +280,38 @@ func TestGetGrantID_DoesNotFallbackToConfigWhenStoreLocked(t *testing.T) {
 
 	grantID, err := GetGrantID(nil)
 
+	require.NoError(t, err)
+	assert.Equal(t, "stale-config-grant", grantID)
+}
+
+func TestGetGrantID_DoesNotUseStaleConfigDefaultWhenCacheExists(t *testing.T) {
+	tempDir := t.TempDir()
+	configHome := filepath.Join(tempDir, "xdg")
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tempDir, "cache"))
+	t.Setenv("HOME", tempDir)
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_API_KEY", "")
+	t.Setenv("NYLAS_GRANT_ID", "")
+
+	configStore := config.NewFileStore(filepath.Join(configHome, "nylas", "config.yaml"))
+	require.NoError(t, configStore.Save(&domain.Config{
+		Region:       "us",
+		DefaultGrant: "stale-config-grant",
+	}))
+
+	grantStore, err := NewDefaultGrantStore()
+	require.NoError(t, err)
+	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{
+		ID:    "grant-1",
+		Email: "one@example.com",
+	}))
+	require.NoError(t, grantStore.SetDefaultGrant(""))
+
+	grantID, err := GetGrantID(nil)
 	require.Error(t, err)
 	assert.Empty(t, grantID)
-	assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)
-	assert.Contains(t, err.Error(), "NYLAS_FILE_STORE_PASSPHRASE")
+	assert.Contains(t, err.Error(), "No grant ID provided")
 }
 
 // setEnvOrUnset sets an environment variable if value is non-empty, otherwise unsets it

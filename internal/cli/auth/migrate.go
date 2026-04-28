@@ -81,18 +81,16 @@ func runMigrate(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Migrate grants data
-	if grants, err := fileStore.Get("grants"); err == nil && grants != "" {
-		if err := kr.Set("grants", grants); err == nil {
-			fmt.Println("✓ Migrated grants")
-		}
+	if _, err := common.NewDefaultGrantStore(); err != nil {
+		return fmt.Errorf("migrate local grant metadata: %w", err)
 	}
-
-	if defaultGrant, err := fileStore.Get("default_grant"); err == nil && defaultGrant != "" {
-		if err := kr.Set("default_grant", defaultGrant); err == nil {
-			fmt.Println("✓ Migrated default grant")
-		}
+	if _, err := fileStore.Get("grants"); err == nil {
+		return fmt.Errorf("failed to remove legacy local grant metadata from encrypted file store")
 	}
+	if _, err := fileStore.Get("default_grant"); err == nil {
+		return fmt.Errorf("failed to remove legacy default grant from encrypted file store")
+	}
+	fmt.Println("✓ Migrated local grant metadata")
 
 	fmt.Println()
 	fmt.Println("Migration complete! Your credentials are now stored in the system keyring.")

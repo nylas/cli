@@ -10,6 +10,7 @@ import (
 
 	configadapter "github.com/nylas/cli/internal/adapters/config"
 	keyringadapter "github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/air/cache"
 	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/domain"
 )
@@ -291,6 +292,68 @@ func TestHandleSetDefaultGrant_RejectsUnsupportedProviders(t *testing.T) {
 	}
 	if !strings.Contains(resp.Error, "not supported") {
 		t.Fatalf("expected unsupported-provider error, got %q", resp.Error)
+	}
+}
+
+func TestHandleSetDefaultGrantRefreshesActiveOfflineQueue(t *testing.T) {
+	t.Parallel()
+
+	manager, err := cache.NewManager(cache.Config{BasePath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new cache manager: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = manager.Close()
+	})
+
+	settings := cache.DefaultSettings()
+	settings.Enabled = true
+	settings.OfflineQueueEnabled = true
+
+	grantStore := &testGrantStore{
+		grants: []domain.GrantInfo{
+			{ID: "grant-old", Email: "old@example.com", Provider: domain.ProviderGoogle},
+			{ID: "grant-new", Email: "new@example.com", Provider: domain.ProviderNylas},
+		},
+		defaultGrant: "grant-old",
+	}
+	server := &Server{
+		cacheManager:  manager,
+		cacheSettings: settings,
+		configStore:   configadapter.NewMockConfigStore(),
+		grantStore:    grantStore,
+		offlineQueues: make(map[string]*cache.OfflineQueue),
+		isOnline:      false,
+	}
+	t.Cleanup(server.stopBackgroundSync)
+
+	if err := server.withOfflineQueue("old@example.com", func(*cache.OfflineQueue) error { return nil }); err != nil {
+		t.Fatalf("initialize old offline queue: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/grants/default", strings.NewReader(`{"grant_id":"grant-new"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.handleSetDefaultGrant(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	if grantStore.defaultGrant != "grant-new" {
+		t.Fatalf("expected default grant to switch to grant-new, got %q", grantStore.defaultGrant)
+	}
+
+	server.offlineQueuesMu.RLock()
+	defer server.offlineQueuesMu.RUnlock()
+	if len(server.offlineQueues) != 1 {
+		t.Fatalf("expected exactly one offline queue after switch, got %d", len(server.offlineQueues))
+	}
+	if server.offlineQueues["new@example.com"] == nil {
+		t.Fatal("expected new default account offline queue to be initialized")
+	}
+	if server.offlineQueues["old@example.com"] != nil {
+		t.Fatal("did not expect old default account offline queue to remain initialized")
 	}
 }
 

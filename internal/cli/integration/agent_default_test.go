@@ -5,11 +5,10 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -71,14 +70,14 @@ func setAgentSandboxDefaultGrant(t *testing.T, env map[string]string, account *d
 	t.Helper()
 
 	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", env["NYLAS_FILE_STORE_PASSPHRASE"])
+	t.Setenv("NYLAS_DISABLE_KEYRING", env["NYLAS_DISABLE_KEYRING"])
+	t.Setenv("XDG_CONFIG_HOME", env["XDG_CONFIG_HOME"])
+	t.Setenv("HOME", env["HOME"])
 
-	configDir := filepath.Join(env["XDG_CONFIG_HOME"], "nylas")
-	secretStore, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
-		t.Fatalf("failed to create sandbox secret store: %v", err)
+		t.Fatalf("failed to create sandbox grant store: %v", err)
 	}
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	if err := grantStore.SaveGrant(domain.GrantInfo{
 		ID:       account.ID,
 		Email:    account.Email,

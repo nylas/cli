@@ -13,6 +13,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/air/cache"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -31,7 +32,10 @@ func newServer(addr string, secretStoreFactory func(string) (ports.SecretStore, 
 	if err != nil {
 		return nil, fmt.Errorf("initialize secret store: %w", err)
 	}
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		return nil, fmt.Errorf("initialize grant store: %w", err)
+	}
 	configSvc := authapp.NewConfigService(configStore, secretStore)
 
 	// Create Nylas client for API calls (keyring only - env vars are for integration tests)

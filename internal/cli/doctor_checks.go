@@ -249,7 +249,15 @@ func checkGrants() CheckResult {
 		}
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		return CheckResult{
+			Name:    "Grants",
+			Status:  CheckStatusError,
+			Message: "Failed to open grant store",
+			Detail:  err.Error(),
+		}
+	}
 	grants, err := grantStore.ListGrants()
 	if err != nil {
 		return CheckResult{

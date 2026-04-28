@@ -355,6 +355,11 @@ func (m *mockGrantStore) SaveGrant(grant domain.GrantInfo) error {
 	return nil
 }
 
+func (m *mockGrantStore) ReplaceGrants(grants []domain.GrantInfo) error {
+	m.grants = append([]domain.GrantInfo(nil), grants...)
+	return nil
+}
+
 func (m *mockGrantStore) DeleteGrant(grantID string) error {
 	return nil
 }

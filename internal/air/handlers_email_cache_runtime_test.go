@@ -38,6 +38,11 @@ func (s *testGrantStore) SaveGrant(info domain.GrantInfo) error {
 	return nil
 }
 
+func (s *testGrantStore) ReplaceGrants(grants []domain.GrantInfo) error {
+	s.grants = append([]domain.GrantInfo(nil), grants...)
+	return nil
+}
+
 func (s *testGrantStore) GetGrant(grantID string) (*domain.GrantInfo, error) {
 	for i := range s.grants {
 		if s.grants[i].ID == grantID {

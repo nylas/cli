@@ -6,6 +6,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -69,10 +70,11 @@ func GetSetupStatus() SetupStatus {
 		status.ActiveAppRegion = appRegion
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
-	grants, err := grantStore.ListGrants()
-	if err == nil && len(grants) > 0 {
-		status.HasGrants = true
+	if grantStore, err := common.NewDefaultGrantStore(); err == nil {
+		grants, err := grantStore.ListGrants()
+		if err == nil && len(grants) > 0 {
+			status.HasGrants = true
+		}
 	}
 
 	return status

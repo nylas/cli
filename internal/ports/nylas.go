@@ -60,6 +60,9 @@ type GrantStore interface {
 	// SaveGrant saves grant info to storage.
 	SaveGrant(info domain.GrantInfo) error
 
+	// ReplaceGrants replaces all locally cached grant metadata.
+	ReplaceGrants(grants []domain.GrantInfo) error
+
 	// GetGrant retrieves grant info by ID.
 	GetGrant(grantID string) (*domain.GrantInfo, error)
 

@@ -132,6 +132,11 @@ func (m *mockGrantStore) SaveGrant(info domain.GrantInfo) error {
 	return nil
 }
 
+func (m *mockGrantStore) ReplaceGrants(grants []domain.GrantInfo) error {
+	m.grants = append([]domain.GrantInfo(nil), grants...)
+	return nil
+}
+
 func (m *mockGrantStore) GetGrant(grantID string) (*domain.GrantInfo, error) {
 	for _, g := range m.grants {
 		if g.ID == grantID {
