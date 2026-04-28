@@ -234,8 +234,15 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 	if cfg.DefaultGrant != "grant-2" {
 		t.Fatalf("config default grant = %q, want %q", cfg.DefaultGrant, "grant-2")
 	}
-	if len(cfg.Grants) != 1 || cfg.Grants[0].ID != "grant-2" {
+	if len(cfg.Grants) != 0 {
 		t.Fatalf("unexpected config grants after remove: %+v", cfg.Grants)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+	if strings.Contains(string(data), "grants:") {
+		t.Fatalf("config file should not contain grants list:\n%s", string(data))
 	}
 }
 

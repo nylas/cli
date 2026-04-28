@@ -22,6 +22,7 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			status.GrantCount = grantSvc.CachedGrantCount()
 
 			// Get current grant info
 			ctx, cancel := common.CreateContext()

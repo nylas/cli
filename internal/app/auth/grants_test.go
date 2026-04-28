@@ -100,6 +100,16 @@ func TestGrantService_ListGrantsClearsStaleConfigDefault(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
 }
 
+func TestGrantService_CachedGrantCountUsesGrantStore(t *testing.T) {
+	grantStore := newMockGrantStore()
+	grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "one@example.com"}
+	grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "two@example.com"}
+
+	svc := NewGrantService(nylas.NewMockClient(), grantStore, newMockConfigStore())
+
+	assert.Equal(t, 2, svc.CachedGrantCount())
+}
+
 func TestGrantService_SwitchGrant(t *testing.T) {
 	t.Run("updates both local cache and config file", func(t *testing.T) {
 		grantStore := newMockGrantStore()

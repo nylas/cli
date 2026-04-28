@@ -188,11 +188,6 @@ func (s *Service) autoSwitchDefault() {
 }
 
 func (s *Service) syncConfigWithGrantStore() {
-	grants, err := s.grantStore.ListGrants()
-	if err != nil {
-		return
-	}
-
 	defaultGrant, err := s.grantStore.GetDefaultGrant()
 	if err == domain.ErrNoDefaultGrant {
 		defaultGrant = ""
@@ -205,7 +200,7 @@ func (s *Service) syncConfigWithGrantStore() {
 		return
 	}
 
-	cfg.Grants = append([]domain.GrantInfo(nil), grants...)
+	cfg.Grants = nil
 	cfg.DefaultGrant = defaultGrant
 	_ = s.config.Save(cfg)
 }

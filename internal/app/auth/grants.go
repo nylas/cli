@@ -24,6 +24,15 @@ func NewGrantService(client ports.NylasClient, grantStore ports.GrantStore, conf
 	}
 }
 
+// CachedGrantCount returns the number of locally cached grants.
+func (s *GrantService) CachedGrantCount() int {
+	grants, err := s.grantStore.ListGrants()
+	if err != nil {
+		return 0
+	}
+	return len(grants)
+}
+
 // ListGrants returns all grants with their status.
 func (s *GrantService) ListGrants(ctx context.Context) ([]domain.GrantStatus, error) {
 	liveGrants, err := s.client.ListGrants(ctx)

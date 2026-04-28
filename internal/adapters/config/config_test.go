@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -118,6 +119,42 @@ func TestFileStore_LoadSaveRoundTrip(t *testing.T) {
 	}
 	if loaded.CallbackPort != config.CallbackPort {
 		t.Errorf("CallbackPort = %d, want %d", loaded.CallbackPort, config.CallbackPort)
+	}
+}
+
+func TestFileStore_SaveDropsLegacyGrants(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	legacyYAML := []byte(`region: us
+callback_port: 9007
+default_grant: grant-1
+grants:
+  - id: grant-1
+    email: user@example.com
+    provider: google
+`)
+	if err := os.WriteFile(configPath, legacyYAML, 0600); err != nil {
+		t.Fatalf("failed to write legacy config: %v", err)
+	}
+
+	store := NewFileStore(configPath)
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DefaultGrant != "grant-1" {
+		t.Fatalf("DefaultGrant = %q, want %q", cfg.DefaultGrant, "grant-1")
+	}
+
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+	if strings.Contains(string(data), "grants:") {
+		t.Fatalf("saved config still contains legacy grants list:\n%s", string(data))
 	}
 }
 
