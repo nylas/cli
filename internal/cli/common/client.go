@@ -201,9 +201,9 @@ func GetGrantID(args []string) (string, error) {
 	}
 
 	return "", NewUserErrorWithSuggestions(
-		"No grant ID provided",
-		"Check available grants with: nylas auth list",
-		"Set default grant with: nylas config set default_grant <grant-id>",
+		"No grant ID provided. Run 'nylas auth list' to find a grant, then 'nylas auth switch <grant-id-or-email>' to set the default.",
+		"List available grants with: nylas auth list",
+		"Set a default grant with: nylas auth switch <grant-id-or-email>",
 		"Use environment variable: export NYLAS_GRANT_ID=<grant-id>",
 		"Or specify as argument: nylas [command] <grant-id>",
 	)

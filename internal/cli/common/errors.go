@@ -80,7 +80,7 @@ func WrapError(err error) *CLIError {
 		return &CLIError{
 			Err:        err,
 			Message:    "No default grant set",
-			Suggestion: "Run 'nylas auth list' to see grants, then 'nylas auth switch <grant-id>' to set a default",
+			Suggestion: "Run 'nylas auth list' to see grants, then 'nylas auth switch <grant-id-or-email>' to set a default",
 			Code:       ErrCodeNotConfigured,
 		}
 

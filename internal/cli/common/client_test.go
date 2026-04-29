@@ -312,6 +312,8 @@ func TestGetGrantID_DoesNotUseStaleConfigDefaultWhenCacheExists(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, grantID)
 	assert.Contains(t, err.Error(), "No grant ID provided")
+	assert.Contains(t, err.Error(), "nylas auth list")
+	assert.Contains(t, err.Error(), "nylas auth switch")
 }
 
 // setEnvOrUnset sets an environment variable if value is non-empty, otherwise unsets it
