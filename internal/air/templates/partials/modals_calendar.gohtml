@@ -1,10 +1,10 @@
 {{define "modals_calendar"}}
 <!-- Event Modal -->
-<div class="event-modal-overlay hidden" id="eventModalOverlay" onclick="if(event.target === this) closeEventModal()">
+<div class="event-modal-overlay hidden" id="eventModalOverlay" data-action="close-event-modal-overlay">
     <div class="event-modal" role="dialog" aria-labelledby="eventModalTitle" aria-modal="true">
         <div class="event-modal-header">
             <h2 id="eventModalTitle">New Event</h2>
-            <button class="event-modal-close" onclick="closeEventModal()" aria-label="Close">
+            <button class="event-modal-close" data-action="close-event-modal" aria-label="Close">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
@@ -38,7 +38,7 @@
 
             <div class="event-form-group event-checkbox-group">
                 <label class="event-checkbox-label">
-                    <input type="checkbox" id="eventAllDay" onchange="toggleAllDay()">
+                    <input type="checkbox" id="eventAllDay" data-action="toggle-all-day">
                     <span>All day</span>
                 </label>
             </div>
@@ -66,19 +66,19 @@
             </div>
         </form>
         <div class="event-modal-footer">
-            <button type="button" class="event-btn event-btn-secondary" onclick="closeEventModal()">Cancel</button>
-            <button type="button" class="event-btn event-btn-danger hidden" id="eventDeleteBtn" onclick="deleteEvent()">Delete</button>
-            <button type="button" class="event-btn event-btn-primary" id="eventSaveBtn" onclick="saveEvent()">Save</button>
+            <button type="button" class="event-btn event-btn-secondary" data-action="close-event-modal">Cancel</button>
+            <button type="button" class="event-btn event-btn-danger hidden" id="eventDeleteBtn" data-action="delete-event">Delete</button>
+            <button type="button" class="event-btn event-btn-primary" id="eventSaveBtn" data-action="save-event">Save</button>
         </div>
     </div>
 </div>
 
 <!-- Contact Modal -->
-<div class="contact-modal-overlay hidden" id="contactModalOverlay" onclick="if(event.target === this) ContactsManager.closeModal()">
+<div class="contact-modal-overlay hidden" id="contactModalOverlay" data-action="close-contact-modal-overlay">
     <div class="contact-modal" role="dialog" aria-labelledby="contactModalTitle" aria-modal="true">
         <div class="contact-modal-header">
             <h2 id="contactModalTitle">New Contact</h2>
-            <button class="contact-modal-close" onclick="ContactsManager.closeModal()" aria-label="Close">
+            <button class="contact-modal-close" data-action="close-contact-modal" aria-label="Close">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
@@ -113,7 +113,7 @@
                             <option value="work">Work</option>
                             <option value="other">Other</option>
                         </select>
-                        <button type="button" class="contact-add-btn" onclick="ContactsManager.addEmailRow()">+</button>
+                        <button type="button" class="contact-add-btn" data-action="contact-add-email-row">+</button>
                     </div>
                 </div>
             </div>
@@ -129,7 +129,7 @@
                             <option value="work">Work</option>
                             <option value="other">Other</option>
                         </select>
-                        <button type="button" class="contact-add-btn" onclick="ContactsManager.addPhoneRow()">+</button>
+                        <button type="button" class="contact-add-btn" data-action="contact-add-phone-row">+</button>
                     </div>
                 </div>
             </div>
@@ -156,8 +156,8 @@
             </div>
         </form>
         <div class="contact-modal-footer">
-            <button type="button" class="contact-btn contact-btn-secondary" onclick="ContactsManager.closeModal()">Cancel</button>
-            <button type="button" class="contact-btn contact-btn-primary" id="contactSaveBtn" onclick="ContactsManager.saveContact()">Save</button>
+            <button type="button" class="contact-btn contact-btn-secondary" data-action="close-contact-modal">Cancel</button>
+            <button type="button" class="contact-btn contact-btn-primary" id="contactSaveBtn" data-action="save-contact">Save</button>
         </div>
     </div>
 </div>

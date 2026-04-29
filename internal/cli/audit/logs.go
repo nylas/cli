@@ -135,7 +135,7 @@ func newStatusCmd() *cobra.Command {
 			if err == nil && fileCount > 0 {
 				fmt.Println()
 				fmt.Println("Storage:")
-				fmt.Printf("  Current size:   %s\n", FormatSize(totalSize))
+				fmt.Printf("  Current size:   %s\n", common.FormatSize(totalSize))
 				fmt.Printf("  Files:          %d\n", fileCount)
 				if oldestEntry != nil {
 					fmt.Printf("  Oldest entry:   %s\n", oldestEntry.Timestamp.Format("2006-01-02"))
@@ -171,7 +171,7 @@ func newClearCmd() *cobra.Command {
 			}
 
 			if !force {
-				fmt.Printf("This will delete %d log files (%s).\n", fileCount, FormatSize(totalSize))
+				fmt.Printf("This will delete %d log files (%s).\n", fileCount, common.FormatSize(totalSize))
 				fmt.Print("Are you sure? [y/N]: ")
 
 				var confirm string

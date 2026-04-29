@@ -13,8 +13,6 @@ import (
 )
 
 func newProvidersCmd() *cobra.Command {
-	var outputJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "providers",
 		Short: "List available authentication providers",
@@ -48,7 +46,7 @@ This command shows connectors configured for your Nylas application.`,
 			}
 			connectors = common.FilterVisibleConnectors(connectors)
 
-			if outputJSON {
+			if common.IsJSON(cmd) {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(connectors)
@@ -58,8 +56,6 @@ This command shows connectors configured for your Nylas application.`,
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

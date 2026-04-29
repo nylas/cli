@@ -74,6 +74,26 @@ func TestConfigService_ResetConfig(t *testing.T) {
 	})
 }
 
+func TestConfigService_GetStatusIgnoresConfigGrantList(t *testing.T) {
+	secrets := newMockSecretStore()
+	configStore := newMockConfigStore()
+	configStore.config = &domain.Config{
+		Region:       "us",
+		DefaultGrant: "grant-1",
+		Grants: []domain.GrantInfo{
+			{ID: "grant-1", Email: "one@example.com"},
+			{ID: "grant-2", Email: "two@example.com"},
+		},
+	}
+
+	svc := NewConfigService(configStore, secrets)
+
+	status, err := svc.GetStatus()
+	require.NoError(t, err)
+	assert.Zero(t, status.GrantCount)
+	assert.Equal(t, "grant-1", status.DefaultGrant)
+}
+
 func TestConfigService_SetupConfig_PreservesExistingSettings(t *testing.T) {
 	secrets := newMockSecretStore()
 	secrets.data[ports.KeyClientID] = "old-client"
@@ -164,8 +184,7 @@ func TestConfigService_SetupConfig_PreservesGrantStateWhenCredentialsDoNotChange
 	require.NoError(t, err)
 
 	assert.Equal(t, "grant-123", cfg.DefaultGrant)
-	require.Len(t, cfg.Grants, 1)
-	assert.Equal(t, "grant-123", cfg.Grants[0].ID)
+	assert.Empty(t, cfg.Grants)
 	assert.Equal(t, "grant-123", secrets.data[storedDefaultGrantKey])
 	assert.NotEmpty(t, secrets.data[storedGrantsKey])
 }

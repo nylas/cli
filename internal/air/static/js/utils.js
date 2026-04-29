@@ -49,6 +49,73 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Sanitize untrusted HTML before assigning it to innerHTML.
+//
+// Uses DOMParser so the browser handles malformed markup, entity tricks,
+// and weird tag boundaries that defeat regex-based strippers (e.g.
+// "<scr<script>ipt>", "<img src=x onerror=...>", SVG payloads).
+//
+// Removes: <script>, <iframe>, <object>, <embed>, <link>, <meta>, <base>,
+// <form>, all on* event-handler attributes, and any href/src whose value
+// after trimming starts with javascript:, data: (except data:image/*),
+// vbscript:, or file:.
+//
+// Always render the return value via innerHTML — the browser has already
+// parsed and sanitized the structure.
+const DANGEROUS_TAGS = new Set([
+    'SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE',
+    'FORM', 'INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'OPTION'
+]);
+
+function sanitizeHtml(html) {
+    if (typeof html !== 'string' || html === '') return '';
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+
+    const toRemove = [];
+    let node = walker.currentNode;
+    while ((node = walker.nextNode())) {
+        if (DANGEROUS_TAGS.has(node.tagName)) {
+            toRemove.push(node);
+            continue;
+        }
+        // Strip event handlers and dangerous URLs.
+        for (const attr of Array.from(node.attributes)) {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on')) {
+                node.removeAttribute(attr.name);
+                continue;
+            }
+            if (name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction') {
+                if (!isSafeUrl(attr.value)) {
+                    node.removeAttribute(attr.name);
+                }
+            }
+        }
+    }
+    toRemove.forEach((n) => n.remove());
+
+    return doc.body.innerHTML;
+}
+
+// isSafeUrl returns true for relative, anchor, http(s), mailto:, tel:, and
+// data:image/* URLs. Everything else (javascript:, vbscript:, data:text/html,
+// file:) is rejected.
+function isSafeUrl(rawUrl) {
+    const url = String(rawUrl).trim();
+    if (url === '') return true;
+    const m = url.match(/^([a-z][a-z0-9+.-]*):/i);
+    if (!m) return true; // relative or anchor
+    const scheme = m[1].toLowerCase();
+    if (scheme === 'http' || scheme === 'https' || scheme === 'mailto' || scheme === 'tel') return true;
+    if (scheme === 'data') {
+        // Allow only data:image/* (PNG, JPEG, GIF, SVG, WEBP) — never data:text/html.
+        return /^data:image\//i.test(url);
+    }
+    return false;
+}
+
 // Generate unique ID
 function generateId() {
     return 'id_' + Math.random().toString(36).substr(2, 9);

@@ -29,8 +29,6 @@ func newCredentialsCmd() *cobra.Command {
 }
 
 func newCredentialListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "list <connector-id>",
 		Aliases: []string{"ls"},
@@ -45,7 +43,7 @@ func newCredentialListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("credentials", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(credentials)
 				}
 
@@ -68,14 +66,10 @@ func newCredentialListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newCredentialShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <credential-id>",
 		Short: "Show credential details",
@@ -89,7 +83,7 @@ func newCredentialShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("credential", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(credential)
 				}
 
@@ -105,8 +99,6 @@ func newCredentialShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

@@ -91,15 +91,15 @@ func markMessage(args []string, unread bool, starred *bool) error {
 
 		if starred != nil {
 			if *starred {
-				printSuccess("Message starred")
+				common.PrintSuccess("Message starred")
 			} else {
-				printSuccess("Star removed from message")
+				common.PrintSuccess("Star removed from message")
 			}
 		} else {
 			if unread {
-				printSuccess("Message marked as unread")
+				common.PrintSuccess("Message marked as unread")
 			} else {
-				printSuccess("Message marked as read")
+				common.PrintSuccess("Message marked as read")
 			}
 		}
 

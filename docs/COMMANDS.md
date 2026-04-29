@@ -439,8 +439,9 @@ nylas webhook pubsub delete <channel-id> --yes
 ```bash
 nylas webhook test send <webhook-url>                 # Send test payload
 nylas webhook test payload [trigger-type]             # Generate test payload
-nylas webhook server                                  # Start local webhook server
-nylas webhook server --port 8080 --tunnel cloudflared # With public tunnel
+nylas webhook server                                  # Interactive preflight (offers cloudflared tunnel)
+nylas webhook server --no-tunnel                      # Loopback-only (skip preflight)
+nylas webhook server --port 8080 --tunnel cloudflared --secret xxx  # Public tunnel + HMAC verify
 ```
 
 **Details:** `docs/commands/webhooks.md`

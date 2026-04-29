@@ -162,6 +162,7 @@ func (s *Server) handleSetDefaultGrant(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	s.refreshActiveAccountCacheRuntime()
 
 	writeJSON(w, http.StatusOK, SetDefaultGrantResponse{
 		Success: true,

@@ -27,22 +27,22 @@ getProviderName(provider) {
 },
 
 /**
- * Strip embedded styles and scripts from HTML for safe rendering
+ * Strip embedded styles and scripts from HTML for safe rendering.
+ *
+ * Delegates structural sanitization (scripts, event handlers, dangerous
+ * URLs) to sanitizeHtml() in utils.js — that uses DOMParser, which is not
+ * defeatable by entity tricks or malformed tags the way the previous
+ * regex strippers were. Inline <style> blocks and style="" attributes are
+ * removed as before so our CSS controls theming.
  */
 stripEmbeddedStyles(html) {
-    // Remove <script> tags and their content (XSS prevention)
-    let cleaned = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    // Remove event handlers (onclick, onerror, etc.)
-    cleaned = cleaned.replace(/\s+on\w+="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\s+on\w+='[^']*'/gi, '');
-    // Remove <style> tags and their content
+    let cleaned = sanitizeHtml(html);
+    // Remove inline style attributes and <style> blocks so our app CSS
+    // controls theming. sanitizeHtml leaves these intact intentionally so
+    // legitimate emails can keep their structure.
     cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    // Remove inline style attributes
     cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    // Remove <html>, <head>, <body> tags but keep their content
-    cleaned = cleaned.replace(/<\/?html[^>]*>/gi, '');
-    cleaned = cleaned.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
-    cleaned = cleaned.replace(/<\/?body[^>]*>/gi, '');
+    cleaned = cleaned.replace(/\s+style='[^']*'/gi, '');
     return cleaned;
 },
 
@@ -125,30 +125,30 @@ renderPendingContent(nt) {
 renderActions(nt) {
     if (nt.isExternal && nt.externalUrl) {
         return `
-            <button class="btn-primary" onclick="window.open('${nt.externalUrl}', '_blank')">
+            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${this.escapeHtml(nt.externalUrl)}">
                 🔗 Open in Nylas Notebook
             </button>
         `;
     }
     if (nt.state === 'complete' || nt.state === 'completed') {
         return `
-            <button class="btn-primary" onclick="NotetakerModule.playRecording('${nt.id}')">
+            <button class="btn-primary" data-action="notetaker-play" data-not-id="${this.escapeHtml(nt.id)}">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Play Recording
             </button>
-            <button class="btn-secondary" onclick="NotetakerModule.viewTranscript('${nt.id}')">
+            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${this.escapeHtml(nt.id)}">
                 📝 View Transcript
             </button>
-            <button class="btn-secondary" onclick="NotetakerModule.summarize('${nt.id}')">
+            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${this.escapeHtml(nt.id)}">
                 ✨ AI Summary
             </button>
         `;
     }
     if (nt.state === 'scheduled') {
         return `
-            <button class="btn-danger" onclick="NotetakerModule.cancel('${nt.id}')">
+            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${this.escapeHtml(nt.id)}">
                 ❌ Cancel Recording
             </button>
         `;
@@ -271,28 +271,20 @@ showSummaryModal(nt) {
 },
 
 /**
- * Clean email HTML - keep structure but remove scripts and styles for safe rendering
+ * Clean email HTML - keep structure but remove scripts and styles for safe rendering.
+ *
+ * Like stripEmbeddedStyles, defers structural sanitization to sanitizeHtml.
+ * Strips style/width/height after parsing so the app CSS owns layout.
  */
 stripEmailCruft(html) {
-    let cleaned = html;
-    // Remove script tags (XSS prevention)
-    cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    // Remove event handlers (onclick, onerror, etc.)
-    cleaned = cleaned.replace(/\s+on\w+="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\s+on\w+='[^']*'/gi, '');
-    // Remove style tags
+    let cleaned = sanitizeHtml(html);
     cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    // Remove inline styles
     cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    // Remove width/height attributes globally
+    cleaned = cleaned.replace(/\s+style='[^']*'/gi, '');
     cleaned = cleaned.replace(/\s+width="[^"]*"/gi, '');
     cleaned = cleaned.replace(/\s+height="[^"]*"/gi, '');
-    // Add small size to all images
+    // Add a small constrained size to images so they don't blow up the modal.
     cleaned = cleaned.replace(/<img/gi, '<img style="max-width:80px;max-height:40px;display:block;margin:0 auto 16px"');
-    // Remove html/head/body tags
-    cleaned = cleaned.replace(/<\/?html[^>]*>/gi, '');
-    cleaned = cleaned.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
-    cleaned = cleaned.replace(/<\/?body[^>]*>/gi, '');
     return cleaned;
 },
 

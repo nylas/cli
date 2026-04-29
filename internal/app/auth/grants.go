@@ -24,55 +24,52 @@ func NewGrantService(client ports.NylasClient, grantStore ports.GrantStore, conf
 	}
 }
 
+// CachedGrantCount returns the number of locally cached grants.
+func (s *GrantService) CachedGrantCount() int {
+	grants, err := s.grantStore.ListGrants()
+	if err != nil {
+		return 0
+	}
+	return len(grants)
+}
+
 // ListGrants returns all grants with their status.
 func (s *GrantService) ListGrants(ctx context.Context) ([]domain.GrantStatus, error) {
-	localGrants, err := s.grantStore.ListGrants()
+	liveGrants, err := s.client.ListGrants(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	defaultGrant, _ := s.grantStore.GetDefaultGrant()
+	defaultGrant := s.defaultGrantID()
+	defaultStillExists := defaultGrant == ""
+	cacheGrants := make([]domain.GrantInfo, 0, len(liveGrants))
+	result := make([]domain.GrantStatus, 0, len(liveGrants))
 
-	var result []domain.GrantStatus
-	for _, g := range localGrants {
-		var status string
-		var errMsg string
-		provider := g.Provider // Default to local storage
-
-		// Verify grant is still valid on Nylas
-		grant, err := s.client.GetGrant(ctx, g.ID)
-		if err == nil && grant != nil {
-			if grant.IsValid() {
-				status = "valid"
-			} else {
-				status = grant.GrantStatus
-			}
-			// Use provider from API (authoritative source)
-			if grant.Provider != "" {
-				provider = grant.Provider
-				// Update local storage if provider changed
-				if g.Provider != grant.Provider {
-					g.Provider = grant.Provider
-					_ = s.grantStore.SaveGrant(g)
-				}
-			}
-		} else if err == domain.ErrGrantNotFound {
-			status = "revoked"
-		} else {
-			status = "error"
-			if err != nil {
-				errMsg = err.Error()
-			}
+	for _, grant := range liveGrants {
+		status := grant.GrantStatus
+		if grant.IsValid() {
+			status = "valid"
 		}
 
 		result = append(result, domain.GrantStatus{
-			ID:        g.ID,
-			Email:     g.Email,
-			Provider:  provider,
+			ID:        grant.ID,
+			Email:     grant.Email,
+			Provider:  grant.Provider,
 			Status:    status,
-			IsDefault: g.ID == defaultGrant,
-			Error:     errMsg,
+			IsDefault: grant.ID == defaultGrant,
 		})
+		if grant.ID == defaultGrant {
+			defaultStillExists = true
+		}
+		cacheGrants = append(cacheGrants, domain.GrantInfo{
+			ID:       grant.ID,
+			Email:    grant.Email,
+			Provider: grant.Provider,
+		})
+	}
+	_ = s.grantStore.ReplaceGrants(cacheGrants)
+	if !defaultStillExists {
+		_ = PersistDefaultGrant(s.config, s.grantStore, "")
 	}
 
 	return result, nil
@@ -124,8 +121,18 @@ func (s *GrantService) GetCurrentGrant(ctx context.Context) (*domain.GrantStatus
 
 // SwitchGrant switches the default grant to the specified ID.
 func (s *GrantService) SwitchGrant(grantID string) error {
-	// Verify grant exists
-	if _, err := s.grantStore.GetGrant(grantID); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), domain.TimeoutAPI)
+	defer cancel()
+
+	grant, err := s.client.GetGrant(ctx, grantID)
+	if err != nil {
+		return err
+	}
+	if err := s.grantStore.SaveGrant(domain.GrantInfo{
+		ID:       grant.ID,
+		Email:    grant.Email,
+		Provider: grant.Provider,
+	}); err != nil {
 		return err
 	}
 	return s.setDefaultGrant(grantID)
@@ -133,11 +140,26 @@ func (s *GrantService) SwitchGrant(grantID string) error {
 
 // SwitchGrantByEmail switches the default grant by email.
 func (s *GrantService) SwitchGrantByEmail(email string) error {
-	info, err := s.grantStore.GetGrantByEmail(email)
+	ctx, cancel := context.WithTimeout(context.Background(), domain.TimeoutAPI)
+	defer cancel()
+
+	grants, err := s.client.ListGrants(ctx)
 	if err != nil {
 		return err
 	}
-	return s.setDefaultGrant(info.ID)
+	for _, grant := range grants {
+		if grant.Email == email {
+			if err := s.grantStore.SaveGrant(domain.GrantInfo{
+				ID:       grant.ID,
+				Email:    grant.Email,
+				Provider: grant.Provider,
+			}); err != nil {
+				return err
+			}
+			return s.setDefaultGrant(grant.ID)
+		}
+	}
+	return domain.ErrGrantNotFound
 }
 
 // PersistDefaultGrant updates both the config file and grant store so all
@@ -183,7 +205,7 @@ func PersistDefaultGrant(config ports.ConfigStore, grantStore ports.GrantStore, 
 	return nil
 }
 
-// setDefaultGrant updates the default grant in both keyring and config file.
+// setDefaultGrant updates the default grant in both local cache and config file.
 func (s *GrantService) setDefaultGrant(grantID string) error {
 	return PersistDefaultGrant(s.config, s.grantStore, grantID)
 }
@@ -230,4 +252,22 @@ func (s *GrantService) AddGrant(grantID, email string, provider domain.Provider,
 // FetchGrantFromNylas fetches grant details directly from Nylas API.
 func (s *GrantService) FetchGrantFromNylas(ctx context.Context, grantID string) (*domain.Grant, error) {
 	return s.client.GetGrant(ctx, grantID)
+}
+
+func (s *GrantService) defaultGrantID() string {
+	defaultGrant, err := s.grantStore.GetDefaultGrant()
+	if err == nil {
+		return defaultGrant
+	}
+	if !errors.Is(err, domain.ErrNoDefaultGrant) {
+		return ""
+	}
+	if s.config == nil {
+		return ""
+	}
+	cfg, err := s.config.Load()
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return cfg.DefaultGrant
 }

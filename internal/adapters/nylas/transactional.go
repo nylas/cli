@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -24,7 +25,7 @@ func buildTransactionalSendPayload(req *domain.SendMessageRequest) map[string]an
 // SendTransactionalMessage sends an email via the domain-based transactional endpoint.
 // Used for managed Nylas grants: POST /v3/domains/{domain}/messages/send
 func (c *HTTPClient) SendTransactionalMessage(ctx context.Context, domainName string, req *domain.SendMessageRequest) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/domains/%s/messages/send", c.baseURL, domainName)
+	queryURL := fmt.Sprintf("%s/v3/domains/%s/messages/send", c.baseURL, url.PathEscape(domainName))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildTransactionalSendPayload(req), http.StatusOK, http.StatusCreated, http.StatusAccepted)
 	if err != nil {

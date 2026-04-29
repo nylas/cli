@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -40,7 +41,7 @@ func (c *HTTPClient) GetThreads(ctx context.Context, grantID string, params *dom
 		params.Limit = 10
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/threads", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/threads", c.baseURL, url.PathEscape(grantID))
 	queryURL := NewQueryBuilder().
 		AddInt("limit", params.Limit).
 		AddInt("offset", params.Offset).
@@ -64,7 +65,7 @@ func (c *HTTPClient) GetThreads(ctx context.Context, grantID string, params *dom
 
 // GetThread retrieves a single thread by ID.
 func (c *HTTPClient) GetThread(ctx context.Context, grantID, threadID string) (*domain.Thread, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, grantID, threadID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(threadID))
 
 	var result struct {
 		Data threadResponse `json:"data"`
@@ -79,7 +80,7 @@ func (c *HTTPClient) GetThread(ctx context.Context, grantID, threadID string) (*
 
 // UpdateThread updates thread properties.
 func (c *HTTPClient) UpdateThread(ctx context.Context, grantID, threadID string, req *domain.UpdateMessageRequest) (*domain.Thread, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, grantID, threadID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(threadID))
 
 	payload := make(map[string]any)
 	if req.Unread != nil {
@@ -113,7 +114,7 @@ func (c *HTTPClient) DeleteThread(ctx context.Context, grantID, threadID string)
 	if err := validateRequired("thread ID", threadID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, grantID, threadID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/threads/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(threadID))
 	return c.doDelete(ctx, queryURL)
 }
 

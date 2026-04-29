@@ -2,11 +2,27 @@ package auth
 
 import (
 	"fmt"
+	"io"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 )
+
+const (
+	authListGrantIDWidth  = 38
+	authListEmailWidth    = 24
+	authListProviderWidth = 12
+	authListStatusWidth   = 12
+)
+
+type grantListCell struct {
+	raw     string
+	display string
+}
 
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
@@ -39,46 +55,92 @@ func newListCmd() *cobra.Command {
 
 			verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
 
-			green := common.Green
-			red := common.Red
-			yellow := common.Yellow
-			dim := common.Dim
-			bold := common.Bold
-
-			// Print header
-			_, _ = bold.Printf("  %-38s  %-24s  %-12s  %-12s  %s\n", "GRANT ID", "EMAIL", "PROVIDER", "STATUS", "DEFAULT")
-
-			for _, g := range grants {
-				// Print fixed-width columns first
-				fmt.Printf("  %-38s  %-24s  %-12s  ",
-					g.ID, g.Email, g.Provider.DisplayName())
-
-				// Print status with color (fixed 12 char width)
-				switch g.Status {
-				case "valid":
-					_, _ = green.Print("✓ valid     ")
-				case "error":
-					_, _ = red.Print("✗ error     ")
-				case "revoked":
-					_, _ = red.Print("✗ revoked   ")
-				default:
-					_, _ = yellow.Printf("%-12s", g.Status)
-				}
-
-				// Print default indicator
-				fmt.Print("  ")
-				if g.IsDefault {
-					_, _ = green.Print("✓")
-				}
-				fmt.Println()
-
-				// Show error details in verbose mode
-				if verbose && g.Error != "" {
-					_, _ = dim.Printf("    Error: %s\n", g.Error)
-				}
-			}
+			renderGrantListTable(cmd.OutOrStdout(), grants, verbose)
 
 			return nil
 		},
 	}
+}
+
+func renderGrantListTable(w io.Writer, grants []domain.GrantStatus, verbose bool) {
+	headers := []grantListCell{
+		{raw: "GRANT ID", display: common.Bold.Sprint("GRANT ID")},
+		{raw: "EMAIL", display: common.Bold.Sprint("EMAIL")},
+		{raw: "PROVIDER", display: common.Bold.Sprint("PROVIDER")},
+		{raw: "STATUS", display: common.Bold.Sprint("STATUS")},
+		{raw: "DEFAULT", display: common.Bold.Sprint("DEFAULT")},
+	}
+	widths := []int{
+		authListGrantIDWidth,
+		authListEmailWidth,
+		authListProviderWidth,
+		authListStatusWidth,
+		utf8.RuneCountInString(headers[4].raw),
+	}
+
+	rows := make([][]grantListCell, 0, len(grants))
+	for _, grant := range grants {
+		row := []grantListCell{
+			{raw: grant.ID, display: grant.ID},
+			{raw: grant.Email, display: grant.Email},
+			{raw: grant.Provider.DisplayName(), display: grant.Provider.DisplayName()},
+			grantStatusCell(grant.Status),
+			defaultGrantCell(grant.IsDefault),
+		}
+		rows = append(rows, row)
+		for i, cell := range row {
+			if width := displayWidth(cell.raw); width > widths[i] {
+				widths[i] = width
+			}
+		}
+	}
+
+	renderGrantListRow(w, headers, widths)
+	for i, row := range rows {
+		renderGrantListRow(w, row, widths)
+		if verbose && grants[i].Error != "" {
+			_, _ = common.Dim.Fprintf(w, "    Error: %s\n", grants[i].Error)
+		}
+	}
+}
+
+func renderGrantListRow(w io.Writer, row []grantListCell, widths []int) {
+	_, _ = fmt.Fprint(w, "  ")
+	for i, cell := range row {
+		if i > 0 {
+			_, _ = fmt.Fprint(w, "  ")
+		}
+		_, _ = fmt.Fprint(w, cell.display)
+		if i < len(row)-1 {
+			padding := widths[i] - displayWidth(cell.raw)
+			if padding > 0 {
+				_, _ = fmt.Fprint(w, strings.Repeat(" ", padding))
+			}
+		}
+	}
+	_, _ = fmt.Fprintln(w)
+}
+
+func grantStatusCell(status string) grantListCell {
+	switch status {
+	case "valid":
+		return grantListCell{raw: "✓ valid", display: common.Green.Sprint("✓ valid")}
+	case "error":
+		return grantListCell{raw: "✗ error", display: common.Red.Sprint("✗ error")}
+	case "revoked":
+		return grantListCell{raw: "✗ revoked", display: common.Red.Sprint("✗ revoked")}
+	default:
+		return grantListCell{raw: status, display: common.Yellow.Sprint(status)}
+	}
+}
+
+func defaultGrantCell(isDefault bool) grantListCell {
+	if !isDefault {
+		return grantListCell{}
+	}
+	return grantListCell{raw: "✓", display: common.Green.Sprint("✓")}
+}
+
+func displayWidth(s string) int {
+	return utf8.RuneCountInString(s)
 }

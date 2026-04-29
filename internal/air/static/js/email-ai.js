@@ -46,7 +46,7 @@ async loadSmartReplies(emailId) {
                 </div>
                 <div class="smart-replies-list">
                     ${result.replies.map((reply, i) => `
-                        <button class="smart-reply-chip" onclick="EmailListManager.useSmartReply('${emailId}', ${i})" data-reply="${this.escapeHtml(reply)}">
+                        <button class="smart-reply-chip" data-action="use-smart-reply" data-email-id="${escapeHtml(emailId)}" data-reply-index="${i}" data-reply="${this.escapeHtml(reply)}">
                             ${this.escapeHtml(reply)}
                         </button>
                     `).join('')}
@@ -56,7 +56,7 @@ async loadSmartReplies(emailId) {
             this.smartReplies = result.replies;
         } else {
             container.innerHTML = `
-                <button class="smart-replies-trigger" onclick="EmailListManager.loadSmartReplies('${emailId}')">
+                <button class="smart-replies-trigger" data-action="load-smart-replies" data-email-id="${escapeHtml(emailId)}">
                     <span class="smart-replies-icon">💬</span>
                     <span>Get smart reply suggestions</span>
                 </button>
@@ -70,7 +70,7 @@ async loadSmartReplies(emailId) {
     } catch (err) {
         console.error('Smart replies error:', err);
         container.innerHTML = `
-            <button class="smart-replies-trigger" onclick="EmailListManager.loadSmartReplies('${emailId}')">
+            <button class="smart-replies-trigger" data-action="load-smart-replies" data-email-id="${escapeHtml(emailId)}">
                 <span class="smart-replies-icon">💬</span>
                 <span>Get smart reply suggestions</span>
             </button>
@@ -208,13 +208,13 @@ showEnhancedSummaryModal(subject, result) {
         <div class="modal ai-summary-modal">
             <div class="modal-header">
                 <h3>✨ AI Analysis</h3>
-                <button class="close-btn" onclick="EmailListManager.closeAISummaryModal()">&times;</button>
+                <button class="close-btn" data-action="ai-summary-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="summary-subject">${this.escapeHtml(subject || '(No Subject)')}</div>
                 <div class="summary-badges">
-                    <span class="summary-badge sentiment-${result.sentiment}">${sentimentIcon} ${result.sentiment}</span>
-                    <span class="summary-badge category-${result.category}">${categoryIcon} ${result.category}</span>
+                    <span class="summary-badge sentiment-${this.escapeHtml(result.sentiment)}">${sentimentIcon} ${this.escapeHtml(result.sentiment)}</span>
+                    <span class="summary-badge category-${this.escapeHtml(result.category)}">${categoryIcon} ${this.escapeHtml(result.category)}</span>
                 </div>
                 <div class="summary-section">
                     <div class="summary-section-title">📝 Summary</div>
@@ -223,8 +223,8 @@ showEnhancedSummaryModal(subject, result) {
                 ${actionItemsHtml}
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="EmailListManager.copyAISummary()">Copy Summary</button>
-                <button class="btn btn-primary" onclick="EmailListManager.closeAISummaryModal()">Close</button>
+                <button class="btn btn-secondary" data-action="ai-summary-copy">Copy Summary</button>
+                <button class="btn btn-primary" data-action="ai-summary-close">Close</button>
             </div>
         </div>
     `;
@@ -251,15 +251,15 @@ showAISummaryModal(subject, summary) {
             <div class="modal ai-summary-modal">
                 <div class="modal-header">
                     <h3>✨ AI Summary</h3>
-                    <button class="close-btn" onclick="EmailListManager.closeAISummaryModal()">&times;</button>
+                    <button class="close-btn" data-action="ai-summary-close">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="summary-subject"></div>
                     <div class="summary-content"></div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="EmailListManager.copyAISummary()">Copy Summary</button>
-                    <button class="btn btn-primary" onclick="EmailListManager.closeAISummaryModal()">Close</button>
+                    <button class="btn btn-secondary" data-action="ai-summary-copy">Copy Summary</button>
+                    <button class="btn btn-primary" data-action="ai-summary-close">Close</button>
                 </div>
             </div>
         `;

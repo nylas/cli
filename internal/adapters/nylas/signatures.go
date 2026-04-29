@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -20,7 +21,7 @@ type signatureResponse struct {
 
 // GetSignatures retrieves all signatures for a grant.
 func (c *HTTPClient) GetSignatures(ctx context.Context, grantID string) ([]domain.Signature, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data []signatureResponse `json:"data"`
@@ -34,7 +35,7 @@ func (c *HTTPClient) GetSignatures(ctx context.Context, grantID string) ([]domai
 
 // GetSignature retrieves a specific signature.
 func (c *HTTPClient) GetSignature(ctx context.Context, grantID, signatureID string) (*domain.Signature, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, grantID, signatureID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(signatureID))
 
 	var result struct {
 		Data signatureResponse `json:"data"`
@@ -49,7 +50,7 @@ func (c *HTTPClient) GetSignature(ctx context.Context, grantID, signatureID stri
 
 // CreateSignature creates a new signature.
 func (c *HTTPClient) CreateSignature(ctx context.Context, grantID string, req *domain.CreateSignatureRequest) (*domain.Signature, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures", c.baseURL, url.PathEscape(grantID))
 
 	resp, err := c.doJSONRequestNoRetry(ctx, http.MethodPost, queryURL, req)
 	if err != nil {
@@ -69,7 +70,7 @@ func (c *HTTPClient) CreateSignature(ctx context.Context, grantID string, req *d
 
 // UpdateSignature updates an existing signature.
 func (c *HTTPClient) UpdateSignature(ctx context.Context, grantID, signatureID string, req *domain.UpdateSignatureRequest) (*domain.Signature, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, grantID, signatureID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(signatureID))
 
 	resp, err := c.doJSONRequestNoRetry(ctx, http.MethodPut, queryURL, req, http.StatusOK)
 	if err != nil {
@@ -89,7 +90,7 @@ func (c *HTTPClient) UpdateSignature(ctx context.Context, grantID, signatureID s
 
 // DeleteSignature deletes a signature.
 func (c *HTTPClient) DeleteSignature(ctx context.Context, grantID, signatureID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, grantID, signatureID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/signatures/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(signatureID))
 	return c.doDelete(ctx, queryURL)
 }
 

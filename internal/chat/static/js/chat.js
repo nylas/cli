@@ -191,14 +191,37 @@ const Chat = {
         }
         previewHtml += '</dl>';
 
-        card.innerHTML =
-            '<div class="approval-header">Confirm: ' + this.escapeHtml(data.tool) + '</div>' +
-            previewHtml +
-            '<div class="approval-actions">' +
-            '<button class="btn-approve" onclick="Chat.approve(\'' + data.approval_id + '\')">Approve</button>' +
-            '<button class="btn-reject" onclick="Chat.reject(\'' + data.approval_id + '\')">Reject</button>' +
-            '</div>' +
-            '<div class="approval-status"></div>';
+        const header = document.createElement('div');
+        header.className = 'approval-header';
+        header.textContent = 'Confirm: ' + data.tool;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'approval-actions';
+
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'btn-approve';
+        approveBtn.textContent = 'Approve';
+        approveBtn.dataset.action = 'approve';
+        approveBtn.dataset.approvalId = data.approval_id;
+
+        const rejectBtn = document.createElement('button');
+        rejectBtn.className = 'btn-reject';
+        rejectBtn.textContent = 'Reject';
+        rejectBtn.dataset.action = 'reject';
+        rejectBtn.dataset.approvalId = data.approval_id;
+
+        actionsDiv.appendChild(approveBtn);
+        actionsDiv.appendChild(rejectBtn);
+
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'approval-status';
+
+        // Build card from safe DOM nodes; only previewHtml uses innerHTML
+        // (it is constructed from escapeHtml-sanitised strings, never raw API data).
+        card.innerHTML = previewHtml;
+        card.insertBefore(header, card.firstChild);
+        card.appendChild(actionsDiv);
+        card.appendChild(statusDiv);
 
         messages.appendChild(card);
         this.scrollToBottom();
@@ -354,4 +377,18 @@ const Chat = {
 document.addEventListener('DOMContentLoaded', () => {
     Chat.init();
     Sidebar.init();
+});
+
+// Single delegated listener for approval card buttons built by showApprovalCard.
+// Installed once at module load; the buttons carry data-action and data-approval-id.
+document.addEventListener('click', function (e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const approvalId = target.dataset.approvalId;
+    if (!approvalId) return;
+    if (target.dataset.action === 'approve') {
+        Chat.approve(approvalId);
+    } else if (target.dataset.action === 'reject') {
+        Chat.reject(approvalId);
+    }
 });

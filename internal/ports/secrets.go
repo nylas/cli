@@ -35,8 +35,3 @@ const (
 	KeyDashboardAppID        = "dashboard_app_id"
 	KeyDashboardAppRegion    = "dashboard_app_region"
 )
-
-// GrantTokenKey returns the keystore key for a grant's access token.
-func GrantTokenKey(grantID string) string {
-	return "grant_token_" + grantID
-}

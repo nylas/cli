@@ -231,7 +231,7 @@ const ShortcutsManager = {
             <div class="shortcuts-modal-content">
                 <div class="shortcuts-header">
                     <h2>Keyboard Shortcuts</h2>
-                    <button class="shortcuts-close" onclick="ShortcutsManager.hideModal()">&times;</button>
+                    <button class="shortcuts-close" data-action="shortcuts-modal-close">&times;</button>
                 </div>
                 <div class="shortcuts-body">
                     ${this.renderShortcutCategories()}

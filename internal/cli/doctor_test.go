@@ -13,6 +13,24 @@ import (
 	"github.com/nylas/cli/internal/cli/testutil"
 )
 
+// TestCheckAPICredentials_MissingClientID confirms the "no API key /
+// client id" path returns a Warning with actionable detail rather than
+// silently passing. Covers a previously-zero-coverage branch.
+func TestCheckAPICredentials_MissingClientID(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "xdg"))
+	t.Setenv("HOME", tempDir)
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
+	t.Setenv("NYLAS_FILE_STORE_PASSPHRASE", "doctor-test-passphrase")
+
+	// Don't pre-populate any credentials — checkAPICredentials should
+	// detect the absence and warn.
+	result := checkAPICredentials()
+	if result.Status != CheckStatusWarning && result.Status != CheckStatusError {
+		t.Fatalf("Status = %v, want Warning or Error", result.Status)
+	}
+}
+
 func TestCheckSecretStore_WarnsWhenFileStoreIsForced(t *testing.T) {
 	tempDir := t.TempDir()
 

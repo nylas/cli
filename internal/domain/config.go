@@ -43,10 +43,11 @@ const (
 // Config represents the application configuration.
 // Note: client_id is stored in keystore, not config file.
 type Config struct {
-	Region       string      `yaml:"region"`
-	CallbackPort int         `yaml:"callback_port"`
-	DefaultGrant string      `yaml:"default_grant"`
-	Grants       []GrantInfo `yaml:"grants"`
+	Region       string `yaml:"region"`
+	CallbackPort int    `yaml:"callback_port"`
+	DefaultGrant string `yaml:"default_grant"`
+	// Grant metadata is stored in the grant cache, not config.yaml.
+	Grants []GrantInfo `yaml:"-"`
 
 	// API settings
 	API *APIConfig `yaml:"api,omitempty"`

@@ -33,8 +33,6 @@ on existing messages through the API.`,
 }
 
 func newMetadataShowCmd() *cobra.Command {
-	var asJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "show <message-id> [grant-id]",
 		Short: "Show metadata for a message",
@@ -46,6 +44,7 @@ This shows all metadata stored on the message, including both indexed
 		RunE: func(cmd *cobra.Command, args []string) error {
 			messageID := args[0]
 			remainingArgs := args[1:]
+			asJSON := common.IsJSON(cmd)
 
 			_, err := common.WithClient(remainingArgs, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				message, err := client.GetMessage(ctx, grantID, messageID)
@@ -83,8 +82,6 @@ This shows all metadata stored on the message, including both indexed
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&asJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

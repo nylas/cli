@@ -30,6 +30,19 @@ func (m *mockGrantStore) SaveGrant(info domain.GrantInfo) error {
 	return nil
 }
 
+func (m *mockGrantStore) ReplaceGrants(grants []domain.GrantInfo) error {
+	m.grants = make(map[string]domain.GrantInfo, len(grants))
+	for _, grant := range grants {
+		m.grants[grant.ID] = grant
+	}
+	if m.defaultGrant != "" {
+		if _, ok := m.grants[m.defaultGrant]; !ok {
+			m.defaultGrant = ""
+		}
+	}
+	return nil
+}
+
 func (m *mockGrantStore) GetGrant(grantID string) (*domain.GrantInfo, error) {
 	if grant, ok := m.grants[grantID]; ok {
 		return &grant, nil
@@ -151,8 +164,26 @@ func TestService_autoSwitchDefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, []string{"grant-1", "grant-2"}, defaultID)
 		assert.Equal(t, defaultID, configStore.config.DefaultGrant)
-		assert.Len(t, configStore.config.Grants, 2)
+		assert.Empty(t, configStore.config.Grants)
 	})
+}
+
+func TestService_syncConfigWithGrantStoreStoresOnlyDefaultGrant(t *testing.T) {
+	grantStore := newMockGrantStore()
+	grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "one@example.com"}
+	grantStore.grants["grant-2"] = domain.GrantInfo{ID: "grant-2", Email: "two@example.com"}
+	grantStore.defaultGrant = "grant-2"
+	configStore := newMockConfigStore()
+
+	svc := &Service{
+		grantStore: grantStore,
+		config:     configStore,
+	}
+
+	svc.syncConfigWithGrantStore()
+
+	assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
+	assert.Empty(t, configStore.config.Grants)
 }
 
 func TestService_FirstGrantBecomesDefault(t *testing.T) {
@@ -362,7 +393,7 @@ func TestService_Login(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "grant-123", defaultID)
 		assert.Equal(t, "grant-123", configStore.config.DefaultGrant)
-		assert.Len(t, configStore.config.Grants, 1)
+		assert.Empty(t, configStore.config.Grants)
 	})
 
 	t.Run("server start failure returns error", func(t *testing.T) {
@@ -539,8 +570,7 @@ func TestService_Logout(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
 		assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
-		assert.Len(t, configStore.config.Grants, 1)
-		assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
+		assert.Empty(t, configStore.config.Grants)
 	})
 }
 
@@ -573,8 +603,7 @@ func TestService_LogoutGrant(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "grant-1", defaultID)
 		assert.Equal(t, "grant-1", configStore.config.DefaultGrant)
-		assert.Len(t, configStore.config.Grants, 1)
-		assert.Equal(t, "grant-1", configStore.config.Grants[0].ID)
+		assert.Empty(t, configStore.config.Grants)
 	})
 
 	t.Run("logging out default grant switches to another", func(t *testing.T) {
@@ -605,8 +634,7 @@ func TestService_LogoutGrant(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "grant-2", defaultID)
 		assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
-		assert.Len(t, configStore.config.Grants, 1)
-		assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
+		assert.Empty(t, configStore.config.Grants)
 	})
 
 	t.Run("grant not found on revoke is ignored", func(t *testing.T) {
@@ -650,8 +678,7 @@ func TestService_RemoveLocalGrant(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "grant-2", defaultID)
 	assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
-	assert.Len(t, configStore.config.Grants, 1)
-	assert.Equal(t, "grant-2", configStore.config.Grants[0].ID)
+	assert.Empty(t, configStore.config.Grants)
 }
 
 func pkceChallenge(verifier string) string {

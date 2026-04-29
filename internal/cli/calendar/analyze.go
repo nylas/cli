@@ -237,7 +237,7 @@ func displayAnalysis(analysis *domain.MeetingAnalysis, workingHours *domain.DayS
 	}
 }
 
-func scoreSpecificTime(ctx context.Context, learner *analytics.PatternLearner, client ports.NylasClient, grantID, timeStr string, participants []string, duration int) error {
+func scoreSpecificTime(ctx context.Context, learner *analytics.PatternLearner, _ ports.NylasClient, grantID, timeStr string, participants []string, duration int) error {
 	// Parse the time
 	proposedTime, err := time.Parse(time.RFC3339, timeStr)
 	if err != nil {
@@ -310,7 +310,7 @@ func scoreSpecificTime(ctx context.Context, learner *analytics.PatternLearner, c
 	return nil
 }
 
-func applyRecommendations(ctx context.Context, client ports.NylasClient, grantID string, analysis *domain.MeetingAnalysis) error {
+func applyRecommendations(_ context.Context, _ ports.NylasClient, _ string, analysis *domain.MeetingAnalysis) error {
 	if len(analysis.Recommendations) == 0 {
 		fmt.Println("⚠️  No recommendations to apply")
 		return nil

@@ -172,7 +172,7 @@ func newDemoEmailAttachmentsListCmd() *cobra.Command {
 			for _, a := range attachments {
 				fmt.Printf("  📎 %s\n", common.BoldWhite.Sprint(a.Filename))
 				fmt.Printf("     Type: %s\n", a.ContentType)
-				fmt.Printf("     Size: %s\n", formatDemoBytes(a.Size))
+				fmt.Printf("     Size: %s\n", common.FormatSize(a.Size))
 				_, _ = common.Dim.Printf("     ID: %s\n", a.ID)
 				fmt.Println()
 			}
@@ -204,19 +204,6 @@ func newDemoEmailAttachmentsDownloadCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func formatDemoBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // newDemoEmailScheduledCmd manages scheduled messages.

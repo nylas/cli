@@ -14,9 +14,8 @@ import (
 
 func newListCmd() *cobra.Command {
 	var (
-		limit      int
-		state      string
-		outputJSON bool
+		limit int
+		state string
 	)
 
 	cmd := &cobra.Command{
@@ -48,7 +47,7 @@ func newListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("notetakers", err)
 				}
 
-				if outputJSON {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(notetakers)
 				}
 
@@ -89,7 +88,6 @@ func newListCmd() *cobra.Command {
 
 	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Maximum number of notetakers to return")
 	cmd.Flags().StringVar(&state, "state", "", "Filter by state (scheduled, connecting, attending, complete, cancelled, failed)")
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }

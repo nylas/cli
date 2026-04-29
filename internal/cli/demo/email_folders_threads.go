@@ -149,10 +149,7 @@ func newDemoEmailThreadsListCmd() *cobra.Command {
 					star = common.Yellow.Sprint("★")
 				}
 
-				subject := t.Subject
-				if len(subject) > 40 {
-					subject = subject[:37] + "..."
-				}
+				subject := common.Truncate(t.Subject, 40)
 
 				fmt.Printf("%s %s %-40s %s\n", status, star, subject, common.Dim.Sprintf("%d messages", len(t.MessageIDs)))
 			}

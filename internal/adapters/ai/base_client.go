@@ -173,3 +173,92 @@ func FallbackStreamChat(ctx context.Context, req *domain.ChatRequest, chatFunc f
 	}
 	return callback(resp.Content)
 }
+
+// openAICompatibleResponse is the shared shape of /v1/chat/completions
+// responses across providers that speak the OpenAI API surface (OpenAI,
+// Groq, Together, Anyscale, etc.). Kept private to this package.
+type openAICompatibleResponse struct {
+	Choices []struct {
+		Message struct {
+			Role      string `json:"role"`
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls,omitempty"`
+		} `json:"message"`
+	} `json:"choices"`
+	Model string `json:"model"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+// OpenAICompatibleChat performs a chat request against any provider that
+// implements the OpenAI /v1/chat/completions surface. provider is used to
+// label the response and shape error messages.
+//
+// Callers (OpenAIClient, GroqClient, …) should validate IsConfigured before
+// calling this method.
+func (b *BaseClient) OpenAICompatibleChat(ctx context.Context, provider string, req *domain.ChatRequest, tools []domain.Tool) (*domain.ChatResponse, error) {
+	body := map[string]any{
+		"model":    b.GetModel(req.Model),
+		"messages": ConvertMessagesToMaps(req.Messages),
+	}
+	if req.MaxTokens > 0 {
+		body["max_tokens"] = req.MaxTokens
+	}
+	if req.Temperature > 0 {
+		body["temperature"] = req.Temperature
+	}
+	if len(tools) > 0 {
+		body["tools"] = ConvertToolsOpenAIFormat(tools)
+		body["tool_choice"] = "auto"
+	}
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + b.apiKey,
+	}
+
+	var raw openAICompatibleResponse
+	if err := b.DoJSONRequestAndDecode(ctx, "POST", "/chat/completions", body, headers, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.Choices) == 0 {
+		return nil, fmt.Errorf("no response from %s", provider)
+	}
+
+	resp := &domain.ChatResponse{
+		Content:  raw.Choices[0].Message.Content,
+		Model:    raw.Model,
+		Provider: provider,
+		Usage: domain.TokenUsage{
+			PromptTokens:     raw.Usage.PromptTokens,
+			CompletionTokens: raw.Usage.CompletionTokens,
+			TotalTokens:      raw.Usage.TotalTokens,
+		},
+	}
+	for _, tc := range raw.Choices[0].Message.ToolCalls {
+		var args map[string]any
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			// The model emitted a tool-call with malformed JSON arguments.
+			// Silently dropping it would leave the caller wondering why
+			// `len(ToolCalls)` is short — return the parse error so the
+			// scheduler can decide whether to retry or surface it.
+			return nil, fmt.Errorf("model tool-call %q has invalid JSON arguments: %w",
+				tc.Function.Name, err)
+		}
+		resp.ToolCalls = append(resp.ToolCalls, domain.ToolCall{
+			ID:        tc.ID,
+			Function:  tc.Function.Name,
+			Arguments: args,
+		})
+	}
+	return resp, nil
+}

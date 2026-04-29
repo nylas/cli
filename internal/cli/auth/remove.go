@@ -1,6 +1,8 @@
 package auth
 
 import (
+	adapterconfig "github.com/nylas/cli/internal/adapters/config"
+	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/spf13/cobra"
 )
@@ -21,15 +23,13 @@ on the Nylas server.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			grantID := args[0]
 
-			grantStore, err := createGrantStore()
+			configStore := adapterconfig.NewDefaultFileStore()
+			grantStore, err := common.NewDefaultGrantStore()
 			if err != nil {
 				return err
 			}
 
-			authSvc, _, err := createAuthService()
-			if err != nil {
-				return err
-			}
+			authSvc := authapp.NewService(nil, grantStore, configStore, nil, nil)
 
 			// Check if grant exists locally
 			if _, err := grantStore.GetGrant(grantID); err != nil {
@@ -41,9 +41,9 @@ on the Nylas server.`,
 				return err
 			}
 
-			_, _ = common.Green.Printf("✓ Grant %s removed from local config\n", grantID)
-			_, _ = common.Yellow.Println("  Note: Grant is still valid on Nylas server")
-			_, _ = common.Yellow.Println("  Use 'nylas auth add' to re-add it, or 'nylas auth revoke' to permanently revoke")
+			_, _ = common.Green.Printf("✓ Grant %s removed from local cache\n", grantID)
+			_, _ = common.Yellow.Println("  Note: Grant is still valid on Nylas server and will still appear in 'nylas auth list'")
+			_, _ = common.Yellow.Println("  Use 'nylas auth switch <grant-id>' to set it as default again, or 'nylas auth revoke' to permanently revoke")
 
 			return nil
 		},

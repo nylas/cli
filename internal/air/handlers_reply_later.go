@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // ReplyLaterItem represents an email in the reply later queue
@@ -13,7 +15,7 @@ type ReplyLaterItem struct {
 	Subject     string    `json:"subject"`
 	From        string    `json:"from"`
 	AddedAt     time.Time `json:"addedAt"`
-	RemindAt    time.Time `json:"remindAt,omitempty"`
+	RemindAt    time.Time `json:"remindAt,omitzero"`
 	DraftID     string    `json:"draftId,omitempty"`
 	Notes       string    `json:"notes,omitempty"`
 	Priority    int       `json:"priority"` // 1=high, 2=medium, 3=low
@@ -56,10 +58,7 @@ func (s *Server) handleGetReplyLaterItems(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(items); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, items)
 }
 
 // handleAddToReplyLater adds an email to reply later queue
@@ -117,10 +116,7 @@ func (s *Server) handleAddToReplyLater(w http.ResponseWriter, r *http.Request) {
 	rlStore.items[req.EmailID] = item
 	rlStore.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(item); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, item)
 }
 
 // handleUpdateReplyLater updates a reply later item
@@ -158,10 +154,7 @@ func (s *Server) handleUpdateReplyLater(w http.ResponseWriter, r *http.Request) 
 	}
 	item.IsCompleted = req.IsCompleted
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(item); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, item)
 }
 
 // handleRemoveFromReplyLater removes an email from reply later queue

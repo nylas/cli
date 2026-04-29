@@ -59,10 +59,7 @@ func AppDisplayName(app domain.Application) string {
 		region = "us"
 	}
 
-	displayID := clientID
-	if len(displayID) > 20 {
-		displayID = displayID[:17] + "..."
-	}
+	displayID := common.Truncate(clientID, 20)
 
 	return fmt.Sprintf("%s (%s, %s)", displayID, env, region)
 }
@@ -138,7 +135,7 @@ func resolveAPIKeyApplication(
 	}, nil
 }
 
-// EnsureOAuthCallbackURI provisions the expected localhost callback URI for the
+// EnsureOAuthCallbackURI provisions the expected loopback callback URI for the
 // selected application when it does not already exist.
 func EnsureOAuthCallbackURI(apiKey, clientID, region string, callbackPort int) (*CallbackURIProvisionResult, error) {
 	return ensureOAuthCallbackURI(apiKey, clientID, region, callbackPort, newAPIKeySetupClient)

@@ -5,13 +5,15 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // ReadReceipt represents a read receipt for a sent email
 type ReadReceipt struct {
 	EmailID   string    `json:"emailId"`
 	Recipient string    `json:"recipient"`
-	OpenedAt  time.Time `json:"openedAt,omitempty"`
+	OpenedAt  time.Time `json:"openedAt,omitzero"`
 	OpenCount int       `json:"openCount"`
 	Device    string    `json:"device,omitempty"`
 	Location  string    `json:"location,omitempty"`
@@ -55,10 +57,7 @@ func (s *Server) handleGetReadReceipts(w http.ResponseWriter, r *http.Request) {
 
 	if emailID != "" {
 		if receipt, ok := rrStore.receipts[emailID]; ok {
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(receipt); err != nil {
-				http.Error(w, "Failed to encode", http.StatusInternalServerError)
-			}
+			httputil.WriteJSON(w, http.StatusOK, receipt)
 			return
 		}
 		http.Error(w, "Receipt not found", http.StatusNotFound)
@@ -70,10 +69,7 @@ func (s *Server) handleGetReadReceipts(w http.ResponseWriter, r *http.Request) {
 		receipts = append(receipts, r)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(receipts); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, receipts)
 }
 
 // handleTrackOpen records an email open (tracking pixel endpoint)
@@ -131,10 +127,7 @@ func (s *Server) handleGetReadReceiptSettings(w http.ResponseWriter, r *http.Req
 	rrStore.mu.RLock()
 	defer rrStore.mu.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(rrStore.settings); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, rrStore.settings)
 }
 
 // handleUpdateReadReceiptSettings updates settings
@@ -149,11 +142,7 @@ func (s *Server) handleUpdateReadReceiptSettings(w http.ResponseWriter, r *http.
 	rrStore.settings = &settings
 	rrStore.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "updated"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 // RegisterEmailForTracking registers an email for read tracking

@@ -14,7 +14,7 @@ nylas auth config            # Configure API credentials (stored securely)
 
 ### Keyring Storage
 
-Credentials are stored in the system keyring under service name `"nylas"`:
+Secrets are stored in the system keyring under service name `"nylas"`:
 
 | Key | Constant | Description |
 |-----|----------|-------------|
@@ -22,9 +22,10 @@ Credentials are stored in the system keyring under service name `"nylas"`:
 | `api_key` | `ports.KeyAPIKey` | Nylas API key (Bearer auth) |
 | `client_secret` | `ports.KeyClientSecret` | Provider OAuth secret (Google/Microsoft) |
 | `org_id` | `ports.KeyOrgID` | Nylas Organization ID |
-| `grants` | `grantsKey` | JSON array of grant info (ID, email, provider) |
-| `default_grant` | `defaultGrantKey` | Default grant ID for CLI operations |
-| `grant_token_<id>` | `ports.GrantTokenKey()` | Per-grant access tokens |
+
+Grant IDs, emails, providers, and the local default grant are non-secret metadata.
+They are stored in the grant cache at `filepath.Join(os.UserCacheDir(), "nylas", "grants.json")`.
+Keyring remains secrets-only.
 
 ### Implementation Files
 
@@ -32,7 +33,7 @@ Credentials are stored in the system keyring under service name `"nylas"`:
 |------|---------|
 | `internal/ports/secrets.go` | Key constants (`KeyClientID`, `KeyAPIKey`, etc.) |
 | `internal/adapters/keyring/keyring.go` | System keyring implementation |
-| `internal/adapters/keyring/grants.go` | Grant storage (`grants`, `default_grant`) |
+| `internal/adapters/grantcache/cache.go` | File-backed non-secret grant metadata/default cache |
 | `internal/app/auth/config.go` | `SetupConfig()` saves credentials to keyring |
 
 ### Platform Backends
@@ -53,6 +54,7 @@ NYLAS_DISABLE_KEYRING=true   # Force encrypted file store (useful for testing/CI
 Non-sensitive settings stored in `~/.config/nylas/config.yaml`:
 - Region (us/eu)
 - Callback port
+- Local default grant mirror
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/spf13/cobra"
 )
@@ -43,6 +44,19 @@ The configuration file will be created if it doesn't exist.`,
 
 			key := args[0]
 			value := args[1]
+
+			if key == "default_grant" {
+				grantStore, err := common.NewDefaultGrantStore()
+				if err != nil {
+					return err
+				}
+				if err := authapp.PersistDefaultGrant(configStore, grantStore, value); err != nil {
+					return common.WrapSaveError("configuration", err)
+				}
+				fmt.Printf("%s Configuration updated: %s = %s\n", common.Green.Sprint("✓"), key, value)
+				fmt.Printf("Config file: %s\n", configStore.Path())
+				return nil
+			}
 
 			if err := setConfigValue(cfg, key, value); err != nil {
 				return err

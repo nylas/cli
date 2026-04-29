@@ -137,10 +137,7 @@ func appDisplayName(app domain.GatewayApplication) string {
 		env = "production"
 	}
 
-	displayID := app.ApplicationID
-	if len(displayID) > 20 {
-		displayID = displayID[:17] + "..."
-	}
+	displayID := common.Truncate(app.ApplicationID, 20)
 
 	if name != "" {
 		return fmt.Sprintf("%s — %s (%s, %s)", name, displayID, env, app.Region)

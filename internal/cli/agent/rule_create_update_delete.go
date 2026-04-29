@@ -16,7 +16,6 @@ func newRuleCreateCmd() *cobra.Command {
 		data        string
 		dataFile    string
 		policyID    string
-		jsonOutput  bool
 		opts        rulePayloadOptions
 		enableRule  bool
 		disableRule bool
@@ -46,7 +45,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return runRuleCreate(loaded.Payload, policyID, jsonOutput)
+			return runRuleCreate(loaded.Payload, policyID, common.IsJSON(cmd))
 		},
 	}
 
@@ -62,7 +61,6 @@ Examples:
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach the created rule to")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -91,7 +89,7 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 			return struct{}{}, common.PrintJSON(rule)
 		}
 
-		printSuccess("Rule created successfully!")
+		common.PrintSuccess("Rule created successfully!")
 		fmt.Println()
 		printRuleDetails(*rule, []rulePolicyRef{{
 			PolicyID:   policy.ID,
@@ -110,7 +108,6 @@ func newRuleUpdateCmd() *cobra.Command {
 		dataFile    string
 		policyID    string
 		allRules    bool
-		jsonOutput  bool
 		opts        rulePayloadOptions
 		enableRule  bool
 		disableRule bool
@@ -153,7 +150,7 @@ Examples:
 					"Use flags like --name/--condition/--action, or provide JSON with --data/--data-file",
 				)
 			}
-			return runRuleUpdate(args[0], payload, loaded.PureJSON, policyID, allRules, jsonOutput)
+			return runRuleUpdate(args[0], payload, loaded.PureJSON, policyID, allRules, common.IsJSON(cmd))
 		},
 	}
 
@@ -170,7 +167,6 @@ Examples:
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the update to")
 	cmd.Flags().BoolVar(&allRules, "all", false, "Search across all provider=nylas policies")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

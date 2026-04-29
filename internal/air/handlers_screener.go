@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // ScreenedSender represents a sender pending approval
@@ -46,10 +48,7 @@ func (s *Server) handleGetScreenedSenders(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(senders); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, senders)
 }
 
 // handleScreenerAllow allows a sender
@@ -83,11 +82,7 @@ func (s *Server) handleScreenerAllow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "allowed", "destination": req.Destination}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "allowed", "destination": req.Destination})
 }
 
 // handleScreenerBlock blocks a sender
@@ -114,11 +109,7 @@ func (s *Server) handleScreenerBlock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "blocked"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "blocked"})
 }
 
 // handleAddToScreener adds a new sender for screening
@@ -156,11 +147,7 @@ func (s *Server) handleAddToScreener(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "pending"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 }
 
 // IsSenderAllowed checks if a sender is allowed

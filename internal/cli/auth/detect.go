@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -11,8 +12,6 @@ import (
 )
 
 func newDetectCmd() *cobra.Command {
-	var outputJSON bool
-
 	cmd := &cobra.Command{
 		Use:   "detect <email>",
 		Short: "Detect provider from email address",
@@ -41,8 +40,8 @@ custom domains, verify the provider with your IT administrator.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email := strings.ToLower(strings.TrimSpace(args[0]))
 
-			if !strings.Contains(email, "@") {
-				return common.NewInputError(fmt.Sprintf("invalid email address: %s", email))
+			if err := common.ValidateEmail("email", email); err != nil {
+				return err
 			}
 
 			parts := strings.Split(email, "@")
@@ -78,7 +77,7 @@ custom domains, verify the provider with your IT administrator.`,
 				result.Note = "Use IMAP for generic email providers. Configure IMAP/SMTP settings during authentication."
 			}
 
-			if outputJSON {
+			if common.IsJSON(cmd) {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(result)
@@ -99,8 +98,6 @@ custom domains, verify the provider with your IT administrator.`,
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -140,12 +137,7 @@ func isGoogleDomain(domain string) bool {
 		"google.com",
 	}
 
-	for _, d := range googleDomains {
-		if domain == d {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(googleDomains, domain)
 }
 
 func isMicrosoftDomain(domain string) bool {
@@ -178,12 +170,7 @@ func isICloudDomain(domain string) bool {
 		"mac.com",
 	}
 
-	for _, d := range icloudDomains {
-		if domain == d {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(icloudDomains, domain)
 }
 
 func isYahooDomain(domain string) bool {

@@ -63,7 +63,7 @@ func formatDSTWarning(warning *domain.DSTWarning) string {
 
 // checkDSTConflict checks if an event time falls in a DST conflict.
 // Returns the warning if there's a conflict, nil otherwise.
-func checkDSTConflict(eventTime time.Time, tz string, duration time.Duration) (*domain.DSTWarning, error) {
+func checkDSTConflict(eventTime time.Time, tz string, _ time.Duration) (*domain.DSTWarning, error) {
 	if tz == "" {
 		return nil, nil
 	}

@@ -3,6 +3,8 @@ package timezone
 import (
 	"strings"
 	"testing"
+
+	"github.com/nylas/cli/internal/cli/testutil"
 )
 
 func TestDSTCmd_Help(t *testing.T) {
@@ -58,8 +60,7 @@ func TestDSTCmd_WithNonDSTZone(t *testing.T) {
 }
 
 func TestDSTCmd_JSONOutput(t *testing.T) {
-	cmd := newDSTCmd()
-	stdout, _, err := executeCommand(cmd,
+	stdout, _, err := testutil.ExecuteSubCommand(newDSTCmd(),
 		"--zone", "America/New_York",
 		"--year", "2026",
 		"--json")
@@ -125,8 +126,7 @@ func TestListCmd_WithFilter(t *testing.T) {
 }
 
 func TestListCmd_JSONOutput(t *testing.T) {
-	cmd := newListCmd()
-	stdout, _, err := executeCommand(cmd, "--json")
+	stdout, _, err := testutil.ExecuteSubCommand(newListCmd(), "--json")
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -219,8 +219,7 @@ func TestInfoCmd_MissingZone(t *testing.T) {
 }
 
 func TestInfoCmd_JSONOutput(t *testing.T) {
-	cmd := newInfoCmd()
-	stdout, _, err := executeCommand(cmd, "--zone", "UTC", "--json")
+	stdout, _, err := testutil.ExecuteSubCommand(newInfoCmd(), "--zone", "UTC", "--json")
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)

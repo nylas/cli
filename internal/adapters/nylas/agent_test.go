@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -44,7 +45,10 @@ func TestListAgentAccounts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "nylas", r.URL.Query().Get("provider"))
+		// listManagedGrants intentionally does NOT pass provider= as a
+		// server-side filter — the filtered listing has been observed to
+		// lag freshly-created managed grants. We filter client-side.
+		assert.Equal(t, "", r.URL.Query().Get("provider"))
 
 		response := map[string]any{
 			"data": []map[string]any{
@@ -58,6 +62,13 @@ func TestListAgentAccounts(t *testing.T) {
 						"policy_id": "policy-123",
 					},
 					"created_at": time.Now().Unix(),
+				},
+				// Mix in a non-nylas grant — the client must filter it out.
+				{
+					"id":           "google-001",
+					"email":        "user@gmail.com",
+					"provider":     "google",
+					"grant_status": "valid",
 				},
 			},
 		}
@@ -73,7 +84,7 @@ func TestListAgentAccounts(t *testing.T) {
 
 	accounts, err := client.ListAgentAccounts(context.Background())
 	require.NoError(t, err)
-	require.Len(t, accounts, 1)
+	require.Len(t, accounts, 1, "non-nylas grants must be filtered client-side")
 	assert.Equal(t, "agent-001", accounts[0].ID)
 	assert.Equal(t, "agent@example.com", accounts[0].Email)
 	assert.Equal(t, "policy-123", accounts[0].Settings.PolicyID)
@@ -84,11 +95,28 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "nylas", r.URL.Query().Get("provider"))
+		// No server-side provider filter — see TestListAgentAccounts.
+		assert.Equal(t, "", r.URL.Query().Get("provider"))
+		assert.Equal(t, "", r.URL.Query().Get("page_token"))
+		assert.Equal(t, strconv.Itoa(grantPageSize), r.URL.Query().Get("limit"))
 
 		requests++
 		var response map[string]any
-		if r.URL.Query().Get("page_token") == "" {
+		switch r.URL.Query().Get("offset") {
+		case "":
+			page := make([]map[string]any, grantPageSize)
+			for i := range page {
+				page[i] = map[string]any{
+					"id":           "google-" + strconv.Itoa(i),
+					"email":        "user" + strconv.Itoa(i) + "@gmail.com",
+					"provider":     "google",
+					"grant_status": "valid",
+				}
+			}
+			response = map[string]any{
+				"data": page,
+			}
+		case strconv.Itoa(grantPageSize):
 			response = map[string]any{
 				"data": []map[string]any{
 					{
@@ -97,13 +125,6 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 						"provider":     "nylas",
 						"grant_status": "valid",
 					},
-				},
-				"next_cursor": "cursor-2",
-			}
-		} else {
-			assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
-			response = map[string]any{
-				"data": []map[string]any{
 					{
 						"id":           "agent-002",
 						"email":        "second@example.com",
@@ -112,6 +133,8 @@ func TestListAgentAccounts_PaginatesAllResults(t *testing.T) {
 					},
 				},
 			}
+		default:
+			t.Fatalf("unexpected offset %q", r.URL.Query().Get("offset"))
 		}
 
 		w.Header().Set("Content-Type", "application/json")

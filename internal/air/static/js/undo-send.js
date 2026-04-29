@@ -92,7 +92,7 @@ const UndoSendManager = {
                     <span class="undo-message">Message sent</span>
                     <span class="undo-timer">${remaining}s</span>
                 </div>
-                <button class="undo-btn" onclick="UndoSendManager.undo()">Undo</button>
+                <button class="undo-btn" data-action="undo-send">Undo</button>
             `;
             document.body.appendChild(toast);
         }

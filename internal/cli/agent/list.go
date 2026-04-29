@@ -10,8 +10,6 @@ import (
 )
 
 func newListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List agent accounts",
@@ -23,11 +21,9 @@ Examples:
   nylas agent account list
   nylas agent account list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(jsonOutput)
+			return runList(common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -37,6 +33,10 @@ func runList(jsonOutput bool) error {
 		accounts, err := client.ListAgentAccounts(ctx)
 		if err != nil {
 			return struct{}{}, common.WrapListError("agent accounts", err)
+		}
+		defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+		if defaultAccount != nil {
+			accounts = upsertAgentAccount(accounts, *defaultAccount)
 		}
 
 		if jsonOutput {

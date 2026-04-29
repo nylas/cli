@@ -64,10 +64,6 @@ func TestConvertCmd_Help(t *testing.T) {
 		t.Error("Expected --to flag to exist")
 	}
 
-	jsonFlag := cmd.Flags().Lookup("json")
-	if jsonFlag == nil {
-		t.Error("Expected --json flag to exist")
-	}
 }
 
 func TestConvertCmd_MissingRequiredFlags(t *testing.T) {
@@ -137,8 +133,7 @@ func TestConvertCmd_WithSpecificTime(t *testing.T) {
 }
 
 func TestConvertCmd_JSONOutput(t *testing.T) {
-	cmd := newConvertCmd()
-	stdout, _, err := executeCommand(cmd,
+	stdout, _, err := testutil.ExecuteSubCommand(newConvertCmd(),
 		"--from", "UTC",
 		"--to", "America/New_York",
 		"--json")

@@ -152,12 +152,11 @@ func GetAPIKey() (string, error) {
 	return apiKey, nil
 }
 
-// GetGrantID returns the grant ID from arguments, environment variable, config file, or keyring.
+// GetGrantID returns the grant ID from arguments, environment variable, local grant cache, or config file.
 // It checks in this order:
 // 1. Command line argument (if provided) - supports email lookup if arg contains "@"
 // 2. Environment variable (NYLAS_GRANT_ID)
-// 3. Stored default grant (from keyring/file)
-// 4. Config file (default_grant)
+// 3. Stored default grant (from local grant cache)
 func GetGrantID(args []string) (string, error) {
 	// If provided as argument
 	if len(args) > 0 && args[0] != "" {
@@ -174,11 +173,10 @@ func GetGrantID(args []string) (string, error) {
 		return grantID, nil
 	}
 
-	secretStore, err := openSecretStore()
+	grantStore, err := NewDefaultGrantStore()
 	if err != nil {
 		return "", err
 	}
-	grantStore := keyring.NewGrantStore(secretStore)
 
 	// Email arguments require a local grant lookup.
 	if len(args) > 0 && args[0] != "" {
@@ -188,31 +186,24 @@ func GetGrantID(args []string) (string, error) {
 			if errors.Is(err, domain.ErrGrantNotFound) {
 				return "", fmt.Errorf("no grant found for email: %s", identifier)
 			}
-			return "", wrapSecretStoreError(err)
+			return "", err
 		}
 		return grant.ID, nil
 	}
 
-	// Try to get default grant from keyring first - it is the authoritative source.
+	// Try to get default grant from the local grant cache first.
 	grantID, err := grantStore.GetDefaultGrant()
 	switch {
 	case err == nil:
 		return grantID, nil
 	case !errors.Is(err, domain.ErrNoDefaultGrant):
-		return "", wrapSecretStoreError(err)
-	}
-
-	// Fall back to config for backward compatibility with older setups.
-	configStore := config.NewDefaultFileStore()
-	cfg, cfgErr := configStore.Load()
-	if cfgErr == nil && cfg.DefaultGrant != "" {
-		return cfg.DefaultGrant, nil
+		return "", err
 	}
 
 	return "", NewUserErrorWithSuggestions(
-		"No grant ID provided",
-		"Check available grants with: nylas auth list",
-		"Set default grant with: nylas config set default_grant <grant-id>",
+		"No grant ID provided. Run 'nylas auth list' to find a grant, then 'nylas auth switch <grant-id-or-email>' to set the default.",
+		"List available grants with: nylas auth list",
+		"Set a default grant with: nylas auth switch <grant-id-or-email>",
 		"Use environment variable: export NYLAS_GRANT_ID=<grant-id>",
 		"Or specify as argument: nylas [command] <grant-id>",
 	)

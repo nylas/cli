@@ -22,7 +22,7 @@ showErrorState(message) {
         <div class="error-state">
             <div class="error-icon">⚠️</div>
             <div class="error-message">${this.escapeHtml(message)}</div>
-            <button class="btn btn-secondary" onclick="ContactsManager.loadContacts()">Retry</button>
+            <button class="btn btn-secondary" data-action="contacts-retry">Retry</button>
         </div>
     `;
 },

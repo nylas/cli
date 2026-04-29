@@ -3,8 +3,10 @@ package oauth
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -56,6 +58,37 @@ func TestCallbackServer_GetRedirectURI(t *testing.T) {
 				t.Errorf("GetRedirectURI() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCallbackServer_StartAcceptsIPv6LoopbackForAdvertisedLocalhost(t *testing.T) {
+	probe, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback is not available: %v", err)
+	}
+	_ = probe.Close()
+
+	server := NewCallbackServer(0)
+	if err := server.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer func() { _ = server.Stop() }()
+	server.setExpectedState("test-state")
+
+	client := &http.Client{
+		Timeout: time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+		},
+	}
+
+	resp, err := client.Get("http://[::1]:" + strconv.Itoa(server.port) + "/callback?code=test-code&state=test-state")
+	if err != nil {
+		t.Fatalf("IPv6 loopback callback request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("IPv6 loopback callback status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 }
 

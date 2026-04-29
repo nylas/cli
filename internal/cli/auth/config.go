@@ -214,16 +214,9 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 			fmt.Println()
 			fmt.Printf("Added %d grant(s). Run 'nylas auth list' to see all accounts.\n", len(result.ValidGrants))
 
-			// Update config file with default grant and grants list
+			// Update config file with the local default grant preference.
 			cfg.DefaultGrant = defaultGrantID
-			cfg.Grants = make([]domain.GrantInfo, len(result.ValidGrants))
-			for i, grant := range result.ValidGrants {
-				cfg.Grants[i] = domain.GrantInfo{
-					ID:       grant.ID,
-					Email:    grant.Email,
-					Provider: grant.Provider,
-				}
-			}
+			cfg.Grants = nil
 			if err := configStore.Save(cfg); err != nil {
 				_, _ = common.Yellow.Printf("  Warning: Could not update config file: %v\n", err)
 			}

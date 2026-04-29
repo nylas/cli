@@ -27,7 +27,6 @@ type UsageStats struct {
 
 func newUsageCmd() *cobra.Command {
 	var month string
-	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "usage",
@@ -58,7 +57,7 @@ Examples:
 				}
 			}
 
-			if jsonOutput {
+			if common.IsJSON(cmd) {
 				data, err := json.MarshalIndent(stats, "", "  ")
 				if err != nil {
 					return common.WrapMarshalError("usage stats", err)
@@ -92,7 +91,6 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&month, "month", "", "Month to show usage for (YYYY-MM format)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

@@ -12,7 +12,6 @@ func newInfoCmd() *cobra.Command {
 	var (
 		zone    string
 		timeStr string
-		jsonOut bool
 	)
 
 	cmd := &cobra.Command{
@@ -47,13 +46,12 @@ Examples:
 				return fmt.Errorf("time zone required (use argument or --zone flag)")
 			}
 
-			return runInfo(zone, timeStr, jsonOut)
+			return runInfo(zone, timeStr, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&zone, "zone", "", "Time zone (IANA name or abbreviation)")
 	cmd.Flags().StringVar(&timeStr, "time", "", "Time to check (RFC3339 format, defaults to now)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	return cmd
 }

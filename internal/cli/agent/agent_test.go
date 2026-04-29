@@ -42,7 +42,6 @@ func TestCreateCmd(t *testing.T) {
 	cmd := newCreateCmd()
 
 	assert.Equal(t, "create <email>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "provider=nylas")
@@ -68,7 +67,6 @@ func TestGetCmd(t *testing.T) {
 	cmd := newGetCmd()
 
 	assert.Equal(t, "get [agent-id|email]", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Contains(t, cmd.Long, "grant ID or by email address")
 	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
 }
@@ -77,7 +75,6 @@ func TestUpdateCmd(t *testing.T) {
 	cmd := newUpdateCmd()
 
 	assert.Equal(t, "update [agent-id|email]", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
 	assert.Contains(t, cmd.Long, "mutable settings")
 	assert.Contains(t, cmd.Long, "resolves a local provider=nylas grant")
@@ -137,7 +134,6 @@ func TestPolicyListCmd(t *testing.T) {
 	cmd := newPolicyListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.Contains(t, cmd.Long, "provider=nylas account")
 	assert.Contains(t, cmd.Flags().Lookup("all").Usage, "provider=nylas accounts")
@@ -147,7 +143,6 @@ func TestPolicyReadCmd(t *testing.T) {
 	cmd := newPolicyReadCmd()
 
 	assert.Equal(t, "read <policy-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.Contains(t, cmd.Long, "Read details for a single policy")
 }
 
@@ -155,7 +150,6 @@ func TestRuleListCmd(t *testing.T) {
 	cmd := newRuleListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "default grant")
@@ -165,7 +159,6 @@ func TestRuleReadCmd(t *testing.T) {
 	cmd := newRuleReadCmd()
 
 	assert.Equal(t, "read <rule-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("json"))
 	assert.NotNil(t, cmd.Flags().Lookup("all"))
 	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "Read details for a single rule")
@@ -329,54 +322,6 @@ func TestPrintPolicyDetails(t *testing.T) {
 	assert.Contains(t, output, "Use DNSBL:")
 	assert.Contains(t, output, "Header anomaly detection:")
 	assert.Contains(t, output, "Spam sensitivity:")
-}
-
-func TestPrintRuleDetails(t *testing.T) {
-	priority := 10
-	enabled := true
-	rule := domain.Rule{
-		ID:             "rule-123",
-		Name:           "Block Example",
-		Description:    "Blocks example.com",
-		Priority:       &priority,
-		Enabled:        &enabled,
-		Trigger:        "inbound",
-		ApplicationID:  "app-123",
-		OrganizationID: "org-123",
-		Match: &domain.RuleMatch{
-			Operator: "all",
-			Conditions: []domain.RuleCondition{{
-				Field:    "from.domain",
-				Operator: "is",
-				Value:    "example.com",
-			}},
-		},
-		Actions: []domain.RuleAction{{
-			Type: "mark_as_spam",
-		}},
-		CreatedAt: domain.UnixTime{Time: time.Date(2026, time.April, 13, 16, 49, 44, 0, time.UTC)},
-		UpdatedAt: domain.UnixTime{Time: time.Date(2026, time.April, 13, 16, 49, 44, 0, time.UTC)},
-	}
-
-	output := captureStdout(t, func() {
-		printRuleDetails(rule, []rulePolicyRef{{
-			PolicyID:   "policy-123",
-			PolicyName: "Default Policy",
-			Accounts: []policyAgentAccountRef{{
-				GrantID: "grant-123",
-				Email:   "agent@example.com",
-			}},
-		}})
-	})
-
-	assert.Contains(t, output, "Rule:         Block Example")
-	assert.Contains(t, output, "Policies:")
-	assert.Contains(t, output, "Default Policy")
-	assert.Contains(t, output, "agent@example.com")
-	assert.Contains(t, output, "Match:")
-	assert.Contains(t, output, "from.domain is example.com")
-	assert.Contains(t, output, "Actions:")
-	assert.Contains(t, output, "mark_as_spam")
 }
 
 func TestBuildPolicyAccountRefs(t *testing.T) {

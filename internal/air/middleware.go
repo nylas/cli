@@ -3,12 +3,12 @@ package air
 import (
 	"compress/gzip"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nylas/cli/internal/webguard"
 )
 
 // gzipResponseWriter wraps http.ResponseWriter to support gzip compression.
@@ -180,14 +180,28 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		// Referrer policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Content Security Policy (relaxed for local development)
+		// Content Security Policy.
+		//
+		// 'unsafe-inline' is removed from script-src: all inline onclick/
+		// onchange handlers and inline <script> blocks have been converted to
+		// external JS files with event delegation (data-action attributes).
+		// 'unsafe-eval' is not present — no callers exist.
+		//
+		// frame-ancestors / base-uri / form-action / object-src are added to
+		// prevent clickjacking, base-tag injection, form-action redirection,
+		// and legacy plugin embeds even on browsers that ignore the older
+		// X-Frame-Options header.
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
+				"script-src 'self'; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"img-src 'self' data: https:; "+
 				"font-src 'self' data: https://fonts.gstatic.com; "+
-				"connect-src 'self' https://api.us.nylas.com https://api.eu.nylas.com;")
+				"connect-src 'self' https://api.us.nylas.com https://api.eu.nylas.com; "+
+				"frame-ancestors 'self'; "+
+				"base-uri 'self'; "+
+				"form-action 'self'; "+
+				"object-src 'none';")
 
 		next.ServeHTTP(w, r)
 	})
@@ -208,16 +222,9 @@ func MethodOverrideMiddleware(next http.Handler) http.Handler {
 }
 
 // HostValidationMiddleware rejects requests that do not target an explicit
-// loopback Air host.
+// loopback Air host. Delegates to the shared webguard implementation.
 func HostValidationMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isAllowedAirHost(r.Host) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+	return webguard.HostValidationMiddleware(next)
 }
 
 // CORSMiddleware reflects CORS headers only for the Air origin. Cross-origin
@@ -225,7 +232,7 @@ func HostValidationMiddleware(next http.Handler) http.Handler {
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" && isAllowedBrowserOrigin(origin, r.Host) {
+		if origin != "" && webguard.IsLoopbackBrowserOrigin(origin, r.Host) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-HTTP-Method-Override")
@@ -234,7 +241,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		}
 
 		if r.Method == http.MethodOptions {
-			if origin == "" || !isAllowedBrowserOrigin(origin, r.Host) {
+			if origin == "" || !webguard.IsLoopbackBrowserOrigin(origin, r.Host) {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -249,71 +256,5 @@ func CORSMiddleware(next http.Handler) http.Handler {
 // OriginProtectionMiddleware rejects state-changing requests that do not
 // originate from the active Air origin.
 func OriginProtectionMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !requiresSameOriginProtection(r.Method) || requestMatchesAirOrigin(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		http.Error(w, "Forbidden", http.StatusForbidden)
-	})
-}
-
-func requiresSameOriginProtection(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		return false
-	default:
-		return true
-	}
-}
-
-func requestMatchesAirOrigin(r *http.Request) bool {
-	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
-		return isAllowedBrowserOrigin(origin, r.Host)
-	}
-	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
-		return isAllowedBrowserOrigin(referer, r.Host)
-	}
-	return false
-}
-
-func isAllowedBrowserOrigin(rawOrigin, requestHost string) bool {
-	if !isAllowedAirHost(requestHost) {
-		return false
-	}
-
-	parsed, err := url.Parse(rawOrigin)
-	if err != nil {
-		return false
-	}
-	if parsed.Host == "" {
-		return false
-	}
-	if parsed.Scheme != "http" {
-		return false
-	}
-	if !isAllowedAirHost(parsed.Host) {
-		return false
-	}
-
-	return strings.EqualFold(parsed.Host, requestHost)
-}
-
-func isAllowedAirHost(requestHost string) bool {
-	host := requestHost
-	if parsedHost, _, err := net.SplitHostPort(requestHost); err == nil {
-		host = parsedHost
-	}
-
-	host = strings.Trim(strings.TrimSpace(host), "[]")
-	if host == "" {
-		return false
-	}
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return webguard.OriginProtectionMiddleware(next)
 }

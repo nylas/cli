@@ -3,15 +3,18 @@ package air
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // FocusModeState represents the current focus mode state
 type FocusModeState struct {
 	IsActive      bool      `json:"isActive"`
-	StartedAt     time.Time `json:"startedAt,omitempty"`
-	EndsAt        time.Time `json:"endsAt,omitempty"`
+	StartedAt     time.Time `json:"startedAt,omitzero"`
+	EndsAt        time.Time `json:"endsAt,omitzero"`
 	Duration      int       `json:"duration"` // minutes
 	PomodoroMode  bool      `json:"pomodoroMode"`
 	SessionCount  int       `json:"sessionCount"`
@@ -112,10 +115,7 @@ func (s *Server) handleGetFocusModeState(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
 // handleStartFocusMode starts a focus mode session
@@ -154,10 +154,7 @@ func (s *Server) handleStartFocusMode(w http.ResponseWriter, r *http.Request) {
 		InBreak:       false,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fmStore.state); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, fmStore.state)
 }
 
 // handleStopFocusMode stops the current focus mode session
@@ -171,14 +168,10 @@ func (s *Server) handleStopFocusMode(w http.ResponseWriter, r *http.Request) {
 	fmStore.state.IsActive = false
 	fmStore.state.InBreak = false
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]any{
+	httputil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status":       "stopped",
 		"sessionCount": fmStore.state.SessionCount,
-	}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	})
 }
 
 // handleStartBreak starts a break in pomodoro mode
@@ -203,10 +196,7 @@ func (s *Server) handleStartBreak(w http.ResponseWriter, r *http.Request) {
 	fmStore.state.EndsAt = now.Add(time.Duration(breakDuration) * time.Minute)
 	fmStore.state.BreakDuration = breakDuration
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fmStore.state); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, fmStore.state)
 }
 
 // handleGetFocusModeSettings returns focus mode settings
@@ -214,10 +204,7 @@ func (s *Server) handleGetFocusModeSettings(w http.ResponseWriter, r *http.Reque
 	fmStore.mu.RLock()
 	defer fmStore.mu.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fmStore.settings); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, fmStore.settings)
 }
 
 // handleUpdateFocusModeSettings updates focus mode settings
@@ -232,11 +219,7 @@ func (s *Server) handleUpdateFocusModeSettings(w http.ResponseWriter, r *http.Re
 	fmStore.settings = &settings
 	fmStore.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "updated"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 // IsFocusModeActive returns whether focus mode is active
@@ -256,11 +239,5 @@ func ShouldAllowNotification(senderEmail string) bool {
 	}
 
 	// Check if sender is in allowed list
-	for _, allowed := range fmStore.settings.AllowedSenders {
-		if allowed == senderEmail {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(fmStore.settings.AllowedSenders, senderEmail)
 }

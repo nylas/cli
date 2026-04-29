@@ -109,17 +109,17 @@ func TestFormatSize(t *testing.T) {
 	}{
 		{"zero bytes", 0, "0 B"},
 		{"bytes under 1KB", 500, "500 B"},
-		{"exactly 1KB", 1024, "1.0 KB"},
-		{"kilobytes", 2048, "2.0 KB"},
+		{"exactly 1KB", 1024, "1 KB"},
+		{"kilobytes", 2048, "2 KB"},
 		{"kilobytes with decimal", 1536, "1.5 KB"},
-		{"megabytes", 1048576, "1.0 MB"},
+		{"megabytes", 1048576, "1 MB"},
 		{"megabytes with decimal", 2621440, "2.5 MB"},
-		{"gigabytes", 1073741824, "1.0 GB"},
-		{"large file", 5368709120, "5.0 GB"},
-		{"terabytes", 1099511627776, "1.0 TB"},
+		{"gigabytes", 1073741824, "1 GB"},
+		{"large file", 5368709120, "5 GB"},
+		{"terabytes", 1099511627776, "1 TB"},
 		{"small value", 1, "1 B"},
 		{"1023 bytes", 1023, "1023 B"},
-		{"1025 bytes", 1025, "1.0 KB"},
+		{"1025 bytes", 1025, "1 KB"},
 	}
 
 	for _, tt := range tests {

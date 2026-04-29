@@ -152,6 +152,26 @@ func (s *Server) setDefaultGrant(grantID string) error {
 	return authapp.PersistDefaultGrant(s.configStore, s.grantStore, grantID)
 }
 
+func (s *Server) refreshActiveAccountCacheRuntime() {
+	if s.demoMode || s.cacheSettings == nil || !s.cacheSettings.IsCacheEnabled() || !s.hasCacheRuntime() {
+		return
+	}
+
+	s.stopBackgroundSync()
+
+	if s.cacheSettings.Get().OfflineQueueEnabled {
+		s.runtimeMu.Lock()
+		if s.cacheManager != nil {
+			_ = s.initializeOfflineQueuesLocked()
+		}
+		s.runtimeMu.Unlock()
+	} else {
+		s.clearOfflineQueues()
+	}
+
+	s.startBackgroundSync()
+}
+
 func (s *Server) resolveDefaultGrantInfo() (domain.GrantInfo, error) {
 	supported, err := s.listSupportedGrants()
 	if err != nil {
@@ -270,7 +290,17 @@ func (s *Server) initializeOfflineQueuesLocked() error {
 		return nil
 	}
 
-	accounts, err := s.cacheManager.ListCachedAccounts()
+	grant, err := s.resolveDefaultGrantInfo()
+	if err != nil {
+		s.clearOfflineQueues()
+		return nil
+	}
+
+	db, err := s.cacheManager.GetDB(grant.Email)
+	if err != nil {
+		return err
+	}
+	queue, err := cache.NewOfflineQueue(db)
 	if err != nil {
 		return err
 	}
@@ -278,17 +308,8 @@ func (s *Server) initializeOfflineQueuesLocked() error {
 	s.offlineQueuesMu.Lock()
 	defer s.offlineQueuesMu.Unlock()
 
-	s.offlineQueues = make(map[string]*cache.OfflineQueue, len(accounts))
-	for _, email := range accounts {
-		db, err := s.cacheManager.GetDB(email)
-		if err != nil {
-			return err
-		}
-		queue, err := cache.NewOfflineQueue(db)
-		if err != nil {
-			return err
-		}
-		s.offlineQueues[email] = queue
+	s.offlineQueues = map[string]*cache.OfflineQueue{
+		grant.Email: queue,
 	}
 
 	return nil

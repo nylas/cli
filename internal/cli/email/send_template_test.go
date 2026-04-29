@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/nylas"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -213,11 +213,11 @@ func TestRenderHostedTemplateForSend(t *testing.T) {
 		t.Setenv("NYLAS_API_KEY", "")
 		t.Setenv("NYLAS_GRANT_ID", "")
 
-		store, err := keyring.NewEncryptedFileStore(configDir)
+		_ = configDir
+		grantStore, err := common.NewDefaultGrantStore()
 		if err != nil {
-			t.Fatalf("NewEncryptedFileStore() error = %v", err)
+			t.Fatalf("NewDefaultGrantStore() error = %v", err)
 		}
-		grantStore := keyring.NewGrantStore(store)
 		if err := grantStore.SaveGrant(domain.GrantInfo{
 			ID:    "grant-email-id",
 			Email: "lookup@example.com",

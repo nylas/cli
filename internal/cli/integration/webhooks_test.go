@@ -359,8 +359,11 @@ func TestCLI_WebhookLifecycle(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start the webhook server in the background
-	serverCmd := exec.CommandContext(ctx, testBinary, "webhook", "server", "--tunnel", "cloudflared", "--port", "3099")
+	// Start the webhook server in the background. --allow-unsigned because
+	// this test exercises the lifecycle end-to-end and does not assert on
+	// HMAC verification; the production flag still requires --secret to
+	// avoid accepting unverified events from a public tunnel.
+	serverCmd := exec.CommandContext(ctx, testBinary, "webhook", "server", "--tunnel", "cloudflared", "--port", "3099", "--allow-unsigned")
 	serverCmd.Env = os.Environ()
 
 	stdout, err := serverCmd.StdoutPipe()

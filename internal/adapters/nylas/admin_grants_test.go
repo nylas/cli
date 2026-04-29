@@ -3,6 +3,7 @@ package nylas_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,9 +59,9 @@ func TestHTTPClient_ListAllGrants_WithParams(t *testing.T) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
-		// Check query parameters
+		// limit is the API page size (max 200), not the caller's cap.
 		query := r.URL.Query()
-		assert.Equal(t, "10", query.Get("limit"))
+		assert.Equal(t, "200", query.Get("limit"))
 		assert.Equal(t, "conn-123", query.Get("connector_id"))
 
 		response := map[string]any{
@@ -92,6 +93,104 @@ func TestHTTPClient_ListAllGrants_WithParams(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, grants, 1)
 	assert.Equal(t, "google", string(grants[0].Provider))
+}
+
+func TestHTTPClient_ListAllGrants_FollowsPagination(t *testing.T) {
+	// Regression: the Nylas v3 /v3/grants endpoint is offset-paginated
+	// (limit, offset) and does NOT return next_cursor. ListAllGrants
+	// previously made a single request and silently truncated to the API
+	// default page size (10), so any tenant with >10 grants — including
+	// the `nylas auth config` flow via SyncGrants → ListGrants — only
+	// saw the first page.
+	const apiPageSize = 200 // mirrors the unexported grantPageSize constant
+	full := make([]map[string]any, 0, apiPageSize)
+	for i := range apiPageSize {
+		full = append(full, map[string]any{
+			"id":           fmt.Sprintf("grant-page1-%d", i),
+			"provider":     "google",
+			"grant_status": "valid",
+		})
+	}
+
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		query := r.URL.Query()
+		assert.Equal(t, "200", query.Get("limit"), "should request the API max page size")
+
+		w.Header().Set("Content-Type", "application/json")
+		switch query.Get("offset") {
+		case "", "0":
+			// First page is full — implementation must fetch another.
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": full})
+		case "200":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "grant-tail-1", "provider": "microsoft", "grant_status": "valid"},
+					{"id": "grant-tail-2", "provider": "microsoft", "grant_status": "valid"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected offset %q", query.Get("offset"))
+		}
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	grants, err := client.ListAllGrants(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls, "should have advanced offset and made a second request")
+	assert.Len(t, grants, 202)
+	assert.Equal(t, "grant-tail-2", grants[201].ID)
+}
+
+func TestHTTPClient_ListAllGrants_StopsOnShortPage(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "grant-1", "provider": "google", "grant_status": "valid"},
+				{"id": "grant-2", "provider": "google", "grant_status": "valid"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	grants, err := client.ListAllGrants(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls, "short first page must terminate pagination")
+	assert.Len(t, grants, 2)
+}
+
+func TestHTTPClient_ListAllGrants_LimitCapsResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "grant-1", "provider": "google", "grant_status": "valid"},
+				{"id": "grant-2", "provider": "google", "grant_status": "valid"},
+				{"id": "grant-3", "provider": "google", "grant_status": "valid"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	grants, err := client.ListAllGrants(context.Background(), &domain.GrantsQueryParams{Limit: 2})
+	require.NoError(t, err)
+	assert.Len(t, grants, 2, "client-side limit should cap results")
 }
 
 func TestHTTPClient_GetGrantStats(t *testing.T) {

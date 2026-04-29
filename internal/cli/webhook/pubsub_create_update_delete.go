@@ -46,7 +46,9 @@ func newPubSubCreateCmd() *cobra.Command {
 				if common.IsStructuredOutput(cmd) {
 					return struct{}{}, common.GetOutputWriter(cmd).Write(channel)
 				}
-				printPubSubChannel(channel)
+				// Show the encryption key in full once at creation; the user
+				// needs it to register webhooks. Subsequent reads mask it.
+				printPubSubChannel(channel, true)
 				return struct{}{}, nil
 			})
 			return err
@@ -125,7 +127,7 @@ func newPubSubUpdateCmd() *cobra.Command {
 				if common.IsStructuredOutput(cmd) {
 					return struct{}{}, common.GetOutputWriter(cmd).Write(channel)
 				}
-				printPubSubChannel(channel)
+				printPubSubChannel(channel, false)
 				return struct{}{}, nil
 			})
 			return err

@@ -78,9 +78,9 @@ func (s *ConfigService) SetupConfig(region, clientID, clientSecret, apiKey, orgI
 		}
 	}
 
+	cfg.Grants = nil
 	if credentialsChanged {
 		cfg.DefaultGrant = ""
-		cfg.Grants = nil
 		if err = clearStoredGrantState(s.secrets); err != nil {
 			return err
 		}
@@ -128,7 +128,6 @@ func (s *ConfigService) GetStatus() (*domain.ConfigStatus, error) {
 		Region:      cfg.Region,
 		SecretStore: s.secrets.Name(),
 		ConfigPath:  s.config.Path(),
-		GrantCount:  len(cfg.Grants),
 	}
 
 	// Get client_id from keystore

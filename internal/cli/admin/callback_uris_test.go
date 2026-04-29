@@ -47,11 +47,6 @@ func TestCallbackURIListCmd(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "false", flag.DefValue)
-	})
 }
 
 func TestCallbackURIShowCmd(t *testing.T) {
@@ -65,10 +60,6 @@ func TestCallbackURIShowCmd(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
 	})
 
-	t.Run("has_json_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("json")
-		assert.NotNil(t, flag)
-	})
 }
 
 func TestCallbackURICreateCmd(t *testing.T) {

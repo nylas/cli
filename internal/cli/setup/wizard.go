@@ -419,7 +419,11 @@ func stepGrantSync(status *SetupStatus) {
 	cfg, _ := configStore.Load()
 	region := cfg.Region
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		_, _ = common.Yellow.Printf("  Could not access grant store: %v\n", err)
+		return
+	}
 
 	var result *SyncResult
 	err = common.RunWithSpinner("Checking for existing email accounts...", func() error {
@@ -465,19 +469,12 @@ func stepGrantSync(status *SetupStatus) {
 	updateConfigGrants(configStore, cfg, result)
 }
 
-// updateConfigGrants writes grant info to the config file.
+// updateConfigGrants writes the local default grant preference to the config file.
 func updateConfigGrants(configStore *config.FileStore, cfg *domain.Config, result *SyncResult) {
 	if cfg == nil || result == nil {
 		return
 	}
 	cfg.DefaultGrant = result.DefaultGrantID
-	cfg.Grants = make([]domain.GrantInfo, len(result.ValidGrants))
-	for i, grant := range result.ValidGrants {
-		cfg.Grants[i] = domain.GrantInfo{
-			ID:       grant.ID,
-			Email:    grant.Email,
-			Provider: grant.Provider,
-		}
-	}
+	cfg.Grants = nil
 	_ = configStore.Save(cfg)
 }

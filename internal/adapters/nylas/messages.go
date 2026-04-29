@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -94,7 +95,7 @@ func (c *HTTPClient) GetMessagesWithCursor(ctx context.Context, grantID string, 
 		params.Limit = 10
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/messages", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/messages", c.baseURL, url.PathEscape(grantID))
 	queryURL := NewQueryBuilder().
 		AddInt("limit", params.Limit).
 		Add("page_token", params.PageToken).
@@ -147,7 +148,7 @@ func (c *HTTPClient) GetMessageWithFields(ctx context.Context, grantID, messageI
 		return nil, err
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, grantID, messageID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID))
 	queryURL := NewQueryBuilder().Add("fields", fields).BuildURL(baseURL)
 
 	var result struct {
@@ -163,7 +164,7 @@ func (c *HTTPClient) GetMessageWithFields(ctx context.Context, grantID, messageI
 
 // UpdateMessage updates message properties.
 func (c *HTTPClient) UpdateMessage(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, grantID, messageID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID))
 
 	payload := make(map[string]any, 3) // Pre-allocate for up to 3 fields
 	if req.Unread != nil {
@@ -194,7 +195,7 @@ func (c *HTTPClient) UpdateMessage(ctx context.Context, grantID, messageID strin
 
 // DeleteMessage deletes a message (moves to trash).
 func (c *HTTPClient) DeleteMessage(ctx context.Context, grantID, messageID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, grantID, messageID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID))
 	return c.doDelete(ctx, queryURL)
 }
 

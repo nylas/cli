@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/nylas/cli/internal/domain"
@@ -48,92 +47,13 @@ func (c *OpenAIClient) Chat(ctx context.Context, req *domain.ChatRequest) (*doma
 	return c.ChatWithTools(ctx, req, nil)
 }
 
-// ChatWithTools sends a chat request with function calling.
+// ChatWithTools sends a chat request with function calling, delegating to
+// the shared OpenAI-compatible pipeline in BaseClient.
 func (c *OpenAIClient) ChatWithTools(ctx context.Context, req *domain.ChatRequest, tools []domain.Tool) (*domain.ChatResponse, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("openai API key not configured")
 	}
-
-	// Prepare OpenAI request
-	openaiReq := map[string]any{
-		"model":    c.GetModel(req.Model),
-		"messages": ConvertMessagesToMaps(req.Messages),
-	}
-
-	if req.MaxTokens > 0 {
-		openaiReq["max_tokens"] = req.MaxTokens
-	}
-
-	if req.Temperature > 0 {
-		openaiReq["temperature"] = req.Temperature
-	}
-
-	// Tools support
-	if len(tools) > 0 {
-		openaiReq["tools"] = ConvertToolsOpenAIFormat(tools)
-		openaiReq["tool_choice"] = "auto"
-	}
-
-	// Send request using base client
-	var openaiResp struct {
-		Choices []struct {
-			Message struct {
-				Role      string `json:"role"`
-				Content   string `json:"content"`
-				ToolCalls []struct {
-					ID       string `json:"id"`
-					Type     string `json:"type"`
-					Function struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					} `json:"function"`
-				} `json:"tool_calls,omitempty"`
-			} `json:"message"`
-		} `json:"choices"`
-		Model string `json:"model"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-	}
-
-	headers := map[string]string{
-		"Authorization": "Bearer " + c.apiKey,
-	}
-
-	if err := c.DoJSONRequestAndDecode(ctx, "POST", "/chat/completions", openaiReq, headers, &openaiResp); err != nil {
-		return nil, err
-	}
-
-	if len(openaiResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from OpenAI")
-	}
-
-	response := &domain.ChatResponse{
-		Content:  openaiResp.Choices[0].Message.Content,
-		Model:    openaiResp.Model,
-		Provider: "openai",
-		Usage: domain.TokenUsage{
-			PromptTokens:     openaiResp.Usage.PromptTokens,
-			CompletionTokens: openaiResp.Usage.CompletionTokens,
-			TotalTokens:      openaiResp.Usage.TotalTokens,
-		},
-	}
-
-	// Convert tool calls if present
-	for _, tc := range openaiResp.Choices[0].Message.ToolCalls {
-		var args map[string]any
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
-			response.ToolCalls = append(response.ToolCalls, domain.ToolCall{
-				ID:        tc.ID,
-				Function:  tc.Function.Name,
-				Arguments: args,
-			})
-		}
-	}
-
-	return response, nil
+	return c.OpenAICompatibleChat(ctx, "openai", req, tools)
 }
 
 // StreamChat streams chat responses.

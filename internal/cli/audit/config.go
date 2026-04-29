@@ -59,7 +59,7 @@ func newConfigShowCmd() *cobra.Command {
 			if err == nil && fileCount > 0 {
 				fmt.Println()
 				fmt.Println("Storage:")
-				fmt.Printf("  Current size:    %s\n", FormatSize(totalSize))
+				fmt.Printf("  Current size:    %s\n", common.FormatSize(totalSize))
 				fmt.Printf("  Files:           %d\n", fileCount)
 				if oldestEntry != nil {
 					fmt.Printf("  Oldest entry:    %s\n", oldestEntry.Timestamp.Format("2006-01-02"))

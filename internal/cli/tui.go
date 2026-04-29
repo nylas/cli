@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -379,14 +378,11 @@ func runTUI(refreshInterval time.Duration, initialView string, theme tui.ThemeNa
 		return err
 	}
 
-	// Initialize secret store for grant management
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	// Get default grant
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
 		return common.WrapError(err)
 	}
-
-	// Get default grant
-	grantStore := keyring.NewGrantStore(secretStore)
 	grantID, err := grantStore.GetDefaultGrant()
 	if err != nil {
 		return fmt.Errorf("no default grant set. Run 'nylas auth login' first")

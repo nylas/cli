@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -32,8 +33,11 @@ func (c *HTTPClient) ListApplications(ctx context.Context) ([]domain.Application
 		return nil, c.parseError(resp)
 	}
 
-	// Read body once (special handling: API may return array or single object)
-	body, err := io.ReadAll(resp.Body)
+	// Read body once (special handling: API may return array or single object).
+	// Bound the read so a misbehaving upstream cannot OOM us, and so that an
+	// auth/error JSON containing tokens or PII cannot be echoed unbounded into
+	// our error string below.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +61,14 @@ func (c *HTTPClient) ListApplications(ctx context.Context) ([]domain.Application
 		}
 	}
 
-	// If both fail, return error with response body for debugging
-	return nil, fmt.Errorf("failed to decode applications response: %s", string(body))
+	// Both decodings failed. Report status only — never echo the raw body
+	// since it may carry tokens, customer data, or other sensitive fields.
+	return nil, fmt.Errorf("failed to decode applications response (status %d, %d bytes)", resp.StatusCode, len(body))
 }
+
+// maxResponseBodySize bounds bodies read for ad-hoc decoding (1 MiB). Larger
+// bodies are an upstream bug; truncating prevents secret leakage in errors.
+const maxResponseBodySize = 1 << 20
 
 // GetApplication retrieves a specific application.
 func (c *HTTPClient) GetApplication(ctx context.Context, appID string) (*domain.Application, error) {
@@ -67,7 +76,7 @@ func (c *HTTPClient) GetApplication(ctx context.Context, appID string) (*domain.
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, appID)
+	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, url.PathEscape(appID))
 
 	var result struct {
 		Data domain.Application `json:"data"`
@@ -102,7 +111,7 @@ func (c *HTTPClient) UpdateApplication(ctx context.Context, appID string, req *d
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, appID)
+	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, url.PathEscape(appID))
 
 	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
 	if err != nil {
@@ -123,7 +132,7 @@ func (c *HTTPClient) DeleteApplication(ctx context.Context, appID string) error 
 	if err := validateRequired("application ID", appID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, appID)
+	queryURL := fmt.Sprintf("%s/v3/applications/%s", c.baseURL, url.PathEscape(appID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -148,7 +157,7 @@ func (c *HTTPClient) GetCallbackURI(ctx context.Context, uriID string) (*domain.
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, url.PathEscape(uriID))
 
 	var result struct {
 		Data domain.CallbackURI `json:"data"`
@@ -190,7 +199,7 @@ func (c *HTTPClient) UpdateCallbackURI(ctx context.Context, uriID string, req *d
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, url.PathEscape(uriID))
 
 	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
 	if err != nil {
@@ -211,7 +220,7 @@ func (c *HTTPClient) DeleteCallbackURI(ctx context.Context, uriID string) error 
 	if err := validateRequired("callback URI ID", uriID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, uriID)
+	queryURL := fmt.Sprintf("%s/v3/applications/callback-uris/%s", c.baseURL, url.PathEscape(uriID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -236,7 +245,7 @@ func (c *HTTPClient) GetConnector(ctx context.Context, connectorID string) (*dom
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, connectorID)
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, url.PathEscape(connectorID))
 
 	var result struct {
 		Data domain.Connector `json:"data"`
@@ -271,7 +280,7 @@ func (c *HTTPClient) UpdateConnector(ctx context.Context, connectorID string, re
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, connectorID)
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, url.PathEscape(connectorID))
 
 	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
 	if err != nil {
@@ -292,7 +301,7 @@ func (c *HTTPClient) DeleteConnector(ctx context.Context, connectorID string) er
 	if err := validateRequired("connector ID", connectorID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, connectorID)
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s", c.baseURL, url.PathEscape(connectorID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -304,7 +313,7 @@ func (c *HTTPClient) ListCredentials(ctx context.Context, connectorID string) ([
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, connectorID)
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, url.PathEscape(connectorID))
 
 	var result struct {
 		Data []domain.ConnectorCredential `json:"data"`
@@ -321,7 +330,7 @@ func (c *HTTPClient) GetCredential(ctx context.Context, credentialID string) (*d
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, credentialID)
+	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
 
 	var result struct {
 		Data domain.ConnectorCredential `json:"data"`
@@ -338,7 +347,7 @@ func (c *HTTPClient) CreateCredential(ctx context.Context, connectorID string, r
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, connectorID)
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, url.PathEscape(connectorID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
 	if err != nil {
@@ -360,7 +369,7 @@ func (c *HTTPClient) UpdateCredential(ctx context.Context, credentialID string, 
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, credentialID)
+	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
 
 	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
 	if err != nil {
@@ -381,32 +390,75 @@ func (c *HTTPClient) DeleteCredential(ctx context.Context, credentialID string) 
 	if err := validateRequired("credential ID", credentialID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, credentialID)
+	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
 	return c.doDelete(ctx, queryURL)
 }
 
 // Admin Grant Operations
 
-// ListAllGrants retrieves all grants with optional filtering.
+// grantPageSize is the per-request page size used when walking grants.
+// The Nylas v3 /v3/grants endpoint accepts limit values up to 200 and
+// defaults to 10 — using the maximum minimises the number of round-trips
+// when paginating large result sets.
+const grantPageSize = 200
+
+// maxGrantPages caps the number of pages ListAllGrants will fetch as a
+// hard safety ceiling. At grantPageSize=200 this allows up to 200,000
+// grants — well above any realistic tenant.
+const maxGrantPages = 1000
+
+// ListAllGrants retrieves all grants matching the optional filters,
+// transparently walking offset/limit pagination so callers always see the
+// complete result set.
+//
+// The Nylas v3 /v3/grants endpoint is offset-paginated (limit, offset),
+// not cursor-paginated — its response does not include next_cursor — so
+// pagination stops when a page returns fewer than grantPageSize grants.
+//
+// When params.Limit is positive, at most that many grants are returned
+// and pagination stops once the cap is reached. When params is nil or
+// Limit is zero, every page is fetched.
 func (c *HTTPClient) ListAllGrants(ctx context.Context, params *domain.GrantsQueryParams) ([]domain.Grant, error) {
 	baseURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
 
-	qb := NewQueryBuilder()
+	maxResults := 0
+	connectorID := ""
+	status := ""
+	offset := 0
 	if params != nil {
-		qb.AddInt("limit", params.Limit).
-			AddInt("offset", params.Offset).
-			Add("connector_id", params.ConnectorID).
-			Add("status", params.Status)
+		maxResults = params.Limit
+		connectorID = params.ConnectorID
+		status = params.Status
+		offset = params.Offset
 	}
-	queryURL := qb.BuildURL(baseURL)
 
-	var result struct {
-		Data []domain.Grant `json:"data"`
+	grants := make([]domain.Grant, 0)
+	for range maxGrantPages {
+		queryURL := NewQueryBuilder().
+			AddInt("limit", grantPageSize).
+			AddInt("offset", offset).
+			Add("connector_id", connectorID).
+			Add("status", status).
+			BuildURL(baseURL)
+
+		var result struct {
+			Data []domain.Grant `json:"data"`
+		}
+		if err := c.doGet(ctx, queryURL, &result); err != nil {
+			return nil, err
+		}
+
+		grants = append(grants, result.Data...)
+		if maxResults > 0 && len(grants) >= maxResults {
+			return grants[:maxResults], nil
+		}
+		// Last page: server returned fewer than a full page.
+		if len(result.Data) < grantPageSize {
+			return grants, nil
+		}
+		offset += len(result.Data)
 	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+	return nil, fmt.Errorf("failed to paginate grants: exceeded max page count (%d)", maxGrantPages)
 }
 
 // GetGrantStats retrieves grant statistics.

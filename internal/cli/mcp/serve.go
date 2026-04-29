@@ -8,10 +8,8 @@ import (
 	"syscall"
 
 	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/mcp"
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -65,17 +63,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		proxy.SetDefaultGrant(grantID)
 	}
 
-	// Set up grant store for local grant lookups (allows get_grant without email)
-	// Try multiple secret store backends to ensure we can access grants
-	var secretStore ports.SecretStore
-	secretStore, err = keyring.NewSecretStore(config.DefaultConfigDir())
-	if err != nil {
-		// Fallback to encrypted file store if keyring fails
-		// This can happen when the MCP server runs in a sandboxed context
-		secretStore, err = keyring.NewEncryptedFileStore(config.DefaultConfigDir())
-	}
-	if err == nil && secretStore != nil {
-		grantStore := keyring.NewGrantStore(secretStore)
+	// Set up grant store for local grant lookups (allows get_grant without email).
+	if grantStore, err := common.NewDefaultGrantStore(); err == nil {
 		proxy.SetGrantStore(grantStore)
 	}
 

@@ -67,13 +67,13 @@
 
                 group.style.display = 'block';
                 container.innerHTML = searches.map(search => `
-                    <div class="search-suggestion-item recent-search-item" onclick="executeSearch('${escapeHtml(search.query)}')">
+                    <div class="search-suggestion-item recent-search-item" data-action="execute-search" data-search-query="${escapeHtml(search.query)}">
                         <div class="search-suggestion-icon">🕐</div>
                         <div class="search-suggestion-content">
                             <div class="search-suggestion-text">${escapeHtml(search.query)}</div>
                             <div class="search-suggestion-meta">${this.formatTime(search.timestamp)}</div>
                         </div>
-                        <button class="remove-recent-btn" onclick="event.stopPropagation(); RecentSearches.remove('${escapeHtml(search.query)}')" title="Remove">
+                        <button class="remove-recent-btn" data-action="remove-recent-search" data-search-query="${escapeHtml(search.query)}" title="Remove">
                             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path d="M18 6L6 18M6 6l12 12"/>
                             </svg>
@@ -158,21 +158,21 @@
                 resultsSection.innerHTML = `
                     <div class="search-suggestion-group">
                         <div class="search-suggestion-title">Results for "${escapedQuery}"</div>
-                        <div class="search-suggestion-item" onclick="executeSearch('${escapedQuery}')">
+                        <div class="search-suggestion-item"  data-action="execute-search" data-search-query="${escapedQuery}">
                             <div class="search-suggestion-icon">📧</div>
                             <div class="search-suggestion-content">
                                 <div class="search-suggestion-text">Email containing <mark>${escapedQuery}</mark></div>
                                 <div class="search-suggestion-meta">From Sarah Chen - 2 hours ago</div>
                             </div>
                         </div>
-                        <div class="search-suggestion-item" onclick="executeSearch('${escapedQuery}')">
+                        <div class="search-suggestion-item"  data-action="execute-search" data-search-query="${escapedQuery}">
                             <div class="search-suggestion-icon">📧</div>
                             <div class="search-suggestion-content">
                                 <div class="search-suggestion-text">Re: <mark>${escapedQuery}</mark> discussion</div>
                                 <div class="search-suggestion-meta">From Alex Johnson - Yesterday</div>
                             </div>
                         </div>
-                        <div class="search-suggestion-item" onclick="executeSearch('${escapedQuery}')">
+                        <div class="search-suggestion-item"  data-action="execute-search" data-search-query="${escapedQuery}">
                             <div class="search-suggestion-icon">📅</div>
                             <div class="search-suggestion-content">
                                 <div class="search-suggestion-text">Meeting: <mark>${escapedQuery}</mark> review</div>
@@ -253,3 +253,16 @@
                 handleSearchInput(query);
             }
         }
+
+        // Wire up search input event listeners (replaces inline oninput/onkeydown)
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    handleSearchInput(this.value);
+                });
+                searchInput.addEventListener('keydown', function(event) {
+                    handleSearchKeydown(event);
+                });
+            }
+        });

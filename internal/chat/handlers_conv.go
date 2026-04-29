@@ -26,8 +26,10 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/conversations/{id} — delete conversation
 func (s *Server) handleConversationByID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
-	if id == "" {
-		http.Error(w, "conversation ID required", http.StatusBadRequest)
+	if !IsValidConversationID(id) {
+		// Reject any path that wouldn't have come from generateID(); this
+		// blocks path-traversal attempts like ../../etc/passwd.json.
+		http.Error(w, "invalid conversation ID", http.StatusBadRequest)
 		return
 	}
 

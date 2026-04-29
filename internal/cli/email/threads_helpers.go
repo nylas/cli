@@ -25,15 +25,9 @@ func DisplayThreadListItem(t domain.Thread, showID bool) {
 	}
 
 	// Format participants
-	participants := common.FormatParticipants(t.Participants)
-	if len(participants) > 25 {
-		participants = participants[:22] + "..."
-	}
+	participants := common.Truncate(common.FormatParticipants(t.Participants), 25)
 
-	subj := t.Subject
-	if len(subj) > 35 {
-		subj = subj[:32] + "..."
-	}
+	subj := common.Truncate(t.Subject, 35)
 
 	msgCount := fmt.Sprintf("(%d)", len(t.MessageIDs))
 	dateStr := common.FormatTimeAgo(t.LatestMessageRecvDate)

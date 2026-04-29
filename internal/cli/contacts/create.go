@@ -12,14 +12,13 @@ import (
 
 func newCreateCmd() *cobra.Command {
 	var (
-		firstName  string
-		lastName   string
-		email      string
-		phone      string
-		company    string
-		jobTitle   string
-		notes      string
-		jsonOutput bool
+		firstName string
+		lastName  string
+		email     string
+		phone     string
+		company   string
+		jobTitle  string
+		notes     string
 	)
 
 	cmd := &cobra.Command{
@@ -67,7 +66,7 @@ Examples:
 					return struct{}{}, common.WrapCreateError("contact", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(contact)
 				}
 
@@ -91,7 +90,6 @@ Examples:
 	cmd.Flags().StringVarP(&company, "company", "c", "", "Company name")
 	cmd.Flags().StringVarP(&jobTitle, "job-title", "j", "", "Job title")
 	cmd.Flags().StringVarP(&notes, "notes", "n", "", "Notes about the contact")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

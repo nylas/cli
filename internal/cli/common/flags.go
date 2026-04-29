@@ -2,11 +2,6 @@ package common
 
 import "github.com/spf13/cobra"
 
-// AddJSONFlag adds a --json flag for JSON output.
-func AddJSONFlag(cmd *cobra.Command, target *bool) {
-	cmd.Flags().BoolVar(target, "json", false, "Output as JSON")
-}
-
 // AddLimitFlag adds a --limit/-n flag with the given default.
 func AddLimitFlag(cmd *cobra.Command, target *int, defaultValue int) {
 	cmd.Flags().IntVarP(target, "limit", "n", defaultValue, "Maximum number of items to show")

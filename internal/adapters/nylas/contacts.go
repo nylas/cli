@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/util"
@@ -55,7 +56,7 @@ func (c *HTTPClient) GetContacts(ctx context.Context, grantID string, params *do
 
 // GetContactsWithCursor retrieves contacts with pagination cursor.
 func (c *HTTPClient) GetContactsWithCursor(ctx context.Context, grantID string, params *domain.ContactQueryParams) (*domain.ContactListResponse, error) {
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/contacts", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/contacts", c.baseURL, url.PathEscape(grantID))
 
 	qb := NewQueryBuilder()
 	if params != nil {
@@ -94,7 +95,7 @@ func (c *HTTPClient) GetContact(ctx context.Context, grantID, contactID string) 
 
 // GetContactWithPicture retrieves a single contact by ID with optional profile picture.
 func (c *HTTPClient) GetContactWithPicture(ctx context.Context, grantID, contactID string, includePicture bool) (*domain.Contact, error) {
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, grantID, contactID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(contactID))
 	queryURL := NewQueryBuilder().AddBool("profile_picture", includePicture).BuildURL(baseURL)
 
 	var result struct {
@@ -110,7 +111,7 @@ func (c *HTTPClient) GetContactWithPicture(ctx context.Context, grantID, contact
 
 // CreateContact creates a new contact.
 func (c *HTTPClient) CreateContact(ctx context.Context, grantID string, req *domain.CreateContactRequest) (*domain.Contact, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts", c.baseURL, url.PathEscape(grantID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
 	if err != nil {
@@ -130,7 +131,7 @@ func (c *HTTPClient) CreateContact(ctx context.Context, grantID string, req *dom
 
 // UpdateContact updates an existing contact.
 func (c *HTTPClient) UpdateContact(ctx context.Context, grantID, contactID string, req *domain.UpdateContactRequest) (*domain.Contact, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, grantID, contactID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(contactID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req, http.StatusOK)
 	if err != nil {
@@ -150,13 +151,13 @@ func (c *HTTPClient) UpdateContact(ctx context.Context, grantID, contactID strin
 
 // DeleteContact deletes a contact.
 func (c *HTTPClient) DeleteContact(ctx context.Context, grantID, contactID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, grantID, contactID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(contactID))
 	return c.doDelete(ctx, queryURL)
 }
 
 // GetContactGroups retrieves contact groups for a grant.
 func (c *HTTPClient) GetContactGroups(ctx context.Context, grantID string) ([]domain.ContactGroup, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data []contactGroupResponse `json:"data"`
@@ -170,7 +171,7 @@ func (c *HTTPClient) GetContactGroups(ctx context.Context, grantID string) ([]do
 
 // GetContactGroup retrieves a single contact group by ID.
 func (c *HTTPClient) GetContactGroup(ctx context.Context, grantID, groupID string) (*domain.ContactGroup, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, grantID, groupID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(groupID))
 
 	var result struct {
 		Data contactGroupResponse `json:"data"`
@@ -185,7 +186,7 @@ func (c *HTTPClient) GetContactGroup(ctx context.Context, grantID, groupID strin
 
 // CreateContactGroup creates a new contact group.
 func (c *HTTPClient) CreateContactGroup(ctx context.Context, grantID string, req *domain.CreateContactGroupRequest) (*domain.ContactGroup, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups", c.baseURL, url.PathEscape(grantID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
 	if err != nil {
@@ -205,7 +206,7 @@ func (c *HTTPClient) CreateContactGroup(ctx context.Context, grantID string, req
 
 // UpdateContactGroup updates an existing contact group.
 func (c *HTTPClient) UpdateContactGroup(ctx context.Context, grantID, groupID string, req *domain.UpdateContactGroupRequest) (*domain.ContactGroup, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, grantID, groupID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(groupID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req, http.StatusOK)
 	if err != nil {
@@ -225,7 +226,7 @@ func (c *HTTPClient) UpdateContactGroup(ctx context.Context, grantID, groupID st
 
 // DeleteContactGroup deletes a contact group.
 func (c *HTTPClient) DeleteContactGroup(ctx context.Context, grantID, groupID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, grantID, groupID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/contacts/groups/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(groupID))
 	return c.doDelete(ctx, queryURL)
 }
 

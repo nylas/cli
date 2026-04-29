@@ -69,16 +69,10 @@ func TestListCommand(t *testing.T) {
 		assert.Contains(t, cmd.Aliases, "ls")
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
+	t.Run("format_flag_inherited_from_root", func(t *testing.T) {
+		root := testutil.NewTestRoot(cmd)
+		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "table", flag.DefValue)
-	})
-
-	t.Run("has_format_shorthand", func(t *testing.T) {
-		flag := cmd.Flags().ShorthandLookup("f")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "format", flag.Name)
 	})
 
 	t.Run("has_full_ids_flag", func(t *testing.T) {
@@ -106,16 +100,10 @@ func TestShowCommand(t *testing.T) {
 		assert.Equal(t, "show <webhook-id>", cmd.Use)
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
+	t.Run("format_flag_inherited_from_root", func(t *testing.T) {
+		root := testutil.NewTestRoot(cmd)
+		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "text", flag.DefValue)
-	})
-
-	t.Run("has_format_shorthand", func(t *testing.T) {
-		flag := cmd.Flags().ShorthandLookup("f")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "format", flag.Name)
 	})
 
 	t.Run("requires_one_arg", func(t *testing.T) {
@@ -174,11 +162,6 @@ func TestCreateCommand(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
-		assert.NotNil(t, flag)
-	})
-
 	t.Run("has_examples", func(t *testing.T) {
 		assert.NotEmpty(t, cmd.Example)
 		assert.Contains(t, cmd.Example, "webhook create")
@@ -216,11 +199,6 @@ func TestUpdateCommand(t *testing.T) {
 
 	t.Run("has_notify_flag", func(t *testing.T) {
 		flag := cmd.Flags().Lookup("notify")
-		assert.NotNil(t, flag)
-	})
-
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
 		assert.NotNil(t, flag)
 	})
 
@@ -325,12 +303,6 @@ func TestTestPayloadCommand(t *testing.T) {
 
 	t.Run("command_name", func(t *testing.T) {
 		assert.Equal(t, "payload [trigger-type]", cmd.Use)
-	})
-
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "json", flag.DefValue)
 	})
 
 	t.Run("has_trigger_flag", func(t *testing.T) {

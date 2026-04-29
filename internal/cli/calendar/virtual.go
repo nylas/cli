@@ -32,8 +32,6 @@ Perfect for conference rooms, equipment, or external contractors.`,
 
 // newVirtualListCmd creates the list virtual calendars command.
 func newVirtualListCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all virtual calendar grants",
@@ -50,7 +48,7 @@ func newVirtualListCmd() *cobra.Command {
 					return struct{}{}, common.WrapFetchError("virtual calendar grants", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(os.Stdout).Encode(grants)
 				}
 
@@ -67,16 +65,13 @@ func newVirtualListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
-
 	return cmd
 }
 
 // newVirtualCreateCmd creates the create virtual calendar command.
 func newVirtualCreateCmd() *cobra.Command {
 	var (
-		email      string
-		jsonOutput bool
+		email string
 	)
 
 	cmd := &cobra.Command{
@@ -100,7 +95,7 @@ The email can be any identifier - it doesn't need to be a real email address.`,
 					return struct{}{}, common.WrapCreateError("virtual calendar grant", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(os.Stdout).Encode(grant)
 				}
 
@@ -118,7 +113,6 @@ The email can be any identifier - it doesn't need to be a real email address.`,
 	}
 
 	cmd.Flags().StringVar(&email, "email", "", "Email identifier for the virtual calendar (required)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	_ = cmd.MarkFlagRequired("email") // Hardcoded flag name, won't fail
 
 	return cmd
@@ -126,8 +120,6 @@ The email can be any identifier - it doesn't need to be a real email address.`,
 
 // newVirtualShowCmd creates the show virtual calendar command.
 func newVirtualShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <grant-id>",
 		Short: "Show details of a virtual calendar grant",
@@ -147,7 +139,7 @@ func newVirtualShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("virtual calendar grant", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(os.Stdout).Encode(grant)
 				}
 
@@ -164,8 +156,6 @@ func newVirtualShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 
 	return cmd
 }

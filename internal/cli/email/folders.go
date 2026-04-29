@@ -68,10 +68,7 @@ func newFoldersListCmd() *cobra.Command {
 						folderType = "custom"
 					}
 
-					name := f.Name
-					if len(name) > 28 {
-						name = name[:25] + "..."
-					}
+					name := common.Truncate(f.Name, 28)
 
 					unreadPadded := fmt.Sprintf("%8d", f.UnreadCount)
 					if f.UnreadCount > 0 {
@@ -174,7 +171,7 @@ func newFoldersCreateCmd() *cobra.Command {
 					return struct{}{}, common.WrapCreateError("folder", err)
 				}
 
-				printSuccess("Created folder '%s' (ID: %s)", folder.Name, folder.ID)
+				common.PrintSuccess("Created folder '%s' (ID: %s)", folder.Name, folder.ID)
 				return struct{}{}, nil
 			})
 			return err
@@ -223,7 +220,7 @@ func newFoldersRenameCmd() *cobra.Command {
 					return struct{}{}, common.WrapUpdateError("folder", err)
 				}
 
-				printSuccess("Folder renamed to '%s'", folder.Name)
+				common.PrintSuccess("Folder renamed to '%s'", folder.Name)
 				return struct{}{}, nil
 			})
 			return err

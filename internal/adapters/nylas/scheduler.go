@@ -30,7 +30,7 @@ func (c *HTTPClient) GetSchedulerConfiguration(ctx context.Context, configID str
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, configID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, url.PathEscape(configID))
 
 	var result struct {
 		Data domain.SchedulerConfiguration `json:"data"`
@@ -65,7 +65,7 @@ func (c *HTTPClient) UpdateSchedulerConfiguration(ctx context.Context, configID 
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, configID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, url.PathEscape(configID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req)
 	if err != nil {
@@ -86,7 +86,7 @@ func (c *HTTPClient) DeleteSchedulerConfiguration(ctx context.Context, configID 
 	if err := validateRequired("configuration ID", configID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, configID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/configurations/%s", c.baseURL, url.PathEscape(configID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -116,7 +116,7 @@ func (c *HTTPClient) GetSchedulerSession(ctx context.Context, sessionID string) 
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/sessions/%s", c.baseURL, sessionID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/sessions/%s", c.baseURL, url.PathEscape(sessionID))
 
 	var result struct {
 		Data domain.SchedulerSession `json:"data"`
@@ -149,7 +149,7 @@ func (c *HTTPClient) GetBooking(ctx context.Context, bookingID string) (*domain.
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/bookings/%s", c.baseURL, bookingID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/bookings/%s", c.baseURL, url.PathEscape(bookingID))
 
 	var result struct {
 		Data domain.Booking `json:"data"`
@@ -166,7 +166,7 @@ func (c *HTTPClient) ConfirmBooking(ctx context.Context, bookingID string, req *
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/bookings/%s", c.baseURL, bookingID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/bookings/%s", c.baseURL, url.PathEscape(bookingID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req)
 	if err != nil {
@@ -243,7 +243,7 @@ func (c *HTTPClient) GetSchedulerPage(ctx context.Context, pageID string) (*doma
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, pageID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
 
 	var result struct {
 		Data domain.SchedulerPage `json:"data"`
@@ -278,7 +278,7 @@ func (c *HTTPClient) UpdateSchedulerPage(ctx context.Context, pageID string, req
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, pageID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req)
 	if err != nil {
@@ -299,6 +299,6 @@ func (c *HTTPClient) DeleteSchedulerPage(ctx context.Context, pageID string) err
 	if err := validateRequired("page ID", pageID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, pageID)
+	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
 	return c.doDelete(ctx, queryURL)
 }

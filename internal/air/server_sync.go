@@ -9,7 +9,7 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-// startBackgroundSync starts background sync goroutines for all accounts.
+// startBackgroundSync starts background sync for the active account.
 func (s *Server) startBackgroundSync() {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
@@ -18,27 +18,14 @@ func (s *Server) startBackgroundSync() {
 		return
 	}
 
-	grants, err := s.grantStore.ListGrants()
-	if err != nil || len(grants) == 0 {
+	grant, err := s.resolveDefaultGrantInfo()
+	if err != nil {
 		return
 	}
 
 	stopCh := make(chan struct{})
-	started := 0
-	for _, grant := range grants {
-		if !grant.Provider.IsSupportedByAir() {
-			continue
-		}
-
-		s.syncWg.Add(1)
-		started++
-		go s.syncAccountLoop(stopCh, grant.Email, grant.ID)
-	}
-
-	if started == 0 {
-		return
-	}
-
+	s.syncWg.Add(1)
+	go s.syncAccountLoop(stopCh, grant.Email, grant.ID)
 	s.syncStopCh = stopCh
 	s.syncRunning = true
 }

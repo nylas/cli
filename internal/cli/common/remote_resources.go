@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -21,12 +20,11 @@ func ResolveGrantIdentifier(identifier string) (string, error) {
 		return identifier, nil
 	}
 
-	secretStore, err := openSecretStore()
+	grantStore, err := NewDefaultGrantStore()
 	if err != nil {
 		return "", err
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
 	grant, err := grantStore.GetGrantByEmail(identifier)
 	if err != nil {
 		if errors.Is(err, domain.ErrGrantNotFound) {

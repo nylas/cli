@@ -3,7 +3,6 @@ package calendar
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newAvailabilityCmd() *cobra.Command {
@@ -37,7 +35,6 @@ func newFreeBusyCmd() *cobra.Command {
 		start    string
 		end      string
 		duration string
-		format   string
 	)
 
 	cmd := &cobra.Command{
@@ -95,7 +92,7 @@ Shows busy time slots within the specified time range.`,
 				if len(emailList) == 0 {
 					grant, err := client.GetGrant(ctx, grantID)
 					if err != nil {
-						return struct{}{}, common.NewUserError("Failed to get grant details: "+err.Error(),
+						return struct{}{}, common.NewUserError(fmt.Sprintf("Failed to get grant details: %v", err),
 							"Run 'nylas auth status' to verify your authentication")
 					}
 					if grant.Email != "" {
@@ -116,18 +113,15 @@ Shows busy time slots within the specified time range.`,
 					return client.GetFreeBusy(ctx, grantID, req)
 				})
 				if err != nil {
-					return struct{}{}, common.NewUserError("Failed to get availability: "+err.Error(),
+					return struct{}{}, common.NewUserError(fmt.Sprintf("Failed to get availability: %v", err),
 						"Check that the email addresses are valid")
 				}
 
-				switch format {
-				case "json":
-					return struct{}{}, common.PrintJSON(result)
-				case "yaml":
-					return struct{}{}, yaml.NewEncoder(os.Stdout).Encode(result)
-				default:
-					return struct{}{}, displayFreeBusy(result, startTime, endTime)
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(result)
 				}
+				return struct{}{}, displayFreeBusy(result, startTime, endTime)
 			})
 			return err
 		},
@@ -137,7 +131,7 @@ Shows busy time slots within the specified time range.`,
 	cmd.Flags().StringVarP(&start, "start", "s", "", "Start time (default: now)")
 	cmd.Flags().StringVar(&end, "end", "", "End time")
 	cmd.Flags().StringVarP(&duration, "duration", "d", "", "Duration from start (e.g., '8h', '1d', '7d')")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json, yaml)")
+	cmd.Flags().StringP("format", "f", "text", "Output format (text, json, yaml)")
 
 	return cmd
 }
@@ -149,7 +143,6 @@ func newFindSlotsCmd() *cobra.Command {
 		end          string
 		durationMins int
 		intervalMins int
-		format       string
 	)
 
 	cmd := &cobra.Command{
@@ -218,18 +211,15 @@ This searches for time slots when all participants are free.`,
 					return client.GetAvailability(ctx, req)
 				})
 				if err != nil {
-					return struct{}{}, common.NewUserError("Failed to find availability: "+err.Error(),
+					return struct{}{}, common.NewUserError(fmt.Sprintf("Failed to find availability: %v", err),
 						"Check that the participant email addresses are valid")
 				}
 
-				switch format {
-				case "json":
-					return struct{}{}, common.PrintJSON(result)
-				case "yaml":
-					return struct{}{}, yaml.NewEncoder(os.Stdout).Encode(result)
-				default:
-					return struct{}{}, displayAvailableSlots(result, durationMins)
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(result)
 				}
+				return struct{}{}, displayAvailableSlots(result, durationMins)
 			})
 			return err
 		},
@@ -240,7 +230,7 @@ This searches for time slots when all participants are free.`,
 	cmd.Flags().StringVar(&end, "end", "", "End time for search (default: 7 days from start)")
 	cmd.Flags().IntVarP(&durationMins, "duration", "d", 30, "Meeting duration in minutes")
 	cmd.Flags().IntVarP(&intervalMins, "interval", "i", 15, "Search interval in minutes")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json, yaml)")
+	cmd.Flags().StringP("format", "f", "text", "Output format (text, json, yaml)")
 
 	_ = cmd.MarkFlagRequired("participants")
 
@@ -319,65 +309,5 @@ func displayAvailableSlots(result *domain.AvailabilityResponse, durationMins int
 }
 
 func parseTimeInput(input string) (time.Time, error) {
-	now := time.Now()
-	input = strings.TrimSpace(input)
-	lower := strings.ToLower(input)
-
-	// Handle "tomorrow" keyword
-	if strings.HasPrefix(lower, "tomorrow") {
-		tomorrow := now.AddDate(0, 0, 1)
-		rest := strings.TrimPrefix(lower, "tomorrow")
-		rest = strings.TrimSpace(rest)
-		if rest == "" {
-			return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 9, 0, 0, 0, now.Location()), nil
-		}
-		if t, err := common.ParseTimeOfDay(rest); err == nil {
-			return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), nil
-		}
-	}
-
-	// Handle "today" keyword
-	if strings.HasPrefix(lower, "today") {
-		rest := strings.TrimPrefix(lower, "today")
-		rest = strings.TrimSpace(rest)
-		if rest == "" {
-			return now, nil
-		}
-		if t, err := common.ParseTimeOfDay(rest); err == nil {
-			return time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location()), nil
-		}
-	}
-
-	// Try standard formats (most specific first)
-	formats := []string{
-		time.RFC3339,           // "2006-01-02T15:04:05Z07:00"
-		"2006-01-02T15:04:05Z", // ISO8601 UTC
-		"2006-01-02T15:04:05",  // ISO8601 with seconds
-		"2006-01-02T15:04",     // ISO8601 without seconds
-		"2006-01-02 15:04:05",  // Space separator with seconds
-		"2006-01-02 15:04",     // Space separator
-		"2006-01-02 3:04pm",    // 12-hour format
-		"Jan 2 15:04",          // Month name
-		"Jan 2 3:04pm",         // Month name 12-hour
-	}
-
-	for _, format := range formats {
-		if t, err := time.ParseInLocation(format, input, now.Location()); err == nil {
-			if t.Year() == 0 {
-				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-			}
-			return t, nil
-		}
-	}
-
-	// Try just time of day
-	if t, err := common.ParseTimeOfDay(lower); err == nil {
-		result := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
-		if result.Before(now) {
-			result = result.AddDate(0, 0, 1)
-		}
-		return result, nil
-	}
-
-	return time.Time{}, fmt.Errorf("could not parse time: %s", input)
+	return common.ParseHumanTime(input, common.ParseHumanTimeOpts{})
 }

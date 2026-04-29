@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/util"
@@ -53,7 +54,7 @@ func buildSendMessagePayload(req *domain.SendMessageRequest, includeSignature bo
 
 // SendMessage sends an email.
 func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send", c.baseURL, url.PathEscape(grantID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildSendMessagePayload(req, true), http.StatusOK, http.StatusCreated, http.StatusAccepted)
 	if err != nil {
@@ -74,7 +75,7 @@ func (c *HTTPClient) SendMessage(ctx context.Context, grantID string, req *domai
 // SendRawMessage sends a raw RFC 822 MIME message via the Nylas API.
 // Uses multipart/form-data with type=mime query parameter per Nylas API v3 spec.
 func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send?type=mime", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/send?type=mime", c.baseURL, url.PathEscape(grantID))
 
 	// Create multipart form data
 	var body bytes.Buffer
@@ -106,10 +107,10 @@ func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	// Check status code
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
@@ -117,7 +118,7 @@ func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME
 	var result struct {
 		Data messageResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -127,7 +128,7 @@ func (c *HTTPClient) SendRawMessage(ctx context.Context, grantID string, rawMIME
 
 // ListScheduledMessages retrieves all scheduled messages for a grant.
 func (c *HTTPClient) ListScheduledMessages(ctx context.Context, grantID string) ([]domain.ScheduledMessage, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules", c.baseURL, url.PathEscape(grantID))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {
@@ -139,9 +140,9 @@ func (c *HTTPClient) ListScheduledMessages(ctx context.Context, grantID string) 
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
@@ -155,7 +156,7 @@ func (c *HTTPClient) ListScheduledMessages(ctx context.Context, grantID string) 
 			CloseTime int64 `json:"close_time"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -177,7 +178,7 @@ func (c *HTTPClient) ListScheduledMessages(ctx context.Context, grantID string) 
 
 // GetScheduledMessage retrieves a specific scheduled message.
 func (c *HTTPClient) GetScheduledMessage(ctx context.Context, grantID, scheduleID string) (*domain.ScheduledMessage, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules/%s", c.baseURL, grantID, scheduleID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(scheduleID))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {
@@ -189,12 +190,13 @@ func (c *HTTPClient) GetScheduledMessage(ctx context.Context, grantID, scheduleI
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
+		_ = resp.Body.Close()
 		return nil, domain.ErrMessageNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
@@ -208,7 +210,7 @@ func (c *HTTPClient) GetScheduledMessage(ctx context.Context, grantID, scheduleI
 			CloseTime int64 `json:"close_time"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -221,7 +223,7 @@ func (c *HTTPClient) GetScheduledMessage(ctx context.Context, grantID, scheduleI
 
 // CancelScheduledMessage cancels a scheduled message.
 func (c *HTTPClient) CancelScheduledMessage(ctx context.Context, grantID, scheduleID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules/%s", c.baseURL, grantID, scheduleID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/schedules/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(scheduleID))
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", queryURL, nil)
 	if err != nil {
@@ -245,7 +247,7 @@ func (c *HTTPClient) CancelScheduledMessage(ctx context.Context, grantID, schedu
 // SmartCompose generates an AI-powered email draft based on a prompt.
 // Uses Nylas Smart Compose API (requires Plus package).
 func (c *HTTPClient) SmartCompose(ctx context.Context, grantID string, req *domain.SmartComposeRequest) (*domain.SmartComposeSuggestion, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/smart-compose", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/smart-compose", c.baseURL, url.PathEscape(grantID))
 
 	payload := map[string]any{
 		"prompt": req.Prompt,
@@ -268,16 +270,16 @@ func (c *HTTPClient) SmartCompose(ctx context.Context, grantID string, req *doma
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data domain.SmartComposeSuggestion `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -287,7 +289,7 @@ func (c *HTTPClient) SmartCompose(ctx context.Context, grantID string, req *doma
 // SmartComposeReply generates an AI-powered reply to a specific message.
 // Uses Nylas Smart Compose API (requires Plus package).
 func (c *HTTPClient) SmartComposeReply(ctx context.Context, grantID, messageID string, req *domain.SmartComposeRequest) (*domain.SmartComposeSuggestion, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/smart-compose", c.baseURL, grantID, messageID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/smart-compose", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID))
 
 	payload := map[string]any{
 		"prompt": req.Prompt,
@@ -310,16 +312,16 @@ func (c *HTTPClient) SmartComposeReply(ctx context.Context, grantID, messageID s
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data domain.SmartComposeSuggestion `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 

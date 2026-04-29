@@ -10,9 +10,8 @@ import (
 
 func newDSTCmd() *cobra.Command {
 	var (
-		zone    string
-		year    int
-		jsonOut bool
+		zone string
+		year int
 	)
 
 	cmd := &cobra.Command{
@@ -39,14 +38,13 @@ Examples:
   # Output as JSON
   nylas timezone dst --zone PST --year 2026 --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDST(zone, year, jsonOut)
+			return runDST(zone, year, common.IsJSON(cmd))
 		},
 	}
 
 	currentYear := time.Now().Year()
 	cmd.Flags().StringVar(&zone, "zone", "", "Time zone (IANA name or abbreviation)")
 	cmd.Flags().IntVar(&year, "year", currentYear, "Year to check")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 
 	_ = cmd.MarkFlagRequired("zone")
 

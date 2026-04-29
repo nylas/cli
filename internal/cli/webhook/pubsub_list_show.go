@@ -55,7 +55,7 @@ func newPubSubShowCmd() *cobra.Command {
 					return struct{}{}, common.GetOutputWriter(cmd).Write(channel)
 				}
 
-				printPubSubChannel(channel)
+				printPubSubChannel(channel, false)
 				return struct{}{}, nil
 			})
 			return err

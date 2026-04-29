@@ -49,7 +49,9 @@ The demo UI runs on localhost and opens in your default browser.`,
 }
 
 func runDemoUI(port int, noBrowser bool) error {
-	addr := fmt.Sprintf(":%d", port)
+	// Bind to loopback only — the demo UI is a local development tool and
+	// should not be reachable from the LAN.
+	addr := fmt.Sprintf("localhost:%d", port)
 
 	// Check if port is available
 	listener, err := net.Listen("tcp", addr)

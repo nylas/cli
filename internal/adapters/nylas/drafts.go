@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -59,7 +61,7 @@ func (c *HTTPClient) GetDrafts(ctx context.Context, grantID string, limit int) (
 		limit = 10
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, url.PathEscape(grantID))
 	queryURL := NewQueryBuilder().AddInt("limit", limit).BuildURL(baseURL)
 
 	var result struct {
@@ -74,7 +76,7 @@ func (c *HTTPClient) GetDrafts(ctx context.Context, grantID string, limit int) (
 
 // GetDraft retrieves a single draft by ID.
 func (c *HTTPClient) GetDraft(ctx context.Context, grantID, draftID string) (*domain.Draft, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(draftID))
 
 	var result struct {
 		Data draftResponse `json:"data"`
@@ -129,7 +131,7 @@ func buildDraftPayload(req *domain.CreateDraftRequest, includeSignature bool) ma
 
 // createDraftWithJSON creates a draft using JSON encoding (no attachments or small attachments).
 func (c *HTTPClient) createDraftWithJSON(ctx context.Context, grantID string, req *domain.CreateDraftRequest) (*domain.Draft, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, url.PathEscape(grantID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, buildDraftPayload(req, true))
 	if err != nil {
@@ -147,25 +149,24 @@ func (c *HTTPClient) createDraftWithJSON(ctx context.Context, grantID string, re
 	return &draft, nil
 }
 
-// createDraftWithMultipart creates a draft with attachments using multipart/form-data.
-func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID string, req *domain.CreateDraftRequest) (*domain.Draft, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
-
+// doMultipartDraft sends a multipart/form-data draft request and decodes the
+// response into out. Used by both createDraftWithMultipart and updateDraftWithMultipart.
+func (c *HTTPClient) doMultipartDraft(ctx context.Context, method, url string, payload map[string]any, attachments []domain.Attachment, out any, acceptedStatuses ...int) error {
 	// Create multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
 	// Add message as JSON field
-	messageJSON, err := json.Marshal(buildDraftPayload(req, true))
+	messageJSON, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 	if err := writer.WriteField("message", string(messageJSON)); err != nil {
-		return nil, fmt.Errorf("failed to write message field: %w", err)
+		return fmt.Errorf("failed to write message field: %w", err)
 	}
 
 	// Add each attachment as a file
-	for i, att := range req.Attachments {
+	for i, att := range attachments {
 		if len(att.Content) == 0 {
 			continue // Skip attachments without content
 		}
@@ -181,38 +182,45 @@ func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID strin
 
 		part, err := writer.CreatePart(h)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create attachment part: %w", err)
+			return fmt.Errorf("failed to create attachment part: %w", err)
 		}
 		if _, err := part.Write(att.Content); err != nil {
-			return nil, fmt.Errorf("failed to write attachment content: %w", err)
+			return fmt.Errorf("failed to write attachment content: %w", err)
 		}
 	}
 
 	if err := writer.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+		return fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", queryURL, &buf)
+	httpReq, err := http.NewRequestWithContext(ctx, method, url, &buf)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 	c.setAuthHeader(httpReq)
 
 	resp, err := c.doRequest(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
+		return fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, c.parseError(resp)
+	if !slices.Contains(acceptedStatuses, resp.StatusCode) {
+		defer func() { _ = resp.Body.Close() }()
+		return c.parseError(resp)
 	}
+
+	return c.decodeJSONResponse(resp, out)
+}
+
+// createDraftWithMultipart creates a draft with attachments using multipart/form-data.
+func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID string, req *domain.CreateDraftRequest) (*domain.Draft, error) {
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data draftResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.doMultipartDraft(ctx, "POST", queryURL, buildDraftPayload(req, true), req.Attachments, &result, http.StatusOK, http.StatusCreated); err != nil {
 		return nil, err
 	}
 
@@ -223,7 +231,7 @@ func (c *HTTPClient) createDraftWithMultipart(ctx context.Context, grantID strin
 // CreateDraftWithAttachmentFromReader creates a draft with an attachment from an io.Reader.
 // This is useful for large attachments or streaming file uploads.
 func (c *HTTPClient) CreateDraftWithAttachmentFromReader(ctx context.Context, grantID string, req *domain.CreateDraftRequest, filename string, contentType string, reader io.Reader) (*domain.Draft, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts", c.baseURL, url.PathEscape(grantID))
 	payload := buildDraftPayload(req, true)
 
 	// Use pipe to stream multipart data
@@ -280,21 +288,22 @@ func (c *HTTPClient) CreateDraftWithAttachmentFromReader(ctx context.Context, gr
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	// Wait for writer goroutine to finish
 	if writerErr := <-errCh; writerErr != nil {
+		_ = resp.Body.Close()
 		return nil, writerErr
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data draftResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
@@ -304,13 +313,13 @@ func (c *HTTPClient) CreateDraftWithAttachmentFromReader(ctx context.Context, gr
 
 // DeleteDraft deletes a draft.
 func (c *HTTPClient) DeleteDraft(ctx context.Context, grantID, draftID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(draftID))
 	return c.doDelete(ctx, queryURL)
 }
 
 // SendDraft sends a draft.
 func (c *HTTPClient) SendDraft(ctx context.Context, grantID, draftID string, req *domain.SendDraftRequest) (*domain.Message, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, grantID, draftID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/drafts/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(draftID))
 
 	var bodyReader io.Reader
 	if req != nil && req.SignatureID != "" {
@@ -332,16 +341,16 @@ func (c *HTTPClient) SendDraft(ctx context.Context, grantID, draftID string, req
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}
 
 	var result struct {
 		Data messageResponse `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
 		return nil, err
 	}
 

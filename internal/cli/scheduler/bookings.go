@@ -31,8 +31,7 @@ func newBookingsCmd() *cobra.Command {
 
 func newBookingListCmd() *cobra.Command {
 	var (
-		configID   string
-		jsonOutput bool
+		configID string
 	)
 
 	cmd := &cobra.Command{
@@ -47,7 +46,7 @@ func newBookingListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("bookings", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(bookings)
 				}
 
@@ -72,14 +71,11 @@ func newBookingListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&configID, "config-id", "", "Filter by configuration ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
 
 func newBookingShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "show <booking-id>",
 		Short: "Show booking details",
@@ -93,7 +89,7 @@ func newBookingShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("booking", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(booking)
 				}
 
@@ -132,15 +128,12 @@ func newBookingShowCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-
 	return cmd
 }
 
 func newBookingConfirmCmd() *cobra.Command {
 	var (
-		reason     string
-		jsonOutput bool
+		reason string
 	)
 
 	cmd := &cobra.Command{
@@ -161,7 +154,7 @@ func newBookingConfirmCmd() *cobra.Command {
 					return struct{}{}, common.WrapUpdateError("booking", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(booking)
 				}
 
@@ -175,18 +168,16 @@ func newBookingConfirmCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&reason, "reason", "", "Reason for confirmation")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
 
 func newBookingRescheduleCmd() *cobra.Command {
 	var (
-		startTime  int64
-		endTime    int64
-		timezone   string
-		reason     string
-		jsonOutput bool
+		startTime int64
+		endTime   int64
+		timezone  string
+		reason    string
 	)
 
 	cmd := &cobra.Command{
@@ -224,7 +215,7 @@ You must provide the new start and end times as Unix timestamps.`,
 					return struct{}{}, common.WrapUpdateError("booking", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(booking)
 				}
 
@@ -242,7 +233,6 @@ You must provide the new start and end times as Unix timestamps.`,
 	cmd.Flags().Int64Var(&endTime, "end-time", 0, "New end time (Unix timestamp, required)")
 	cmd.Flags().StringVar(&timezone, "timezone", "", "Timezone for the booking (e.g., America/New_York)")
 	cmd.Flags().StringVar(&reason, "reason", "", "Reason for rescheduling")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

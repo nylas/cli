@@ -11,8 +11,6 @@ import (
 )
 
 func newShowCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:     "show <contact-id> [grant-id]",
 		Aliases: []string{"get", "read"},
@@ -29,7 +27,7 @@ func newShowCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("contact", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, common.PrintJSON(contact)
 				}
 
@@ -38,8 +36,6 @@ func newShowCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

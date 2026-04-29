@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"context"
 	"fmt"
 
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
@@ -9,13 +10,17 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
+type grantLister interface {
+	ListAllGrants(ctx context.Context, params *domain.GrantsQueryParams) ([]domain.Grant, error)
+}
+
 // SyncResult holds the result of a grant sync operation.
 type SyncResult struct {
 	ValidGrants    []domain.Grant
 	DefaultGrantID string
 }
 
-// SyncGrants fetches grants from the Nylas API and saves them to the local keyring.
+// SyncGrants fetches grants from the Nylas API and saves them to the local grant cache.
 // It returns the list of valid grants and the chosen default grant ID.
 // The caller is responsible for setting the default if multiple grants exist
 // (use PromptDefaultGrant for interactive selection).
@@ -27,12 +32,17 @@ func SyncGrants(grantStore ports.GrantStore, apiKey, clientID, region string) (*
 	ctx, cancel := common.CreateContext()
 	defer cancel()
 
-	grants, err := client.ListGrants(ctx)
+	return syncGrantsWithClient(ctx, grantStore, client)
+}
+
+func syncGrantsWithClient(ctx context.Context, grantStore ports.GrantStore, client grantLister) (*SyncResult, error) {
+	grants, err := client.ListAllGrants(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch grants: %w", err)
 	}
 
 	var validGrants []domain.Grant
+	grantInfos := make([]domain.GrantInfo, 0, len(grants))
 	for _, grant := range grants {
 		if !grant.IsValid() {
 			continue
@@ -44,15 +54,18 @@ func SyncGrants(grantStore ports.GrantStore, apiKey, clientID, region string) (*
 			Provider: grant.Provider,
 		}
 
-		if saveErr := grantStore.SaveGrant(grantInfo); saveErr != nil {
-			continue
-		}
-
+		grantInfos = append(grantInfos, grantInfo)
 		validGrants = append(validGrants, grant)
 		_, _ = common.Green.Printf("  ✓ Added %s (%s)\n", grant.Email, grant.Provider.DisplayName())
 	}
 
-	result := &SyncResult{ValidGrants: validGrants}
+	if err := grantStore.ReplaceGrants(grantInfos); err != nil {
+		return nil, fmt.Errorf("could not save grants: %w", err)
+	}
+
+	result := &SyncResult{
+		ValidGrants: validGrants,
+	}
 
 	// Auto-set default if there's exactly one valid grant.
 	if len(validGrants) == 1 {

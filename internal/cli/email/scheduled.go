@@ -159,7 +159,7 @@ func newScheduledCancelCmd() *cobra.Command {
 					return struct{}{}, common.WrapCancelError("scheduled message", err)
 				}
 
-				printSuccess("Scheduled message %s cancelled", scheduleID)
+				common.PrintSuccess("Scheduled message %s cancelled", scheduleID)
 				return struct{}{}, nil
 			})
 			return err

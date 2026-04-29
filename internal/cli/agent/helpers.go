@@ -7,24 +7,10 @@ import (
 	"os"
 	"strings"
 
-	config "github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
-
-func printError(format string, args ...any) {
-	common.PrintError(format, args...)
-}
-
-func printSuccess(format string, args ...any) {
-	common.PrintSuccess(format, args...)
-}
-
-func formatStatus(status string) string {
-	return common.FormatGrantStatus(status)
-}
 
 func printAgentSummary(account domain.AgentAccount, index int) {
 	createdStr := common.FormatTimeAgo(account.CreatedAt.Time)
@@ -32,7 +18,7 @@ func printAgentSummary(account domain.AgentAccount, index int) {
 		index+1,
 		common.Cyan.Sprint(account.Email),
 		common.Dim.Sprint(createdStr),
-		formatStatus(account.GrantStatus),
+		common.FormatGrantStatus(account.GrantStatus),
 	)
 	_, _ = common.Dim.Printf("   ID: %s\n", account.ID)
 }
@@ -44,7 +30,7 @@ func printAgentDetails(account domain.AgentAccount) {
 	fmt.Printf("ID:           %s\n", account.ID)
 	fmt.Printf("Provider:     %s\n", account.Provider.DisplayName())
 	fmt.Printf("Email:        %s\n", account.Email)
-	fmt.Printf("Status:       %s\n", formatStatus(account.GrantStatus))
+	fmt.Printf("Status:       %s\n", common.FormatGrantStatus(account.GrantStatus))
 	if account.CredentialID != "" {
 		fmt.Printf("Credential:   %s\n", account.CredentialID)
 	}
@@ -111,13 +97,25 @@ func resolveAgentID(ctx context.Context, client ports.NylasClient, identifier st
 	if err != nil {
 		return "", err
 	}
-	for _, account := range accounts {
-		if strings.EqualFold(account.Email, identifier) {
-			return account.ID, nil
-		}
+	if account := findAgentAccountByEmail(accounts, identifier); account != nil {
+		return account.ID, nil
+	}
+
+	defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+	if defaultAccount != nil && strings.EqualFold(defaultAccount.Email, identifier) {
+		return defaultAccount.ID, nil
 	}
 
 	return "", common.NewUserError("agent account not found", fmt.Sprintf("No agent account found for email %s", identifier))
+}
+
+func findAgentAccountByEmail(accounts []domain.AgentAccount, email string) *domain.AgentAccount {
+	for i := range accounts {
+		if strings.EqualFold(accounts[i].Email, email) {
+			return &accounts[i]
+		}
+	}
+	return nil
 }
 
 func getAgentIdentifier(args []string) (string, error) {
@@ -153,12 +151,10 @@ func getRequiredAgentIdentifier(args []string) (string, error) {
 }
 
 func resolveDefaultAgentGrantID() (string, error) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
 		return "", err
 	}
-
-	grantStore := keyring.NewGrantStore(secretStore)
 	grants, err := grantStore.ListGrants()
 	if err != nil {
 		return "", err

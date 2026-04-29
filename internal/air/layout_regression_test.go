@@ -122,3 +122,38 @@ func TestMainLayoutHasExplicitHeight(t *testing.T) {
 		t.Error("main-layout should use calc(100vh - ...) for explicit height calculation")
 	}
 }
+
+func TestAccountDropdownIsViewportBoundedAndScrollable(t *testing.T) {
+	t.Parallel()
+
+	cssContent, err := staticFiles.ReadFile("static/css/components-account.css")
+	if err != nil {
+		t.Fatalf("failed to read components-account.css: %v", err)
+	}
+
+	rule := cssRule(t, string(cssContent), ".account-dropdown")
+	required := []string{
+		"max-height:",
+		"overflow-y: auto",
+		"overscroll-behavior: contain",
+	}
+	for _, declaration := range required {
+		if !strings.Contains(rule, declaration) {
+			t.Errorf(".account-dropdown must include %q so long account lists fit the viewport and scroll", declaration)
+		}
+	}
+}
+
+func cssRule(t *testing.T, css, selector string) string {
+	t.Helper()
+
+	start := strings.Index(css, selector+" {")
+	if start == -1 {
+		t.Fatalf("missing CSS rule for %s", selector)
+	}
+	end := strings.Index(css[start:], "}")
+	if end == -1 {
+		t.Fatalf("unterminated CSS rule for %s", selector)
+	}
+	return css[start : start+end]
+}

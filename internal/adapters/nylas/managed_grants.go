@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -23,20 +24,27 @@ type agentSettingsPayload struct {
 	PolicyID string `json:"policy_id,omitempty"`
 }
 
+// listManagedGrants returns every grant whose provider matches `provider`.
+//
+// We deliberately do NOT pass `provider=<name>` as a server-side filter:
+// the server-side filtered listing has been observed to lag freshly-
+// created managed grants by tens of seconds (>70s in the worst case),
+// while the unfiltered listing surfaces new grants almost immediately.
+// Trade ~4x more page bytes (typical tenants have <100 grants) for
+// freshness and predictability. We filter to `provider` client-side.
 func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Provider) ([]managedGrantResponse, error) {
 	baseURL := fmt.Sprintf("%s/v3/grants", c.baseURL)
-	pageToken := ""
+	offset := 0
 	grants := make([]managedGrantResponse, 0)
 
-	for {
+	for range maxGrantPages {
 		queryURL := NewQueryBuilder().
-			Add("provider", string(provider)).
-			Add("page_token", pageToken).
+			AddInt("limit", grantPageSize).
+			AddInt("offset", offset).
 			BuildURL(baseURL)
 
 		var result struct {
-			Data       []managedGrantResponse `json:"data"`
-			NextCursor string                 `json:"next_cursor,omitempty"`
+			Data []managedGrantResponse `json:"data"`
 		}
 		if err := c.doGet(ctx, queryURL, &result); err != nil {
 			return nil, err
@@ -48,20 +56,16 @@ func (c *HTTPClient) listManagedGrants(ctx context.Context, provider domain.Prov
 			}
 		}
 
-		if result.NextCursor == "" {
-			break
+		if len(result.Data) < grantPageSize {
+			return grants, nil
 		}
-		if result.NextCursor == pageToken {
-			return nil, fmt.Errorf("failed to paginate managed grants: repeated cursor %q", result.NextCursor)
-		}
-		pageToken = result.NextCursor
+		offset += len(result.Data)
 	}
-
-	return grants, nil
+	return nil, fmt.Errorf("failed to paginate managed grants: exceeded max page count (%d)", maxGrantPages)
 }
 
 func (c *HTTPClient) getManagedGrant(ctx context.Context, grantID string) (*managedGrantResponse, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data managedGrantResponse `json:"data"`

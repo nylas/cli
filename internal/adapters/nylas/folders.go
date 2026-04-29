@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/util"
@@ -29,7 +30,7 @@ func (c *HTTPClient) GetFolders(ctx context.Context, grantID string) ([]domain.F
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data []folderResponse `json:"data"`
@@ -50,7 +51,7 @@ func (c *HTTPClient) GetFolder(ctx context.Context, grantID, folderID string) (*
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, grantID, folderID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(folderID))
 
 	var result struct {
 		Data folderResponse `json:"data"`
@@ -69,7 +70,7 @@ func (c *HTTPClient) CreateFolder(ctx context.Context, grantID string, req *doma
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, url.PathEscape(grantID))
 
 	payload := map[string]any{
 		"name": req.Name,
@@ -109,7 +110,7 @@ func (c *HTTPClient) UpdateFolder(ctx context.Context, grantID, folderID string,
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, grantID, folderID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(folderID))
 
 	payload := make(map[string]any, 4) // Pre-allocate for up to 4 fields
 	if req.Name != "" {
@@ -149,7 +150,7 @@ func (c *HTTPClient) DeleteFolder(ctx context.Context, grantID, folderID string)
 	if err := validateRequired("folder ID", folderID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, grantID, folderID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(folderID))
 	return c.doDelete(ctx, queryURL)
 }
 

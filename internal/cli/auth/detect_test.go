@@ -1,10 +1,10 @@
 package auth
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -67,20 +67,14 @@ func TestDetectCmd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := newDetectCmd()
-			buf := new(bytes.Buffer)
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-			cmd.SetArgs(tt.args)
-
-			err := cmd.Execute()
+			stdout, stderr, err := testutil.ExecuteSubCommand(newDetectCmd(), tt.args...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newDetectCmd() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr {
-				output := buf.String()
+				output := stdout + stderr
 				for _, want := range tt.wantOutput {
 					if !strings.Contains(output, want) {
 						t.Errorf("newDetectCmd() output = %v, want to contain %v", output, want)

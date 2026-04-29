@@ -2,8 +2,11 @@ package air
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"sync"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // AIConfig represents AI provider configuration
@@ -81,10 +84,7 @@ func (s *Server) handleGetAIConfig(w http.ResponseWriter, r *http.Request) {
 		config.APIKey = "***" + config.APIKey[max(0, len(config.APIKey)-4):]
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(config); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, config)
 }
 
 // handleUpdateAIConfig updates AI configuration
@@ -118,20 +118,14 @@ func (s *Server) handleUpdateAIConfig(w http.ResponseWriter, r *http.Request) {
 		aiStore.config.Temperature = req.Temperature
 	}
 	if req.TaskModels != nil {
-		for task, model := range req.TaskModels {
-			aiStore.config.TaskModels[task] = model
-		}
+		maps.Copy(aiStore.config.TaskModels, req.TaskModels)
 	}
 	if req.UsageBudget > 0 {
 		aiStore.config.UsageBudget = req.UsageBudget
 	}
 	aiStore.config.Enabled = req.Enabled
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"status": "updated"}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 // handleTestAIConnection tests the AI provider connection
@@ -153,10 +147,7 @@ func (s *Server) handleTestAIConnection(w http.ResponseWriter, r *http.Request) 
 		result["message"] = "API key required"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, result)
 }
 
 // handleGetAIUsage returns AI usage statistics
@@ -172,10 +163,7 @@ func (s *Server) handleGetAIUsage(w http.ResponseWriter, r *http.Request) {
 		"percentUsed": (aiStore.config.UsageSpent / aiStore.config.UsageBudget) * 100,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, response)
 }
 
 // GetAIProviders returns available AI providers
@@ -207,10 +195,7 @@ func (s *Server) handleGetAIProviders(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(providers); err != nil {
-		http.Error(w, "Failed to encode", http.StatusInternalServerError)
-	}
+	httputil.WriteJSON(w, http.StatusOK, providers)
 }
 
 // RecordAIUsage records AI usage for a task

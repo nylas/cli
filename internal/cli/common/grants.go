@@ -1,8 +1,6 @@
 package common
 
 import (
-	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/domain"
 )
 
@@ -20,12 +18,11 @@ func FormatGrantStatus(status string) string {
 
 // SaveGrantLocally stores a grant in the local grant store so it can be reused by CLI flows.
 func SaveGrantLocally(grantID, email string, provider domain.Provider) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	grantStore, err := NewDefaultGrantStore()
 	if err != nil {
 		return
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
 	_ = grantStore.SaveGrant(domain.GrantInfo{
 		ID:       grantID,
 		Email:    email,
@@ -35,11 +32,10 @@ func SaveGrantLocally(grantID, email string, provider domain.Provider) {
 
 // RemoveGrantLocally removes a grant from the local grant store.
 func RemoveGrantLocally(grantID string) {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	grantStore, err := NewDefaultGrantStore()
 	if err != nil {
 		return
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
 	_ = grantStore.DeleteGrant(grantID)
 }

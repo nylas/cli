@@ -12,6 +12,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/nylas"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
@@ -26,7 +27,10 @@ func testServer(t *testing.T) *Server {
 		t.Skipf("Skipping: cannot access secret store: %v", err)
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		t.Skipf("Skipping: cannot access grant store: %v", err)
+	}
 	configSvc := authapp.NewConfigService(configStore, secretStore)
 
 	// Check configuration

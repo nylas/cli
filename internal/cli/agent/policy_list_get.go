@@ -13,10 +13,7 @@ import (
 )
 
 func newPolicyListCmd() *cobra.Command {
-	var (
-		jsonOutput  bool
-		allPolicies bool
-	)
+	var allPolicies bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -32,11 +29,10 @@ Examples:
   nylas agent policy list --all
   nylas agent policy list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPolicyList(jsonOutput, allPolicies)
+			return runPolicyList(common.IsJSON(cmd), allPolicies)
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&allPolicies, "all", false, "List all policies referenced by provider=nylas accounts")
 
 	return cmd
@@ -45,17 +41,11 @@ Examples:
 func runPolicyList(jsonOutput, allPolicies bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 		if allPolicies {
-			policies, err := client.ListPolicies(ctx)
+			scope, err := loadAgentPolicyScope(ctx, client)
 			if err != nil {
-				return struct{}{}, common.WrapListError("policies", err)
+				return struct{}{}, err
 			}
-
-			accounts, err := client.ListAgentAccounts(ctx)
-			if err != nil {
-				return struct{}{}, common.WrapListError("agent accounts", err)
-			}
-			refsByPolicyID := buildPolicyAccountRefs(accounts)
-			policies = filterPoliciesWithAgentAccounts(policies, refsByPolicyID)
+			policies := scope.AgentPolicies
 
 			if jsonOutput {
 				return struct{}{}, common.PrintJSON(policies)
@@ -68,7 +58,7 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 
 			_, _ = common.BoldWhite.Printf("Policies (%d)\n\n", len(policies))
 			for i, policy := range policies {
-				printPolicySummary(policy, i, refsByPolicyID[policy.ID])
+				printPolicySummary(policy, i, scope.PolicyRefsByID[policy.ID])
 			}
 			fmt.Println()
 			return struct{}{}, nil
@@ -126,8 +116,6 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 }
 
 func newPolicyGetCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "get <policy-id>",
 		Short: "Show a policy",
@@ -138,18 +126,14 @@ Examples:
   nylas agent policy get <policy-id> --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPolicyGet(args[0], jsonOutput)
+			return runPolicyGet(args[0], common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
 
 func newPolicyReadCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "read <policy-id>",
 		Short: "Read a policy",
@@ -160,11 +144,9 @@ Examples:
   nylas agent policy read <policy-id> --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPolicyGet(args[0], jsonOutput)
+			return runPolicyGet(args[0], common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

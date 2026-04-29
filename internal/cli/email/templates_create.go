@@ -116,7 +116,7 @@ Use --interactive for a guided creation experience.`,
 			}
 
 			// Success output
-			printSuccess("Template created successfully!")
+			common.PrintSuccess("Template created successfully!")
 			fmt.Printf("\n  ID:        %s\n", created.ID)
 			fmt.Printf("  Name:      %s\n", created.Name)
 			fmt.Printf("  Subject:   %s\n", created.Subject)
@@ -129,11 +129,11 @@ Use --interactive for a guided creation experience.`,
 
 			fmt.Println("\nUse this template with:")
 			if len(created.Variables) > 0 {
-				varFlags := ""
+				var sb strings.Builder
 				for _, v := range created.Variables {
-					varFlags += fmt.Sprintf(" --var %s=<value>", v)
+					fmt.Fprintf(&sb, " --var %s=<value>", v)
 				}
-				fmt.Printf("  nylas email templates use %s --to recipient@example.com%s\n", created.ID, varFlags)
+				fmt.Printf("  nylas email templates use %s --to recipient@example.com%s\n", created.ID, sb.String())
 			} else {
 				fmt.Printf("  nylas email templates use %s --to recipient@example.com\n", created.ID)
 			}

@@ -1,7 +1,7 @@
 {{define "modals_navigation"}}
 <!-- Command Palette -->
-<div class="modal-overlay hidden" id="commandPalette" data-testid="command-palette" onclick="toggleCommandPalette()">
-    <div class="command-palette" onclick="event.stopPropagation()">
+<div class="modal-overlay hidden" id="commandPalette" data-testid="command-palette" data-action="toggle-command-palette">
+    <div class="command-palette" data-action="stop-propagation">
         <div class="command-input-wrapper">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
@@ -64,30 +64,29 @@
 </div>
 
 <!-- Search Overlay -->
-<div class="search-overlay" id="searchOverlay" data-testid="search-overlay" onclick="if(event.target === this) closeSearch()">
-    <div class="search-modal" onclick="event.stopPropagation()">
+<div class="search-overlay" id="searchOverlay" data-testid="search-overlay" data-action="close-search-overlay">
+    <div class="search-modal" data-action="stop-propagation">
         <div class="search-input-wrapper">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
             </svg>
-            <input type="text" id="searchInput" class="search-input" data-testid="search-input" placeholder="Search emails, events, contacts..."
-                   oninput="handleSearchInput(this.value)" onkeydown="handleSearchKeydown(event)">
+            <input type="text" id="searchInput" class="search-input" data-testid="search-input" placeholder="Search emails, events, contacts...">
             <kbd class="search-kbd">ESC</kbd>
         </div>
         <div class="search-filters">
-            <button class="search-filter-chip active" onclick="toggleSearchFilter(this)" data-filter="all">
+            <button class="search-filter-chip active" data-action="search-filter" data-filter="all">
                 All
             </button>
-            <button class="search-filter-chip" onclick="toggleSearchFilter(this)" data-filter="emails">
+            <button class="search-filter-chip" data-action="search-filter" data-filter="emails">
                 <span>📧</span> Emails
             </button>
-            <button class="search-filter-chip" onclick="toggleSearchFilter(this)" data-filter="events">
+            <button class="search-filter-chip" data-action="search-filter" data-filter="events">
                 <span>📅</span> Events
             </button>
-            <button class="search-filter-chip" onclick="toggleSearchFilter(this)" data-filter="contacts">
+            <button class="search-filter-chip" data-action="search-filter" data-filter="contacts">
                 <span>👤</span> Contacts
             </button>
-            <button class="search-filter-chip" onclick="toggleSearchFilter(this)" data-filter="attachments">
+            <button class="search-filter-chip" data-action="search-filter" data-filter="attachments">
                 <span>📎</span> Attachments
             </button>
         </div>
@@ -96,7 +95,7 @@
             <div class="search-suggestion-group" id="recentSearchesGroup">
                 <div class="search-suggestion-title">
                     <span>Recent Searches</span>
-                    <button class="clear-recent-btn" onclick="RecentSearches.clear()" title="Clear recent searches">Clear</button>
+                    <button class="clear-recent-btn" data-action="clear-recent-searches" title="Clear recent searches">Clear</button>
                 </div>
                 <div id="recentSearchesList">
                     <!-- Recent searches will be rendered here -->
@@ -124,7 +123,7 @@
                 <input type="text" id="composeTo" class="compose-field-input" data-testid="compose-to" placeholder="Recipients (comma separated)" autocomplete="email">
             </div>
             <div class="compose-field compose-field-collapsed" id="ccBccToggle" data-testid="compose-cc-bcc-toggle">
-                <button type="button" class="compose-cc-toggle" onclick="toggleCcBcc()">Cc/Bcc</button>
+                <button type="button" class="compose-cc-toggle" data-action="toggle-cc-bcc">Cc/Bcc</button>
             </div>
             <div class="compose-field compose-field-cc hidden" id="ccField" data-testid="compose-cc-field">
                 <label class="compose-label" for="composeCc">Cc</label>
@@ -162,16 +161,7 @@
     </div>
 </div>
 
-<script>
-function toggleCcBcc() {
-    const ccField = document.getElementById('ccField');
-    const bccField = document.getElementById('bccField');
-    const toggle = document.getElementById('ccBccToggle');
-    ccField.classList.remove('hidden');
-    bccField.classList.remove('hidden');
-    toggle.classList.add('hidden');
-}
-</script>
+<!-- toggleCcBcc() is now in /js/modals-navigation.js -->
 
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer" data-testid="toast-container"></div>
@@ -183,18 +173,18 @@ function toggleCcBcc() {
 </div>
 
 <!-- Focus Mode Toggle -->
-<button class="focus-mode-toggle" id="focusModeToggle" onclick="toggleFocusMode()">
+<button class="focus-mode-toggle" id="focusModeToggle" data-action="toggle-focus-mode">
     <span>🎯</span>
     <span>Focus Mode</span>
     <kbd style="font-size: 10px; padding: 2px 6px; background: var(--bg-surface); border-radius: 4px;">F</kbd>
 </button>
 
 <!-- Keyboard Shortcut Overlay -->
-<div class="shortcut-overlay" id="shortcutOverlay" data-testid="shortcut-overlay" onclick="if(event.target === this) closeShortcutOverlay()">
+<div class="shortcut-overlay" id="shortcutOverlay" data-testid="shortcut-overlay" data-action="close-shortcut-overlay">
     <div class="shortcut-modal">
         <div class="shortcut-header">
             <h2 class="shortcut-title">⌨️ Keyboard Shortcuts</h2>
-            <button class="shortcut-close" data-testid="shortcut-close" onclick="closeShortcutOverlay()">✕</button>
+            <button class="shortcut-close" data-testid="shortcut-close" data-action="close-shortcut-overlay">✕</button>
         </div>
         <div class="shortcut-content">
             <div class="shortcut-group">
@@ -252,36 +242,36 @@ function toggleCcBcc() {
 
 <!-- Context Menu -->
 <div class="context-menu" id="contextMenu" data-testid="context-menu">
-    <div class="context-menu-item" onclick="handleContextAction('reply')">
+    <div class="context-menu-item" data-action="context-reply">
         <span class="context-menu-icon">↩️</span>
         <span>Reply</span>
         <span class="context-menu-shortcut">R</span>
     </div>
-    <div class="context-menu-item" onclick="handleContextAction('forward')">
+    <div class="context-menu-item" data-action="context-forward">
         <span class="context-menu-icon">↪️</span>
         <span>Forward</span>
         <span class="context-menu-shortcut">F</span>
     </div>
     <div class="context-menu-divider"></div>
     <!-- Snooze disabled
-    <div class="context-menu-item" onclick="SnoozeManager.openForEmail(window.contextMenuEmailId)">
+    <div class="context-menu-item" data-action="context-snooze">
         <span class="context-menu-icon">⏰</span>
         <span>Snooze</span>
         <span class="context-menu-shortcut">Z</span>
     </div>
     -->
-    <div class="context-menu-item" onclick="handleContextAction('archive')">
+    <div class="context-menu-item" data-action="context-archive">
         <span class="context-menu-icon">📥</span>
         <span>Archive</span>
         <span class="context-menu-shortcut">E</span>
     </div>
-    <div class="context-menu-item" onclick="handleContextAction('star')">
+    <div class="context-menu-item" data-action="context-star">
         <span class="context-menu-icon">⭐</span>
         <span>Star</span>
         <span class="context-menu-shortcut">S</span>
     </div>
     <div class="context-menu-divider"></div>
-    <div class="context-menu-item danger" onclick="handleContextAction('delete')">
+    <div class="context-menu-item danger" data-action="context-delete">
         <span class="context-menu-icon">🗑️</span>
         <span>Delete</span>
         <span class="context-menu-shortcut">#</span>

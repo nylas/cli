@@ -106,9 +106,9 @@ func TestHandleCacheSync_FiltersSupportedProviders(t *testing.T) {
 		wantCount int
 	}{
 		{
-			name:      "syncs all supported providers",
+			name:      "syncs only default provider when no account requested",
 			query:     "/api/cache/sync",
-			wantCount: 2,
+			wantCount: 1,
 		},
 		{
 			name:      "syncs only requested supported provider",

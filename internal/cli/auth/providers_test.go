@@ -8,6 +8,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
@@ -62,19 +63,13 @@ func TestProvidersCmd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := newProvidersCmd()
-			buf := new(bytes.Buffer)
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-			cmd.SetArgs(tt.args)
-
-			err := cmd.Execute()
+			stdout, stderr, err := testutil.ExecuteSubCommand(newProvidersCmd(), tt.args...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newProvidersCmd() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			output := buf.String()
+			output := stdout + stderr
 			for _, want := range tt.wantOutput {
 				if !strings.Contains(output, want) {
 					t.Errorf("newProvidersCmd() output = %v, want to contain %v", output, want)

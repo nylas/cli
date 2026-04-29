@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,10 +20,8 @@ func TestResolveGrantIdentifier_WithEmail(t *testing.T) {
 	t.Setenv("NYLAS_API_KEY", "")
 	t.Setenv("NYLAS_GRANT_ID", "")
 
-	store, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(store)
 	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{
 		ID:    "grant-123",
 		Email: "user@example.com",
@@ -45,10 +42,8 @@ func TestResolveGrantIdentifier_WithEmailIgnoresEnvGrantFallback(t *testing.T) {
 	t.Setenv("NYLAS_API_KEY", "")
 	t.Setenv("NYLAS_GRANT_ID", "env-default-grant")
 
-	store, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(store)
 	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{
 		ID:    "grant-email",
 		Email: "lookup@example.com",
@@ -69,10 +64,8 @@ func TestResolveScopeGrantID_GrantScopeUsesGrantLookup(t *testing.T) {
 	t.Setenv("NYLAS_API_KEY", "")
 	t.Setenv("NYLAS_GRANT_ID", "")
 
-	store, err := keyring.NewEncryptedFileStore(configDir)
+	grantStore, err := NewDefaultGrantStore()
 	require.NoError(t, err)
-
-	grantStore := keyring.NewGrantStore(store)
 	require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{
 		ID:    "grant-456",
 		Email: "grant@example.com",

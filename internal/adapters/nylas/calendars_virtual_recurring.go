@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -48,7 +49,7 @@ func (c *HTTPClient) ListVirtualCalendarGrants(ctx context.Context) ([]domain.Vi
 
 // GetVirtualCalendarGrant retrieves a single virtual calendar grant by ID.
 func (c *HTTPClient) GetVirtualCalendarGrant(ctx context.Context, grantID string) (*domain.VirtualCalendarGrant, error) {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 
 	var result struct {
 		Data domain.VirtualCalendarGrant `json:"data"`
@@ -62,7 +63,7 @@ func (c *HTTPClient) GetVirtualCalendarGrant(ctx context.Context, grantID string
 
 // DeleteVirtualCalendarGrant deletes a virtual calendar grant.
 func (c *HTTPClient) DeleteVirtualCalendarGrant(ctx context.Context, grantID string) error {
-	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, grantID)
+	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 	return c.doDelete(ctx, queryURL)
 }
 
@@ -77,7 +78,7 @@ func (c *HTTPClient) GetRecurringEventInstances(ctx context.Context, grantID, ca
 		params.ExpandRecurring = true
 	}
 
-	baseURL := fmt.Sprintf("%s/v3/grants/%s/events", c.baseURL, grantID)
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/events", c.baseURL, url.PathEscape(grantID))
 	queryURL := NewQueryBuilder().
 		Add("calendar_id", calendarID).
 		Add("master_event_id", masterEventID).

@@ -1,17 +1,13 @@
 package keyring
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -24,9 +20,28 @@ const (
 	fileStoreSaltSize      = 16
 )
 
+// fileStoreKeyType describes which key(s) can decrypt the on-disk .secrets.enc file.
+type fileStoreKeyType int
+
+const (
+	fileStoreKeyNone           fileStoreKeyType = iota // file does not exist or neither key decrypts it
+	fileStoreKeyLegacyOnly                             // decryptable only with the legacy machine-derived key
+	fileStoreKeyPassphraseOnly                         // decryptable only with the passphrase-derived key
+	fileStoreKeyBoth                                   // decryptable with either key
+)
+
 // EncryptedFileStore implements SecretStore using an encrypted file.
 // This is a fallback for environments where the system keyring is unavailable.
-// Uses AES-256-GCM encryption with a key derived from user-supplied secret material.
+// Uses AES-256-GCM encryption with an Argon2id key derived from a user-supplied
+// passphrase set via NYLAS_FILE_STORE_PASSPHRASE.
+//
+// REQUIREMENT: NYLAS_FILE_STORE_PASSPHRASE must be set before using this store
+// on a fresh install. Existing installations that used the legacy machine-derived
+// key remain readable without a passphrase for backward compatibility, and will
+// be migrated automatically the first time NYLAS_FILE_STORE_PASSPHRASE is supplied.
+//
+// To avoid the file store entirely, leave NYLAS_DISABLE_KEYRING unset and let
+// the system keyring be used, or run `nylas auth config` to reconfigure.
 type EncryptedFileStore struct {
 	path         string
 	keyPath      string
@@ -37,8 +52,15 @@ type EncryptedFileStore struct {
 	mu           sync.RWMutex
 }
 
-// NewEncryptedFileStore creates a new EncryptedFileStore.
-// The secrets are stored in an encrypted file within the config directory.
+// NewEncryptedFileStore creates a new EncryptedFileStore rooted in configDir.
+//
+// Construction always succeeds — a fresh install (no passphrase, no legacy
+// file) yields a store whose reads return ErrSecretNotFound and whose writes
+// fail with a clear "set NYLAS_FILE_STORE_PASSPHRASE" error. This lets
+// callers probe an empty store without crashing.
+//
+// To actually persist secrets, set NYLAS_FILE_STORE_PASSPHRASE to a strong
+// value, or run `nylas auth config` to switch to the system keyring.
 func NewEncryptedFileStore(configDir string) (*EncryptedFileStore, error) {
 	path := filepath.Join(configDir, ".secrets.enc")
 	keyPath := filepath.Join(configDir, ".secrets.key")
@@ -56,6 +78,17 @@ func NewEncryptedFileStore(configDir string) (*EncryptedFileStore, error) {
 
 	var passphrase []byte
 	if value := os.Getenv(fileStorePassphraseEnv); value != "" {
+		// Enforce a minimum length so a 4-character passphrase isn't held
+		// up as adequate defense. This is a deliberately gentle floor (12
+		// characters) — long enough to make offline brute-force materially
+		// expensive when combined with Argon2id, short enough that real
+		// users can comply.
+		if len(value) < minPassphraseLen {
+			return nil, fmt.Errorf(
+				"%s must be at least %d characters (got %d) — pick a longer passphrase",
+				fileStorePassphraseEnv, minPassphraseLen, len(value),
+			)
+		}
 		passphrase = []byte(value)
 	}
 
@@ -90,9 +123,16 @@ func (f *EncryptedFileStore) Set(key, value string) error {
 }
 
 // Get retrieves a secret value for the given key.
+//
+// Holds the exclusive lock — not RLock — because loadSecrets→decrypt may
+// run migrateToPassphrase on legacy data, which writes BOTH .secrets.salt
+// and .secrets.enc. Two concurrent first-readers under RLock can interleave
+// those writes and leave a salt/ciphertext pair that no longer decrypts.
+// CLI workloads aren't read-heavy, so serializing reads is the right
+// trade for guaranteed migration correctness.
 func (f *EncryptedFileStore) Get(key string) (string, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
 	secrets, err := f.loadSecrets()
 	if err != nil {
@@ -139,6 +179,56 @@ func (f *EncryptedFileStore) Name() string {
 	return "encrypted file"
 }
 
+// detectKeyType returns which key(s) can currently decrypt the on-disk file.
+// It reads the file once and probes each key in order.  If the file does not
+// exist, fileStoreKeyNone is returned with no error.
+func (f *EncryptedFileStore) detectKeyType() (fileStoreKeyType, error) {
+	data, err := os.ReadFile(f.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fileStoreKeyNone, nil
+		}
+		return fileStoreKeyNone, err
+	}
+
+	hasPassphrase := false
+	if key, err := f.passphraseKey(false); err == nil {
+		if _, err := decryptWithKey(key, data); err == nil {
+			hasPassphrase = true
+		}
+		zeroBytes(key)
+	}
+
+	hasLegacy := f.canDecryptWithLegacyKeys(data)
+
+	switch {
+	case hasPassphrase && hasLegacy:
+		return fileStoreKeyBoth, nil
+	case hasPassphrase:
+		return fileStoreKeyPassphraseOnly, nil
+	case hasLegacy:
+		return fileStoreKeyLegacyOnly, nil
+	default:
+		return fileStoreKeyNone, nil
+	}
+}
+
+// canDecryptWithLegacyKeys returns true when the ciphertext can be opened by
+// either the migration master key or the legacy machine-derived key.
+func (f *EncryptedFileStore) canDecryptWithLegacyKeys(data []byte) bool {
+	if len(f.migrationKey) > 0 {
+		if _, err := decryptWithKey(f.migrationKey, data); err == nil {
+			return true
+		}
+	}
+	if len(f.legacyKey) > 0 {
+		if _, err := decryptWithKey(f.legacyKey, data); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // loadSecrets loads and decrypts the secrets file.
 func (f *EncryptedFileStore) loadSecrets() (map[string]string, error) {
 	data, err := os.ReadFile(f.path)
@@ -158,7 +248,7 @@ func (f *EncryptedFileStore) loadSecrets() (map[string]string, error) {
 	return secrets, nil
 }
 
-// saveSecrets encrypts and saves the secrets file.
+// saveSecrets encrypts and saves the secrets file atomically.
 func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 	plaintext, err := json.Marshal(secrets)
 	if err != nil {
@@ -170,16 +260,42 @@ func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 		return err
 	}
 
-	// Ensure directory exists
+	// Ensure directory exists.
 	dir := filepath.Dir(f.path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
 
-	// Write with restrictive permissions
-	if err := os.WriteFile(f.path, ciphertext, 0600); err != nil {
+	// Atomic write: write to a sibling temp file, then rename.
+	tmp, err := os.CreateTemp(dir, ".secrets.enc.tmp.*")
+	if err != nil {
 		return err
 	}
+	tmpPath := tmp.Name()
+
+	// Clean up the temp file on any failure path.
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(ciphertext); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, f.path); err != nil {
+		return err
+	}
+	committed = true
 
 	// Remove the plaintext migration key once the store has been rewritten.
 	if f.keyPath != "" {
@@ -190,88 +306,160 @@ func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 }
 
 // encrypt encrypts plaintext using AES-256-GCM.
+//
+// Passphrase rules enforced here:
+//   - If passphrase is set: encrypt with the passphrase-derived key.
+//   - If passphrase is unset AND a legacy file exists: refuse writes until the
+//     caller sets NYLAS_FILE_STORE_PASSPHRASE so the migration path in decrypt
+//     can re-encrypt before mutation.
+//   - If passphrase is unset AND no legacy file: refuse — this is a new install
+//     that should never have been constructed (NewEncryptedFileStore checks this).
 func (f *EncryptedFileStore) encrypt(plaintext []byte) ([]byte, error) {
+	if len(f.passphrase) == 0 {
+		// Distinguish between "legacy file exists" and "fresh install" for clearer errors.
+		if _, statErr := os.Stat(f.path); statErr == nil {
+			return nil, fmt.Errorf(
+				"encrypted file store requires %s to migrate from the legacy machine-derived key. "+
+					"Set it and re-run, or run `nylas auth config` to switch to the system keyring",
+				fileStorePassphraseEnv,
+			)
+		}
+		return nil, fmt.Errorf(
+			"%s must be set to use the encrypted file secret store. "+
+				"Set it and re-run, or run `nylas auth config` to switch to the system keyring",
+			fileStorePassphraseEnv,
+		)
+	}
+
 	key, err := f.passphraseKey(true)
 	if err != nil {
 		return nil, err
 	}
+	defer zeroBytes(key)
 	return encryptWithKey(key, plaintext)
 }
 
 // decrypt decrypts ciphertext using AES-256-GCM.
+//
+// Decryption order:
+//  1. Passphrase key (if passphrase is set) — normal path.
+//  2. Legacy key (migration master key or machine-derived key):
+//     - If passphrase is NOT set: return plaintext for read-only backward
+//     compatibility. Writes still fail in encrypt until a passphrase is set.
+//     - If passphrase IS set: re-encrypt with the passphrase key (one-shot
+//     migration), print a notice to stderr, and return the plaintext.
+//  3. Neither key works: return an error.
 func (f *EncryptedFileStore) decrypt(data []byte) ([]byte, error) {
-	if key, err := f.passphraseKey(false); err == nil {
-		plaintext, err := decryptWithKey(key, data)
-		if err == nil {
-			return plaintext, nil
+	// 1. Try passphrase key first.
+	if len(f.passphrase) > 0 {
+		if key, err := f.passphraseKey(false); err == nil {
+			plaintext, decErr := decryptWithKey(key, data)
+			zeroBytes(key)
+			if decErr == nil {
+				return plaintext, nil
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, err
 		}
-	} else if !os.IsNotExist(err) && len(f.passphrase) > 0 {
-		return nil, err
+		// Passphrase set but salt missing or passphrase wrong — fall through to legacy.
 	}
 
-	if len(f.migrationKey) > 0 {
-		plaintext, err := decryptWithKey(f.migrationKey, data)
-		if err == nil {
+	// 2. Try legacy keys.
+	if plaintext, legacyKey, ok := f.tryLegacyDecrypt(data); ok {
+		_ = legacyKey // used only for the migration path below
+		if len(f.passphrase) == 0 {
 			return plaintext, nil
 		}
-	}
 
-	if len(f.legacyKey) > 0 {
-		plaintext, err := decryptWithKey(f.legacyKey, data)
-		if err == nil {
-			return plaintext, nil
+		// Passphrase is available — perform one-shot migration.
+		if migrateErr := f.migrateToPassphrase(plaintext); migrateErr != nil {
+			// Migration failed (e.g. disk write error). Return the plaintext so
+			// the caller's operation still succeeds; the legacy file remains intact.
+			fmt.Fprintf(os.Stderr, "warning: failed to migrate encrypted file store: %v\n", migrateErr)
+		} else {
+			fmt.Fprintf(os.Stderr,
+				"notice: encrypted file store migrated to passphrase-derived key (%s)\n",
+				fileStorePassphraseEnv)
 		}
+		return plaintext, nil
 	}
 
+	// 3. Nothing worked.
 	if len(f.passphrase) == 0 {
-		return nil, fmt.Errorf("%s must be set to unlock the encrypted file store", fileStorePassphraseEnv)
+		return nil, fmt.Errorf(
+			"%s must be set to unlock the encrypted file store",
+			fileStorePassphraseEnv,
+		)
 	}
-
 	return nil, fmt.Errorf("failed to decrypt encrypted file store with the configured passphrase")
 }
 
-func encryptWithKey(key, plaintext []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
+// tryLegacyDecrypt attempts decryption with the migration master key first,
+// then the machine-derived legacy key.  Returns the plaintext, the key used,
+// and whether decryption succeeded.
+func (f *EncryptedFileStore) tryLegacyDecrypt(data []byte) (plaintext []byte, key []byte, ok bool) {
+	if len(f.migrationKey) > 0 {
+		if pt, err := decryptWithKey(f.migrationKey, data); err == nil {
+			return pt, f.migrationKey, true
+		}
 	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
+	if len(f.legacyKey) > 0 {
+		if pt, err := decryptWithKey(f.legacyKey, data); err == nil {
+			return pt, f.legacyKey, true
+		}
 	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
-	return []byte(base64.StdEncoding.EncodeToString(ciphertext)), nil
+	return nil, nil, false
 }
 
-func decryptWithKey(key, data []byte) ([]byte, error) {
-	ciphertext, err := base64.StdEncoding.DecodeString(string(data))
+// migrateToPassphrase re-encrypts plaintext with the passphrase-derived key and
+// atomically writes it to disk.  If this fails, the on-disk legacy file is left
+// intact so the next invocation can retry.
+func (f *EncryptedFileStore) migrateToPassphrase(plaintext []byte) error {
+	ciphertext, err := f.encrypt(plaintext)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("re-encrypt for migration: %w", err)
 	}
 
-	block, err := aes.NewCipher(key)
+	dir := filepath.Dir(f.path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("mkdir for migration: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, ".secrets.enc.tmp.*")
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("create temp file for migration: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp file for migration: %w", err)
+	}
+	if _, err := tmp.Write(ciphertext); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp file for migration: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file for migration: %w", err)
+	}
+	if err := os.Rename(tmpPath, f.path); err != nil {
+		return fmt.Errorf("rename temp file for migration: %w", err)
+	}
+	committed = true
+
+	// Remove the plaintext migration master key now that re-encryption succeeded.
+	if f.keyPath != "" {
+		_ = os.Remove(f.keyPath)
 	}
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ciphertext) < gcm.NonceSize() {
-		return nil, fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertext := ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():]
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	return nil
 }
 
 func readCompatibilityMasterKey(path string) ([]byte, error) {
@@ -342,84 +530,26 @@ func (f *EncryptedFileStore) loadSalt(create bool) ([]byte, error) {
 	return salt, nil
 }
 
+// argon2id parameters. The OWASP 2024 guidance is t=2, m=19MiB, p=1 as
+// the absolute minimum for password storage; modern hosts comfortably
+// support t=3, m=64MiB, p=4 for a CLI use case where derive happens once
+// per process. Increasing t from 1 (the previous setting) to 3 raises
+// offline-cracking cost ~3x for any attacker who exfiltrates the salt and
+// ciphertext.
+const (
+	argon2idTime    uint32 = 3
+	argon2idMemory  uint32 = 64 * 1024 // 64 MiB
+	argon2idThreads uint8  = 4
+	argon2idKeyLen  uint32 = 32
+
+	// minPassphraseLen is the minimum length we accept for
+	// NYLAS_FILE_STORE_PASSPHRASE. Argon2id alone cannot save a 4-character
+	// passphrase from offline brute-force.
+	minPassphraseLen = 12
+)
+
 func derivePassphraseKey(passphrase, salt []byte) []byte {
 	// Argon2id keeps the fallback store bound to user-supplied secret material
 	// instead of host metadata while staying fast enough for CLI use.
-	return argon2.IDKey(passphrase, salt, 1, 64*1024, 4, 32)
-}
-
-// deriveLegacyKey derives the pre-v2 machine-specific fallback key so older
-// encrypted files can still be read and rewritten with a passphrase-derived key.
-func deriveLegacyKey() ([]byte, error) {
-	// Collect machine-specific identifiers
-	var identifiers []byte
-
-	// Add hostname
-	hostname, _ := os.Hostname()
-	identifiers = append(identifiers, []byte(hostname)...)
-
-	// Add user info
-	identifiers = append(identifiers, []byte(os.Getenv("USER"))...)
-	identifiers = append(identifiers, []byte(os.Getenv("USERNAME"))...) // Windows
-
-	// Add home directory
-	home, _ := os.UserHomeDir()
-	identifiers = append(identifiers, []byte(home)...)
-
-	// Add OS-specific machine ID if available
-	machineID := getMachineID()
-	identifiers = append(identifiers, []byte(machineID)...)
-
-	// Add a static salt to prevent rainbow table attacks
-	salt := []byte("nylas-cli-v1-secret-store")
-	identifiers = append(identifiers, salt...)
-
-	// Derive key using SHA-256
-	hash := sha256.Sum256(identifiers)
-	return hash[:], nil
-}
-
-// getMachineID attempts to read a machine-specific ID.
-func getMachineID() string {
-	switch runtime.GOOS {
-	case "linux":
-		// Try /etc/machine-id (systemd)
-		if data, err := os.ReadFile("/etc/machine-id"); err == nil {
-			return string(data)
-		}
-		// Try /var/lib/dbus/machine-id
-		if data, err := os.ReadFile("/var/lib/dbus/machine-id"); err == nil {
-			return string(data)
-		}
-	case "darwin":
-		// Try to get hardware UUID from system profiler
-		if data, err := os.ReadFile("/var/db/SystemKey"); err == nil {
-			return string(data)
-		}
-		// Fallback: use boot time + serial from IOKit
-		if data, err := os.ReadFile("/Library/Preferences/SystemConfiguration/com.apple.smb.server.plist"); err == nil {
-			return string(data)
-		}
-	case "windows":
-		// Try to read MachineGuid from registry path
-		programData := os.Getenv("PROGRAMDATA")
-		if programData != "" {
-			// Construct and clean the path to prevent traversal
-			guidPath := filepath.Join(programData, "Microsoft", "Crypto", "RSA", "MachineKeys", ".GUID")
-			cleanPath := filepath.Clean(guidPath)
-
-			// Validate the path starts with the expected base (security check)
-			if strings.HasPrefix(cleanPath, filepath.Clean(programData)) {
-				if data, err := os.ReadFile(cleanPath); err == nil {
-					return string(data)
-				}
-			}
-		}
-		// Fallback: use system drive serial
-		systemRoot := os.Getenv("SYSTEMROOT")
-		if systemRoot != "" {
-			return systemRoot
-		}
-	}
-	return ""
+	return argon2.IDKey(passphrase, salt, argon2idTime, argon2idMemory, argon2idThreads, argon2idKeyLen)
 }

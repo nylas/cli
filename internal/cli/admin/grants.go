@@ -31,7 +31,6 @@ func newGrantListCmd() *cobra.Command {
 		offset      int
 		connectorID string
 		status      string
-		jsonOutput  bool
 	)
 
 	cmd := &cobra.Command{
@@ -53,7 +52,7 @@ func newGrantListCmd() *cobra.Command {
 					return struct{}{}, common.WrapListError("grants", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(grants)
 				}
 
@@ -95,14 +94,11 @@ func newGrantListCmd() *cobra.Command {
 	cmd.Flags().IntVar(&offset, "offset", 0, "Offset for pagination")
 	cmd.Flags().StringVar(&connectorID, "connector-id", "", "Filter by connector ID")
 	cmd.Flags().StringVar(&status, "status", "", "Filter by status (valid, invalid)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
 
 func newGrantStatsCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Show grant statistics",
@@ -114,7 +110,7 @@ func newGrantStatsCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("grant stats", err)
 				}
 
-				if jsonOutput {
+				if common.IsJSON(cmd) {
 					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(stats)
 				}
 
@@ -153,8 +149,6 @@ func newGrantStatsCmd() *cobra.Command {
 			return err
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

@@ -3,6 +3,7 @@ package calendar
 import (
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -64,10 +65,16 @@ func TestFreeBusyCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
+	t.Run("format_flag_inherited_from_root", func(t *testing.T) {
+		root := testutil.NewTestRoot(cmd)
+		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "text", flag.DefValue)
+	})
+
+	t.Run("format_flag_preserves_shorthand", func(t *testing.T) {
+		flag := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "format", flag.Name)
 	})
 
 	t.Run("has_examples", func(t *testing.T) {
@@ -110,10 +117,16 @@ func TestFindSlotsCmd(t *testing.T) {
 		assert.Equal(t, "15", flag.DefValue)
 	})
 
-	t.Run("has_format_flag", func(t *testing.T) {
-		flag := cmd.Flags().Lookup("format")
+	t.Run("format_flag_inherited_from_root", func(t *testing.T) {
+		root := testutil.NewTestRoot(cmd)
+		flag := root.PersistentFlags().Lookup("format")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "text", flag.DefValue)
+	})
+
+	t.Run("format_flag_preserves_shorthand", func(t *testing.T) {
+		flag := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "format", flag.Name)
 	})
 
 	t.Run("has_examples", func(t *testing.T) {

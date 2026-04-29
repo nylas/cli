@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/air/cache"
+	"github.com/nylas/cli/internal/domain"
 )
 
 // CacheStatusResponse represents the cache status API response.
@@ -175,20 +176,32 @@ func (s *Server) handleCacheSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get email from query param (optional - sync all if not specified)
+	// Get email from query param (optional - sync default account if not specified)
 	email := r.URL.Query().Get("email")
 
-	// Get all grants
-	grants, err := s.grantStore.ListGrants()
-	if err != nil {
-		writeJSON(w, http.StatusOK, CacheSyncResponse{
-			Success: false,
-			Error:   "Failed to get accounts",
-		})
-		return
+	var grants []domain.GrantInfo
+	if email == "" {
+		grant, err := s.resolveDefaultGrantInfo()
+		if err != nil {
+			writeJSON(w, http.StatusOK, CacheSyncResponse{
+				Success: false,
+				Error:   "Failed to get default account",
+			})
+			return
+		}
+		grants = []domain.GrantInfo{grant}
+	} else {
+		var err error
+		grants, err = s.grantStore.ListGrants()
+		if err != nil {
+			writeJSON(w, http.StatusOK, CacheSyncResponse{
+				Success: false,
+				Error:   "Failed to get accounts",
+			})
+			return
+		}
 	}
 
-	// Sync accounts
 	synced := 0
 	for _, grant := range grants {
 		if !grant.Provider.IsSupportedByAir() {

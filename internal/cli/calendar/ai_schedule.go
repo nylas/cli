@@ -156,7 +156,7 @@ Examples:
 }
 
 // displayScheduleOptions displays the AI-suggested meeting options.
-func displayScheduleOptions(response *ai.ScheduleResponse, userTZ string) error {
+func displayScheduleOptions(response *ai.ScheduleResponse, _ string) error {
 	if len(response.Options) == 0 {
 		fmt.Println("No suitable meeting times found.")
 		return nil

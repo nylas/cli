@@ -14,7 +14,6 @@ import (
 )
 
 func newCreateCmd() *cobra.Command {
-	var jsonOutput bool
 	var appPassword string
 	var policyID string
 
@@ -33,13 +32,12 @@ Examples:
   nylas agent account create routed@yourapp.nylas.email --policy-id <policy-id>`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCreate(args[0], appPassword, policyID, jsonOutput)
+			return runCreate(args[0], appPassword, policyID, common.IsJSON(cmd))
 		},
 	}
 
 	cmd.Flags().StringVar(&appPassword, "app-password", "", "Optional IMAP/SMTP app password for mail-client access")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Optional policy ID to attach to the created agent account")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }
@@ -47,15 +45,15 @@ Examples:
 func runCreate(email, appPassword, policyID string, jsonOutput bool) error {
 	email = strings.TrimSpace(email)
 	if email == "" {
-		printError("Email address cannot be empty")
+		common.PrintError("Email address cannot be empty")
 		return common.NewInputError("email address cannot be empty")
 	}
 	if strings.Contains(email, " ") {
-		printError("Email address should not contain spaces")
+		common.PrintError("Email address should not contain spaces")
 		return common.NewInputError("invalid email address - should not contain spaces")
 	}
 	if err := validateAgentAppPassword(appPassword); err != nil {
-		printError(err.Error())
+		common.PrintError(err.Error())
 		return err
 	}
 	policyID = strings.TrimSpace(policyID)
@@ -77,7 +75,7 @@ func runCreate(email, appPassword, policyID string, jsonOutput bool) error {
 			return struct{}{}, common.PrintJSON(account)
 		}
 
-		printSuccess("Agent account created successfully!")
+		common.PrintSuccess("Agent account created successfully!")
 		fmt.Println()
 		printAgentDetails(*account)
 		if connector != nil {
@@ -150,11 +148,14 @@ func findExistingAgentAccountByEmail(ctx context.Context, client ports.AgentClie
 		return nil, err
 	}
 
-	for _, account := range accounts {
-		if strings.EqualFold(account.Email, email) {
-			accountCopy := account
-			return &accountCopy, nil
-		}
+	if account := findAgentAccountByEmail(accounts, email); account != nil {
+		accountCopy := *account
+		return &accountCopy, nil
+	}
+
+	defaultAccount := getConfiguredDefaultAgentAccount(ctx, client)
+	if defaultAccount != nil && strings.EqualFold(defaultAccount.Email, email) {
+		return defaultAccount, nil
 	}
 
 	return nil, nil

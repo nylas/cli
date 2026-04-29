@@ -185,7 +185,7 @@ No actual email is sent - this is just a demonstration of the command flow.`,
 }
 
 // printDemoMessageSummary prints a single-line message summary.
-func printDemoMessageSummary(msg domain.Message, index int, showID bool) {
+func printDemoMessageSummary(msg domain.Message, _ int, showID bool) {
 	status := " "
 	if msg.Unread {
 		status = common.Cyan.Sprint("●")
@@ -196,15 +196,9 @@ func printDemoMessageSummary(msg domain.Message, index int, showID bool) {
 		star = common.Yellow.Sprint("★")
 	}
 
-	from := formatDemoContacts(msg.From)
-	if len(from) > 20 {
-		from = from[:17] + "..."
-	}
+	from := common.Truncate(formatDemoContacts(msg.From), 20)
 
-	subject := msg.Subject
-	if len(subject) > 40 {
-		subject = subject[:37] + "..."
-	}
+	subject := common.Truncate(msg.Subject, 40)
 
 	dateStr := formatDemoTimeAgo(msg.Date)
 	if len(dateStr) > 12 {

@@ -25,7 +25,7 @@ renderContacts() {
     if (this.hasMore) {
         container.innerHTML += `
             <div class="load-more">
-                <button class="btn btn-secondary" onclick="ContactsManager.loadContacts(true)">
+                <button class="btn btn-secondary" data-action="contacts-load-more">
                     Load More
                 </button>
             </div>
@@ -38,6 +38,7 @@ renderContacts() {
             this.selectContact(item.dataset.contactId);
         });
     });
+    this.bindAvatarFallbacks(container);
 },
 
 renderContactItem(contact) {
@@ -55,7 +56,7 @@ renderContactItem(contact) {
                 <img src="${photoUrl}"
                      alt="${this.escapeHtml(displayName)}"
                      loading="lazy"
-                     onerror="this.onerror=null; this.src='${fallbackUrl}';" />
+                     data-fallback-src="${this.escapeHtml(fallbackUrl)}" />
             </div>
             <div class="contact-info">
                 <div class="contact-name">${this.escapeHtml(displayName)}</div>

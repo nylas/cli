@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -147,12 +145,11 @@ Supports GPG/PGP encrypted and signed messages:
 // getProviderForGrant retrieves the provider type for a grant ID.
 // Returns empty string if provider cannot be determined.
 func getProviderForGrant(grantID string) domain.Provider {
-	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	grantStore, err := common.NewDefaultGrantStore()
 	if err != nil {
 		return ""
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
 	grant, err := grantStore.GetGrant(grantID)
 	if err != nil || grant == nil {
 		return ""

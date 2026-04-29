@@ -9,8 +9,6 @@ import (
 )
 
 func newGetCmd() *cobra.Command {
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "get [agent-id|email]",
 		Short: "Show an agent account",
@@ -30,11 +28,9 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return runGet(identifier, jsonOutput)
+			return runGet(identifier, common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
 }

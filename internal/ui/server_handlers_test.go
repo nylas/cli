@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	configadapter "github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/adapters/grantcache"
 	keyringadapter "github.com/nylas/cli/internal/adapters/keyring"
 	authapp "github.com/nylas/cli/internal/app/auth"
 	setupcli "github.com/nylas/cli/internal/cli/setup"
@@ -283,7 +285,7 @@ func TestHandleConfigSetup_RequiresExplicitClientIDWhenMultipleAppsExist(t *test
 	server := &Server{
 		configStore: configadapter.NewMockConfigStore(),
 		secretStore: keyringadapter.NewMockSecretStore(),
-		grantStore:  keyringadapter.NewGrantStore(keyringadapter.NewMockSecretStore()),
+		grantStore:  grantcache.New(filepath.Join(t.TempDir(), "grants.json")),
 	}
 	server.configSvc = authapp.NewConfigService(server.configStore, server.secretStore)
 
@@ -340,7 +342,7 @@ func TestHandleConfigSetup_ReturnsWarningWhenCallbackSetupFails(t *testing.T) {
 	server := &Server{
 		configStore: configStore,
 		secretStore: secretStore,
-		grantStore:  keyringadapter.NewGrantStore(secretStore),
+		grantStore:  grantcache.New(filepath.Join(t.TempDir(), "grants.json")),
 	}
 	server.configSvc = authapp.NewConfigService(configStore, secretStore)
 
@@ -405,7 +407,7 @@ func TestHandleConfigSetup_PersistsFirstValidGrantAsDefault(t *testing.T) {
 	server := &Server{
 		configStore: configStore,
 		secretStore: secretStore,
-		grantStore:  keyringadapter.NewGrantStore(secretStore),
+		grantStore:  grantcache.New(filepath.Join(t.TempDir(), "grants.json")),
 	}
 	server.configSvc = authapp.NewConfigService(configStore, secretStore)
 

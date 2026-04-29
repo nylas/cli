@@ -10,7 +10,9 @@ import (
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
+	"github.com/nylas/cli/internal/webguard"
 )
 
 //go:embed static/* static/css/* static/js/*
@@ -31,7 +33,7 @@ type Server struct {
 func NewServer(addr string) *Server {
 	configStore := config.NewDefaultFileStore()
 	secretStore, _ := keyring.NewSecretStore(config.DefaultConfigDir())
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, _ := common.NewDefaultGrantStore()
 	configSvc := authapp.NewConfigService(configStore, secretStore)
 
 	// Load templates
@@ -92,9 +94,15 @@ func (s *Server) Start() error {
 	// Template-rendered index page
 	mux.HandleFunc("/", s.handleIndex)
 
+	// Wrap with loopback-only host validation and same-origin protection.
+	// Without this, any visited webpage could POST to /api/exec or
+	// /api/config/setup on the local UI port.
+	handler := webguard.HostValidationMiddleware(
+		webguard.OriginProtectionMiddleware(mux))
+
 	server := &http.Server{
 		Addr:              s.addr,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

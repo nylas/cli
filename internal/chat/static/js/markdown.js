@@ -28,8 +28,18 @@ const Markdown = {
         // Ordered lists
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        // Links — scheme-validate the URL so attacker-controlled markdown
+        // coming from agent output cannot inject `javascript:` URLs. The URL
+        // is already HTML-escaped by escape() above (the regex runs against
+        // the escaped html), so it is already safe to drop into a
+        // double-quoted attribute.
+        html = html.replace(
+            /\[([^\]]+)\]\(([^)]+)\)/g,
+            (_, label, url) => {
+                const safe = Markdown.safeUrl(url);
+                return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+            }
+        );
 
         // Paragraphs
         html = html.replace(/\n\n/g, '</p><p>');
@@ -47,5 +57,25 @@ const Markdown = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
+    },
+
+    // safeUrl returns the URL if it uses an http(s) or mailto: scheme; otherwise
+    // it returns "#". Relative URLs (no scheme) and anchor links pass through.
+    // This blocks javascript:, data:, vbscript: and similar dangerous schemes.
+    safeUrl(rawUrl) {
+        const url = String(rawUrl).trim();
+        if (url === '') return '#';
+        // Anchor / relative path / explicit scheme.
+        const schemeMatch = url.match(/^([a-z][a-z0-9+.-]*):/i);
+        if (!schemeMatch) {
+            // No scheme — relative or anchor link, allow.
+            return url;
+        }
+        const scheme = schemeMatch[1].toLowerCase();
+        if (scheme === 'http' || scheme === 'https' || scheme === 'mailto') {
+            return url;
+        }
+        return '#';
+    },
+
 };

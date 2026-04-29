@@ -5,6 +5,7 @@ package nylas
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -267,6 +268,52 @@ func TestHTTPClient_ListGrants(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHTTPClient_ListGrants_FollowsPagination(t *testing.T) {
+	// Regression: ListGrants issued a single GET /v3/grants without
+	// paginating, so tenants with more grants than the v3 default page
+	// size (10) silently lost the rest — including in the `nylas auth
+	// config` flow, which would only sync the first page (e.g. 9 valid
+	// grants out of 25). The /v3/grants endpoint is offset-paginated, so
+	// ListGrants must walk offsets until a short page is returned.
+	const apiPageSize = 200
+	full := make([]map[string]any, 0, apiPageSize)
+	for i := range apiPageSize {
+		full = append(full, map[string]any{
+			"id":           fmt.Sprintf("grant-page1-%d", i),
+			"provider":     "google",
+			"grant_status": "valid",
+		})
+	}
+
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("offset") {
+		case "", "0":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": full})
+		case "200":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "grant-tail", "provider": "microsoft", "grant_status": "valid"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected offset %q", r.URL.Query().Get("offset"))
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient("test-api-key", "test-client-id", "")
+	client.SetBaseURL(server.URL)
+
+	grants, err := client.ListGrants(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls, "should advance offset and fetch a second page")
+	assert.Len(t, grants, 201)
+	assert.Equal(t, "grant-tail", grants[200].ID)
 }
 
 func TestHTTPClient_GetGrant(t *testing.T) {

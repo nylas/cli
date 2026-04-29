@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,12 +32,13 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		if created == nil {
 			return
 		}
-		if exists, account := waitForAgentByEmail(t, client, email, true); exists {
-			acquireRateLimit(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_ = client.DeleteAgentAccount(ctx, account.ID)
-		}
+		// Use the ID we already have — no need for a list lookup. GET-by-id
+		// is consistent against fresh grants while the list endpoint can
+		// lag tens of seconds.
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = client.DeleteAgentAccount(ctx, created.ID)
 	})
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "create", email, "--app-password", appPassword, "--json")
@@ -58,10 +60,7 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		t.Fatalf("expected created agent account ID, got empty output: %s", stdout)
 	}
 	created = &account
-
-	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list", email)
-	}
+	env["NYLAS_GRANT_ID"] = account.ID
 
 	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "list", "--json")
 	if err != nil {
@@ -94,7 +93,7 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		t.Fatalf("expected delete confirmation in stdout, got: %s", deleteStdout)
 	}
 
-	if exists, _ := waitForAgentByEmail(t, client, email, false); exists {
+	if exists, _ := waitForAgentByID(t, client, account.ID, false); exists {
 		t.Fatalf("agent account %q still exists after delete", email)
 	}
 	created = nil
@@ -237,12 +236,10 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	var created *domain.AgentAccount
 	t.Cleanup(func() {
 		if created != nil {
-			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
-				acquireRateLimit(t)
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				_ = client.DeleteAgentAccount(ctx, account.ID)
-			}
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			_ = client.DeleteAgentAccount(ctx, created.ID)
+			cancel()
 		}
 		if createdPolicy != nil {
 			acquireRateLimit(t)
@@ -278,10 +275,10 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	}
 	created = &account
 
-	if exists, listed := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list", email)
-	} else if listed.Settings.PolicyID != policy.ID {
-		t.Fatalf("listed policy_id = %q, want %q", listed.Settings.PolicyID, policy.ID)
+	if exists, fetched := waitForAgentByID(t, client, account.ID, true); !exists {
+		t.Fatalf("created agent account %q did not appear via GET-by-id", email)
+	} else if fetched.Settings.PolicyID != policy.ID {
+		t.Fatalf("fetched policy_id = %q, want %q", fetched.Settings.PolicyID, policy.ID)
 	}
 }
 
@@ -297,12 +294,10 @@ func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
 	var created *domain.AgentAccount
 	t.Cleanup(func() {
 		if created != nil {
-			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
-				acquireRateLimit(t)
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				_ = client.DeleteAgentAccount(ctx, account.ID)
-			}
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = client.DeleteAgentAccount(ctx, created.ID)
 		}
 	})
 
@@ -314,9 +309,7 @@ func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
 		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
 	}
 	created = account
-	if exists, _ := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list before update", email)
-	}
+	env["NYLAS_GRANT_ID"] = account.ID
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -367,12 +360,10 @@ func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
 	var created *domain.AgentAccount
 	t.Cleanup(func() {
 		if created != nil {
-			if exists, account := waitForAgentByEmail(t, client, email, true); exists {
-				acquireRateLimit(t)
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				_ = client.DeleteAgentAccount(ctx, account.ID)
-			}
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			_ = client.DeleteAgentAccount(ctx, created.ID)
+			cancel()
 		}
 		if createdPolicy != nil {
 			acquireRateLimit(t)
@@ -399,10 +390,11 @@ func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
 		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
 	}
 	created = account
-	if exists, listed := waitForAgentByEmail(t, client, email, true); !exists {
-		t.Fatalf("created agent account %q did not appear in list before update", email)
-	} else if listed.Settings.PolicyID != policy.ID {
-		t.Fatalf("listed policy_id before update = %q, want %q", listed.Settings.PolicyID, policy.ID)
+	env["NYLAS_GRANT_ID"] = account.ID
+	if exists, fetched := waitForAgentByID(t, client, account.ID, true); !exists {
+		t.Fatalf("created agent account %q not retrievable by id", email)
+	} else if fetched.Settings.PolicyID != policy.ID {
+		t.Fatalf("fetched policy_id before update = %q, want %q", fetched.Settings.PolicyID, policy.ID)
 	}
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(
@@ -450,11 +442,14 @@ func TestCLI_AgentDelete_ByID(t *testing.T) {
 	account := createAgentForTest(t, client, email)
 
 	t.Cleanup(func() {
-		if exists, listed := waitForAgentByEmail(t, client, email, true); exists {
+		// Test deletes the account itself; cleanup is a best-effort
+		// safety net. GET-by-id is consistent so we use it instead of
+		// the lag-prone list endpoint.
+		if exists, _ := waitForAgentByID(t, client, account.ID, true); exists {
 			acquireRateLimit(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			_ = client.DeleteAgentAccount(ctx, listed.ID)
+			_ = client.DeleteAgentAccount(ctx, account.ID)
 		}
 	})
 
@@ -463,7 +458,7 @@ func TestCLI_AgentDelete_ByID(t *testing.T) {
 		t.Fatalf("agent delete by ID failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
 
-	if exists, _ := waitForAgentByEmail(t, client, email, false); exists {
+	if exists, _ := waitForAgentByID(t, client, account.ID, false); exists {
 		t.Fatalf("agent account %q still exists after delete by ID", email)
 	}
 }
@@ -476,14 +471,13 @@ func TestCLI_AgentDelete_CancelKeepsAccount(t *testing.T) {
 	client := getTestClient()
 	email := newAgentTestEmail(t, "cancel")
 	account := createAgentForTest(t, client, email)
+	env["NYLAS_GRANT_ID"] = account.ID
 
 	t.Cleanup(func() {
-		if exists, listed := waitForAgentByEmail(t, client, email, true); exists {
-			acquireRateLimit(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_ = client.DeleteAgentAccount(ctx, listed.ID)
-		}
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = client.DeleteAgentAccount(ctx, account.ID)
 	})
 
 	acquireRateLimit(t)
@@ -495,7 +489,9 @@ func TestCLI_AgentDelete_CancelKeepsAccount(t *testing.T) {
 		t.Fatalf("expected cancellation message, got stdout: %s", stdout)
 	}
 
-	if exists, listed := waitForAgentByEmail(t, client, email, true); !exists || listed.ID != account.ID {
+	// Cancellation must leave the grant intact — verify via GET-by-id
+	// (consistent) instead of the lag-prone list endpoint.
+	if exists, fetched := waitForAgentByID(t, client, account.ID, true); !exists || fetched.ID != account.ID {
 		t.Fatalf("agent account %q should still exist after cancellation", email)
 	}
 }
@@ -508,14 +504,13 @@ func TestCLI_AgentGet_ByEmailAndID(t *testing.T) {
 	client := getTestClient()
 	email := newAgentTestEmail(t, "get")
 	account := createAgentForTest(t, client, email)
+	env["NYLAS_GRANT_ID"] = account.ID
 
 	t.Cleanup(func() {
-		if exists, listed := waitForAgentByEmail(t, client, email, true); exists {
-			acquireRateLimit(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_ = client.DeleteAgentAccount(ctx, listed.ID)
-		}
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = client.DeleteAgentAccount(ctx, account.ID)
 	})
 
 	byEmailStdout, byEmailStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "get", email, "--json")
@@ -648,12 +643,20 @@ func validAgentTestPassword() string {
 	return "ValidAgentPass123ABC!"
 }
 
+// waitForAgentByEmail polls /v3/grants?provider=nylas (the LIST endpoint)
+// for a managed agent account matching `email`. The list endpoint has been
+// observed to lag freshly-created grants by tens of seconds — sometimes
+// >70s — while GET-by-id is consistent immediately. Use waitForAgentByID
+// for ID-based checks; reserve this helper for tests that genuinely
+// validate the email→list resolution path (delete-by-email, get-by-email).
+//
+// Deadline is set to 90s to absorb the observed list-propagation lag.
 func waitForAgentByEmail(t *testing.T, client interface {
 	ListAgentAccounts(context.Context) ([]domain.AgentAccount, error)
 }, email string, wantPresent bool) (bool, *domain.AgentAccount) {
 	t.Helper()
 
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
 		acquireRateLimit(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -682,6 +685,47 @@ func waitForAgentByEmail(t *testing.T, client interface {
 		return false, nil
 	}
 	return true, nil
+}
+
+// waitForAgentByID polls /v3/grants/<id> (the GET endpoint) for a managed
+// agent account by its grant ID. GET-by-id is strongly consistent against
+// freshly-created grants — verified by direct probing — so this is the
+// preferred helper for visibility checks where the test already has the
+// ID returned from create.
+//
+// wantPresent=true returns (true, account) on first hit, (false, nil) if
+// the deadline expires without a hit. wantPresent=false inverts: returns
+// (false, nil) once the API stops returning the grant, (true, last) if
+// the deadline expires while it's still returned.
+func waitForAgentByID(t *testing.T, client interface {
+	GetAgentAccount(context.Context, string) (*domain.AgentAccount, error)
+}, id string, wantPresent bool) (bool, *domain.AgentAccount) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+	var last *domain.AgentAccount
+	for time.Now().Before(deadline) {
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		account, err := client.GetAgentAccount(ctx, id)
+		cancel()
+		if err == nil && account != nil {
+			last = account
+			if wantPresent {
+				return true, account
+			}
+		} else if errors.Is(err, domain.ErrGrantNotFound) {
+			if !wantPresent {
+				return false, nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if wantPresent {
+		return false, nil
+	}
+	return true, last
 }
 
 func runCLIWithInputAndOverrides(timeout time.Duration, input string, envOverrides map[string]string, args ...string) (string, string, error) {

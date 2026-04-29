@@ -7,6 +7,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/keyring"
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	otpapp "github.com/nylas/cli/internal/app/otp"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -19,7 +20,10 @@ func createOTPService() (*otpapp.Service, error) {
 		return nil, err
 	}
 
-	grantStore := keyring.NewGrantStore(secretStore)
+	grantStore, err := common.NewDefaultGrantStore()
+	if err != nil {
+		return nil, err
+	}
 
 	// Create Nylas client
 	client := nylasadapter.NewHTTPClient()

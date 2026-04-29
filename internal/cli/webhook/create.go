@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -18,7 +17,6 @@ func newCreateCmd() *cobra.Command {
 		description  string
 		triggers     []string
 		notifyEmails []string
-		format       string
 	)
 
 	cmd := &cobra.Command{
@@ -98,10 +96,9 @@ Use 'nylas webhook triggers' to see available trigger types.`,
 					return struct{}{}, common.WrapCreateError("webhook", err)
 				}
 
-				if format == "json" {
-					enc := json.NewEncoder(cmd.OutOrStdout())
-					enc.SetIndent("", "  ")
-					return struct{}{}, enc.Encode(webhook)
+				if common.IsStructuredOutput(cmd) {
+					out := common.GetOutputWriter(cmd)
+					return struct{}{}, out.Write(webhook)
 				}
 
 				fmt.Printf("%s Webhook created successfully!\n", common.Green.Sprint("✓"))
@@ -133,7 +130,6 @@ Use 'nylas webhook triggers' to see available trigger types.`,
 	cmd.Flags().StringVarP(&description, "description", "d", "", "Webhook description")
 	cmd.Flags().StringSliceVarP(&triggers, "triggers", "t", nil, "Trigger types (required, comma-separated or multiple flags)")
 	cmd.Flags().StringSliceVarP(&notifyEmails, "notify", "n", nil, "Notification email addresses")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json)")
 
 	_ = cmd.MarkFlagRequired("url")
 	_ = cmd.MarkFlagRequired("triggers")

@@ -14,8 +14,15 @@ document.addEventListener('DOMContentLoaded', () => {
         newEventBtn.onclick = () => openEventModal();
     }
 
-    // Wire up event card clicks for editing
+    // Wire up event card clicks for editing. Skip when the click originates
+    // inside an interactive child (data-action button or link), so the
+    // child's handler — e.g. join-meeting-link — runs alone instead of also
+    // opening the edit modal. stopPropagation can't help here: both listeners
+    // are on document, so they're siblings, not parent/child.
     document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action]') || e.target.closest('a[href]')) {
+            return;
+        }
         const eventCard = e.target.closest('.event-card');
         if (eventCard) {
             const eventId = eventCard.getAttribute('data-event-id');

@@ -22,20 +22,35 @@ nylas webhook pubsub delete <channel-id> --yes
 Start a local webhook server for development and testing:
 
 ```bash
-# Start server (local only)
+# Interactive: detects cloudflared and prompts to enable a public tunnel.
+# (Nylas can't deliver webhooks to localhost, so a tunnel is needed to
+# receive real events.)
 nylas webhook server
 
-# Start with public tunnel (cloudflared required)
-nylas webhook server --tunnel cloudflared
+# Skip the prompt and run loopback-only (useful for local curl tests
+# or non-interactive environments)
+nylas webhook server --no-tunnel
 
-# Custom port
-nylas webhook server --port 8080 --tunnel cloudflared
+# Start with public tunnel (cloudflared required) + signature verification
+nylas webhook server --tunnel cloudflared --secret your-webhook-secret
+
+# Custom port with a tunnel
+nylas webhook server --port 8080 --tunnel cloudflared --secret your-webhook-secret
 ```
 
-**Install cloudflared:**
+When `--tunnel` is set, `--secret` is required (or pass `--allow-unsigned`
+to opt out explicitly). The interactive preflight will prompt for a
+secret inline when you accept the tunnel; leaving it empty opts into
+unsigned mode.
+
+**Cloudflared install:**
+
+On macOS, the preflight will offer to run `brew install cloudflared` for
+you when cloudflared isn't on `PATH`. On other platforms, see:
+
 ```bash
-brew install cloudflared                    # macOS
-# Or download from: github.com/cloudflare/cloudflared
+brew install cloudflared                    # macOS (manual)
+# Linux/Windows: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
 ```
 
 ### TUI Webhook Server

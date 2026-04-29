@@ -75,50 +75,6 @@ func TestFormatDuration(t *testing.T) {
 }
 
 // =============================================================================
-// FormatSize Tests
-// =============================================================================
-
-func TestFormatSize(t *testing.T) {
-	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
-	)
-
-	tests := []struct {
-		name     string
-		input    int64
-		expected string
-	}{
-		// Bytes range
-		{name: "zero bytes", input: 0, expected: "0 B"},
-		{name: "one byte", input: 1, expected: "1 B"},
-		{name: "512 bytes", input: 512, expected: "512 B"},
-		{name: "1023 bytes", input: 1023, expected: "1023 B"},
-		// KB range
-		{name: "exactly 1 KB", input: KB, expected: "1 KB"},
-		{name: "1.5 KB", input: KB + KB/2, expected: "1.5 KB"},
-		{name: "exactly 1023 KB", input: 1023 * KB, expected: "1023 KB"},
-		// MB range
-		{name: "exactly 1 MB", input: MB, expected: "1 MB"},
-		{name: "1.5 MB", input: MB + MB/2, expected: "1.5 MB"},
-		{name: "10 MB", input: 10 * MB, expected: "10 MB"},
-		{name: "exactly 1023 MB", input: 1023 * MB, expected: "1023 MB"},
-		// GB range
-		{name: "exactly 1 GB", input: GB, expected: "1 GB"},
-		{name: "1.5 GB", input: GB + GB/2, expected: "1.5 GB"},
-		{name: "10 GB", input: 10 * GB, expected: "10 GB"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatSize(tt.input)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-// =============================================================================
 // parseBool Tests
 // =============================================================================
 

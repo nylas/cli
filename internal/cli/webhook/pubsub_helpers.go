@@ -19,7 +19,7 @@ var pubSubColumns = []ports.Column{
 func parseAndValidateTriggers(values []string) ([]string, error) {
 	var triggers []string
 	for _, value := range values {
-		for _, part := range strings.Split(value, ",") {
+		for part := range strings.SplitSeq(value, ",") {
 			trigger := strings.TrimSpace(part)
 			if trigger != "" {
 				triggers = append(triggers, trigger)
@@ -60,7 +60,10 @@ func validatePubSubTopic(topic string) error {
 	return nil
 }
 
-func printPubSubChannel(channel *domain.PubSubChannel) {
+// printPubSubChannel prints a Pub/Sub channel. When showSecrets is true the
+// encryption key is printed in full; otherwise it is masked. Callers should
+// pass true only at creation time, when the user needs to copy the key once.
+func printPubSubChannel(channel *domain.PubSubChannel, showSecrets bool) {
 	fmt.Printf("ID:           %s\n", channel.ID)
 	fmt.Printf("Description:  %s\n", channel.Description)
 	fmt.Printf("Topic:        %s\n", channel.Topic)
@@ -68,7 +71,11 @@ func printPubSubChannel(channel *domain.PubSubChannel) {
 		fmt.Printf("Status:       %s\n", channel.Status)
 	}
 	if channel.EncryptionKey != "" {
-		fmt.Printf("Encryption Key: %s\n", channel.EncryptionKey)
+		if showSecrets {
+			fmt.Printf("Encryption Key: %s\n", channel.EncryptionKey)
+		} else {
+			fmt.Printf("Encryption Key: %s\n", maskSecret(channel.EncryptionKey))
+		}
 	}
 	if len(channel.TriggerTypes) > 0 {
 		fmt.Println("\nTrigger Types:")
