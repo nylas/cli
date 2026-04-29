@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -83,7 +84,10 @@ func newCachedTestServer(t *testing.T) (*Server, *nylasmock.MockClient, string) 
 		t.Fatalf("new cache manager: %v", err)
 	}
 
-	settings := cache.DefaultSettings()
+	settings, err := cache.LoadSettings(tmpDir)
+	if err != nil {
+		t.Fatalf("load cache settings: %v", err)
+	}
 	settings.Enabled = true
 	settings.OfflineQueueEnabled = true
 
@@ -113,6 +117,15 @@ func newCachedTestServer(t *testing.T) (*Server, *nylasmock.MockClient, string) 
 	})
 
 	return server, client, email
+}
+
+func TestNewCachedTestServerSettingsUseTempCachePath(t *testing.T) {
+	server, _, accountEmail := newCachedTestServer(t)
+
+	want := filepath.Dir(server.cacheManager.DBPath(accountEmail))
+	if got := server.cacheSettings.BasePath(); got != want {
+		t.Fatalf("cache settings base path = %q, want cache manager base path %q", got, want)
+	}
 }
 
 func putCachedEmail(t *testing.T, server *Server, accountEmail string, email *cache.CachedEmail) {

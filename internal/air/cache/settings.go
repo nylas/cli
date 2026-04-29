@@ -239,6 +239,10 @@ func (s *Settings) BasePath() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	if s.filePath == "" {
+		return ""
+	}
+
 	return filepath.Dir(s.filePath)
 }
 
