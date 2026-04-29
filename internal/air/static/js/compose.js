@@ -170,6 +170,14 @@ const ComposeManager = {
             body: els.body?.value || ''
         };
 
+        // Pin the send to the grant the page was rendered for so the user's
+        // visible "from" account matches what the backend actually uses,
+        // even if the persisted default has drifted.
+        const grantId = document.body && document.body.dataset && document.body.dataset.defaultGrantId;
+        if (grantId) {
+            data.grant_id = grantId;
+        }
+
         // For replies, include reply_to_message_id and thread_id for proper threading
         if (this.mode === 'reply' && this.replyToEmail) {
             data.reply_to_message_id = this.replyToEmail.id;

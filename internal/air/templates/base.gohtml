@@ -22,7 +22,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="/css/main.css">
 </head>
-<body>
+<body data-default-grant-id="{{.DefaultGrantID}}" data-default-grant-provider="{{.Provider}}" data-default-grant-email="{{.UserEmail}}">
     <!-- Loading Overlay for Cache Initialization - uses inline styles to ensure it works before CSS loads -->
     <div id="initOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#0a0a0f; z-index:999999; align-items:center; justify-content:center;">
         <div style="text-align:center; max-width:400px; padding:24px;">
