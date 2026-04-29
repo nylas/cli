@@ -1,12 +1,19 @@
 package air
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
 )
+
+// errSendGrantNotFound indicates the caller-supplied grant_id is not a
+// stored, Air-supported grant for this user.
+var errSendGrantNotFound = errors.New("grant not found or not supported by Air")
 
 // handleDrafts handles POST /api/drafts (create) and GET /api/drafts (list).
 func (s *Server) handleDrafts(w http.ResponseWriter, r *http.Request) {
@@ -231,13 +238,52 @@ func (s *Server) handleSendDraft(w http.ResponseWriter, r *http.Request, draftID
 	})
 }
 
+// resolveSendGrantID returns the grant ID to send from. If the request supplies
+// a grant_id it must match one of the user's stored, Air-supported grants
+// (errSendGrantNotFound otherwise). When unset, the active default grant is
+// used so older clients keep working.
+func (s *Server) resolveSendGrantID(requestedGrantID, defaultGrantID string) (string, error) {
+	if requestedGrantID == "" {
+		return defaultGrantID, nil
+	}
+	supported, err := s.listSupportedGrants()
+	if err != nil {
+		return "", err
+	}
+	for i := range supported {
+		if supported[i].ID == requestedGrantID {
+			return requestedGrantID, nil
+		}
+	}
+	return "", errSendGrantNotFound
+}
+
+// sendMessageForGrant sends via the per-grant /v3/grants/{id}/messages/send
+// endpoint for every provider, populating From for Nylas-managed grants since
+// the API rejects the request otherwise. Per-grant send is what archives the
+// message to the sender's Sent folder; the transactional /v3/domains/...
+// endpoint is a relay that does not archive, so it is *not* used here even
+// for Nylas-provider grants.
+func (s *Server) sendMessageForGrant(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error) {
+	if len(req.From) == 0 {
+		grant, err := s.nylasClient.GetGrant(ctx, grantID)
+		if err != nil {
+			return nil, fmt.Errorf("fetch grant: %w", err)
+		}
+		if grant != nil && grant.Provider == domain.ProviderNylas && grant.Email != "" {
+			req.From = []domain.EmailParticipant{{Email: grant.Email}}
+		}
+	}
+	return s.nylasClient.SendMessage(ctx, grantID, req)
+}
+
 // handleSendMessage sends a message directly without creating a draft first.
 func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	grantID := s.withAuthGrant(w, SendMessageResponse{Success: true, MessageID: "demo-sent-" + time.Now().Format("20060102150405"), Message: "Email sent (demo mode)"})
-	if grantID == "" {
+	defaultGrantID := s.withAuthGrant(w, SendMessageResponse{Success: true, MessageID: "demo-sent-" + time.Now().Format("20060102150405"), Message: "Email sent (demo mode)"})
+	if defaultGrantID == "" {
 		return
 	}
 
@@ -254,6 +300,19 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	grantID, err := s.resolveSendGrantID(req.GrantID, defaultGrantID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errSendGrantNotFound) {
+			status = http.StatusBadRequest
+		}
+		writeJSON(w, status, SendMessageResponse{
+			Success: false,
+			Error:   "Invalid sender account: " + err.Error(),
+		})
+		return
+	}
+
 	ctx, cancel := s.withTimeout(r)
 	defer cancel()
 
@@ -266,7 +325,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		ReplyToMsgID: req.ReplyToMsgID,
 	}
 
-	msg, err := s.nylasClient.SendMessage(ctx, grantID, sendReq)
+	msg, err := s.sendMessageForGrant(ctx, grantID, sendReq)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, SendMessageResponse{
 			Success: false,

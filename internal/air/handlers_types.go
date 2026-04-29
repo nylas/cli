@@ -155,7 +155,12 @@ type DraftsResponse struct {
 }
 
 // SendMessageRequest represents a request to send a message directly.
+//
+// GrantID, when set, identifies which connected account to send from. It must
+// match one of the user's stored, Air-supported grants. If empty, the server
+// falls back to the active default grant.
 type SendMessageRequest struct {
+	GrantID      string                     `json:"grant_id,omitempty"`
 	To           []EmailParticipantResponse `json:"to"`
 	Cc           []EmailParticipantResponse `json:"cc,omitempty"`
 	Bcc          []EmailParticipantResponse `json:"bcc,omitempty"`

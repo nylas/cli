@@ -262,39 +262,37 @@ function startRefreshTimer() {
     console.log(`%c🔄 Auto-refresh started: every ${settingsState.refreshInterval}s`, 'color: #22c55e;');
 }
 
-// Refresh emails function
+// Refresh emails function. Re-fetches the currently visible folder so newly
+// arrived messages show up without requiring a full page reload.
 function refreshEmails() {
     lastRefreshTime = Date.now();
 
-    // Show refresh indicator in status bar if it exists
     const syncStatus = document.querySelector('.sync-status');
     if (syncStatus) {
         syncStatus.classList.add('syncing');
-        setTimeout(() => syncStatus.classList.remove('syncing'), 1000);
     }
 
-    // Simulate fetching new emails
-    console.log('%c📬 Checking for new emails...', 'color: #3b82f6;');
+    const clearSpinner = () => {
+        if (syncStatus) syncStatus.classList.remove('syncing');
+    };
 
-    // Random chance of new email for demo
-    if (Math.random() > 0.7) {
-        setTimeout(() => {
-            if (typeof showToast === 'function') {
-                showToast('info', 'New Email', '1 new message received');
-            }
-            // Update unread count
-            const badge = document.querySelector('.mobile-nav-badge');
-            if (badge) {
-                const count = parseInt(badge.textContent) + 1;
-                badge.textContent = count;
-                badge.classList.add('new-mail');
-                setTimeout(() => badge.classList.remove('new-mail'), 300);
-            }
-        }, 500);
+    if (typeof EmailListManager === 'undefined' || typeof EmailListManager.loadEmails !== 'function') {
+        clearSpinner();
+        return;
     }
+
+    if (EmailListManager.isLoading) {
+        clearSpinner();
+        return;
+    }
+
+    const folder = EmailListManager.currentFolder || 'INBOX';
+    Promise.resolve(EmailListManager.loadEmails(folder))
+        .catch(err => console.error('[refreshEmails] failed:', err))
+        .finally(clearSpinner);
 }
 
-// Manual refresh
+// Manual refresh triggered by a user action (e.g. pull-to-refresh, button).
 function manualRefresh() {
     refreshEmails();
     if (typeof showToast === 'function') {
