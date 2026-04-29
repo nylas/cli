@@ -40,6 +40,14 @@ func TestLoadSettings_NewFile(t *testing.T) {
 	}
 }
 
+func TestDefaultSettingsBasePathIsEmptyUntilLoaded(t *testing.T) {
+	settings := DefaultSettings()
+
+	if got := settings.BasePath(); got != "" {
+		t.Fatalf("DefaultSettings().BasePath() = %q, want empty path", got)
+	}
+}
+
 func TestLoadSettings_ExistingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
