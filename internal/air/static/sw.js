@@ -3,7 +3,12 @@
 // Provides offline support and caching
 // ====================================
 
-const CACHE_NAME = 'nylas-air-v1';
+// Bump this whenever shipped JS/CSS changes — the activate handler
+// deletes any cache that doesn't match, so users picking up new builds
+// don't keep stale assets via stale-while-revalidate. v2 ships the
+// invite-card subject heuristic, attendee chips, and inline-calendar
+// attachment row.
+const CACHE_NAME = 'nylas-air-v2';
 const STATIC_ASSETS = [
     '/',
     '/css/style.css',

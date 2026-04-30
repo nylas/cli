@@ -270,4 +270,184 @@ test.describe('Folders + calendar invite — Air', () => {
     expect(result.yesActive).toBe(true);
     expect(result.hostileLinkExists).toBe(false);
   });
+
+  // Pins the new attendee summary block. The demo invite ships with one
+  // organizer + two attendees (Alex accepted, Jamie tentative) so the
+  // Gmail-style "1 going · 1 maybe" line renders alongside per-attendee
+  // chips. Regression-only — guards against the chip CSS classes being
+  // dropped or the summary tally getting recomputed wrongly.
+  test('demo: invite card renders attendee chips + summary tally', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (typeof EmailListManager === 'undefined' || !EmailListManager) {
+        return { skipped: true };
+      }
+      await EmailListManager.selectEmail('demo-email-invite-001');
+
+      const deadline = Date.now() + 3000;
+      while (!document.querySelector('.calendar-invite-card') && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      const card = document.querySelector('.calendar-invite-card');
+      if (!card) return { skipped: false, found: false };
+
+      const summary = card.querySelector('.calendar-invite-summary');
+      const chips = Array.from(card.querySelectorAll('.calendar-invite-attendee'));
+      return {
+        skipped: false,
+        found: true,
+        summary: summary ? summary.textContent.trim() : '',
+        chipCount: chips.length,
+        statuses: chips.map((c) => {
+          if (c.classList.contains('is-accepted')) return 'accepted';
+          if (c.classList.contains('is-declined')) return 'declined';
+          if (c.classList.contains('is-tentative')) return 'tentative';
+          return 'pending';
+        }),
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'EmailListManager not available on this build');
+      return;
+    }
+
+    expect(result.found).toBe(true);
+    // Demo invite has 3 attendees (Priya organizer, Alex, Jamie)
+    expect(result.chipCount).toBe(3);
+    expect(result.statuses.filter((s) => s === 'accepted').length).toBe(2);
+    expect(result.statuses.filter((s) => s === 'tentative').length).toBe(1);
+    expect(result.summary).toMatch(/2 going/);
+    expect(result.summary).toMatch(/1 maybe/);
+  });
+
+  // METHOD:CANCEL invitations should swap the RSVP buttons for a
+  // cancellation banner. Test renders a synthetic card directly so we
+  // exercise the conditional UI without needing a real cancelled demo
+  // email.
+  test('renderCalendarInviteCard: METHOD=CANCEL replaces RSVP buttons with banner', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      if (typeof EmailListManager === 'undefined' || !EmailListManager) {
+        return { skipped: true };
+      }
+      const html = EmailListManager.renderCalendarInviteCard(
+        {
+          has_invite: true,
+          title: 'Quarterly Sync',
+          method: 'CANCEL',
+          start_time: Math.floor(Date.now() / 1000) + 3600,
+          end_time: Math.floor(Date.now() / 1000) + 7200,
+        },
+        'cancelled-test-id',
+      );
+
+      // Parse via DOMParser so we never assign untrusted strings to
+      // innerHTML — even in test code, that's the codebase rule.
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return {
+        skipped: false,
+        hasBanner: !!doc.querySelector('.calendar-invite-banner-cancel'),
+        bannerText: doc.querySelector('.calendar-invite-banner-cancel')?.textContent?.trim(),
+        rsvpButtonCount: doc.querySelectorAll('.calendar-invite-btn').length,
+        cardHasCancelClass: doc.querySelector('.calendar-invite-card.is-cancelled') !== null,
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'EmailListManager not available on this build');
+      return;
+    }
+
+    expect(result.hasBanner).toBe(true);
+    expect(result.bannerText).toMatch(/cancelled/i);
+    expect(result.rsvpButtonCount).toBe(0); // RSVP suppressed for cancellations
+    expect(result.cardHasCancelClass).toBe(true);
+  });
+
+  // looksLikeInviteSubject is the JS-side heuristic that decides whether
+  // to call /invite for emails without a calendar attachment in
+  // attachments[]. It must catch Google's "Invitation:" pattern (the
+  // common Gmail case) without false-positiving on every email.
+  test('looksLikeInviteSubject matches Google/Microsoft invite subjects', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      if (typeof EmailListManager === 'undefined' || !EmailListManager) {
+        return { skipped: true };
+      }
+      const samples = [
+        { subject: 'Invitation: Quarterly Sync @ Mon May 1', want: true },
+        { subject: 'Event Invitation: Meeting', want: true },
+        { subject: 'Updated invitation: Standup', want: true },
+        { subject: 'Canceled event: Team Outing', want: true },
+        { subject: 'Calendar invitation from priya@partner', want: true },
+        { subject: 'Re: Lunch tomorrow', want: false },
+        { subject: 'Your weekly digest', want: false },
+        { subject: '', want: false },
+      ];
+      return {
+        skipped: false,
+        results: samples.map((s) => ({
+          subject: s.subject,
+          want: s.want,
+          got: EmailListManager.looksLikeInviteSubject({ subject: s.subject }),
+        })),
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'EmailListManager not available on this build');
+      return;
+    }
+
+    for (const r of result.results) {
+      expect(r.got, `subject=${JSON.stringify(r.subject)}`).toBe(r.want);
+    }
+  });
+
+  // Pins the inline-calendar attachment-row injection. When the invite
+  // card lands and the email had no attachments[] entry, the UI should
+  // grow an attachment row so the user sees "invite.ics" the way Gmail
+  // shows it. Drives the path via a synthetic invite to avoid relying
+  // on demo-mode quirks.
+  test('ensureInviteAttachmentRow injects an attachment row when none exists', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      if (typeof EmailListManager === 'undefined' || !EmailListManager) {
+        return { skipped: true };
+      }
+
+      // Build a minimal email-detail container with the invite slot.
+      const detail = document.createElement('div');
+      detail.className = 'email-detail';
+      const slot = document.createElement('div');
+      slot.className = 'calendar-invite-card-slot';
+      slot.id = 'inviteSlot-test-inline';
+      detail.appendChild(slot);
+      document.body.appendChild(detail);
+
+      try {
+        EmailListManager.selectedEmailId = 'test-inline';
+        EmailListManager.ensureInviteAttachmentRow('test-inline', {
+          attachment_id: 'inline-calendar:default',
+          filename: 'invite.ics',
+        });
+
+        return {
+          skipped: false,
+          hasAttachmentSection: !!detail.querySelector('.email-detail-attachments'),
+          attachmentName: detail.querySelector('.attachment-name')?.textContent,
+          inlineMarker: detail.querySelector('[data-inline-calendar="true"]') !== null,
+        };
+      } finally {
+        detail.remove();
+      }
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'EmailListManager not available on this build');
+      return;
+    }
+
+    expect(result.hasAttachmentSection).toBe(true);
+    expect(result.attachmentName).toBe('invite.ics');
+    expect(result.inlineMarker).toBe(true);
+  });
 });

@@ -88,11 +88,17 @@ func TestParseICS_AllDayDate(t *testing.T) {
 }
 
 func TestParseICS_LineFolding(t *testing.T) {
-	folded := "BEGIN:VEVENT\r\n" +
+	folded := "BEGIN:VCALENDAR\r\n" +
+		"VERSION:2.0\r\n" +
+		"PRODID:-//T//EN\r\n" +
+		"BEGIN:VEVENT\r\n" +
+		"UID:fold-1\r\n" +
 		"SUMMARY:Long\r\n" +
 		" Title Continued\r\n" +
 		"DTSTART:20260501T140000Z\r\n" +
-		"END:VEVENT\r\n"
+		"DTEND:20260501T150000Z\r\n" +
+		"END:VEVENT\r\n" +
+		"END:VCALENDAR\r\n"
 
 	ev, err := parseICS(folded)
 	if err != nil {
@@ -104,7 +110,8 @@ func TestParseICS_LineFolding(t *testing.T) {
 }
 
 func TestParseICS_MissingVEvent(t *testing.T) {
-	_, err := parseICS("BEGIN:VCALENDAR\nEND:VCALENDAR\n")
+	// A calendar with zero events should not produce a renderable invite.
+	_, err := parseICS("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//T//EN\nEND:VCALENDAR\n")
 	if err == nil {
 		t.Fatal("expected error when no VEVENT block is present")
 	}
@@ -112,7 +119,8 @@ func TestParseICS_MissingVEvent(t *testing.T) {
 
 func TestParseICS_EmptyEvent(t *testing.T) {
 	// VEVENT block with no usable fields → error rather than empty noise.
-	_, err := parseICS("BEGIN:VCALENDAR\nBEGIN:VEVENT\nEND:VEVENT\nEND:VCALENDAR\n")
+	body := "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//T//EN\nBEGIN:VEVENT\nUID:e\nEND:VEVENT\nEND:VCALENDAR\n"
+	_, err := parseICS(body)
 	if err == nil {
 		t.Fatal("expected error for VEVENT with no fields")
 	}

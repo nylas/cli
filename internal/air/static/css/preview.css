@@ -590,3 +590,77 @@
             outline: 2px solid var(--accent);
             outline-offset: 1px;
         }
+
+        /* Cancellation banner — shown when METHOD:CANCEL or            */
+        /* STATUS:CANCELLED is present. Replaces the RSVP buttons so    */
+        /* the user can't RSVP to a dead invitation.                    */
+        .calendar-invite-banner {
+            margin-bottom: var(--space-2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .calendar-invite-banner-cancel {
+            background: rgba(220, 38, 38, 0.12);
+            color: #dc2626;
+        }
+
+        .calendar-invite-card.is-cancelled .calendar-invite-title {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        /* Attendee summary line + per-attendee chip list. Mirrors       */
+        /* Gmail's "3 going · 1 declined" header and the individual     */
+        /* response pills.                                              */
+        .calendar-invite-attendees {
+            margin-top: var(--space-3);
+        }
+
+        .calendar-invite-summary {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .calendar-invite-attendee-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .calendar-invite-attendee {
+            font-size: 12px;
+            padding: 3px 9px;
+            border-radius: 9999px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .calendar-invite-attendee.is-accepted {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: #16a34a;
+        }
+
+        .calendar-invite-attendee.is-declined {
+            background: rgba(220, 38, 38, 0.12);
+            border-color: rgba(220, 38, 38, 0.3);
+            color: #dc2626;
+            text-decoration: line-through;
+        }
+
+        .calendar-invite-attendee.is-tentative {
+            background: rgba(234, 179, 8, 0.12);
+            border-color: rgba(234, 179, 8, 0.3);
+            color: #ca8a04;
+        }
+
+        .calendar-invite-attendee.is-overflow {
+            color: var(--text-muted);
+        }

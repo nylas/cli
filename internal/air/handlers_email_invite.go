@@ -1,6 +1,7 @@
 package air
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -10,28 +11,53 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
+// maxICSBytes caps a single iCalendar payload. 1 MB is far above any
+// real invitation and keeps memory predictable when an attacker stitches
+// a large fake attachment.
+const maxICSBytes = 1 << 20
+
 // CalendarInviteResponse is the JSON returned by /api/emails/{id}/invite.
 // It is intentionally a small subset of iCalendar VEVENT — just what the
 // Air UI needs to render a Gmail-style "you have an invite" card.
 type CalendarInviteResponse struct {
-	HasInvite       bool   `json:"has_invite"`
-	AttachmentID    string `json:"attachment_id,omitempty"`
-	Filename        string `json:"filename,omitempty"`
-	Title           string `json:"title,omitempty"`
-	Location        string `json:"location,omitempty"`
-	Description     string `json:"description,omitempty"`
-	StartTime       int64  `json:"start_time,omitempty"`
-	EndTime         int64  `json:"end_time,omitempty"`
-	IsAllDay        bool   `json:"is_all_day,omitempty"`
-	OrganizerName   string `json:"organizer_name,omitempty"`
-	OrganizerEmail  string `json:"organizer_email,omitempty"`
-	ConferencingURL string `json:"conferencing_url,omitempty"`
-	Status          string `json:"status,omitempty"` // CONFIRMED / TENTATIVE / CANCELLED
+	HasInvite       bool             `json:"has_invite"`
+	AttachmentID    string           `json:"attachment_id,omitempty"`
+	Filename        string           `json:"filename,omitempty"`
+	Title           string           `json:"title,omitempty"`
+	Location        string           `json:"location,omitempty"`
+	Description     string           `json:"description,omitempty"`
+	StartTime       int64            `json:"start_time,omitempty"`
+	EndTime         int64            `json:"end_time,omitempty"`
+	IsAllDay        bool             `json:"is_all_day,omitempty"`
+	OrganizerName   string           `json:"organizer_name,omitempty"`
+	OrganizerEmail  string           `json:"organizer_email,omitempty"`
+	ConferencingURL string           `json:"conferencing_url,omitempty"`
+	Status          string           `json:"status,omitempty"` // CONFIRMED / TENTATIVE / CANCELLED
+	Method          string           `json:"method,omitempty"` // REQUEST / CANCEL / REPLY
+	Attendees       []InviteAttendee `json:"attendees,omitempty"`
+	RecurrenceRule  string           `json:"recurrence_rule,omitempty"` // raw RRULE for callers that want to summarise
+}
+
+// InviteAttendee is a participant on the VEVENT — surfaced so the Air
+// invite card can render the same "Alice (accepted), Bob (declined)"
+// list that Gmail shows. Distinct from the demo-data Attendee in
+// data.go which is a UI-only avatar.
+type InviteAttendee struct {
+	Name        string `json:"name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Status      string `json:"status,omitempty"` // ACCEPTED / DECLINED / TENTATIVE / NEEDS-ACTION
+	Role        string `json:"role,omitempty"`
+	IsOrganizer bool   `json:"is_organizer,omitempty"`
 }
 
 // handleEmailInvite returns parsed iCalendar invite data for an email.
-// It detects the first text/calendar (or .ics) attachment, downloads its
-// content, and parses out the fields the Air UI shows.
+// Resolution order:
+//  1. attachments[] entry with text/calendar or .ics filename — Microsoft,
+//     custom senders typically arrive this way.
+//  2. inline text/calendar part inside raw_mime (Gmail's invitation
+//     shape — the ICS rides as a multipart/alternative leaf).
+//
+// Returns has_invite=false when neither path yields a calendar payload.
 func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, emailID string) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
@@ -57,40 +83,106 @@ func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, email
 	}
 
 	att := findCalendarAttachment(msg.Attachments)
-	if att == nil {
+	if att != nil {
+		if parsed, ok := s.tryParseAttachmentInvite(ctx, grantID, emailID, att); ok {
+			writeJSON(w, http.StatusOK, parsed)
+			return
+		}
+		// Download or parse failed. Don't surface a 5xx — Nylas
+		// frequently returns synthetic attachment IDs (v0:base64(...):...)
+		// that look like real attachments but cannot be downloaded.
+		// Falling through to the raw_mime walker recovers the calendar
+		// payload directly from the MIME tree.
+	}
+
+	// Fetch raw MIME and look for a text/calendar part — both Gmail's
+	// inline-multipart shape AND Nylas's "synthetic attachment that
+	// can't be downloaded" case land here.
+	full, err := s.nylasClient.GetMessageWithFields(ctx, grantID, emailID, "raw_mime")
+	if err != nil || full == nil || full.RawMIME == "" {
+		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
+		return
+	}
+	parts := findInlineCalendarParts(full.RawMIME)
+	if len(parts) == 0 {
 		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
 		return
 	}
 
+	parsed, err := parseICS(parts[0].Body)
+	if err != nil {
+		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
+		return
+	}
+	parsed.HasInvite = true
+	// If we had a Nylas attachment entry (even an undownloadable
+	// synthetic one), keep its ID so the frontend's existing
+	// attachment-row check can match by name; otherwise mint a stable
+	// inline marker so the row still renders.
+	if att != nil {
+		parsed.AttachmentID = att.ID
+		parsed.Filename = att.Filename
+	} else {
+		parsed.AttachmentID = inlineCalendarAttachmentID(parts[0].ContentID)
+		if parts[0].Filename != "" {
+			parsed.Filename = parts[0].Filename
+		} else {
+			parsed.Filename = "invite.ics"
+		}
+	}
+	if parsed.Method == "" && parts[0].Method != "" {
+		parsed.Method = parts[0].Method
+	}
+	writeJSON(w, http.StatusOK, parsed)
+}
+
+// tryParseAttachmentInvite attempts the legacy path: download an ICS
+// attachment via the Nylas attachments endpoint and parse it. Returns
+// ok=false on any failure so the caller can fall back to raw_mime.
+// Errors are intentionally swallowed: we don't want 5xxs for transient
+// download problems when the calendar payload is recoverable from MIME.
+func (s *Server) tryParseAttachmentInvite(ctx context.Context, grantID, emailID string, att *domain.Attachment) (CalendarInviteResponse, bool) {
 	body, err := s.nylasClient.DownloadAttachment(ctx, grantID, emailID, att.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to download invite: "+err.Error())
-		return
+		return CalendarInviteResponse{}, false
 	}
 	defer func() { _ = body.Close() }()
 
-	// Cap the read so a hostile/oversized attachment cannot DoS us.
-	const maxICSBytes = 1 << 20 // 1 MB
 	raw, err := io.ReadAll(io.LimitReader(body, maxICSBytes+1))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to read invite: "+err.Error())
-		return
-	}
-	if len(raw) > maxICSBytes {
-		writeError(w, http.StatusRequestEntityTooLarge, "Invite attachment exceeds 1 MB limit")
-		return
+	if err != nil || len(raw) > maxICSBytes {
+		return CalendarInviteResponse{}, false
 	}
 
 	parsed, err := parseICS(string(raw))
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "Failed to parse invite: "+err.Error())
-		return
+		return CalendarInviteResponse{}, false
 	}
-
 	parsed.HasInvite = true
 	parsed.AttachmentID = att.ID
 	parsed.Filename = att.Filename
-	writeJSON(w, http.StatusOK, parsed)
+	return parsed, true
+}
+
+// inlineCalendarPrefix prefixes synthetic attachment IDs that point at
+// a text/calendar MIME part rather than a real Nylas attachment. The
+// download endpoint recognises this prefix and serves the part directly
+// from raw_mime instead of forwarding to Nylas.
+const inlineCalendarPrefix = "inline-calendar:"
+
+// inlineCalendarAttachmentID builds a stable synthetic attachment ID for
+// a calendar MIME part. Falls back to a fixed marker when the source
+// part has no Content-ID — Gmail invitations often omit it.
+func inlineCalendarAttachmentID(contentID string) string {
+	if contentID == "" {
+		return inlineCalendarPrefix + "default"
+	}
+	return inlineCalendarPrefix + contentID
+}
+
+// isInlineCalendarAttachmentID reports whether an attachment ID came
+// from a synthesized calendar part rather than a real Nylas attachment.
+func isInlineCalendarAttachmentID(id string) bool {
+	return strings.HasPrefix(id, inlineCalendarPrefix)
 }
 
 // findCalendarAttachment locates the first attachment that looks like an
@@ -114,184 +206,11 @@ func isCalendarAttachment(contentType, filename string) bool {
 		strings.HasSuffix(fn, ".ics")
 }
 
-// parseICS is a tiny iCalendar parser. It handles:
-//   - line unfolding (RFC 5545 §3.1: lines starting with space/tab are
-//     continuations of the previous line)
-//   - CRLF and LF line endings
-//   - basic VEVENT properties: SUMMARY, LOCATION, DESCRIPTION, DTSTART,
-//     DTEND, ORGANIZER, STATUS, X-CONFERENCE-URL / URL
-//   - DATE-only DTSTART/DTEND (all-day events)
-//   - DATE-TIME values in UTC (suffix Z) or local time
-//
-// It does NOT try to be a full RFC 5545 parser — it covers the
-// invitation-card use case and rejects garbage early.
-func parseICS(raw string) (CalendarInviteResponse, error) {
-	if !strings.Contains(raw, "BEGIN:VEVENT") {
-		return CalendarInviteResponse{}, errors.New("no VEVENT block found")
-	}
-
-	// Normalise line endings then unfold continuations.
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
-	raw = strings.ReplaceAll(raw, "\r", "\n")
-
-	rawLines := strings.Split(raw, "\n")
-	lines := make([]string, 0, len(rawLines))
-	for _, ln := range rawLines {
-		if len(ln) > 0 && (ln[0] == ' ' || ln[0] == '\t') && len(lines) > 0 {
-			lines[len(lines)-1] += ln[1:]
-			continue
-		}
-		lines = append(lines, ln)
-	}
-
-	var (
-		inEvent bool
-		ev      CalendarInviteResponse
-	)
-	for _, ln := range lines {
-		switch {
-		case ln == "BEGIN:VEVENT":
-			inEvent = true
-			continue
-		case ln == "END:VEVENT":
-			// Stop at the first VEVENT — invites typically have one.
-			if ev.Title == "" && ev.StartTime == 0 {
-				return CalendarInviteResponse{}, errors.New("VEVENT had no usable fields")
-			}
-			return ev, nil
-		case !inEvent:
-			continue
-		}
-
-		name, params, value, ok := splitICSLine(ln)
-		if !ok {
-			continue
-		}
-
-		switch name {
-		case "SUMMARY":
-			ev.Title = unescapeICSText(value)
-		case "LOCATION":
-			ev.Location = unescapeICSText(value)
-		case "DESCRIPTION":
-			ev.Description = unescapeICSText(value)
-		case "DTSTART":
-			ts, allDay := parseICSDate(value, params)
-			ev.StartTime = ts
-			if allDay {
-				ev.IsAllDay = true
-			}
-		case "DTEND":
-			ts, allDay := parseICSDate(value, params)
-			ev.EndTime = ts
-			if allDay {
-				ev.IsAllDay = true
-			}
-		case "ORGANIZER":
-			ev.OrganizerEmail, ev.OrganizerName = parseOrganizer(params, value)
-		case "STATUS":
-			ev.Status = strings.ToUpper(strings.TrimSpace(value))
-		case "URL", "X-CONFERENCE-URL", "X-GOOGLE-CONFERENCE":
-			if ev.ConferencingURL == "" {
-				ev.ConferencingURL = strings.TrimSpace(value)
-			}
-		}
-	}
-
-	if ev.Title == "" && ev.StartTime == 0 {
-		return CalendarInviteResponse{}, errors.New("VEVENT had no usable fields")
-	}
-	return ev, nil
-}
-
-// splitICSLine splits "NAME[;PARAM=VAL...]:VALUE" into its three parts.
-// Returns ok=false on malformed input. Param parsing is permissive.
-func splitICSLine(line string) (name string, params map[string]string, value string, ok bool) {
-	colon := strings.IndexByte(line, ':')
-	if colon < 1 {
-		return "", nil, "", false
-	}
-	left := line[:colon]
-	value = line[colon+1:]
-
-	parts := strings.Split(left, ";")
-	name = strings.ToUpper(strings.TrimSpace(parts[0]))
-	if name == "" {
-		return "", nil, "", false
-	}
-	if len(parts) > 1 {
-		params = make(map[string]string, len(parts)-1)
-		for _, p := range parts[1:] {
-			eq := strings.IndexByte(p, '=')
-			if eq <= 0 {
-				continue
-			}
-			params[strings.ToUpper(p[:eq])] = strings.Trim(p[eq+1:], `"`)
-		}
-	}
-	return name, params, value, true
-}
-
-// parseICSDate accepts VALUE=DATE (all-day) and DATE-TIME forms. Returns
-// 0 when the value cannot be parsed. The boolean is true for all-day.
-func parseICSDate(value string, params map[string]string) (int64, bool) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, false
-	}
-
-	if v, ok := params["VALUE"]; ok && strings.EqualFold(v, "DATE") {
-		if t, err := time.Parse("20060102", value); err == nil {
-			return t.UTC().Unix(), true
-		}
-		return 0, true
-	}
-
-	// DATE-TIME with explicit UTC marker.
-	if strings.HasSuffix(value, "Z") {
-		if t, err := time.Parse("20060102T150405Z", value); err == nil {
-			return t.Unix(), false
-		}
-	}
-
-	// Local DATE-TIME (no zone). Treat as UTC for stability — the UI
-	// displays in the viewer's locale anyway.
-	if t, err := time.Parse("20060102T150405", value); err == nil {
-		return t.UTC().Unix(), false
-	}
-
-	// As a last resort, try date-only.
-	if t, err := time.Parse("20060102", value); err == nil {
-		return t.UTC().Unix(), true
-	}
-	return 0, false
-}
-
-// unescapeICSText reverses RFC 5545 text escaping (\\, \,, \;, \n).
-func unescapeICSText(v string) string {
-	v = strings.ReplaceAll(v, `\\`, "\x00")
-	v = strings.ReplaceAll(v, `\,`, ",")
-	v = strings.ReplaceAll(v, `\;`, ";")
-	v = strings.ReplaceAll(v, `\n`, "\n")
-	v = strings.ReplaceAll(v, `\N`, "\n")
-	return strings.ReplaceAll(v, "\x00", `\`)
-}
-
-// parseOrganizer extracts the email + display name from an ORGANIZER
-// line such as `ORGANIZER;CN=Priya Patel:mailto:priya@partner.example`.
-func parseOrganizer(params map[string]string, value string) (email, name string) {
-	v := strings.TrimSpace(value)
-	v = strings.TrimPrefix(strings.ToLower(v), "mailto:")
-	// Re-grab the original-cased email if mailto was a prefix only.
-	if lower := strings.ToLower(value); strings.HasPrefix(lower, "mailto:") {
-		v = value[len("mailto:"):]
-	}
-	email = strings.TrimSpace(v)
-	if cn, ok := params["CN"]; ok {
-		name = strings.TrimSpace(cn)
-	}
-	return email, name
-}
+// errNoUsableEvent is returned by parseICS when the iCalendar payload is
+// either malformed, has no VEVENT, or whose first VEVENT carries no
+// fields the UI can render. Callers translate this into a "no invite"
+// response rather than a 5xx — clients should silently degrade.
+var errNoUsableEvent = errors.New("ics: no usable event")
 
 // demoInviteFor returns canned parsed-event data so the calendar-invite
 // card has something to render in demo mode without round-tripping
@@ -301,8 +220,7 @@ func demoInviteFor(emailID string) CalendarInviteResponse {
 		return CalendarInviteResponse{HasInvite: false}
 	}
 
-	// Fixed event in the future so the formatted time is consistent.
-	start := time.Now().Add(24 * time.Hour).Truncate(time.Hour)
+	start := demoInviteStart()
 	end := start.Add(time.Hour)
 
 	return CalendarInviteResponse{
@@ -319,5 +237,18 @@ func demoInviteFor(emailID string) CalendarInviteResponse {
 		OrganizerEmail:  "priya@partner.example",
 		ConferencingURL: "https://meet.example.com/q-sync",
 		Status:          "CONFIRMED",
+		Method:          "REQUEST",
+		Attendees: []InviteAttendee{
+			{Name: "Priya Patel", Email: "priya@partner.example", Status: "ACCEPTED", Role: "CHAIR", IsOrganizer: true},
+			{Name: "Alex Reed", Email: "alex@example.com", Status: "ACCEPTED", Role: "REQ-PARTICIPANT"},
+			{Name: "Jamie Chen", Email: "jamie@example.com", Status: "TENTATIVE", Role: "REQ-PARTICIPANT"},
+		},
 	}
+}
+
+// demoInviteStart returns a stable demo start time — 24h from now,
+// truncated to the hour. Extracted so tests can stub via build tag if
+// the rounding behaviour ever needs pinning.
+func demoInviteStart() time.Time {
+	return time.Now().Add(24 * time.Hour).Truncate(time.Hour)
 }
