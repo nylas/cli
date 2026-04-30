@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -92,11 +93,19 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 		return nil, err
 	}
 
-	// Set as default if no default exists.
-	if _, err := s.grantStore.GetDefaultGrant(); err == domain.ErrNoDefaultGrant {
-		_ = s.grantStore.SetDefaultGrant(grant.ID)
+	// PersistDefaultGrant writes both the grant cache and config.yaml so every
+	// reader (CLI, Air, UI, TUI) observes the same value. New grants become
+	// default only when no default exists; otherwise we mirror the existing
+	// default into config.yaml defensively.
+	defaultGrant, err := s.grantStore.GetDefaultGrant()
+	if err == domain.ErrNoDefaultGrant {
+		defaultGrant = grant.ID
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to read default grant: %w", err)
 	}
-	s.syncConfigWithGrantStore()
+	if err := PersistDefaultGrant(s.config, s.grantStore, defaultGrant); err != nil {
+		return nil, fmt.Errorf("failed to persist default grant: %w", err)
+	}
 
 	return grant, nil
 }
@@ -119,7 +128,9 @@ func (s *Service) Logout(ctx context.Context) error {
 	}
 
 	// Auto-switch to another grant if available
-	s.autoSwitchDefault()
+	if err := s.autoSwitchDefault(); err != nil {
+		return fmt.Errorf("failed to update default grant: %w", err)
+	}
 
 	return nil
 }
@@ -142,9 +153,13 @@ func (s *Service) LogoutGrant(ctx context.Context, grantID string) error {
 
 	// Auto-switch to another grant if we deleted the default
 	if isDefault {
-		s.autoSwitchDefault()
+		if err := s.autoSwitchDefault(); err != nil {
+			return fmt.Errorf("failed to update default grant: %w", err)
+		}
 	} else {
-		s.syncConfigWithGrantStore()
+		if err := s.syncConfigWithGrantStore(); err != nil {
+			return fmt.Errorf("failed to sync default grant: %w", err)
+		}
 	}
 
 	return nil
@@ -160,49 +175,49 @@ func (s *Service) RemoveLocalGrant(grantID string) error {
 	}
 
 	if isDefault {
-		s.autoSwitchDefault()
+		if err := s.autoSwitchDefault(); err != nil {
+			return fmt.Errorf("failed to update default grant: %w", err)
+		}
 	} else {
-		s.syncConfigWithGrantStore()
+		if err := s.syncConfigWithGrantStore(); err != nil {
+			return fmt.Errorf("failed to sync default grant: %w", err)
+		}
 	}
 
 	return nil
 }
 
-// autoSwitchDefault sets a new default grant from remaining grants.
-func (s *Service) autoSwitchDefault() {
+// autoSwitchDefault sets a new default grant from remaining grants. Both
+// branches route through PersistDefaultGrant so config.yaml stays in sync
+// with the grant cache.
+func (s *Service) autoSwitchDefault() error {
 	grants, err := s.grantStore.ListGrants()
 	if err != nil {
-		return
+		return err
 	}
 	if len(grants) == 0 {
-		// No remaining grants - clear the default
-		_ = s.grantStore.ClearGrants()
-		s.syncConfigWithGrantStore()
-		return
+		// No remaining grants — clear the cache file and the mirrored default.
+		if err := s.grantStore.ClearGrants(); err != nil {
+			return err
+		}
+		return PersistDefaultGrant(s.config, s.grantStore, "")
 	}
-	// Set the first remaining grant as default
-	if err := s.grantStore.SetDefaultGrant(grants[0].ID); err != nil {
-		return
-	}
-	s.syncConfigWithGrantStore()
+	return PersistDefaultGrant(s.config, s.grantStore, grants[0].ID)
 }
 
-func (s *Service) syncConfigWithGrantStore() {
+// syncConfigWithGrantStore mirrors the grant cache's current default into
+// config.yaml. Used as a defensive sync after operations that mutate the
+// grant cache without changing the default (e.g. removing a non-default
+// grant) — the cached value is read and re-persisted via PersistDefaultGrant
+// so both stores stay in lockstep.
+func (s *Service) syncConfigWithGrantStore() error {
 	defaultGrant, err := s.grantStore.GetDefaultGrant()
 	if err == domain.ErrNoDefaultGrant {
 		defaultGrant = ""
 	} else if err != nil {
-		return
+		return err
 	}
-
-	cfg, err := s.config.Load()
-	if err != nil {
-		return
-	}
-
-	cfg.Grants = nil
-	cfg.DefaultGrant = defaultGrant
-	_ = s.config.Save(cfg)
+	return PersistDefaultGrant(s.config, s.grantStore, defaultGrant)
 }
 
 func generateOAuthState() (string, error) {

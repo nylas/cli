@@ -134,7 +134,7 @@ func TestService_autoSwitchDefault(t *testing.T) {
 		}
 
 		// Call autoSwitchDefault with no grants
-		svc.autoSwitchDefault()
+		require.NoError(t, svc.autoSwitchDefault())
 
 		// Default should be cleared
 		_, err := grantStore.GetDefaultGrant()
@@ -157,7 +157,7 @@ func TestService_autoSwitchDefault(t *testing.T) {
 		}
 
 		// Call autoSwitchDefault
-		svc.autoSwitchDefault()
+		require.NoError(t, svc.autoSwitchDefault())
 
 		// A default should be set (one of the remaining grants)
 		defaultID, err := grantStore.GetDefaultGrant()
@@ -180,7 +180,7 @@ func TestService_syncConfigWithGrantStoreStoresOnlyDefaultGrant(t *testing.T) {
 		config:     configStore,
 	}
 
-	svc.syncConfigWithGrantStore()
+	require.NoError(t, svc.syncConfigWithGrantStore())
 
 	assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
 	assert.Empty(t, configStore.config.Grants)
@@ -230,7 +230,7 @@ func TestService_FirstGrantBecomesDefault(t *testing.T) {
 
 		// Logout - delete grant and auto-switch (simulating Logout behavior)
 		require.NoError(t, grantStore.DeleteGrant("grant-1"))
-		svc.autoSwitchDefault()
+		require.NoError(t, svc.autoSwitchDefault())
 
 		// Verify default is cleared (no grants remain)
 		_, err = grantStore.GetDefaultGrant()
@@ -393,6 +393,69 @@ func TestService_Login(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "grant-123", defaultID)
 		assert.Equal(t, "grant-123", configStore.config.DefaultGrant)
+		assert.Empty(t, configStore.config.Grants)
+	})
+
+	t.Run("default persistence failure returns error", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
+			return &domain.Grant{
+				ID:       "grant-123",
+				Email:    "user@example.com",
+				Provider: domain.ProviderGoogle,
+			}, nil
+		}
+
+		grantStore := newMockGrantStore()
+		configStore := &failingSaveConfigStore{config: &domain.Config{Region: "us"}}
+		server := &mockOAuthServer{
+			redirectURI: "http://localhost:8080/callback",
+			code:        "auth-code-123",
+		}
+		browser := &mockBrowser{}
+
+		svc := NewService(client, grantStore, configStore, server, browser)
+
+		grant, err := svc.Login(context.Background(), domain.ProviderGoogle)
+
+		require.Error(t, err)
+		assert.Nil(t, grant)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		_, defaultErr := grantStore.GetDefaultGrant()
+		assert.ErrorIs(t, defaultErr, domain.ErrNoDefaultGrant)
+	})
+
+	t.Run("existing default is mirrored to config after login", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.ExchangeCodeFunc = func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error) {
+			return &domain.Grant{
+				ID:       "grant-2",
+				Email:    "second@example.com",
+				Provider: domain.ProviderMicrosoft,
+			}, nil
+		}
+
+		grantStore := newMockGrantStore()
+		require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "grant-1", Email: "first@example.com", Provider: domain.ProviderGoogle}))
+		require.NoError(t, grantStore.SetDefaultGrant("grant-1"))
+		configStore := newMockConfigStore()
+		configStore.config.DefaultGrant = "stale-config-default"
+		server := &mockOAuthServer{
+			redirectURI: "http://localhost:8080/callback",
+			code:        "auth-code-123",
+		}
+		browser := &mockBrowser{}
+
+		svc := NewService(client, grantStore, configStore, server, browser)
+
+		grant, err := svc.Login(context.Background(), domain.ProviderMicrosoft)
+
+		require.NoError(t, err)
+		require.NotNil(t, grant)
+		defaultID, err := grantStore.GetDefaultGrant()
+		require.NoError(t, err)
+		assert.Equal(t, "grant-1", defaultID)
+		assert.Equal(t, "grant-1", configStore.config.DefaultGrant)
 		assert.Empty(t, configStore.config.Grants)
 	})
 

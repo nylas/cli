@@ -4,6 +4,8 @@ package tui
 import (
 	"fmt"
 	"time"
+
+	authapp "github.com/nylas/cli/internal/app/auth"
 )
 
 func (a *App) Run() error {
@@ -67,8 +69,9 @@ func (a *App) SwitchGrant(grantID, email, provider string) error {
 		return fmt.Errorf("grant switching not available (no grant store)")
 	}
 
-	// Set the new default grant
-	if err := a.config.GrantStore.SetDefaultGrant(grantID); err != nil {
+	// Set the new default grant. Mirror to config.yaml via PersistDefaultGrant
+	// so the TUI matches every other write path (auth switch, Air, login flow).
+	if err := authapp.PersistDefaultGrant(a.config.ConfigStore, a.config.GrantStore, grantID); err != nil {
 		return fmt.Errorf("failed to switch grant: %w", err)
 	}
 

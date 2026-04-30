@@ -394,10 +394,10 @@ func runTUI(refreshInterval time.Duration, initialView string, theme tui.ThemeNa
 		return common.WrapGetError("grant info", err)
 	}
 
-	return runTViewTUI(client, grantStore, grantID, grantInfo, cfg, theme, themeExplicitlySet, refreshInterval, initialView)
+	return runTViewTUI(client, grantStore, configStore, grantID, grantInfo, cfg, theme, themeExplicitlySet, refreshInterval, initialView)
 }
 
-func runTViewTUI(client ports.NylasClient, grantStore ports.GrantStore, grantID string, grantInfo *domain.GrantInfo, cfg *domain.Config, theme tui.ThemeName, themeExplicitlySet bool, refreshInterval time.Duration, initialView string) error {
+func runTViewTUI(client ports.NylasClient, grantStore ports.GrantStore, configStore ports.ConfigStore, grantID string, grantInfo *domain.GrantInfo, cfg *domain.Config, theme tui.ThemeName, themeExplicitlySet bool, refreshInterval time.Duration, initialView string) error {
 	// Use config theme if no explicit --theme flag was provided
 	if !themeExplicitlySet && cfg.TUITheme != "" {
 		theme = tui.ThemeName(cfg.TUITheme)
@@ -416,6 +416,7 @@ func runTViewTUI(client ports.NylasClient, grantStore ports.GrantStore, grantID 
 	app := tui.NewApp(tui.Config{
 		Client:          client,
 		GrantStore:      grantStore, // Enable grant switching in TUI
+		ConfigStore:     configStore,
 		GrantID:         grantID,
 		Email:           grantInfo.Email,
 		Provider:        string(grantInfo.Provider),

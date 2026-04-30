@@ -427,7 +427,7 @@ func stepGrantSync(status *SetupStatus) {
 
 	var result *SyncResult
 	err = common.RunWithSpinner("Checking for existing email accounts...", func() error {
-		result, err = SyncGrants(grantStore, apiKey, clientID, region)
+		result, err = SyncGrants(configStore, grantStore, apiKey, clientID, region)
 		return err
 	})
 	if err != nil {
@@ -446,14 +446,20 @@ func stepGrantSync(status *SetupStatus) {
 		return
 	}
 
-	// Handle default grant selection.
+	// Handle default grant selection. Both branches persist via
+	// PersistDefaultGrant inside SyncGrants/PromptDefaultGrant — no separate
+	// config.yaml write needed here.
 	if result.DefaultGrantID != "" {
-		// Single grant, auto-set.
+		// Single grant, auto-set by SyncGrants.
 		fmt.Println()
 		_, _ = common.Green.Printf("  ✓ Set %s as default account\n", result.ValidGrants[0].Email)
 	} else if len(result.ValidGrants) > 1 {
-		// Multiple grants, prompt.
-		defaultID, _ := PromptDefaultGrant(grantStore, result.ValidGrants)
+		// Multiple grants, prompt — PromptDefaultGrant persists the choice.
+		defaultID, err := PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
+		if err != nil {
+			_, _ = common.Yellow.Printf("  Could not set default account: %v\n", err)
+			return
+		}
 		if defaultID != "" {
 			result.DefaultGrantID = defaultID
 			for _, g := range result.ValidGrants {
@@ -464,17 +470,4 @@ func stepGrantSync(status *SetupStatus) {
 			}
 		}
 	}
-
-	// Update config file with grants.
-	updateConfigGrants(configStore, cfg, result)
-}
-
-// updateConfigGrants writes the local default grant preference to the config file.
-func updateConfigGrants(configStore *config.FileStore, cfg *domain.Config, result *SyncResult) {
-	if cfg == nil || result == nil {
-		return
-	}
-	cfg.DefaultGrant = result.DefaultGrantID
-	cfg.Grants = nil
-	_ = configStore.Save(cfg)
 }

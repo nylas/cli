@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
+	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -24,7 +25,11 @@ type SyncResult struct {
 // It returns the list of valid grants and the chosen default grant ID.
 // The caller is responsible for setting the default if multiple grants exist
 // (use PromptDefaultGrant for interactive selection).
-func SyncGrants(grantStore ports.GrantStore, apiKey, clientID, region string) (*SyncResult, error) {
+//
+// When exactly one valid grant is returned, it is auto-selected as the default
+// and persisted to both the grant cache and config.yaml via PersistDefaultGrant
+// so every reader observes the same value.
+func SyncGrants(configStore ports.ConfigStore, grantStore ports.GrantStore, apiKey, clientID, region string) (*SyncResult, error) {
 	client := nylasadapter.NewHTTPClient()
 	client.SetRegion(region)
 	client.SetCredentials(clientID, "", apiKey)
@@ -32,10 +37,10 @@ func SyncGrants(grantStore ports.GrantStore, apiKey, clientID, region string) (*
 	ctx, cancel := common.CreateContext()
 	defer cancel()
 
-	return syncGrantsWithClient(ctx, grantStore, client)
+	return syncGrantsWithClient(ctx, configStore, grantStore, client)
 }
 
-func syncGrantsWithClient(ctx context.Context, grantStore ports.GrantStore, client grantLister) (*SyncResult, error) {
+func syncGrantsWithClient(ctx context.Context, configStore ports.ConfigStore, grantStore ports.GrantStore, client grantLister) (*SyncResult, error) {
 	grants, err := client.ListAllGrants(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch grants: %w", err)
@@ -67,17 +72,22 @@ func syncGrantsWithClient(ctx context.Context, grantStore ports.GrantStore, clie
 		ValidGrants: validGrants,
 	}
 
-	// Auto-set default if there's exactly one valid grant.
+	// Auto-set default if there's exactly one valid grant. Route through
+	// PersistDefaultGrant so config.yaml stays in sync with the grant cache.
 	if len(validGrants) == 1 {
 		result.DefaultGrantID = validGrants[0].ID
-		_ = grantStore.SetDefaultGrant(result.DefaultGrantID)
+		if err := authapp.PersistDefaultGrant(configStore, grantStore, result.DefaultGrantID); err != nil {
+			return nil, fmt.Errorf("could not persist default grant: %w", err)
+		}
 	}
 
 	return result, nil
 }
 
 // PromptDefaultGrant presents an interactive menu for the user to select a default grant.
-func PromptDefaultGrant(grantStore ports.GrantStore, grants []domain.Grant) (string, error) {
+// The chosen grant is persisted to both the grant cache and config.yaml via
+// PersistDefaultGrant.
+func PromptDefaultGrant(configStore ports.ConfigStore, grantStore ports.GrantStore, grants []domain.Grant) (string, error) {
 	opts := make([]common.SelectOption[string], len(grants))
 	for i, grant := range grants {
 		opts[i] = common.SelectOption[string]{
@@ -91,6 +101,8 @@ func PromptDefaultGrant(grantStore ports.GrantStore, grants []domain.Grant) (str
 		chosen = grants[0].ID
 	}
 
-	_ = grantStore.SetDefaultGrant(chosen)
+	if err := authapp.PersistDefaultGrant(configStore, grantStore, chosen); err != nil {
+		return "", fmt.Errorf("could not persist default grant: %w", err)
+	}
 	return chosen, nil
 }

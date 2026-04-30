@@ -12,7 +12,8 @@ import (
 // Config holds the TUI configuration.
 type Config struct {
 	Client          ports.NylasClient
-	GrantStore      ports.GrantStore // Optional: enables grant switching in TUI
+	GrantStore      ports.GrantStore  // Optional: enables grant switching in TUI
+	ConfigStore     ports.ConfigStore // Optional: when set, default-grant changes mirror to config.yaml
 	GrantID         string
 	Email           string
 	Provider        string
