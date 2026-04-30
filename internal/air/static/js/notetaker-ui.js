@@ -147,22 +147,18 @@ getProviderName(provider) {
 
 /**
  * Strip embedded styles AND dangerous tags/attrs from HTML so our CSS can
- * take control without inheriting attacker-controlled scripts.
- *
- * Email summaries flow into innerHTML, so a regex-only strip leaves
- * <script>, <iframe>, <img onerror=…>, <svg/onload=…>, etc. We use the
- * shared sanitizeHtml() (DOMParser-based) and then drop <style> + style=""
- * on top.
+ * take control without inheriting attacker-controlled scripts. Built on
+ * sanitizeHtml() (DOMParser-based) and a second DOM pass to remove
+ * <style> elements and inline style="" attributes — regex-based stripping
+ * is vulnerable to nested-tag bypasses (e.g. <sty<style>le>).
  */
 stripEmbeddedStyles(html) {
     if (typeof html !== 'string' || html === '') return '';
-    let cleaned = sanitizeHtml(html);
-    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/<\/?html[^>]*>/gi, '');
-    cleaned = cleaned.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
-    cleaned = cleaned.replace(/<\/?body[^>]*>/gi, '');
-    return cleaned;
+    const cleaned = sanitizeHtml(html);
+    const doc = new DOMParser().parseFromString(cleaned, 'text/html');
+    doc.querySelectorAll('style').forEach((el) => el.remove());
+    doc.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+    return doc.body.innerHTML;
 },
 
 /**
