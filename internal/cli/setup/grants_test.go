@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/grantcache"
 	"github.com/nylas/cli/internal/domain"
 )
@@ -21,10 +22,12 @@ func (f *fakeGrantLister) ListAllGrants(_ context.Context, params *domain.Grants
 }
 
 func TestSyncGrantsWithClientFetchesAllGrantsWithoutLimit(t *testing.T) {
-	grantStore := grantcache.New(filepath.Join(t.TempDir(), "grants.json"))
+	dir := t.TempDir()
+	grantStore := grantcache.New(filepath.Join(dir, "grants.json"))
+	configStore := config.NewFileStore(filepath.Join(dir, "config.yaml"))
 	client := &fakeGrantLister{grants: makeValidSetupGrants(30)}
 
-	result, err := syncGrantsWithClient(context.Background(), grantStore, client)
+	result, err := syncGrantsWithClient(context.Background(), configStore, grantStore, client)
 	if err != nil {
 		t.Fatalf("syncGrantsWithClient failed: %v", err)
 	}
@@ -40,6 +43,63 @@ func TestSyncGrantsWithClientFetchesAllGrantsWithoutLimit(t *testing.T) {
 	}
 	if len(stored) != 30 {
 		t.Fatalf("stored grants len = %d, want %d", len(stored), 30)
+	}
+}
+
+// TestSyncGrantsWithClientPersistsSingleGrantToBothStores guards the contract
+// that a single-grant sync writes the default to grants.json AND mirrors it
+// into config.yaml via PersistDefaultGrant. Regressions in either store would
+// break the TUI/Air/CLI consistency we standardized on.
+func TestSyncGrantsWithClientPersistsSingleGrantToBothStores(t *testing.T) {
+	dir := t.TempDir()
+	grantStore := grantcache.New(filepath.Join(dir, "grants.json"))
+	configStore := config.NewFileStore(filepath.Join(dir, "config.yaml"))
+	client := &fakeGrantLister{grants: makeValidSetupGrants(1)}
+
+	result, err := syncGrantsWithClient(context.Background(), configStore, grantStore, client)
+	if err != nil {
+		t.Fatalf("syncGrantsWithClient failed: %v", err)
+	}
+	if result.DefaultGrantID != "grant-00" {
+		t.Fatalf("DefaultGrantID = %q, want grant-00", result.DefaultGrantID)
+	}
+
+	gotGrantsJSON, err := grantStore.GetDefaultGrant()
+	if err != nil {
+		t.Fatalf("GetDefaultGrant failed: %v", err)
+	}
+	if gotGrantsJSON != "grant-00" {
+		t.Fatalf("grants.json default = %q, want grant-00", gotGrantsJSON)
+	}
+
+	cfg, err := configStore.Load()
+	if err != nil {
+		t.Fatalf("config Load failed: %v", err)
+	}
+	if cfg.DefaultGrant != "grant-00" {
+		t.Fatalf("config.yaml DefaultGrant = %q, want grant-00", cfg.DefaultGrant)
+	}
+}
+
+// TestSyncGrantsWithClientSkipsDefaultForMultipleGrants ensures that with more
+// than one valid grant, neither store has a default set — the caller is
+// expected to disambiguate via PromptDefaultGrant.
+func TestSyncGrantsWithClientSkipsDefaultForMultipleGrants(t *testing.T) {
+	dir := t.TempDir()
+	grantStore := grantcache.New(filepath.Join(dir, "grants.json"))
+	configStore := config.NewFileStore(filepath.Join(dir, "config.yaml"))
+	client := &fakeGrantLister{grants: makeValidSetupGrants(3)}
+
+	result, err := syncGrantsWithClient(context.Background(), configStore, grantStore, client)
+	if err != nil {
+		t.Fatalf("syncGrantsWithClient failed: %v", err)
+	}
+	if result.DefaultGrantID != "" {
+		t.Fatalf("DefaultGrantID = %q, want empty", result.DefaultGrantID)
+	}
+
+	if _, err := grantStore.GetDefaultGrant(); err != domain.ErrNoDefaultGrant {
+		t.Fatalf("GetDefaultGrant err = %v, want ErrNoDefaultGrant", err)
 	}
 }
 

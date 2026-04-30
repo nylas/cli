@@ -182,6 +182,10 @@ func PersistDefaultGrant(config ports.ConfigStore, grantStore ports.GrantStore, 
 		}
 
 		cfgToSave.DefaultGrant = grantID
+		// Drop the legacy in-memory grants slice — grant metadata lives in
+		// the grant cache now, and config.Grants is a transient field that
+		// shouldn't be re-persisted from older config snapshots.
+		cfgToSave.Grants = nil
 		if err := config.Save(cfgToSave); err != nil {
 			return err
 		}

@@ -177,7 +177,7 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				return nil
 			}
 
-			result, err := setup.SyncGrants(grantStore, apiKey, clientID, region)
+			result, err := setup.SyncGrants(configStore, grantStore, apiKey, clientID, region)
 			if err != nil {
 				_, _ = common.Yellow.Printf("  Could not fetch grants: %v\n", err)
 				fmt.Println()
@@ -194,15 +194,17 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				return nil
 			}
 
-			// Set default grant
+			// Set default grant. Both branches persist via PersistDefaultGrant
+			// inside SyncGrants/PromptDefaultGrant — no separate config.yaml
+			// write needed here.
 			defaultGrantID := result.DefaultGrantID
 			if defaultGrantID != "" {
-				// Single grant, auto-selected
+				// Single grant, auto-selected by SyncGrants.
 				fmt.Println()
 				_, _ = common.Green.Printf("✓ Set %s as default account\n", result.ValidGrants[0].Email)
 			} else if len(result.ValidGrants) > 1 {
-				// Multiple grants, prompt
-				defaultGrantID, _ = setup.PromptDefaultGrant(grantStore, result.ValidGrants)
+				// Multiple grants — PromptDefaultGrant persists the choice.
+				defaultGrantID, _ = setup.PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
 				for _, g := range result.ValidGrants {
 					if g.ID == defaultGrantID {
 						_, _ = common.Green.Printf("✓ Set %s as default account\n", g.Email)
@@ -213,13 +215,6 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 
 			fmt.Println()
 			fmt.Printf("Added %d grant(s). Run 'nylas auth list' to see all accounts.\n", len(result.ValidGrants))
-
-			// Update config file with the local default grant preference.
-			cfg.DefaultGrant = defaultGrantID
-			cfg.Grants = nil
-			if err := configStore.Save(cfg); err != nil {
-				_, _ = common.Yellow.Printf("  Warning: Could not update config file: %v\n", err)
-			}
 
 			return nil
 		},

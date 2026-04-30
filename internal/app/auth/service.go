@@ -92,11 +92,12 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 		return nil, err
 	}
 
-	// Set as default if no default exists.
+	// Set as default if no default exists. PersistDefaultGrant writes both
+	// the grant cache and config.yaml atomically so every reader (CLI, Air,
+	// UI, TUI) observes the same value.
 	if _, err := s.grantStore.GetDefaultGrant(); err == domain.ErrNoDefaultGrant {
-		_ = s.grantStore.SetDefaultGrant(grant.ID)
+		_ = PersistDefaultGrant(s.config, s.grantStore, grant.ID)
 	}
-	s.syncConfigWithGrantStore()
 
 	return grant, nil
 }
@@ -168,25 +169,28 @@ func (s *Service) RemoveLocalGrant(grantID string) error {
 	return nil
 }
 
-// autoSwitchDefault sets a new default grant from remaining grants.
+// autoSwitchDefault sets a new default grant from remaining grants. Both
+// branches route through PersistDefaultGrant so config.yaml stays in sync
+// with the grant cache.
 func (s *Service) autoSwitchDefault() {
 	grants, err := s.grantStore.ListGrants()
 	if err != nil {
 		return
 	}
 	if len(grants) == 0 {
-		// No remaining grants - clear the default
+		// No remaining grants — clear the cache file and the mirrored default.
 		_ = s.grantStore.ClearGrants()
-		s.syncConfigWithGrantStore()
+		_ = PersistDefaultGrant(s.config, s.grantStore, "")
 		return
 	}
-	// Set the first remaining grant as default
-	if err := s.grantStore.SetDefaultGrant(grants[0].ID); err != nil {
-		return
-	}
-	s.syncConfigWithGrantStore()
+	_ = PersistDefaultGrant(s.config, s.grantStore, grants[0].ID)
 }
 
+// syncConfigWithGrantStore mirrors the grant cache's current default into
+// config.yaml. Used as a defensive sync after operations that mutate the
+// grant cache without changing the default (e.g. removing a non-default
+// grant) — the cached value is read and re-persisted via PersistDefaultGrant
+// so both stores stay in lockstep.
 func (s *Service) syncConfigWithGrantStore() {
 	defaultGrant, err := s.grantStore.GetDefaultGrant()
 	if err == domain.ErrNoDefaultGrant {
@@ -194,15 +198,7 @@ func (s *Service) syncConfigWithGrantStore() {
 	} else if err != nil {
 		return
 	}
-
-	cfg, err := s.config.Load()
-	if err != nil {
-		return
-	}
-
-	cfg.Grants = nil
-	cfg.DefaultGrant = defaultGrant
-	_ = s.config.Save(cfg)
+	_ = PersistDefaultGrant(s.config, s.grantStore, defaultGrant)
 }
 
 func generateOAuthState() (string, error) {
