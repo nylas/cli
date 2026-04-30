@@ -117,12 +117,14 @@ func (s *Server) createTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	template.Variables = deduplicateStrings(allVars)
 
-	s.templatesMu.Lock()
-	if s.emailTemplates == nil {
-		s.emailTemplates = make(map[string]EmailTemplate)
-	}
-	s.emailTemplates[template.ID] = template
-	s.templatesMu.Unlock()
+	func() {
+		s.templatesMu.Lock()
+		defer s.templatesMu.Unlock()
+		if s.emailTemplates == nil {
+			s.emailTemplates = make(map[string]EmailTemplate)
+		}
+		s.emailTemplates[template.ID] = template
+	}()
 
 	writeJSON(w, http.StatusCreated, template)
 }
@@ -190,9 +192,11 @@ func (s *Server) updateTemplate(w http.ResponseWriter, r *http.Request, template
 
 // deleteTemplate deletes a template.
 func (s *Server) deleteTemplate(w http.ResponseWriter, _ *http.Request, templateID string) {
-	s.templatesMu.Lock()
-	delete(s.emailTemplates, templateID)
-	s.templatesMu.Unlock()
+	func() {
+		s.templatesMu.Lock()
+		defer s.templatesMu.Unlock()
+		delete(s.emailTemplates, templateID)
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -246,12 +250,14 @@ func (s *Server) expandTemplate(w http.ResponseWriter, r *http.Request, template
 	}
 
 	// Increment usage count
-	s.templatesMu.Lock()
-	if t, ok := s.emailTemplates[templateID]; ok {
-		t.UsageCount++
-		s.emailTemplates[templateID] = t
-	}
-	s.templatesMu.Unlock()
+	func() {
+		s.templatesMu.Lock()
+		defer s.templatesMu.Unlock()
+		if t, ok := s.emailTemplates[templateID]; ok {
+			t.UsageCount++
+			s.emailTemplates[templateID] = t
+		}
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"subject": subject,

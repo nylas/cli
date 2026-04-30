@@ -16,6 +16,12 @@
             border: none;
         }
 
+        /* In focus mode with no email selected, hide the empty-state preview entirely
+           so the user sees a clean canvas instead of a stranded "Select an email" card. */
+        .focus-mode-active .preview-pane:has(> .empty-state:only-child) {
+            display: none;
+        }
+
         .focus-mode-active .preview-body {
             font-size: 17px;
             line-height: 1.8;

@@ -248,13 +248,9 @@ const ShortcutsManager = {
             if (e.target === modal) this.hideModal();
         });
 
-        // Listen for ? key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === '?' && !this.isTyping(e.target)) {
-                e.preventDefault();
-                this.toggleModal();
-            }
-        });
+        // ? key handling lives in app-shortcuts-extended.js to avoid duplicate
+        // modal-open events. ShortcutsManager.toggleModal() is still callable
+        // programmatically (command palette, etc.) if a richer view is needed.
     },
 
     // Render shortcut categories for modal

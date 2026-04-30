@@ -79,7 +79,27 @@ func OpenSharedDB(basePath, filename string) (*sql.DB, error) {
 	_, _ = db.Exec("PRAGMA journal_mode=WAL")
 	_, _ = db.Exec("PRAGMA synchronous=NORMAL")
 
+	// Tighten file permissions to 0600 (defense in depth — the parent
+	// directory is already 0700). Errors are non-fatal: missing perms or
+	// non-Unix filesystems shouldn't abort startup.
+	restrictDBFileMode(dbPath)
+
 	return db, nil
+}
+
+// restrictDBFileMode chmods the SQLite database file (and its WAL/SHM
+// sidecars when they exist) to 0600. Best-effort — no-op on systems
+// where chmod has no meaning, and errors are deliberately ignored.
+func restrictDBFileMode(dbPath string) {
+	if _, err := os.Stat(dbPath); err == nil {
+		_ = os.Chmod(dbPath, 0600)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		p := dbPath + suffix
+		if _, err := os.Stat(p); err == nil {
+			_ = os.Chmod(p, 0600)
+		}
+	}
 }
 
 // sanitizeEmail converts email to a safe filename.
@@ -151,6 +171,10 @@ func (m *Manager) GetDB(email string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("init schema for %s: %w", email, err)
 	}
+
+	// Tighten file mode to 0600 once the file definitely exists (defense
+	// in depth atop the 0700 parent directory).
+	restrictDBFileMode(dbPath)
 
 	m.dbs[email] = db
 	return db, nil

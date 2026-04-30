@@ -114,7 +114,9 @@ buildNotetakerItem(nt) {
     // Details section (collapsed by default)
     const details = this.createElement('div', 'nt-card-details');
     details.style.display = 'none';
-    const detailsLink = nt.meetingLink ? `<p><a href="${nt.meetingLink}" target="_blank">🔗 Meeting Link</a></p>` : '';
+    const detailsLink = nt.meetingLink && isSafeUrl(nt.meetingLink)
+        ? `<p><a href="${escapeHtml(nt.meetingLink)}" target="_blank" rel="noopener noreferrer">🔗 Meeting Link</a></p>`
+        : '';
     details.innerHTML = `<p>${this.getProviderName(nt.provider)}</p>${detailsLink}`;
     body.appendChild(details);
 

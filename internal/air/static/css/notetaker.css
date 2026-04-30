@@ -12,7 +12,7 @@
 .nt-tab:hover { color: var(--text-primary); }
 .nt-actions { display: flex; gap: 8px; }
 .nt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-.nt-empty { grid-column: 1 / -1; text-align: center; padding: 60px 20px; }
+.nt-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 60px 20px; }
 .nt-empty-icon { font-size: 48px; margin-bottom: 16px; }
 .nt-empty h3 { margin: 0 0 8px; color: var(--text-primary); }
 .nt-empty p { margin: 0 0 20px; color: var(--text-secondary); }

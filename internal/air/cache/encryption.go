@@ -202,6 +202,10 @@ func (m *EncryptedManager) GetDB(email string) (*sql.DB, error) {
 		return nil, fmt.Errorf("init schema for %s: %w", email, err)
 	}
 
+	// Tighten file mode to 0600 — the file holds encrypted email/calendar
+	// data and should never be world-readable even when umask is permissive.
+	restrictDBFileMode(dbPath)
+
 	m.dbs[email] = db
 	return db, nil
 }
@@ -291,6 +295,9 @@ func (m *EncryptedManager) MigrateToEncrypted(email string) error {
 	_ = os.Remove(backupPath + "-wal")
 	_ = os.Remove(backupPath + "-shm")
 
+	// Lock down file mode on the freshly migrated database.
+	restrictDBFileMode(dbPath)
+
 	return nil
 }
 
@@ -363,6 +370,9 @@ func (m *EncryptedManager) MigrateToUnencrypted(email string) error {
 	_ = os.Remove(backupPath + "-shm")
 	_ = deleteKeyFunc(email)
 	delete(m.keys, email)
+
+	// Lock down file mode on the freshly migrated database.
+	restrictDBFileMode(dbPath)
 
 	return nil
 }

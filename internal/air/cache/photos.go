@@ -2,14 +2,45 @@ package cache
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 // DefaultPhotoTTL is the default time-to-live for cached photos (30 days).
 const DefaultPhotoTTL = 30 * 24 * time.Hour
+
+// errInvalidContactID is returned when the caller hands the photo store an
+// identifier that would be unsafe to compose into a filesystem path.
+var errInvalidContactID = errors.New("invalid contact ID for photo cache")
+
+// validateContactID rejects identifiers that would let a malicious or
+// malformed upstream contact escape the photo cache directory. Photo files
+// are stored at filepath.Join(basePath, contactID), so anything containing
+// a path separator, "..", control bytes, or NUL is unsafe. We also bound
+// the length so a hostile API response can't push us into "name too long"
+// errors at the filesystem layer.
+func validateContactID(id string) error {
+	if id == "" || len(id) > 128 {
+		return errInvalidContactID
+	}
+	if strings.ContainsAny(id, "/\\\x00") {
+		return errInvalidContactID
+	}
+	if id == "." || id == ".." || strings.Contains(id, "..") {
+		return errInvalidContactID
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if c < 0x20 || c == 0x7f {
+			return errInvalidContactID
+		}
+	}
+	return nil
+}
 
 // CachedPhoto represents a contact photo stored in the cache.
 type CachedPhoto struct {
@@ -67,7 +98,9 @@ func NewPhotoStore(db *sql.DB, basePath string, ttl time.Duration) (*PhotoStore,
 
 // Put stores a contact photo.
 func (s *PhotoStore) Put(contactID, contentType string, data []byte) error {
-	// Write photo to file
+	if err := validateContactID(contactID); err != nil {
+		return err
+	}
 	localPath := filepath.Join(s.basePath, contactID)
 	if err := os.WriteFile(localPath, data, 0600); err != nil {
 		return fmt.Errorf("write photo file: %w", err)
@@ -95,6 +128,9 @@ func (s *PhotoStore) Put(contactID, contentType string, data []byte) error {
 // Get retrieves a cached photo if it exists and is not expired.
 // Returns nil, nil if the photo is not cached or expired.
 func (s *PhotoStore) Get(contactID string) ([]byte, string, error) {
+	if err := validateContactID(contactID); err != nil {
+		return nil, "", err
+	}
 	row := s.db.QueryRow(`
 		SELECT content_type, size, local_path, cached_at
 		FROM photos WHERE contact_id = ?
@@ -136,6 +172,9 @@ func (s *PhotoStore) Get(contactID string) ([]byte, string, error) {
 
 // IsValid checks if a cached photo exists and is not expired.
 func (s *PhotoStore) IsValid(contactID string) bool {
+	if err := validateContactID(contactID); err != nil {
+		return false
+	}
 	var cachedAtUnix int64
 	err := s.db.QueryRow("SELECT cached_at FROM photos WHERE contact_id = ?", contactID).Scan(&cachedAtUnix)
 	if err != nil {
@@ -148,6 +187,9 @@ func (s *PhotoStore) IsValid(contactID string) bool {
 
 // Delete removes a cached photo.
 func (s *PhotoStore) Delete(contactID string) error {
+	if err := validateContactID(contactID); err != nil {
+		return err
+	}
 	// Get local path first
 	var localPath string
 	err := s.db.QueryRow("SELECT local_path FROM photos WHERE contact_id = ?", contactID).Scan(&localPath)

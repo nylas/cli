@@ -47,8 +47,8 @@ const EmailRenderer = {
         div.setAttribute('aria-selected', isSelected ? 'true' : 'false');
 
         div.innerHTML = `
-            <div class="email-avatar" style="background: var(--gradient-${Math.floor(Math.random() * 5) + 1})">
-                ${sender.initials}
+            <div class="email-avatar" style="background: ${gradientFor(sender.email || sender.name)}">
+                ${this.escapeHtml(sender.initials)}
             </div>
             <div class="email-content">
                 <div class="email-header">
@@ -93,12 +93,16 @@ const EmailRenderer = {
         return li;
     },
 
-    // Escape HTML to prevent XSS
+    // Escape HTML to prevent XSS. Escapes &, <, >, ", and ' so the result
+    // is safe in both element and attribute contexts.
     escapeHtml(str) {
         if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return String(str)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 };
 

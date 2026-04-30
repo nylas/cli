@@ -8,14 +8,15 @@ renderContactDetail(contact) {
 
     const displayName = contact.display_name || contact.given_name || 'Unknown';
     const primaryEmail = contact.emails && contact.emails[0] ? contact.emails[0].email : '';
-    // Try photo endpoint first, fall back to UI Avatars
-    const photoUrl = `/api/contacts/${contact.id}/photo`;
+    // Try photo endpoint first, fall back to UI Avatars. encodeURIComponent
+    // protects the URL path; escapeHtml protects the attribute context.
+    const photoUrl = `/api/contacts/${encodeURIComponent(contact.id)}/photo`;
     const fallbackUrl = this.getAvatarImageUrl(displayName, primaryEmail, 120);
 
     container.innerHTML = `
         <div class="contact-detail-header">
             <div class="contact-detail-avatar">
-                <img src="${photoUrl}"
+                <img src="${this.escapeHtml(photoUrl)}"
                      alt="${this.escapeHtml(displayName)}"
                      data-fallback-src="${this.escapeHtml(fallbackUrl)}" />
             </div>

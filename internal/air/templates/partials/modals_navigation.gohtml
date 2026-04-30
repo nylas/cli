@@ -112,8 +112,8 @@
     <div class="compose-header">
         <span class="compose-title" id="composeTitle">New Message</span>
         <div class="compose-controls">
-            <button class="compose-control" type="button" title="Minimize">−</button>
-            <button class="compose-control modal-close" type="button" title="Close" data-testid="compose-close">×</button>
+            <button class="compose-control" type="button" title="Minimize" aria-label="Minimize compose window"><span aria-hidden="true">−</span></button>
+            <button class="compose-control modal-close" type="button" title="Close" data-testid="compose-close" aria-label="Close compose window"><span aria-hidden="true">×</span></button>
         </div>
     </div>
     <form id="composeForm" class="compose-form">
@@ -144,13 +144,13 @@
     </form>
     <div class="compose-footer">
         <div class="compose-tools">
-            <button type="button" class="tool-btn" id="composeSave" title="Save draft">💾</button>
-            <button type="button" class="tool-btn" title="Attach file">📎</button>
-            <button type="button" class="tool-btn" title="Insert link">🔗</button>
-            <button type="button" class="tool-btn" title="Insert emoji">😊</button>
+            <button type="button" class="tool-btn" id="composeSave" title="Save draft" aria-label="Save draft"><span aria-hidden="true">💾</span></button>
+            <button type="button" class="tool-btn" title="Attach file" aria-label="Attach file"><span aria-hidden="true">📎</span></button>
+            <button type="button" class="tool-btn" title="Insert link" aria-label="Insert link"><span aria-hidden="true">🔗</span></button>
+            <button type="button" class="tool-btn" title="Insert emoji" aria-label="Insert emoji"><span aria-hidden="true">😊</span></button>
             <!-- Templates button disabled: <button type="button" class="tool-btn" onclick="TemplatesManager.open()" title="Templates">📋</button> -->
-            <button type="button" class="tool-btn ai" title="AI Compose">✨</button>
-            <button type="button" class="tool-btn danger" id="composeDiscard" title="Discard">🗑️</button>
+            <button type="button" class="tool-btn ai" title="AI Compose" aria-label="AI compose"><span aria-hidden="true">✨</span></button>
+            <button type="button" class="tool-btn danger" id="composeDiscard" title="Discard" aria-label="Discard draft"><span aria-hidden="true">🗑️</span></button>
         </div>
         <div class="send-group" style="display: flex;">
             <button type="button" class="send-btn" id="composeSend" data-testid="compose-send">
@@ -184,7 +184,7 @@
     <div class="shortcut-modal">
         <div class="shortcut-header">
             <h2 class="shortcut-title">⌨️ Keyboard Shortcuts</h2>
-            <button class="shortcut-close" data-testid="shortcut-close" data-action="close-shortcut-overlay">✕</button>
+            <button class="shortcut-close" data-testid="shortcut-close" data-action="close-shortcut-overlay" aria-label="Close keyboard shortcuts"><span aria-hidden="true">✕</span></button>
         </div>
         <div class="shortcut-content">
             <div class="shortcut-group">

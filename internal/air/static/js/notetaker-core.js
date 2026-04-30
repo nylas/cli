@@ -95,7 +95,7 @@ async joinMeeting(meetingLink, joinTime = null) {
  */
 async getMedia(notetakerId) {
     try {
-        const resp = await fetch(`/api/notetakers/media?id=${notetakerId}`);
+        const resp = await fetch(`/api/notetakers/media?id=${encodeURIComponent(notetakerId)}`);
         if (!resp.ok) {
             throw new Error('Media not available');
         }
@@ -111,7 +111,7 @@ async getMedia(notetakerId) {
  */
 async cancel(notetakerId) {
     try {
-        const resp = await fetch(`/api/notetakers?id=${notetakerId}`, {
+        const resp = await fetch(`/api/notetakers?id=${encodeURIComponent(notetakerId)}`, {
             method: 'DELETE'
         });
 

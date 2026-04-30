@@ -99,11 +99,15 @@ renderCompleteContent(nt) {
  */
 renderPendingContent(nt) {
     if (nt.state === 'scheduled') {
+        const safeLink = nt.meetingLink && isSafeUrl(nt.meetingLink);
+        const linkHtml = safeLink
+            ? `<a href="${escapeHtml(nt.meetingLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(nt.meetingLink)}</a>`
+            : escapeHtml(nt.meetingLink || 'N/A');
         return `
             <div class="detail-section">
                 <h3>⏰ Scheduled</h3>
                 <p>The bot will join the meeting at the scheduled time.</p>
-                <p>Meeting link: <a href="${nt.meetingLink}" target="_blank">${nt.meetingLink || 'N/A'}</a></p>
+                <p>Meeting link: ${linkHtml}</p>
             </div>
         `;
     }
@@ -125,30 +129,30 @@ renderPendingContent(nt) {
 renderActions(nt) {
     if (nt.isExternal && nt.externalUrl) {
         return `
-            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${this.escapeHtml(nt.externalUrl)}">
+            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${escapeHtml(nt.externalUrl)}">
                 🔗 Open in Nylas Notebook
             </button>
         `;
     }
     if (nt.state === 'complete' || nt.state === 'completed') {
         return `
-            <button class="btn-primary" data-action="notetaker-play" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-primary" data-action="notetaker-play" data-not-id="${escapeHtml(nt.id)}">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Play Recording
             </button>
-            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${escapeHtml(nt.id)}">
                 📝 View Transcript
             </button>
-            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${escapeHtml(nt.id)}">
                 ✨ AI Summary
             </button>
         `;
     }
     if (nt.state === 'scheduled') {
         return `
-            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${escapeHtml(nt.id)}">
                 ❌ Cancel Recording
             </button>
         `;

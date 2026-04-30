@@ -281,8 +281,8 @@ renderEventCard(event) {
     const participantsHtml = event.participants && event.participants.length > 0
         ? `<div class="event-attendees">
             ${event.participants.slice(0, 3).map(p => `
-                <div class="attendee-avatar" style="background: var(--gradient-${Math.floor(Math.random() * 5) + 1})" title="${this.escapeHtml(p.name || p.email)}">
-                    ${(p.name || p.email || '?')[0].toUpperCase()}
+                <div class="attendee-avatar" style="background: ${gradientFor(p.email || p.name)}" title="${this.escapeHtml(p.name || p.email)}">
+                    ${this.escapeHtml(((p.name || p.email || '?')[0] || '?').toUpperCase())}
                 </div>
             `).join('')}
             ${event.participants.length > 3 ? `<div class="attendee-more">+${event.participants.length - 3}</div>` : ''}
@@ -291,8 +291,8 @@ renderEventCard(event) {
 
     return `
         <div class="event-card${isFocusTime ? ' focus-time' : ''}${relativeTime.class ? ' ' + relativeTime.class : ''}" data-event-id="${event.id}">
-            <button class="event-edit-btn" style="position: absolute; top: 8px; right: 8px;" data-action="calendar-edit-event" data-event-id="${this.escapeHtml(event.id)}" title="Edit event">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button class="event-edit-btn" style="position: absolute; top: 8px; right: 8px;" data-action="calendar-edit-event" data-event-id="${this.escapeHtml(event.id)}" title="Edit event" aria-label="Edit event: ${this.escapeHtml(event.title || '(No Title)')}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
@@ -305,9 +305,9 @@ renderEventCard(event) {
             ${event.description ? `<div class="event-desc">${this.escapeHtml(this.stripHtml(event.description).substring(0, 100))}</div>` : ''}
             ${event.location ? `<div class="event-location">📍 ${this.escapeHtml(event.location)}</div>` : ''}
             ${participantsHtml}
-            ${hasConferencing ? `
+            ${hasConferencing && isSafeUrl(event.conferencing.url) ? `
                 <div class="event-actions">
-                    <a href="${event.conferencing.url}" target="_blank" class="join-meeting-btn" data-action="join-meeting-link">
+                    <a href="${this.escapeHtml(event.conferencing.url)}" target="_blank" rel="noopener noreferrer" class="join-meeting-btn" data-action="join-meeting-link">
                         📹 Join Meeting
                     </a>
                 </div>
@@ -375,21 +375,22 @@ formatEventTime(timestamp) {
 
 escapeHtml(str) {
     if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 },
 
 stripHtml(html) {
     if (!html) return '';
-    // Create a temporary element to parse HTML
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    // Get text content (strips all HTML tags)
-    let text = tmp.textContent || tmp.innerText || '';
-    // Clean up whitespace
-    text = text.replace(/\s+/g, ' ').trim();
-    return text;
+    // DOMParser produces an inert document, so side-effecting markup such as
+    // <img onerror>, <svg onload>, or <iframe srcdoc> never runs. We only
+    // read textContent off the parsed body.
+    const doc = new DOMParser().parseFromString(String(html), 'text/html');
+    const text = (doc.body && doc.body.textContent) ? doc.body.textContent : '';
+    return text.replace(/\s+/g, ' ').trim();
 },
 
 openEditModal(eventId) {

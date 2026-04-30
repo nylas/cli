@@ -327,6 +327,10 @@ func (s *Server) Start() error {
 func (s *Server) Stop() error {
 	s.stopBackgroundSync()
 
+	// Wait for background tasks (photo prune, etc.) before closing the
+	// underlying stores they reference.
+	s.bgWg.Wait()
+
 	s.runtimeMu.Lock()
 	defer s.runtimeMu.Unlock()
 

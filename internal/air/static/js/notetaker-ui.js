@@ -69,13 +69,15 @@ renderDetail() {
     if (!detail) return;
 
     if (!this.selectedNotetaker) {
-        detail.innerHTML = `
+        const emptyHtml = `
             <div class="notetaker-detail-empty">
                 <div class="detail-empty-icon">🎬</div>
                 <h3>Select a recording</h3>
                 <p>Click on a recording to view details, playback, and transcript</p>
             </div>
         `;
+        detail.replaceChildren();
+        detail.insertAdjacentHTML('beforeend', emptyHtml);
         return;
     }
 
@@ -93,25 +95,29 @@ renderDetail() {
         bodyContent = this.renderPendingContent(nt);
     }
 
-    // Build status display
+    // Build status display. getStatusText/Icon return values from a fixed
+    // map keyed on nt.state, so they're safe; we still escape the title and
+    // attendees because they come from the email body.
     const statusDisplay = nt.isExternal
         ? '🔗 External'
-        : this.getStatusIcon(nt.state) + ' ' + this.getStatusText(nt.state);
+        : this.getStatusIcon(nt.state) + ' ' + escapeHtml(this.getStatusText(nt.state));
 
-    // Build attendees line
     const attendeesLine = nt.attendees
-        ? '<p class="notetaker-detail-attendees">👥 ' + nt.attendees + '</p>'
+        ? '<p class="notetaker-detail-attendees">👥 ' + escapeHtml(nt.attendees) + '</p>'
         : '';
 
-    detail.innerHTML = `
+    const titleText = escapeHtml(nt.meetingTitle || 'Meeting Recording');
+    const providerName = escapeHtml(this.getProviderName(nt.provider));
+    const createdLine = nt.createdAt ? ' • ' + escapeHtml(new Date(nt.createdAt).toLocaleString()) : '';
+
+    const detailHtml = `
         <div class="notetaker-detail-header">
             <div class="notetaker-detail-status ${statusClass}">
                 ${statusDisplay}
             </div>
-            <h2>${nt.meetingTitle || 'Meeting Recording'}</h2>
+            <h2>${titleText}</h2>
             <p class="notetaker-detail-meta">
-                ${this.getProviderIcon(nt.provider)} ${this.getProviderName(nt.provider)}
-                ${nt.createdAt ? ' • ' + new Date(nt.createdAt).toLocaleString() : ''}
+                ${this.getProviderIcon(nt.provider)} ${providerName}${createdLine}
             </p>
             ${attendeesLine}
         </div>
@@ -122,6 +128,8 @@ renderDetail() {
             ${this.renderActions(nt)}
         </div>
     `;
+    detail.replaceChildren();
+    detail.insertAdjacentHTML('beforeend', detailHtml);
 },
 
 /**
@@ -138,14 +146,19 @@ getProviderName(provider) {
 },
 
 /**
- * Strip embedded styles from HTML to allow our CSS to take control
+ * Strip embedded styles AND dangerous tags/attrs from HTML so our CSS can
+ * take control without inheriting attacker-controlled scripts.
+ *
+ * Email summaries flow into innerHTML, so a regex-only strip leaves
+ * <script>, <iframe>, <img onerror=…>, <svg/onload=…>, etc. We use the
+ * shared sanitizeHtml() (DOMParser-based) and then drop <style> + style=""
+ * on top.
  */
 stripEmbeddedStyles(html) {
-    // Remove <style> tags and their content
-    let cleaned = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    // Remove inline style attributes
+    if (typeof html !== 'string' || html === '') return '';
+    let cleaned = sanitizeHtml(html);
+    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
     cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    // Remove <html>, <head>, <body> tags but keep their content
     cleaned = cleaned.replace(/<\/?html[^>]*>/gi, '');
     cleaned = cleaned.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
     cleaned = cleaned.replace(/<\/?body[^>]*>/gi, '');
@@ -205,11 +218,15 @@ renderCompleteContent(nt) {
  */
 renderPendingContent(nt) {
     if (nt.state === 'scheduled') {
+        const safeLink = nt.meetingLink && isSafeUrl(nt.meetingLink);
+        const linkHtml = safeLink
+            ? `<a href="${escapeHtml(nt.meetingLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(nt.meetingLink)}</a>`
+            : escapeHtml(nt.meetingLink || 'N/A');
         return `
             <div class="detail-section">
                 <h3>⏰ Scheduled</h3>
                 <p>The bot will join the meeting at the scheduled time.</p>
-                <p>Meeting link: <a href="${nt.meetingLink}" target="_blank">${nt.meetingLink || 'N/A'}</a></p>
+                <p>Meeting link: ${linkHtml}</p>
             </div>
         `;
     }
@@ -231,30 +248,30 @@ renderPendingContent(nt) {
 renderActions(nt) {
     if (nt.isExternal && nt.externalUrl) {
         return `
-            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${this.escapeHtml(nt.externalUrl)}">
+            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${escapeHtml(nt.externalUrl)}">
                 🔗 Open in Nylas Notebook
             </button>
         `;
     }
     if (nt.state === 'complete' || nt.state === 'completed') {
         return `
-            <button class="btn-primary" data-action="notetaker-play" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-primary" data-action="notetaker-play" data-not-id="${escapeHtml(nt.id)}">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Play Recording
             </button>
-            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${escapeHtml(nt.id)}">
                 📝 View Transcript
             </button>
-            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${escapeHtml(nt.id)}">
                 ✨ AI Summary
             </button>
         `;
     }
     if (nt.state === 'scheduled') {
         return `
-            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${escapeHtml(nt.id)}">
                 ❌ Cancel Recording
             </button>
         `;

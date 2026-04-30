@@ -18,8 +18,12 @@ async optimisticUpdate(emailId, updateFn, apiCall, successMsg, rollbackFn) {
         // Make API call
         await apiCall();
 
-        // Success - show toast and clear pending operation
+        // Success - clear pending operation FIRST, then re-render so the
+        // 'pending-update' spinner class is removed. Previously the
+        // delete happened but updateEmailInUI was never called again,
+        // leaving the spinner ::after pseudo-element rendering forever.
         this.pendingOperations.delete(operationId);
+        this.updateEmailInUI(emailId);
         if (successMsg && typeof showToast === 'function') {
             showToast('success', successMsg.title, successMsg.message);
         }
@@ -32,8 +36,11 @@ async optimisticUpdate(emailId, updateFn, apiCall, successMsg, rollbackFn) {
         } else {
             Object.assign(email, originalState);
         }
-        this.updateEmailInUI(emailId);
+        // Clear pending operation BEFORE re-rendering so the spinner
+        // class is removed. Doing it the other way leaves the spinner
+        // visible until the next unrelated state update.
         this.pendingOperations.delete(operationId);
+        this.updateEmailInUI(emailId);
 
         if (typeof showToast === 'function') {
             showToast('error', 'Error', 'Failed to update. Changes reverted.');

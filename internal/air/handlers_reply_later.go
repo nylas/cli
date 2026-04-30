@@ -112,9 +112,11 @@ func (s *Server) handleAddToReplyLater(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rlStore.mu.Lock()
-	rlStore.items[req.EmailID] = item
-	rlStore.mu.Unlock()
+	func() {
+		rlStore.mu.Lock()
+		defer rlStore.mu.Unlock()
+		rlStore.items[req.EmailID] = item
+	}()
 
 	httputil.WriteJSON(w, http.StatusOK, item)
 }
@@ -165,9 +167,11 @@ func (s *Server) handleRemoveFromReplyLater(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	rlStore.mu.Lock()
-	delete(rlStore.items, emailID)
-	rlStore.mu.Unlock()
+	func() {
+		rlStore.mu.Lock()
+		defer rlStore.mu.Unlock()
+		delete(rlStore.items, emailID)
+	}()
 
 	w.WriteHeader(http.StatusNoContent)
 }

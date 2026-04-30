@@ -118,10 +118,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== CALENDAR ==========
     Actions.register('create-event', function() {
-        if (typeof EventModal !== 'undefined' && typeof EventModal.openNew === 'function') {
-            EventModal.openNew();
+        if (typeof EventModal !== 'undefined' && typeof EventModal.open === 'function') {
+            EventModal.open();
         } else {
-            console.warn('create-event: EventModal.openNew is not available');
+            console.warn('create-event: EventModal.open is not available');
         }
     });
     Actions.register('open-find-time-modal', function() {

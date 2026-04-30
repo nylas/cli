@@ -93,7 +93,7 @@ Rules:
 - timeline: Brief description of how the conversation evolved
 - next_steps: Clear next action if any, or empty string`, conversationBuilder.String())
 
-	result, err := runClaudeCommand(prompt)
+	result, err := runClaudeCommand(r.Context(), prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, ThreadSummaryResponse{
 			Success: false,
@@ -155,9 +155,13 @@ Rules:
 }
 
 // runClaudeCommand runs the claude CLI with the given prompt.
-func runClaudeCommand(prompt string) (string, error) {
-	// Create context with timeout (30 seconds for AI response)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//
+// The provided ctx is honored: cancelling it (e.g. when the HTTP request is
+// aborted by the client) terminates the subprocess. A 30-second timeout is
+// also applied on top of the caller's context so a runaway claude process
+// can't block forever.
+func runClaudeCommand(ctx context.Context, prompt string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// Find claude binary
@@ -177,9 +181,12 @@ func runClaudeCommand(prompt string) (string, error) {
 
 	err = cmd.Run()
 	if err != nil {
-		// Check if it's a timeout
-		if ctx.Err() == context.DeadlineExceeded {
+		// Distinguish caller cancellation from our local 30s timeout.
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
 			return "", fmt.Errorf("claude code timed out after 30 seconds")
+		case context.Canceled:
+			return "", ctx.Err()
 		}
 		// Return stderr if available
 		if stderr.Len() > 0 {

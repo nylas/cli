@@ -106,4 +106,156 @@ test.describe('Folder Navigation', () => {
       expect(badgeCount >= 0).toBeTruthy();
     }
   });
+
+  // Regression test for the bug where Nylas's folder.unread_count lagged the
+  // per-message unread state — sidebar showed "1" while the loaded folder had
+  // dozens of messages flagged unread. The fix syncs the active folder badge
+  // to the unread count we observe in the loaded set.
+  test('active folder badge syncs to observed unread count', async ({ page }) => {
+    const folderList = page.locator(selectors.email.folderList);
+    await expect(folderList).toBeVisible();
+    // The sidebar is rendered as skeletons by the Go template and replaced
+    // with real folder-items (carrying data-folder-id) only after JS calls
+    // /api/folders. Wait for that swap so the test isn't racing the load.
+    await page.locator('.folder-item[data-folder-id]').first().waitFor({ timeout: 5000 });
+
+    const result = await page.evaluate(() => {
+      const item = document.querySelector('.folder-item[data-folder-id]');
+      // EmailListManager is declared with `const` in a classic script, so
+      // it's a free identifier in page context (not attached to window).
+      const mgr = typeof EmailListManager !== 'undefined' ? EmailListManager : null;
+      if (!item || !mgr) return { skipped: true };
+
+      const folderId = item.getAttribute('data-folder-id');
+
+      // Drop any pre-existing badge so the assertion isn't satisfied by a
+      // leftover render.
+      const stale = item.querySelector('.folder-count');
+      if (stale) stale.remove();
+
+      mgr.currentFolder = folderId;
+      mgr.emails = [
+        { id: 'a', unread: true, from: [], date: 0 },
+        { id: 'b', unread: true, from: [], date: 0 },
+        { id: 'c', unread: true, from: [], date: 0 },
+        { id: 'd', unread: false, from: [], date: 0 },
+      ];
+      mgr.applyFilter();
+
+      const badge = item.querySelector('.folder-count');
+      return {
+        skipped: false,
+        text: badge ? badge.textContent : null,
+        hasUnreadClass: badge ? badge.classList.contains('unread') : false,
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'No data-folder-id available in this render');
+      return;
+    }
+
+    expect(result.text).toBe('3');
+    expect(result.hasUnreadClass).toBe(true);
+  });
+
+  test('active folder badge is left untouched when observed unread is zero', async ({ page }) => {
+    await page.locator('.folder-item[data-folder-id]').first().waitFor({ timeout: 5000 });
+
+    const result = await page.evaluate(() => {
+      const item = document.querySelector('.folder-item[data-folder-id]');
+      const mgr = typeof EmailListManager !== 'undefined' ? EmailListManager : null;
+      if (!item || !mgr) return { skipped: true };
+
+      const folderId = item.getAttribute('data-folder-id');
+
+      // Seed an existing badge (e.g. total_count from API). The fix must
+      // not erase this when no unread is observed — otherwise scrolling
+      // through a zero-unread page on a non-empty folder would blank the
+      // count.
+      let badge = item.querySelector('.folder-count');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'folder-count';
+        item.appendChild(badge);
+      }
+      badge.textContent = '42';
+      badge.classList.remove('unread');
+
+      mgr.currentFolder = folderId;
+      mgr.emails = [
+        { id: 'a', unread: false, from: [], date: 0 },
+        { id: 'b', unread: false, from: [], date: 0 },
+      ];
+      mgr.applyFilter();
+
+      const after = item.querySelector('.folder-count');
+      return {
+        skipped: false,
+        text: after ? after.textContent : null,
+        hasUnreadClass: after ? after.classList.contains('unread') : false,
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'No data-folder-id available in this render');
+      return;
+    }
+
+    expect(result.text).toBe('42');
+    expect(result.hasUnreadClass).toBe(false);
+  });
+
+  // Pins the eager-refresh path: refreshFolderBadge fetches a folder's first
+  // page and updates the badge from the observed unread count, without the
+  // user having to click into the folder. Fixes the case where the sidebar
+  // shows Nylas's stale folder.unread_count on initial paint.
+  test('refreshFolderBadge writes the observed unread count', async ({ page }) => {
+    await page.locator('.folder-item[data-folder-id]').first().waitFor({ timeout: 5000 });
+
+    const result = await page.evaluate(async () => {
+      const item = document.querySelector('.folder-item[data-folder-id]');
+      const mgr = typeof EmailListManager !== 'undefined' ? EmailListManager : null;
+      if (!item || !mgr || typeof AirAPI === 'undefined') return { skipped: true };
+
+      const folderId = item.getAttribute('data-folder-id');
+      // Wipe pre-existing badge so we can prove the refresh wrote one.
+      const stale = item.querySelector('.folder-count');
+      if (stale) stale.remove();
+
+      // Stub AirAPI.getEmails to return a known unread mix without hitting
+      // the demo handler (the demo set's unread distribution depends on
+      // folder mapping that's outside this test's scope).
+      const original = AirAPI.getEmails;
+      AirAPI.getEmails = async () => ({
+        emails: [
+          { id: 'x', unread: true },
+          { id: 'y', unread: true },
+          { id: 'z', unread: true },
+          { id: 'w', unread: true },
+          { id: 'v', unread: false },
+        ],
+      });
+      try {
+        await mgr.refreshFolderBadge(folderId);
+      } finally {
+        AirAPI.getEmails = original;
+      }
+
+      const after = item.querySelector('.folder-count');
+      return {
+        skipped: false,
+        text: after ? after.textContent : null,
+        hasUnreadClass: after ? after.classList.contains('unread') : false,
+      };
+    });
+
+    if (result.skipped) {
+      test.skip(true, 'No data-folder-id / AirAPI available in this render');
+      return;
+    }
+
+    expect(result.text).toBe('4');
+    expect(result.hasUnreadClass).toBe(true);
+  });
 });
