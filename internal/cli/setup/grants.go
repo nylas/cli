@@ -76,7 +76,9 @@ func syncGrantsWithClient(ctx context.Context, configStore ports.ConfigStore, gr
 	// PersistDefaultGrant so config.yaml stays in sync with the grant cache.
 	if len(validGrants) == 1 {
 		result.DefaultGrantID = validGrants[0].ID
-		_ = authapp.PersistDefaultGrant(configStore, grantStore, result.DefaultGrantID)
+		if err := authapp.PersistDefaultGrant(configStore, grantStore, result.DefaultGrantID); err != nil {
+			return nil, fmt.Errorf("could not persist default grant: %w", err)
+		}
 	}
 
 	return result, nil
@@ -99,6 +101,8 @@ func PromptDefaultGrant(configStore ports.ConfigStore, grantStore ports.GrantSto
 		chosen = grants[0].ID
 	}
 
-	_ = authapp.PersistDefaultGrant(configStore, grantStore, chosen)
+	if err := authapp.PersistDefaultGrant(configStore, grantStore, chosen); err != nil {
+		return "", fmt.Errorf("could not persist default grant: %w", err)
+	}
 	return chosen, nil
 }

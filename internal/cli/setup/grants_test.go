@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"github.com/nylas/cli/internal/adapters/grantcache"
 	"github.com/nylas/cli/internal/domain"
 )
+
+var errPersistDefaultGrant = errors.New("persist default grant failed")
 
 type fakeGrantLister struct {
 	grants []domain.Grant
@@ -81,6 +84,25 @@ func TestSyncGrantsWithClientPersistsSingleGrantToBothStores(t *testing.T) {
 	}
 }
 
+func TestSyncGrantsWithClientReturnsErrorWhenSingleGrantDefaultCannotPersist(t *testing.T) {
+	dir := t.TempDir()
+	grantStore := grantcache.New(filepath.Join(dir, "grants.json"))
+	configStore := &failingSetupConfigStore{err: errPersistDefaultGrant}
+	client := &fakeGrantLister{grants: makeValidSetupGrants(1)}
+
+	result, err := syncGrantsWithClient(context.Background(), configStore, grantStore, client)
+	if !errors.Is(err, errPersistDefaultGrant) {
+		t.Fatalf("syncGrantsWithClient err = %v, want %v", err, errPersistDefaultGrant)
+	}
+	if result != nil {
+		t.Fatalf("syncGrantsWithClient result = %#v, want nil on persist failure", result)
+	}
+
+	if _, err := grantStore.GetDefaultGrant(); err != domain.ErrNoDefaultGrant {
+		t.Fatalf("GetDefaultGrant err = %v, want ErrNoDefaultGrant", err)
+	}
+}
+
 // TestSyncGrantsWithClientSkipsDefaultForMultipleGrants ensures that with more
 // than one valid grant, neither store has a default set — the caller is
 // expected to disambiguate via PromptDefaultGrant.
@@ -114,4 +136,24 @@ func makeValidSetupGrants(n int) []domain.Grant {
 		}
 	}
 	return grants
+}
+
+type failingSetupConfigStore struct {
+	err error
+}
+
+func (f *failingSetupConfigStore) Load() (*domain.Config, error) {
+	return domain.DefaultConfig(), nil
+}
+
+func (f *failingSetupConfigStore) Save(*domain.Config) error {
+	return f.err
+}
+
+func (f *failingSetupConfigStore) Path() string {
+	return "/tmp/config.yaml"
+}
+
+func (f *failingSetupConfigStore) Exists() bool {
+	return true
 }

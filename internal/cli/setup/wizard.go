@@ -455,7 +455,11 @@ func stepGrantSync(status *SetupStatus) {
 		_, _ = common.Green.Printf("  ✓ Set %s as default account\n", result.ValidGrants[0].Email)
 	} else if len(result.ValidGrants) > 1 {
 		// Multiple grants, prompt — PromptDefaultGrant persists the choice.
-		defaultID, _ := PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
+		defaultID, err := PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
+		if err != nil {
+			_, _ = common.Yellow.Printf("  Could not set default account: %v\n", err)
+			return
+		}
 		if defaultID != "" {
 			result.DefaultGrantID = defaultID
 			for _, g := range result.ValidGrants {

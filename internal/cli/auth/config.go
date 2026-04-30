@@ -179,7 +179,7 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 
 			result, err := setup.SyncGrants(configStore, grantStore, apiKey, clientID, region)
 			if err != nil {
-				_, _ = common.Yellow.Printf("  Could not fetch grants: %v\n", err)
+				_, _ = common.Yellow.Printf("  Could not sync grants: %v\n", err)
 				fmt.Println()
 				fmt.Println("Next steps:")
 				fmt.Println("  nylas auth login    Authenticate with your email provider")
@@ -204,7 +204,11 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				_, _ = common.Green.Printf("✓ Set %s as default account\n", result.ValidGrants[0].Email)
 			} else if len(result.ValidGrants) > 1 {
 				// Multiple grants — PromptDefaultGrant persists the choice.
-				defaultGrantID, _ = setup.PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
+				var promptErr error
+				defaultGrantID, promptErr = setup.PromptDefaultGrant(configStore, grantStore, result.ValidGrants)
+				if promptErr != nil {
+					return promptErr
+				}
 				for _, g := range result.ValidGrants {
 					if g.ID == defaultGrantID {
 						_, _ = common.Green.Printf("✓ Set %s as default account\n", g.Email)
