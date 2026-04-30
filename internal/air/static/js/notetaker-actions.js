@@ -30,20 +30,17 @@ getProviderName(provider) {
  * Strip embedded styles and scripts from HTML for safe rendering.
  *
  * Delegates structural sanitization (scripts, event handlers, dangerous
- * URLs) to sanitizeHtml() in utils.js — that uses DOMParser, which is not
- * defeatable by entity tricks or malformed tags the way the previous
- * regex strippers were. Inline <style> blocks and style="" attributes are
- * removed as before so our CSS controls theming.
+ * URLs) to sanitizeHtml(), then re-parses the result and removes <style>
+ * elements and inline style="" attributes via DOM operations — regex
+ * stripping is vulnerable to nested-tag bypasses (e.g. <sty<style>le>).
  */
 stripEmbeddedStyles(html) {
-    let cleaned = sanitizeHtml(html);
-    // Remove inline style attributes and <style> blocks so our app CSS
-    // controls theming. sanitizeHtml leaves these intact intentionally so
-    // legitimate emails can keep their structure.
-    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\s+style='[^']*'/gi, '');
-    return cleaned;
+    if (typeof html !== 'string' || html === '') return '';
+    const cleaned = sanitizeHtml(html);
+    const doc = new DOMParser().parseFromString(cleaned, 'text/html');
+    doc.querySelectorAll('style').forEach((el) => el.remove());
+    doc.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+    return doc.body.innerHTML;
 },
 
 /**
@@ -99,11 +96,15 @@ renderCompleteContent(nt) {
  */
 renderPendingContent(nt) {
     if (nt.state === 'scheduled') {
+        const safeLink = nt.meetingLink && isSafeUrl(nt.meetingLink);
+        const linkHtml = safeLink
+            ? `<a href="${escapeHtml(nt.meetingLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(nt.meetingLink)}</a>`
+            : escapeHtml(nt.meetingLink || 'N/A');
         return `
             <div class="detail-section">
                 <h3>⏰ Scheduled</h3>
                 <p>The bot will join the meeting at the scheduled time.</p>
-                <p>Meeting link: <a href="${nt.meetingLink}" target="_blank">${nt.meetingLink || 'N/A'}</a></p>
+                <p>Meeting link: ${linkHtml}</p>
             </div>
         `;
     }
@@ -125,30 +126,30 @@ renderPendingContent(nt) {
 renderActions(nt) {
     if (nt.isExternal && nt.externalUrl) {
         return `
-            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${this.escapeHtml(nt.externalUrl)}">
+            <button class="btn-primary" data-action="notetaker-open-external" data-external-url="${escapeHtml(nt.externalUrl)}">
                 🔗 Open in Nylas Notebook
             </button>
         `;
     }
     if (nt.state === 'complete' || nt.state === 'completed') {
         return `
-            <button class="btn-primary" data-action="notetaker-play" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-primary" data-action="notetaker-play" data-not-id="${escapeHtml(nt.id)}">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
                 Play Recording
             </button>
-            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-transcript" data-not-id="${escapeHtml(nt.id)}">
                 📝 View Transcript
             </button>
-            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-secondary" data-action="notetaker-summarize" data-not-id="${escapeHtml(nt.id)}">
                 ✨ AI Summary
             </button>
         `;
     }
     if (nt.state === 'scheduled') {
         return `
-            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${this.escapeHtml(nt.id)}">
+            <button class="btn-danger" data-action="notetaker-cancel" data-not-id="${escapeHtml(nt.id)}">
                 ❌ Cancel Recording
             </button>
         `;
@@ -273,19 +274,23 @@ showSummaryModal(nt) {
 /**
  * Clean email HTML - keep structure but remove scripts and styles for safe rendering.
  *
- * Like stripEmbeddedStyles, defers structural sanitization to sanitizeHtml.
- * Strips style/width/height after parsing so the app CSS owns layout.
+ * Defers structural sanitization to sanitizeHtml, then uses DOM operations
+ * to drop <style> elements, style/width/height attributes, and apply a
+ * constrained size to images so they don't blow up the modal. DOM-based
+ * stripping avoids the nested-tag bypasses that regex sanitisation has.
  */
 stripEmailCruft(html) {
-    let cleaned = sanitizeHtml(html);
-    cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    cleaned = cleaned.replace(/\s+style="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\s+style='[^']*'/gi, '');
-    cleaned = cleaned.replace(/\s+width="[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\s+height="[^"]*"/gi, '');
-    // Add a small constrained size to images so they don't blow up the modal.
-    cleaned = cleaned.replace(/<img/gi, '<img style="max-width:80px;max-height:40px;display:block;margin:0 auto 16px"');
-    return cleaned;
+    if (typeof html !== 'string' || html === '') return '';
+    const cleaned = sanitizeHtml(html);
+    const doc = new DOMParser().parseFromString(cleaned, 'text/html');
+    doc.querySelectorAll('style').forEach((el) => el.remove());
+    doc.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+    doc.querySelectorAll('[width]').forEach((el) => el.removeAttribute('width'));
+    doc.querySelectorAll('[height]').forEach((el) => el.removeAttribute('height'));
+    doc.querySelectorAll('img').forEach((img) => {
+        img.setAttribute('style', 'max-width:80px;max-height:40px;display:block;margin:0 auto 16px');
+    });
+    return doc.body.innerHTML;
 },
 
 /**

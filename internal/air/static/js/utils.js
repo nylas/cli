@@ -42,11 +42,16 @@ function formatRelativeTime(date) {
     return new Date(date).toLocaleDateString();
 }
 
-// Escape HTML to prevent XSS
+// Escape HTML to prevent XSS. Escapes &, <, >, ", and ' so the result is
+// safe in both element and attribute contexts.
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (text == null) return '';
+    return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 }
 
 // Sanitize untrusted HTML before assigning it to innerHTML.
@@ -119,6 +124,25 @@ function isSafeUrl(rawUrl) {
 // Generate unique ID
 function generateId() {
     return 'id_' + Math.random().toString(36).substr(2, 9);
+}
+
+// stableHashIndex returns a deterministic integer in [0, modulo) derived from
+// the input string. Used so that the same person/event always maps to the
+// same avatar gradient instead of flickering on each re-render.
+function stableHashIndex(seed, modulo) {
+    if (modulo <= 0) return 0;
+    const s = seed == null ? '' : String(seed);
+    let hash = 0;
+    for (let i = 0; i < s.length; i++) {
+        hash = (hash * 31 + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % modulo;
+}
+
+// gradientFor returns a CSS var() reference (--gradient-1 .. --gradient-5)
+// that is stable for a given seed string.
+function gradientFor(seed) {
+    return `var(--gradient-${stableHashIndex(seed, 5) + 1})`;
 }
 
 // Check if element is in viewport

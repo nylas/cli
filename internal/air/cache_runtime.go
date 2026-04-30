@@ -75,6 +75,11 @@ func (s *Server) reconfigureCacheRuntime() error {
 
 	s.stopBackgroundSync()
 
+	// Wait for any in-flight background tasks (e.g. photo prune) before
+	// closing or replacing photoStore/cacheManager — otherwise a running
+	// prune would be operating on a closed *sql.DB.
+	s.bgWg.Wait()
+
 	cacheCfg := cache.DefaultConfig()
 	if basePath := s.cacheSettings.BasePath(); basePath != "" {
 		cacheCfg.BasePath = basePath
@@ -141,7 +146,14 @@ func (s *Server) reconfigureCacheRuntime() error {
 	}
 
 	if photoStore != nil {
-		go prunePhotoStore(photoStore)
+		s.bgWg.Go(func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Fprintf(os.Stderr, "Photo cache prune panic: %v\n", r)
+				}
+			}()
+			prunePhotoStore(photoStore)
+		})
 	}
 	s.startBackgroundSync()
 
@@ -164,7 +176,11 @@ func openPhotoStore(basePath string) (*cache.PhotoStore, error) {
 }
 
 func prunePhotoStore(photoStore *cache.PhotoStore) {
-	if pruned, err := photoStore.Prune(); err == nil && pruned > 0 {
+	pruned, err := photoStore.Prune()
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "Photo cache prune failed: %v\n", err)
+	case pruned > 0:
 		fmt.Fprintf(os.Stderr, "Pruned %d expired photos from cache\n", pruned)
 	}
 }

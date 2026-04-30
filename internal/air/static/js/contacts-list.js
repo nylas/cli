@@ -45,15 +45,16 @@ renderContactItem(contact) {
     const isSelected = contact.id === this.selectedContactId;
     const primaryEmail = contact.emails && contact.emails[0] ? contact.emails[0].email : '';
     const displayName = contact.display_name || contact.given_name || 'Unknown';
-    // Try photo endpoint first, fall back to UI Avatars
-    const photoUrl = `/api/contacts/${contact.id}/photo`;
+    // Try photo endpoint first, fall back to UI Avatars. encodeURIComponent
+    // protects the URL path; escapeHtml protects the attribute context.
+    const photoUrl = `/api/contacts/${encodeURIComponent(contact.id)}/photo`;
     const fallbackUrl = this.getAvatarImageUrl(displayName, primaryEmail, 48);
 
     return `
         <div class="contact-item ${isSelected ? 'selected' : ''}"
-             data-contact-id="${contact.id}">
+             data-contact-id="${this.escapeHtml(contact.id)}">
             <div class="contact-avatar">
-                <img src="${photoUrl}"
+                <img src="${this.escapeHtml(photoUrl)}"
                      alt="${this.escapeHtml(displayName)}"
                      loading="lazy"
                      data-fallback-src="${this.escapeHtml(fallbackUrl)}" />

@@ -75,9 +75,11 @@ func (s *Server) updateUndoSendConfig(w http.ResponseWriter, r *http.Request) {
 		config.GracePeriodSec = 60
 	}
 
-	s.undoSendMu.Lock()
-	s.undoSendConfig = &config
-	s.undoSendMu.Unlock()
+	func() {
+		s.undoSendMu.Lock()
+		defer s.undoSendMu.Unlock()
+		s.undoSendConfig = &config
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,

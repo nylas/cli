@@ -24,18 +24,24 @@ func eventToResponse(e domain.Event) EventResponse {
 		HtmlLink:    e.HtmlLink,
 	}
 
-	// Handle all-day events
+	// Handle all-day events. Skip the override when parsing fails — the
+	// upstream-provided StartTime/EndTime is more useful than a year-1 Unix
+	// timestamp would be.
 	if resp.IsAllDay {
-		if e.When.Date != "" {
-			t, _ := time.Parse("2006-01-02", e.When.Date)
-			resp.StartTime = t.Unix()
-			resp.EndTime = t.Add(24 * time.Hour).Unix()
-		} else if e.When.StartDate != "" {
-			st, _ := time.Parse("2006-01-02", e.When.StartDate)
-			resp.StartTime = st.Unix()
+		switch {
+		case e.When.Date != "":
+			if t, err := time.Parse("2006-01-02", e.When.Date); err == nil {
+				resp.StartTime = t.Unix()
+				resp.EndTime = t.Add(24 * time.Hour).Unix()
+			}
+		case e.When.StartDate != "":
+			if st, err := time.Parse("2006-01-02", e.When.StartDate); err == nil {
+				resp.StartTime = st.Unix()
+			}
 			if e.When.EndDate != "" {
-				et, _ := time.Parse("2006-01-02", e.When.EndDate)
-				resp.EndTime = et.Unix()
+				if et, err := time.Parse("2006-01-02", e.When.EndDate); err == nil {
+					resp.EndTime = et.Unix()
+				}
 			}
 		}
 	}

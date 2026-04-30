@@ -38,6 +38,7 @@ type Server struct {
 	syncMu          sync.Mutex                     // Protects background sync lifecycle
 	syncStopCh      chan struct{}                  // Channel to stop background sync
 	syncWg          sync.WaitGroup                 // Wait group for sync goroutines
+	bgWg            sync.WaitGroup                 // Wait group for fire-and-forget background tasks (cache prune, etc.)
 	syncRunning     bool                           // Tracks whether background sync workers are running
 	isOnline        bool                           // Online status
 	onlineMu        sync.RWMutex                   // Protects isOnline

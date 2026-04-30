@@ -51,9 +51,11 @@ func (s *Server) updateSplitInboxConfig(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	s.splitInboxMu.Lock()
-	s.splitInboxConfig = &config
-	s.splitInboxMu.Unlock()
+	func() {
+		s.splitInboxMu.Lock()
+		defer s.splitInboxMu.Unlock()
+		s.splitInboxConfig = &config
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,

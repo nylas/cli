@@ -252,9 +252,11 @@ func (s *Server) handleCacheClear(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		s.offlineQueuesMu.Lock()
-		delete(s.offlineQueues, email)
-		s.offlineQueuesMu.Unlock()
+		func() {
+			s.offlineQueuesMu.Lock()
+			defer s.offlineQueuesMu.Unlock()
+			delete(s.offlineQueues, email)
+		}()
 	} else {
 		// Clear all accounts
 		if err := s.withCacheManager(func(manager cacheRuntimeManager) error {

@@ -112,13 +112,15 @@ func (s *Server) withOfflineQueue(email string, fn func(*cache.OfflineQueue) err
 			return err
 		}
 
-		s.offlineQueuesMu.Lock()
-		if existing := s.offlineQueues[email]; existing != nil {
-			queue = existing
-		} else {
-			s.offlineQueues[email] = queue
-		}
-		s.offlineQueuesMu.Unlock()
+		func() {
+			s.offlineQueuesMu.Lock()
+			defer s.offlineQueuesMu.Unlock()
+			if existing := s.offlineQueues[email]; existing != nil {
+				queue = existing
+			} else {
+				s.offlineQueues[email] = queue
+			}
+		}()
 	}
 
 	return fn(queue)
@@ -160,11 +162,13 @@ func (s *Server) refreshActiveAccountCacheRuntime() {
 	s.stopBackgroundSync()
 
 	if s.cacheSettings.Get().OfflineQueueEnabled {
-		s.runtimeMu.Lock()
-		if s.cacheManager != nil {
-			_ = s.initializeOfflineQueuesLocked()
-		}
-		s.runtimeMu.Unlock()
+		func() {
+			s.runtimeMu.Lock()
+			defer s.runtimeMu.Unlock()
+			if s.cacheManager != nil {
+				_ = s.initializeOfflineQueuesLocked()
+			}
+		}()
 	} else {
 		s.clearOfflineQueues()
 	}
@@ -317,8 +321,8 @@ func (s *Server) initializeOfflineQueuesLocked() error {
 
 func (s *Server) clearOfflineQueues() {
 	s.offlineQueuesMu.Lock()
+	defer s.offlineQueuesMu.Unlock()
 	s.offlineQueues = make(map[string]*cache.OfflineQueue)
-	s.offlineQueuesMu.Unlock()
 }
 
 func (s *Server) offlineQueueEmails() []string {

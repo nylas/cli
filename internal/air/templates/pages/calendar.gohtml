@@ -1,6 +1,7 @@
 {{define "calendar-view"}}
 <!-- Calendar View -->
 <div class="calendar-view" id="calendarView" data-air-view="calendar" data-testid="calendar-view">
+    <h1 class="sr-only">Calendar</h1>
     <!-- Calendar Sidebar -->
     <aside class="sidebar">
         <button class="compose-btn" data-testid="new-event-btn" data-action="create-event">
@@ -78,9 +79,9 @@
     <div class="calendar-main">
         <div class="calendar-header">
             <div class="calendar-nav">
-                <button class="calendar-nav-btn">←</button>
+                <button class="calendar-nav-btn" aria-label="Previous period"><span aria-hidden="true">←</span></button>
                 <h2 class="calendar-title">Loading...</h2>
-                <button class="calendar-nav-btn">→</button>
+                <button class="calendar-nav-btn" aria-label="Next period"><span aria-hidden="true">→</span></button>
             </div>
             <button class="today-btn">Today</button>
         </div>

@@ -32,7 +32,7 @@ func (s *Server) handleAISummarize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Run claude -p with the prompt
-	summary, err := runClaudeCommand(req.Prompt)
+	summary, err := runClaudeCommand(r.Context(), req.Prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, AIResponse{
 			Success: false,
@@ -98,7 +98,7 @@ Rules:
 - sentiment: Choose ONE based on tone and urgency
 - category: Choose the PRIMARY purpose of the email`, req.From, req.Subject, body)
 
-	result, err := runClaudeCommand(prompt)
+	result, err := runClaudeCommand(r.Context(), prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, EnhancedSummaryResponse{
 			Success: false,

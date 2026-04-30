@@ -47,7 +47,7 @@ Subject: %s
 
 Return format: ["Reply 1", "Reply 2", "Reply 3"]`, req.From, req.Subject, body)
 
-	result, err := runClaudeCommand(prompt)
+	result, err := runClaudeCommand(r.Context(), prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, SmartReplyResponse{
 			Success: false,
@@ -154,7 +154,7 @@ Rules:
 - category: Choose the PRIMARY purpose
 - priority: Based on urgency and sender importance`, req.From, req.Subject, body)
 
-	result, err := runClaudeCommand(prompt)
+	result, err := runClaudeCommand(r.Context(), prompt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, AutoLabelResponse{
 			Success: false,

@@ -12,6 +12,15 @@ async loadFolders() {
         if (inboxFolder) {
             this.inboxFolderId = inboxFolder.id;
         }
+        // Background-refresh primary folder badges so the initial sidebar
+        // paint isn't anchored to Nylas's potentially-stale folder
+        // unread_count aggregate (the SENT label is the worst offender —
+        // Nylas's count regularly lags the per-message unread state). Each
+        // folder's first page is fetched and the badge updated from the
+        // observed count. Fire-and-forget; errors are silenced inside.
+        if (typeof this.refreshPrimaryFolderBadges === 'function') {
+            this.refreshPrimaryFolderBadges().catch(() => {});
+        }
     } catch (error) {
         console.error('Failed to load folders:', error);
         // Keep using template-rendered folders
@@ -160,9 +169,12 @@ createFolderElement(folder, isActive = false) {
 
 escapeHtml(str) {
     if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 },
 });
 

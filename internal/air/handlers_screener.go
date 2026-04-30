@@ -150,17 +150,21 @@ func (s *Server) handleAddToScreener(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 }
 
-// IsSenderAllowed checks if a sender is allowed
+// IsSenderAllowed reports whether a sender has been explicitly allowed and,
+// if so, the routing destination ("inbox", "feed", "paper_trail").
+//
+// Only "allowed" senders pass — pending senders need screening, and blocked
+// senders are rejected. Unknown senders default to needing screening too.
 func IsSenderAllowed(email string) (bool, string) {
 	screenerStore.mu.RLock()
 	defer screenerStore.mu.RUnlock()
 
-	if sender, ok := screenerStore.senders[email]; ok {
-		if sender.Status == "allowed" {
-			return true, sender.Destination
-		}
-		return sender.Status != "blocked", ""
+	sender, ok := screenerStore.senders[email]
+	if !ok {
+		return false, ""
 	}
-	// Unknown sender - needs screening
+	if sender.Status == "allowed" {
+		return true, sender.Destination
+	}
 	return false, ""
 }

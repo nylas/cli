@@ -215,29 +215,49 @@ func (s *Server) handleUpdateFocusModeSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	fmStore.mu.Lock()
-	fmStore.settings = &settings
-	fmStore.mu.Unlock()
+	func() {
+		fmStore.mu.Lock()
+		defer fmStore.mu.Unlock()
+		fmStore.settings = &settings
+	}()
 
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// IsFocusModeActive returns whether focus mode is active
+// IsFocusModeActive reports whether a focus session is currently running.
+//
+// A session is "active" when IsActive=true AND we haven't passed EndsAt.
+// The handler that started the session never schedules a goroutine to flip
+// IsActive when the timer elapses, so callers (notification gating, auto-
+// reply) have to perform the expiry check at call time. Without this the
+// session would appear to last forever after the user closes the tab.
 func IsFocusModeActive() bool {
 	fmStore.mu.RLock()
 	defer fmStore.mu.RUnlock()
-	return fmStore.state.IsActive
+	if !fmStore.state.IsActive {
+		return false
+	}
+	if !fmStore.state.EndsAt.IsZero() && !time.Now().Before(fmStore.state.EndsAt) {
+		return false
+	}
+	return true
 }
 
-// ShouldAllowNotification checks if notification should be shown
+// ShouldAllowNotification reports whether a notification should be surfaced.
+//
+// Honours the active expiry window — once EndsAt has passed, focus mode is
+// effectively over even if no client GET refreshed the persisted state.
 func ShouldAllowNotification(senderEmail string) bool {
 	fmStore.mu.RLock()
 	defer fmStore.mu.RUnlock()
 
-	if !fmStore.state.IsActive || !fmStore.settings.HideNotifications {
+	active := fmStore.state.IsActive
+	if active && !fmStore.state.EndsAt.IsZero() && !time.Now().Before(fmStore.state.EndsAt) {
+		active = false
+	}
+	if !active || !fmStore.settings.HideNotifications {
 		return true
 	}
 
-	// Check if sender is in allowed list
 	return slices.Contains(fmStore.settings.AllowedSenders, senderEmail)
 }

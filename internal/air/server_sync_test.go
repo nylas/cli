@@ -56,7 +56,7 @@ func TestSyncEmails_NoCacheManager(t *testing.T) {
 	}
 
 	// This should not panic
-	server.syncEmails(t.Context(), "test@example.com", "grant-123")
+	server.syncEmails(t.Context(), "test@example.com", "grant-123", nil)
 }
 
 func TestSyncFolders_NoCacheManager(t *testing.T) {
@@ -85,6 +85,132 @@ func TestSyncEvents_NoCacheManager(t *testing.T) {
 
 	// This should not panic
 	server.syncEvents(t.Context(), "test@example.com", "grant-123")
+}
+
+// Pins the per-system-folder hydration: when syncFolders returns folders
+// with system types (inbox/sent/drafts/etc.), syncEmails must call
+// GetMessagesWithParams once per primary folder, in priority order, and
+// must not fall back to the unfiltered GetMessages path. Together with the
+// frontend eager refresh this is what gives non-Inbox folders correct cache
+// coverage on first paint and offline.
+func TestSyncEmails_PerFolderHydration(t *testing.T) {
+	t.Parallel()
+
+	server, client, accountEmail := newCachedTestServer(t)
+
+	folders := []domain.Folder{
+		{ID: "TRASH", Name: "Trash", SystemFolder: "trash"},
+		{ID: "INBOX", Name: "Inbox", SystemFolder: "inbox"},
+		{ID: "LABEL_42", Name: "Custom", SystemFolder: ""},
+		{ID: "SENT", Name: "Sent", SystemFolder: "sent"},
+		{ID: "DRAFTS", Name: "Drafts", SystemFolder: "drafts"},
+	}
+
+	var mu sync.Mutex
+	calls := []string{}
+	client.GetMessagesWithParamsFunc = func(_ context.Context, _ string, p *domain.MessageQueryParams) ([]domain.Message, error) {
+		mu.Lock()
+		if len(p.In) > 0 {
+			calls = append(calls, p.In[0])
+		}
+		mu.Unlock()
+		// Return one message per folder so we can also assert the cache
+		// got hydrated.
+		return []domain.Message{{
+			ID:      "msg-" + p.In[0],
+			Subject: "Hi from " + p.In[0],
+			Folders: []string{p.In[0]},
+			Date:    time.Now(),
+		}}, nil
+	}
+	client.GetMessagesFunc = func(context.Context, string, int) ([]domain.Message, error) {
+		t.Fatal("unfiltered GetMessages must not be called when system folders are available")
+		return nil, nil
+	}
+
+	server.syncEmails(t.Context(), accountEmail, "grant-123", folders)
+
+	mu.Lock()
+	got := append([]string(nil), calls...)
+	mu.Unlock()
+
+	// Priority order: inbox, sent, drafts, archive, trash, spam. Custom
+	// label must be skipped. We only declared four primary folders.
+	want := []string{"INBOX", "SENT", "DRAFTS", "TRASH"}
+	assert.Equal(t, want, got)
+
+	// The cache should now hold one message per primary folder.
+	store, err := server.getEmailStore(accountEmail)
+	if err != nil {
+		t.Fatalf("get email store: %v", err)
+	}
+	for _, fid := range want {
+		got, err := store.Get("msg-" + fid)
+		if err != nil || got == nil {
+			t.Fatalf("expected message msg-%s in cache, got err=%v", fid, err)
+		}
+	}
+}
+
+// Pins the fallback: when no folders are available (folder-API outage),
+// syncEmails must still hydrate the cache using the unfiltered top-N fetch
+// — losing folder coverage but keeping forward progress.
+func TestSyncEmails_FallsBackWhenFoldersEmpty(t *testing.T) {
+	t.Parallel()
+
+	server, client, accountEmail := newCachedTestServer(t)
+
+	called := false
+	client.GetMessagesFunc = func(context.Context, string, int) ([]domain.Message, error) {
+		called = true
+		return []domain.Message{{ID: "msg-fallback", Date: time.Now()}}, nil
+	}
+	client.GetMessagesWithParamsFunc = func(context.Context, string, *domain.MessageQueryParams) ([]domain.Message, error) {
+		t.Fatal("per-folder fetch must not run when folder list is empty")
+		return nil, nil
+	}
+
+	server.syncEmails(t.Context(), accountEmail, "grant-123", nil)
+
+	if !called {
+		t.Fatal("expected fallback GetMessages call")
+	}
+	store, err := server.getEmailStore(accountEmail)
+	if err != nil {
+		t.Fatalf("get email store: %v", err)
+	}
+	got, err := store.Get("msg-fallback")
+	if err != nil || got == nil {
+		t.Fatalf("expected fallback message in cache, err=%v", err)
+	}
+}
+
+// Pins primarySystemFolderIDs ordering and dedup directly so the priority
+// contract is regression-protected even if the calling code changes.
+func TestPrimarySystemFolderIDs_OrdersAndFilters(t *testing.T) {
+	t.Parallel()
+
+	folders := []domain.Folder{
+		{ID: "SPAM", SystemFolder: "spam"},
+		{ID: "LABEL_FOO", SystemFolder: ""},
+		{ID: "INBOX", SystemFolder: "INBOX"}, // upper-case to verify normalization
+		{ID: "INBOX", SystemFolder: "inbox"}, // duplicate, skip
+		{ID: "ARCHIVE", SystemFolder: "archive"},
+		{ID: "SENT", SystemFolder: " sent "}, // padded, verify trim
+	}
+
+	got := primarySystemFolderIDs(folders)
+	assert.Equal(t, []string{"INBOX", "SENT", "ARCHIVE", "SPAM"}, got)
+}
+
+func TestPrimarySystemFolderIDs_EmptyInput(t *testing.T) {
+	t.Parallel()
+	if got := primarySystemFolderIDs(nil); got != nil {
+		t.Fatalf("expected nil for nil input, got %v", got)
+	}
+	if got := primarySystemFolderIDs([]domain.Folder{}); got != nil {
+		t.Fatalf("expected nil for empty input, got %v", got)
+	}
 }
 
 func TestSyncContacts_NoCacheManager(t *testing.T) {
@@ -202,15 +328,11 @@ func TestSyncAccountLoop_StopsOnChannel(t *testing.T) {
 		cacheSettings: cache.DefaultSettings(),
 	}
 
-	// Add to wait group before starting
-	server.syncWg.Add(1)
-
-	// Start the loop in a goroutine
-	done := make(chan struct{})
-	go func() {
+	// Spawn via WaitGroup.Go to mirror production. WaitGroup.Go handles
+	// Add/Done for us, so we no longer call Add manually here.
+	server.syncWg.Go(func() {
 		server.syncAccountLoop(stopCh, "test@example.com", "grant-123")
-		close(done)
-	}()
+	})
 
 	// Give it a moment to start
 	time.Sleep(10 * time.Millisecond)
@@ -218,16 +340,19 @@ func TestSyncAccountLoop_StopsOnChannel(t *testing.T) {
 	// Signal stop
 	close(stopCh)
 
-	// Wait for it to finish with timeout
+	// Wait for it to finish with timeout via a sentinel goroutine.
+	done := make(chan struct{})
+	go func() {
+		server.syncWg.Wait()
+		close(done)
+	}()
+
 	select {
 	case <-done:
 		// Success
 	case <-time.After(2 * time.Second):
 		t.Error("syncAccountLoop did not stop in time")
 	}
-
-	// Verify wait group is decremented
-	server.syncWg.Wait()
 }
 
 func TestSyncAccountLoop_MinInterval(t *testing.T) {

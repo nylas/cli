@@ -99,6 +99,7 @@ type MockClient struct {
 	GetMessagesFunc           func(ctx context.Context, grantID string, limit int) ([]domain.Message, error)
 	GetMessagesWithParamsFunc func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error)
 	GetMessageFunc            func(ctx context.Context, grantID, messageID string) (*domain.Message, error)
+	GetMessageWithFieldsFunc  func(ctx context.Context, grantID, messageID, fields string) (*domain.Message, error)
 	SendMessageFunc           func(ctx context.Context, grantID string, req *domain.SendMessageRequest) (*domain.Message, error)
 	SendRawMessageFunc        func(ctx context.Context, grantID string, rawMIME []byte) (*domain.Message, error)
 	GetSignaturesFunc         func(ctx context.Context, grantID string) ([]domain.Signature, error)

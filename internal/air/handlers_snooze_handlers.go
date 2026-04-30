@@ -91,12 +91,14 @@ func (s *Server) snoozeEmail(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   time.Now().Unix(),
 	}
 
-	s.snoozeMu.Lock()
-	if s.snoozedEmails == nil {
-		s.snoozedEmails = make(map[string]SnoozedEmail)
-	}
-	s.snoozedEmails[req.EmailID] = snoozed
-	s.snoozeMu.Unlock()
+	func() {
+		s.snoozeMu.Lock()
+		defer s.snoozeMu.Unlock()
+		if s.snoozedEmails == nil {
+			s.snoozedEmails = make(map[string]SnoozedEmail)
+		}
+		s.snoozedEmails[req.EmailID] = snoozed
+	}()
 
 	writeJSON(w, http.StatusOK, SnoozeResponse{
 		Success:     true,
@@ -114,9 +116,11 @@ func (s *Server) unsnoozeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.snoozeMu.Lock()
-	delete(s.snoozedEmails, emailID)
-	s.snoozeMu.Unlock()
+	func() {
+		s.snoozeMu.Lock()
+		defer s.snoozeMu.Unlock()
+		delete(s.snoozedEmails, emailID)
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,

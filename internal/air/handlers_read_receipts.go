@@ -3,6 +3,7 @@ package air
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -83,17 +84,28 @@ func (s *Server) handleTrackOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rrStore.mu.Lock()
-	if receipt, ok := rrStore.receipts[emailID]; ok {
-		receipt.OpenCount++
-		if !receipt.IsOpened {
-			receipt.IsOpened = true
-			receipt.OpenedAt = time.Now()
-		}
-		receipt.UserAgent = r.UserAgent()
-		// Could extract device/location from User-Agent and IP
+	// Cap the User-Agent we persist. Browsers and bots sometimes send
+	// multi-kilobyte UA strings, and tracking pixels can be hit
+	// indefinitely; without a cap a single recipient could grow our
+	// in-memory store unboundedly.
+	const maxUA = 256
+	ua := r.UserAgent()
+	if len(ua) > maxUA {
+		ua = ua[:maxUA]
 	}
-	rrStore.mu.Unlock()
+
+	func() {
+		rrStore.mu.Lock()
+		defer rrStore.mu.Unlock()
+		if receipt, ok := rrStore.receipts[emailID]; ok {
+			receipt.OpenCount++
+			if !receipt.IsOpened {
+				receipt.IsOpened = true
+				receipt.OpenedAt = time.Now()
+			}
+			receipt.UserAgent = ua
+		}
+	}()
 
 	// Return transparent 1x1 GIF
 	w.Header().Set("Content-Type", "image/gif")
@@ -138,9 +150,11 @@ func (s *Server) handleUpdateReadReceiptSettings(w http.ResponseWriter, r *http.
 		return
 	}
 
-	rrStore.mu.Lock()
-	rrStore.settings = &settings
-	rrStore.mu.Unlock()
+	func() {
+		rrStore.mu.Lock()
+		defer rrStore.mu.Unlock()
+		rrStore.settings = &settings
+	}()
 
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
@@ -158,7 +172,9 @@ func RegisterEmailForTracking(emailID, recipient string) {
 	}
 }
 
-// GetTrackingPixelURL returns the tracking pixel URL for an email
+// GetTrackingPixelURL returns the tracking pixel URL for an email. The
+// emailID is URL-escaped so callers that compose the result into HTML
+// markup don't accidentally produce a broken or attribute-escaping URL.
 func GetTrackingPixelURL(emailID string) string {
-	return "/api/track/open?id=" + emailID
+	return "/api/track/open?id=" + url.QueryEscape(emailID)
 }

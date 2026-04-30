@@ -97,10 +97,21 @@ func (s *Server) createScheduledMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Validate send time is in the future (at least 1 minute)
-	if sendAt <= time.Now().Add(time.Minute).Unix() {
+	// Validate send time is in the future (at least 1 minute) and not so
+	// far in the future that we'd accept obvious garbage (year 9999) and
+	// queue infinitely. One year out is the documented Nylas API ceiling
+	// and matches the upstream send_at limit; anything beyond that is
+	// almost certainly a client bug or a hostile request.
+	now := time.Now()
+	if sendAt <= now.Add(time.Minute).Unix() {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "Send time must be at least 1 minute in the future",
+		})
+		return
+	}
+	if sendAt > now.Add(366*24*time.Hour).Unix() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Send time must be within one year",
 		})
 		return
 	}

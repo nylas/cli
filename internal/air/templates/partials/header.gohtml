@@ -27,8 +27,8 @@
             <span>Search or command...</span>
             <kbd>⌘K</kbd>
         </div>
-        <button class="settings-btn" data-action="toggle-settings" title="Settings">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button class="settings-btn" data-action="toggle-settings" title="Settings" aria-label="Settings">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
             </svg>
         </button>
@@ -95,7 +95,7 @@
             <strong>Welcome to Nylas Air!</strong>
             <p>Run <code>nylas auth login</code> in your terminal to connect your email account.</p>
         </div>
-        <button class="setup-banner-close" data-action="close-setup-banner">×</button>
+        <button class="setup-banner-close" data-action="close-setup-banner" aria-label="Dismiss setup banner"><span aria-hidden="true">×</span></button>
     </div>
 </div>
 {{end}}

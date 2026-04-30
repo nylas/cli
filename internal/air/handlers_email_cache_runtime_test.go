@@ -208,6 +208,89 @@ func TestHandleListEmails_UsesCacheFilters(t *testing.T) {
 	}
 }
 
+// Pins the fix for the Sent-folder coverage bug: when the cache holds a
+// partial view of a folder (typical for Sent/Drafts/etc. on busy accounts —
+// background sync fetches top-N unfiltered, dominated by Inbox), the handler
+// must fall through to the API. Otherwise the user sees a 1–2 message stub
+// when their real Sent folder has hundreds.
+func TestHandleListEmails_FolderPartialCache_FallsThroughToAPI(t *testing.T) {
+	t.Parallel()
+
+	server, client, accountEmail := newCachedTestServer(t)
+
+	// Single sent message in cache (the "1 email" symptom from the bug
+	// report).
+	putCachedEmail(t, server, accountEmail, &cache.CachedEmail{
+		ID:        "cached-sent-1",
+		FolderID:  "sent",
+		Subject:   "Hello From Nylas",
+		FromName:  "Qasim",
+		FromEmail: "qasim@example.com",
+		Date:      time.Now(),
+		CachedAt:  time.Now(),
+	})
+
+	apiCalled := false
+	client.GetMessagesWithParamsFunc = func(_ context.Context, _ string, _ *domain.MessageQueryParams) ([]domain.Message, error) {
+		apiCalled = true
+		msgs := make([]domain.Message, 0, 3)
+		for i := range 3 {
+			msgs = append(msgs, domain.Message{
+				ID:      "api-sent-" + string(rune('a'+i)),
+				Subject: "Real sent message",
+				Folders: []string{"sent"},
+				Date:    time.Now(),
+			})
+		}
+		return msgs, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/emails?folder=sent", nil)
+	w := httptest.NewRecorder()
+	server.handleListEmails(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !apiCalled {
+		t.Fatal("expected API call when cache has partial folder coverage; got cache short-circuit")
+	}
+}
+
+// Pins the inverse: a fully covered cache page must short-circuit so that
+// Inbox loads stay fast.
+func TestHandleListEmails_FolderFullCache_ShortCircuits(t *testing.T) {
+	t.Parallel()
+
+	server, client, accountEmail := newCachedTestServer(t)
+
+	// 50 cached inbox messages = full default page (handleListEmails uses
+	// query.GetLimit(50)).
+	for i := range 50 {
+		putCachedEmail(t, server, accountEmail, &cache.CachedEmail{
+			ID:        "inbox-" + string(rune('A'+i%26)) + string(rune('A'+i/26)),
+			FolderID:  "inbox",
+			Subject:   "Cached message",
+			FromEmail: "sender@example.com",
+			Date:      time.Now().Add(-time.Duration(i) * time.Minute),
+			CachedAt:  time.Now(),
+		})
+	}
+
+	client.GetMessagesWithParamsFunc = func(_ context.Context, _ string, _ *domain.MessageQueryParams) ([]domain.Message, error) {
+		t.Fatal("expected cache short-circuit when cache holds a full page")
+		return nil, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/emails?folder=inbox", nil)
+	w := httptest.NewRecorder()
+	server.handleListEmails(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
 func TestHandleUpdateEmail_UpdatesCacheOnSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -481,7 +564,9 @@ func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 
 	syncDone := make(chan struct{})
 	go func() {
-		server.syncEmails(context.Background(), accountEmail, "grant-123")
+		// nil folders triggers the unfiltered top-N fallback path, which is
+		// the behavior this lock-contention test was written against.
+		server.syncEmails(context.Background(), accountEmail, "grant-123", nil)
 		close(syncDone)
 	}()
 

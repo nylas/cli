@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -177,13 +178,15 @@ func (s *Server) handleBundleCategorize(w http.ResponseWriter, r *http.Request) 
 	bundleID := categorizeEmail(req.From, req.Subject)
 
 	if req.EmailID != "" && bundleID != "" {
-		bundleStore.mu.Lock()
-		bundleStore.emails[req.EmailID] = bundleID
-		if b, ok := bundleStore.bundles[bundleID]; ok {
-			b.Count++
-			b.LastUpdated = time.Now()
-		}
-		bundleStore.mu.Unlock()
+		func() {
+			bundleStore.mu.Lock()
+			defer bundleStore.mu.Unlock()
+			bundleStore.emails[req.EmailID] = bundleID
+			if b, ok := bundleStore.bundles[bundleID]; ok {
+				b.Count++
+				b.LastUpdated = time.Now()
+			}
+		}()
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, map[string]string{"bundleId": bundleID})
@@ -243,11 +246,58 @@ func matchRule(rule BundleRule, from, subject, domain string) bool {
 	case "startsWith":
 		return strings.HasPrefix(fieldValue, valueLower)
 	case "matches":
-		matched, _ := regexp.MatchString(rule.Value, fieldValue)
-		return matched
+		// Compile-and-match through a cached compile so a pathological
+		// pattern can't recompile on every email. Bad patterns are
+		// rejected at write-time by validateBundleRule, but old/persisted
+		// rules go through this path too — fall through quietly to keep
+		// the matcher panic-free.
+		re, err := compiledBundleRegex(rule.Value)
+		if err != nil || re == nil {
+			return false
+		}
+		return re.MatchString(fieldValue)
 	default:
 		return false
 	}
+}
+
+// bundleRegexCache caches compiled "matches" patterns. Bundle rules are
+// re-applied to every message arrival, so re-running regexp.Compile per
+// match would be both slow and an attack surface (catastrophic backtracking
+// patterns get compiled and burned per call).
+var (
+	bundleRegexCache   = make(map[string]*regexp.Regexp)
+	bundleRegexCacheMu sync.RWMutex
+)
+
+func compiledBundleRegex(pattern string) (*regexp.Regexp, error) {
+	bundleRegexCacheMu.RLock()
+	if re, ok := bundleRegexCache[pattern]; ok {
+		bundleRegexCacheMu.RUnlock()
+		return re, nil
+	}
+	bundleRegexCacheMu.RUnlock()
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	bundleRegexCacheMu.Lock()
+	bundleRegexCache[pattern] = re
+	bundleRegexCacheMu.Unlock()
+	return re, nil
+}
+
+// validateBundleRule rejects rules whose regex fails to compile so we
+// surface the error at PUT time instead of silently dropping every match.
+func validateBundleRule(rule BundleRule) error {
+	if rule.Operator != "matches" || rule.Value == "" {
+		return nil
+	}
+	if _, err := compiledBundleRegex(rule.Value); err != nil {
+		return err
+	}
+	return nil
 }
 
 // extractDomain extracts domain from email address
@@ -269,6 +319,13 @@ func (s *Server) handleUpdateBundle(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(limitedBody(w, r)).Decode(&bundle); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	for i, rule := range bundle.Rules {
+		if err := validateBundleRule(rule); err != nil {
+			http.Error(w, "Invalid regex in rule "+strconv.Itoa(i)+": "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	bundleStore.mu.Lock()

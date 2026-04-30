@@ -478,3 +478,189 @@
             color: var(--text-muted);
         }
 
+
+        /* ----------------------------------------------------------- */
+        /* Calendar invite card (Gmail-style)                            */
+        /* Rendered inside .email-detail when an email has a            */
+        /* text/calendar attachment, populated by                       */
+        /* EmailListManager.loadAndRenderInvite().                      */
+        /* ----------------------------------------------------------- */
+
+        .calendar-invite-card-slot[hidden] {
+            display: none;
+        }
+
+        .calendar-invite-card {
+            margin: 0 var(--space-4) var(--space-3) var(--space-4);
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: linear-gradient(
+                135deg,
+                rgba(99, 102, 241, 0.08),
+                rgba(139, 92, 246, 0.05)
+            );
+        }
+
+        .calendar-invite-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-2);
+        }
+
+        .calendar-invite-icon {
+            font-size: 28px;
+            line-height: 1;
+        }
+
+        .calendar-invite-when {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .calendar-invite-time {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .calendar-invite-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .calendar-invite-location,
+        .calendar-invite-org {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .calendar-invite-link {
+            display: inline-block;
+            margin-top: var(--space-2);
+            font-size: 13px;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .calendar-invite-link:hover {
+            text-decoration: underline;
+        }
+
+        .calendar-invite-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2);
+            margin-top: var(--space-3);
+        }
+
+        .calendar-invite-btn {
+            padding: 6px 16px;
+            border-radius: 9999px;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.12s ease, border-color 0.12s ease;
+        }
+
+        .calendar-invite-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        .calendar-invite-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .calendar-invite-btn.primary:hover {
+            filter: brightness(1.05);
+        }
+
+        .calendar-invite-btn.active {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        /* Cancellation banner — shown when METHOD:CANCEL or            */
+        /* STATUS:CANCELLED is present. Replaces the RSVP buttons so    */
+        /* the user can't RSVP to a dead invitation.                    */
+        .calendar-invite-banner {
+            margin-bottom: var(--space-2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .calendar-invite-banner-cancel {
+            background: rgba(220, 38, 38, 0.12);
+            color: #dc2626;
+        }
+
+        .calendar-invite-card.is-cancelled .calendar-invite-title {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        /* Attendee summary line + per-attendee chip list. Mirrors       */
+        /* Gmail's "3 going · 1 declined" header and the individual     */
+        /* response pills.                                              */
+        .calendar-invite-attendees {
+            margin-top: var(--space-3);
+        }
+
+        .calendar-invite-summary {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .calendar-invite-attendee-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .calendar-invite-attendee {
+            font-size: 12px;
+            padding: 3px 9px;
+            border-radius: 9999px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .calendar-invite-attendee.is-accepted {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: #16a34a;
+        }
+
+        .calendar-invite-attendee.is-declined {
+            background: rgba(220, 38, 38, 0.12);
+            border-color: rgba(220, 38, 38, 0.3);
+            color: #dc2626;
+            text-decoration: line-through;
+        }
+
+        .calendar-invite-attendee.is-tentative {
+            background: rgba(234, 179, 8, 0.12);
+            border-color: rgba(234, 179, 8, 0.3);
+            color: #ca8a04;
+        }
+
+        .calendar-invite-attendee.is-overflow {
+            color: var(--text-muted);
+        }

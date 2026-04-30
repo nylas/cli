@@ -251,14 +251,15 @@ const TouchGestures = {
      */
     async performAction(emailId, action) {
         try {
+            const safeId = encodeURIComponent(emailId);
             if (action === 'archive') {
-                await fetch(`/api/emails/${emailId}`, {
+                await fetch(`/api/emails/${safeId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ folder: 'archive' }),
                 });
             } else if (action === 'delete') {
-                await fetch(`/api/emails/${emailId}`, {
+                await fetch(`/api/emails/${safeId}`, {
                     method: 'DELETE',
                 });
             }

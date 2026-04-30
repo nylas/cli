@@ -430,39 +430,11 @@ func findConflicts(events []domain.Event) []EventConflict {
 			start1, end1 := e1.When.StartTime, e1.When.EndTime
 			start2, end2 := e2.When.StartTime, e2.When.EndTime
 
-			// Handle all-day events
-			if e1.When.IsAllDay() {
-				if e1.When.Date != "" {
-					t, _ := time.Parse("2006-01-02", e1.When.Date)
-					start1 = t.Unix()
-					end1 = t.Add(24 * time.Hour).Unix()
-				} else if e1.When.StartDate != "" {
-					t, _ := time.Parse("2006-01-02", e1.When.StartDate)
-					start1 = t.Unix()
-					if e1.When.EndDate != "" {
-						et, _ := time.Parse("2006-01-02", e1.When.EndDate)
-						end1 = et.Unix()
-					} else {
-						end1 = start1 + 24*60*60
-					}
-				}
-			}
-			if e2.When.IsAllDay() {
-				if e2.When.Date != "" {
-					t, _ := time.Parse("2006-01-02", e2.When.Date)
-					start2 = t.Unix()
-					end2 = t.Add(24 * time.Hour).Unix()
-				} else if e2.When.StartDate != "" {
-					t, _ := time.Parse("2006-01-02", e2.When.StartDate)
-					start2 = t.Unix()
-					if e2.When.EndDate != "" {
-						et, _ := time.Parse("2006-01-02", e2.When.EndDate)
-						end2 = et.Unix()
-					} else {
-						end2 = start2 + 24*60*60
-					}
-				}
-			}
+			// Handle all-day events. Only override the upstream timestamps on
+			// successful parse; on malformed dates we'd otherwise produce a
+			// year-1 Unix timestamp and detect bogus conflicts.
+			start1, end1 = allDayBounds(e1.When, start1, end1)
+			start2, end2 = allDayBounds(e2.When, start2, end2)
 
 			// Check for overlap: start1 < end2 && start2 < end1
 			if start1 < end2 && start2 < end1 {
@@ -475,6 +447,38 @@ func findConflicts(events []domain.Event) []EventConflict {
 	}
 
 	return conflicts
+}
+
+// allDayBounds returns the [start, end] Unix timestamps for an all-day or
+// multi-day event. If the When value carries a date string we cannot parse,
+// the caller-supplied fallback (start, end) is returned untouched so a
+// malformed upstream date never collapses the window to year 1.
+func allDayBounds(when domain.EventWhen, start, end int64) (int64, int64) {
+	if !when.IsAllDay() {
+		return start, end
+	}
+	switch {
+	case when.Date != "":
+		t, err := time.Parse("2006-01-02", when.Date)
+		if err != nil {
+			return start, end
+		}
+		return t.Unix(), t.Add(24 * time.Hour).Unix()
+	case when.StartDate != "":
+		t, err := time.Parse("2006-01-02", when.StartDate)
+		if err != nil {
+			return start, end
+		}
+		newStart := t.Unix()
+		newEnd := newStart + 24*60*60
+		if when.EndDate != "" {
+			if et, err := time.Parse("2006-01-02", when.EndDate); err == nil {
+				newEnd = et.Unix()
+			}
+		}
+		return newStart, newEnd
+	}
+	return start, end
 }
 
 // roundUpTo5Min rounds a Unix timestamp up to the next 5-minute boundary.

@@ -22,6 +22,20 @@ async selectEmail(emailId) {
             this.renderEmailBodyIframe(email.id, email.body);
         });
 
+        // Trigger an invite card render when the email looks like an
+        // invitation: either it carries a real text/calendar attachment,
+        // or its subject matches the patterns Google/Microsoft use for
+        // calendar invitations. The subject heuristic is needed because
+        // Gmail ships the ICS as an inline body part — Nylas does not
+        // surface those in attachments[], so the attachment-only check
+        // misses them. The /api/emails/{id}/invite endpoint then walks
+        // raw_mime as a fallback.
+        if (this.hasCalendarAttachment(email) || this.looksLikeInviteSubject(email)) {
+            this.loadAndRenderInvite(email.id).catch((err) => {
+                console.warn('[invite] render failed:', err);
+            });
+        }
+
         // Mark as read if unread
         if (email.unread) {
             await this.markAsRead(emailId);
@@ -102,6 +116,7 @@ renderEmailDetail(email) {
                 <span>Get smart reply suggestions</span>
             </button>
         </div>
+        <div class="calendar-invite-card-slot" id="inviteSlot-${escapeHtml(email.id)}" hidden></div>
         ${email.attachments && email.attachments.length > 0 ? `
             <div class="email-detail-attachments">
                 <div class="attachments-header">Attachments (${email.attachments.length})</div>
@@ -447,6 +462,266 @@ formatSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 },
 
+// hasCalendarAttachment returns true if the email has at least one
+// attachment that looks like an iCalendar invite (.ics or text/calendar).
+hasCalendarAttachment(email) {
+    if (!email || !Array.isArray(email.attachments)) return false;
+    return email.attachments.some((a) => {
+        const ct = (a.content_type || a.contentType || '').toLowerCase();
+        const fn = (a.filename || '').toLowerCase();
+        return ct.startsWith('text/calendar') ||
+               ct.startsWith('application/ics') ||
+               fn.endsWith('.ics');
+    });
+},
+
+// looksLikeInviteSubject is a cheap heuristic for "should we ask the
+// /invite endpoint about this email even though attachments[] has no
+// ICS?". Matches Google Calendar's "Invitation: …" / "Event
+// Invitation: …" / "Updated invitation: …" / "Canceled event: …"
+// patterns and Outlook's "Updated event: …". Returns false on any
+// non-string subject so we never trip on cached or partial responses.
+looksLikeInviteSubject(email) {
+    if (!email || typeof email.subject !== 'string') return false;
+    return /\b(invitation|invite|event invitation|calendar invitation|updated event|canceled event|cancelled event)\b/i.test(email.subject);
+},
+
+// loadAndRenderInvite fetches /api/emails/{id}/invite and renders the
+// returned event into the calendar-invite-card-slot. Silently no-ops if
+// the slot is missing (e.g., user navigated away) or the response says
+// has_invite=false.
+async loadAndRenderInvite(emailId) {
+    const slot = document.getElementById(`inviteSlot-${emailId}`);
+    if (!slot) return;
+
+    let invite;
+    try {
+        const resp = await fetch(`/api/emails/${encodeURIComponent(emailId)}/invite`);
+        if (!resp.ok) return;
+        invite = await resp.json();
+    } catch (err) {
+        console.warn('[invite] fetch failed:', err);
+        return;
+    }
+    if (!invite || !invite.has_invite) return;
+
+    // Skip if user has navigated to a different email since the fetch
+    // was kicked off.
+    if (this.selectedEmailId !== emailId) return;
+
+    // Replace existing children safely, then insert sanitised markup.
+    // All interpolated strings pass through EmailRenderer.escapeHtml; URL
+    // is screened by isSafeUrl. We use insertAdjacentHTML rather than
+    // direct DOM construction to keep the markup colocated and readable.
+    slot.replaceChildren();
+    slot.insertAdjacentHTML('beforeend', this.renderCalendarInviteCard(invite, emailId));
+    slot.removeAttribute('hidden');
+
+    // Mirror Gmail's behaviour by surfacing the ICS as a regular
+    // attachment row when the invite came from an inline calendar part.
+    // For real attachments the email-detail render already shows them,
+    // so we only need to inject when the row isn't there yet.
+    this.ensureInviteAttachmentRow(emailId, invite);
+},
+
+// ensureInviteAttachmentRow appends a calendar-attachment row to the
+// email detail view when one isn't already rendered. Used for inline
+// calendar parts that Nylas does not surface in attachments[].
+ensureInviteAttachmentRow(emailId, invite) {
+    if (!invite || !invite.filename) return;
+    if (this.selectedEmailId !== emailId) return;
+
+    const detail = document.querySelector('.email-detail');
+    if (!detail) return;
+
+    // Skip if any existing attachment-name already matches the invite
+    // filename — avoids double-rendering when Nylas DID return the ICS
+    // as a real attachment.
+    const existing = detail.querySelectorAll('.email-detail-attachments .attachment-name');
+    for (const el of existing) {
+        if ((el.textContent || '').toLowerCase() === invite.filename.toLowerCase()) {
+            return;
+        }
+    }
+
+    const esc = EmailRenderer.escapeHtml;
+    const rowHTML = `
+        <div class="attachment-item" data-inline-calendar="true">
+            <span class="attachment-icon">&#128206;</span>
+            <span class="attachment-name">${esc(invite.filename)}</span>
+            <span class="attachment-size">Calendar invitation</span>
+        </div>
+    `;
+
+    const list = detail.querySelector('.email-detail-attachments .attachments-list');
+    if (list) {
+        list.insertAdjacentHTML('beforeend', rowHTML);
+        const header = detail.querySelector('.email-detail-attachments .attachments-header');
+        if (header) {
+            const count = list.querySelectorAll('.attachment-item').length;
+            header.textContent = `Attachments (${count})`;
+        }
+        return;
+    }
+
+    // No attachments section exists yet — render one and place it
+    // directly after the invite card so it sits where the user expects.
+    const slot = document.getElementById(`inviteSlot-${emailId}`);
+    if (!slot) return;
+    const sectionHTML = `
+        <div class="email-detail-attachments">
+            <div class="attachments-header">Attachments (1)</div>
+            <div class="attachments-list">${rowHTML}</div>
+        </div>
+    `;
+    slot.insertAdjacentHTML('afterend', sectionHTML);
+},
+
+// renderCalendarInviteCard returns the HTML for a Gmail-style invite
+// card. All untrusted strings are escaped; the URL is also screened by
+// isSafeUrl before being placed in href.
+renderCalendarInviteCard(invite, emailId) {
+    const esc = EmailRenderer.escapeHtml;
+    const fmtRange = this.formatInviteRange(invite);
+    const safeURL = (typeof isSafeUrl === 'function' && invite.conferencing_url &&
+        isSafeUrl(invite.conferencing_url)) ? invite.conferencing_url : '';
+
+    const orgLine = invite.organizer_email
+        ? `${esc(invite.organizer_name || invite.organizer_email)} · Organizer`
+        : '';
+
+    const isCancelled = String(invite.method || '').toUpperCase() === 'CANCEL' ||
+        String(invite.status || '').toUpperCase() === 'CANCELLED';
+    const banner = isCancelled
+        ? `<div class="calendar-invite-banner calendar-invite-banner-cancel" role="alert">This event was cancelled</div>`
+        : '';
+
+    const attendeesBlock = this.renderInviteAttendees(invite.attendees);
+    const actions = isCancelled
+        ? ''
+        : `<div class="calendar-invite-actions">
+                <button type="button" class="calendar-invite-btn primary"
+                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="yes">Yes</button>
+                <button type="button" class="calendar-invite-btn"
+                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="maybe">Maybe</button>
+                <button type="button" class="calendar-invite-btn"
+                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="no">No</button>
+            </div>`;
+
+    return `
+        <section class="calendar-invite-card${isCancelled ? ' is-cancelled' : ''}" role="region" aria-label="Calendar invitation">
+            ${banner}
+            <header class="calendar-invite-header">
+                <div class="calendar-invite-icon" aria-hidden="true">📅</div>
+                <div class="calendar-invite-when">
+                    <div class="calendar-invite-time">${esc(fmtRange)}</div>
+                    <div class="calendar-invite-title">${esc(invite.title || 'Untitled event')}</div>
+                </div>
+            </header>
+            ${invite.location ? `<div class="calendar-invite-location">📍 ${esc(invite.location)}</div>` : ''}
+            ${orgLine ? `<div class="calendar-invite-org">${orgLine}</div>` : ''}
+            ${safeURL ? `<a class="calendar-invite-link" href="${esc(safeURL)}" target="_blank" rel="noopener noreferrer">Join with conferencing</a>` : ''}
+            ${attendeesBlock}
+            ${actions}
+        </section>
+    `;
+},
+
+// renderInviteAttendees produces the attendee summary that mirrors
+// Gmail's "3 going, 1 declined" line and the per-attendee chip list.
+// Returns an empty string when no attendees are present so the card
+// stays compact for invitations without an explicit attendee list
+// (Outlook sometimes omits ATTENDEE on REQUEST).
+renderInviteAttendees(attendees) {
+    if (!Array.isArray(attendees) || attendees.length === 0) return '';
+
+    const esc = EmailRenderer.escapeHtml;
+    const counts = { ACCEPTED: 0, DECLINED: 0, TENTATIVE: 0, OTHER: 0 };
+    attendees.forEach((a) => {
+        const status = String(a.status || '').toUpperCase();
+        if (status in counts) counts[status]++;
+        else counts.OTHER++;
+    });
+
+    const parts = [];
+    if (counts.ACCEPTED > 0) parts.push(`${counts.ACCEPTED} going`);
+    if (counts.DECLINED > 0) parts.push(`${counts.DECLINED} declined`);
+    if (counts.TENTATIVE > 0) parts.push(`${counts.TENTATIVE} maybe`);
+    if (counts.OTHER > 0) parts.push(`${counts.OTHER} no response`);
+
+    const summary = parts.length > 0
+        ? `<div class="calendar-invite-summary">${esc(parts.join(' · '))}</div>`
+        : '';
+
+    const chips = attendees.slice(0, 8).map((a) => {
+        const label = a.name || a.email || '';
+        if (!label) return '';
+        const status = String(a.status || '').toUpperCase();
+        const cls = status === 'ACCEPTED' ? 'is-accepted'
+            : status === 'DECLINED' ? 'is-declined'
+            : status === 'TENTATIVE' ? 'is-tentative'
+            : 'is-pending';
+        const role = a.is_organizer ? ' · Organizer' : '';
+        return `<span class="calendar-invite-attendee ${cls}" title="${esc(a.email || '')}${esc(role)}">${esc(label)}</span>`;
+    }).filter(Boolean).join('');
+
+    const overflow = attendees.length > 8
+        ? `<span class="calendar-invite-attendee is-overflow">+${attendees.length - 8} more</span>`
+        : '';
+
+    return `
+        <div class="calendar-invite-attendees">
+            ${summary}
+            <div class="calendar-invite-attendee-list">${chips}${overflow}</div>
+        </div>
+    `;
+},
+
+// formatInviteRange turns Unix-second start/end into a human string.
+// Falls back gracefully if either side is missing.
+formatInviteRange(invite) {
+    const start = invite.start_time ? new Date(invite.start_time * 1000) : null;
+    const end = invite.end_time ? new Date(invite.end_time * 1000) : null;
+
+    if (invite.is_all_day && start) {
+        return `${start.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })} · All day`;
+    }
+    if (start && end) {
+        const sameDay = start.toDateString() === end.toDateString();
+        const dateOpts = { weekday: 'short', month: 'short', day: 'numeric' };
+        const timeOpts = { hour: 'numeric', minute: '2-digit' };
+        if (sameDay) {
+            return `${start.toLocaleDateString(undefined, dateOpts)} · ${start.toLocaleTimeString(undefined, timeOpts)} – ${end.toLocaleTimeString(undefined, timeOpts)}`;
+        }
+        return `${start.toLocaleString(undefined, { ...dateOpts, ...timeOpts })} – ${end.toLocaleString(undefined, { ...dateOpts, ...timeOpts })}`;
+    }
+    if (start) return start.toLocaleString();
+    return 'Time not specified';
+},
+
+// rsvpToInvite handles a Yes/No/Maybe click. Currently a stub — shows a
+// toast confirming the choice and updates button state. Backend wiring
+// will plug into PUT /api/events/{id}/rsvp once the embedded event ID is
+// surfaced from the parser.
+rsvpToInvite(emailId, response) {
+    const valid = new Set(['yes', 'no', 'maybe']);
+    const choice = String(response || '').toLowerCase();
+    if (!valid.has(choice)) return;
+
+    if (typeof showToast === 'function') {
+        const labels = { yes: 'Accepted', no: 'Declined', maybe: 'Tentative' };
+        showToast('success', labels[choice], `Invite ${labels[choice].toLowerCase()}`);
+    }
+
+    // Visual feedback — mark the chosen button as active.
+    const slot = document.getElementById(`inviteSlot-${emailId}`);
+    if (slot) {
+        slot.querySelectorAll('.calendar-invite-btn').forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.rsvp === choice);
+        });
+    }
+},
+
 });
 
 // Single delegated listener for all email-detail action buttons and smart-reply triggers.
@@ -480,5 +755,8 @@ document.addEventListener('click', function (e) {
             EmailListManager.useSmartReply(emailId, replyIndex);
             break;
         }
+        case 'invite-rsvp':
+            EmailListManager.rsvpToInvite(emailId, target.dataset.rsvp);
+            break;
     }
 });

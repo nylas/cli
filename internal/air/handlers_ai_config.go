@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/nylas/cli/internal/httputil"
@@ -105,7 +106,9 @@ func (s *Server) handleUpdateAIConfig(w http.ResponseWriter, r *http.Request) {
 	if req.Model != "" {
 		aiStore.config.Model = req.Model
 	}
-	if req.APIKey != "" && req.APIKey != "***" {
+	// Saved value is masked for the read path as `***` + last 4 chars; never
+	// overwrite the real key with a masked value that came back via PUT.
+	if req.APIKey != "" && !strings.HasPrefix(req.APIKey, "***") {
 		aiStore.config.APIKey = req.APIKey
 	}
 	if req.BaseURL != "" {
@@ -155,12 +158,19 @@ func (s *Server) handleGetAIUsage(w http.ResponseWriter, r *http.Request) {
 	aiStore.mu.RLock()
 	defer aiStore.mu.RUnlock()
 
+	// Guard against zero budget: division would yield +Inf, which encoding/json
+	// refuses to marshal and would surface as a 500.
+	var percentUsed float64
+	if aiStore.config.UsageBudget > 0 {
+		percentUsed = (aiStore.config.UsageSpent / aiStore.config.UsageBudget) * 100
+	}
+
 	response := map[string]any{
 		"stats":       aiStore.stats,
 		"budget":      aiStore.config.UsageBudget,
 		"spent":       aiStore.config.UsageSpent,
 		"remaining":   aiStore.config.UsageBudget - aiStore.config.UsageSpent,
-		"percentUsed": (aiStore.config.UsageSpent / aiStore.config.UsageBudget) * 100,
+		"percentUsed": percentUsed,
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, response)

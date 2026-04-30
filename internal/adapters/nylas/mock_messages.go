@@ -54,7 +54,14 @@ func (m *MockClient) GetMessage(ctx context.Context, grantID, messageID string) 
 }
 
 // GetMessageWithFields retrieves a message with optional field selection.
+// Tests can pin a specific response by setting GetMessageWithFieldsFunc;
+// otherwise the mock falls back to GetMessage and synthesises a default
+// raw MIME body so callers exercising the raw_mime path don't get nil.
 func (m *MockClient) GetMessageWithFields(ctx context.Context, grantID, messageID string, fields string) (*domain.Message, error) {
+	if m.GetMessageWithFieldsFunc != nil {
+		return m.GetMessageWithFieldsFunc(ctx, grantID, messageID, fields)
+	}
+
 	msg, err := m.GetMessage(ctx, grantID, messageID)
 	if err != nil {
 		return nil, err
