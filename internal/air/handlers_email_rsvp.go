@@ -44,34 +44,19 @@ var validRSVPStatuses = map[string]struct{}{
 	"maybe": {},
 }
 
-// errEventNotImported is returned when the iCalendar UID does not match
-// any event Nylas has imported for the grant. Most commonly happens when
-// a Gmail/Outlook user receives an invite seconds before the calendar
-// auto-importer catches up — the right UX is "try again in a moment",
-// not "permanent failure".
+// errEventNotImported: the invite UID hasn't been ingested by the Nylas
+// calendar importer yet — surface as 404 with a "try again" hint.
 var errEventNotImported = errors.New("invite has not been imported into your calendar yet")
 
-// errNoWritableCalendar is returned when the grant has zero writable
-// calendars (e.g. the only calendar is a read-only "US Holidays"
-// subscription). We surface this distinctly from a transient lookup
-// failure so the user-facing message can be specific instead of the
-// generic "Failed to look up event — please try again", which would
-// recommend a retry that can never succeed.
+// errNoWritableCalendar: grant has only read-only calendars (e.g. a
+// "Holidays" subscription) — surface as 422, retry won't help.
 var errNoWritableCalendar = errors.New("no writable calendar available")
 
-// handleEmailRSVP forwards the user's RSVP choice to Nylas. The pipeline:
+// handleEmailRSVP forwards the user's RSVP choice to Nylas.
 //
-//  1. Re-parse the email's invite (sharing logic with /invite) to recover
-//     the VEVENT UID. We do not trust a UID submitted by the client —
-//     that would let the page RSVP to events on the user's behalf.
-//  2. Look up the Nylas event by ical_uid in the user's primary writable
-//     calendar.
-//  3. Call the Nylas send-rsvp endpoint.
-//
-// Refusing to accept a client-supplied event ID is the security
-// invariant: the invite-card UI never sends an event ID across the wire,
-// and the handler always re-resolves from the email to prevent CSRF-like
-// "RSVP to arbitrary event" attacks via a forged frontend.
+// Security invariant: never trust a client-supplied event ID — always
+// re-resolve via the email's VEVENT UID. Otherwise a forged frontend
+// could RSVP to arbitrary events on the user's behalf.
 func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID string) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -79,14 +64,6 @@ func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID
 
 	var body rsvpRequest
 	if err := json.NewDecoder(limitedBody(w, r)).Decode(&body); err != nil {
-		// json.Decoder error messages are benign here (syntax errors,
-		// unexpected EOF) but echoing them verbatim leaks the raw bytes
-		// the client sent back through the error string. Keep the message
-		// generic; the breadcrumb lives in the server log.
-		//
-		// MaxBytesReader signals body-too-large via *http.MaxBytesError; map
-		// that to 413 so clients can distinguish "your payload is too big"
-		// from "your JSON is malformed" — both currently land here.
 		slog.Warn("RSVP request body decode failed", "emailID", emailID, "err", err)
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
@@ -101,18 +78,12 @@ func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID
 		writeError(w, http.StatusBadRequest, "status must be one of: yes, no, maybe")
 		return
 	}
-	// Trim before the length check so leading/trailing whitespace doesn't
-	// eat the user's budget. The trimmed value is what gets forwarded to
-	// Nylas — surrounding whitespace was never useful anyway.
 	body.Comment = strings.TrimSpace(body.Comment)
 	if len(body.Comment) > rsvpCommentMaxBytes {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("comment must be %d bytes or fewer", rsvpCommentMaxBytes))
 		return
 	}
 
-	// Demo mode: skip all upstream calls so the canned-data UI keeps
-	// working without API credentials. The frontend gets the same shape
-	// the real path returns.
 	if s.demoMode {
 		writeJSON(w, http.StatusOK, rsvpResponse{
 			Status:     status,
@@ -132,13 +103,8 @@ func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID
 
 	invite, err := s.resolveEmailInvite(ctx, grantID, emailID)
 	if err != nil {
-		// Both the initial GetMessage failure AND the raw_mime fallback
-		// failure (errInviteFetchFailed) land here. Either is a transient
-		// upstream condition the user can retry — distinct from "this
-		// email has no invite" (which returns no error and HasInvite:false
-		// further down). Surface as 502 so the frontend can suggest a
-		// retry instead of permanently disabling the RSVP buttons. The
-		// raw error stays in server logs (avoid leaking upstream details).
+		// Both initial GetMessage failure and the raw_mime fallback land
+		// here — both are transient. 502 lets the frontend offer a retry.
 		slog.Error("RSVP failed to fetch email", "emailID", emailID, "err", err)
 		writeError(w, http.StatusBadGateway, "Failed to fetch email — please try again")
 		return
@@ -152,18 +118,13 @@ func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID
 		return
 	}
 	if invite.ICalUID == "" {
-		// Some Microsoft senders ship invites without a UID. The user
-		// would have to RSVP via the underlying calendar UI directly.
+		// Some Microsoft senders ship invites without a UID.
 		writeError(w, http.StatusUnprocessableEntity, "Invite has no UID — open the event in your calendar to RSVP")
 		return
 	}
 
-	// Resolve the (calendar, event) pair across ALL writable calendars,
-	// not just the primary. Users with multiple writable calendars
-	// (work + personal under one Google account, shared team calendars,
-	// etc.) often have invites land in a non-primary one — searching
-	// only the primary returned a misleading "not imported yet" 404 even
-	// though the event was sitting in the next calendar over.
+	// Search ALL writable calendars: invites often land in non-primary ones
+	// (work + personal under one Google account, shared team calendars).
 	calendarID, eventID, err := s.findInviteEventAcrossCalendars(ctx, grantID, invite.ICalUID)
 	if err != nil {
 		if errors.Is(err, errEventNotImported) {
@@ -204,23 +165,10 @@ func (s *Server) handleEmailRSVP(w http.ResponseWriter, r *http.Request, emailID
 	})
 }
 
-// findInviteEventAcrossCalendars searches every writable calendar on the
-// grant for an event matching icalUID, returning the (calendarID, eventID)
-// pair. Order:
-//
-//  1. Primary writable (most invites land here).
-//  2. Other writable calendars in list order.
-//
-// Read-only calendars are skipped because RSVP can't be sent on them
-// anyway — Nylas needs to update the attendee record on the event itself.
-//
-// Returns errEventNotImported when no writable calendar contains the UID —
-// the typical cause is that the calendar auto-importer hasn't ingested the
-// invite yet, or the invite was filed into a calendar Nylas can't see.
-//
-// Note: this scans calendars in order. For accounts with many writable
-// calendars (rare; most users have 1-3), each calendar costs one
-// listEvents call. We bail at the first match.
+// findInviteEventAcrossCalendars searches every writable calendar
+// (primary first) for an event matching icalUID. Returns
+// errEventNotImported when no calendar contains the UID. A single
+// calendar erroring doesn't kill the search — the next might hold it.
 func (s *Server) findInviteEventAcrossCalendars(ctx context.Context, grantID, icalUID string) (string, string, error) {
 	calendars, err := s.nylasClient.GetCalendars(ctx, grantID)
 	if err != nil {
@@ -235,11 +183,6 @@ func (s *Server) findInviteEventAcrossCalendars(ctx context.Context, grantID, ic
 		return "", "", errNoWritableCalendar
 	}
 
-	// Track the most recent transient lookup error so we can surface it
-	// if NO calendar matches. A single calendar erroring shouldn't kill
-	// the whole search — the next calendar might hold the event. Log
-	// each transient failure so a consistently-broken calendar is
-	// debuggable even when the search ultimately succeeds elsewhere.
 	var lastLookupErr error
 	for _, c := range writable {
 		eventID, err := s.findEventByICalUID(ctx, grantID, c.ID, icalUID)
@@ -262,9 +205,7 @@ func (s *Server) findInviteEventAcrossCalendars(ctx context.Context, grantID, ic
 	return "", "", errEventNotImported
 }
 
-// writableCalendars returns the calendars callers should search for an
-// invite, primary first, in calendar-list order. Encapsulates the
-// "primary preferred, fall back to first writable" rule.
+// writableCalendars returns writable calendars, primary first.
 func writableCalendars(calendars []domain.Calendar) []domain.Calendar {
 	out := make([]domain.Calendar, 0, len(calendars))
 	for _, c := range calendars {
@@ -280,13 +221,8 @@ func writableCalendars(calendars []domain.Calendar) []domain.Calendar {
 	return out
 }
 
-// findEventByICalUID resolves an iCalendar UID to a Nylas event ID by
-// querying the events endpoint with `ical_uid=<uid>`. The Nylas v3
-// listing supports this filter directly, so we avoid scanning the full
-// calendar.
-//
-// Returns errEventNotImported when no event matches — typical cause is
-// that the calendar auto-importer hasn't ingested the invite yet.
+// findEventByICalUID resolves a UID via Nylas v3's `ical_uid` filter.
+// Returns errEventNotImported when no event matches.
 func (s *Server) findEventByICalUID(ctx context.Context, grantID, calendarID, icalUID string) (string, error) {
 	resp, err := s.nylasClient.GetEventsWithCursor(ctx, grantID, calendarID, &domain.EventQueryParams{
 		ICalUID: icalUID,

@@ -15,10 +15,7 @@ import (
 // AVAILABILITY & FIND TIME HANDLERS
 // ====================================
 
-// parseInt64Param reads an int64 query parameter or returns an error
-// describing the bad value. An absent param is treated as a valid zero so
-// callers keep the existing "use default when not specified" semantics
-// without having to track presence separately.
+// parseInt64Param reads an int64 query parameter; an absent param yields zero.
 func parseInt64Param(query url.Values, key string) (int64, error) {
 	raw := query.Get(key)
 	if raw == "" {
@@ -31,7 +28,6 @@ func parseInt64Param(query url.Values, key string) (int64, error) {
 	return v, nil
 }
 
-// parseIntParam is the int twin of parseInt64Param.
 func parseIntParam(query url.Values, key string) (int, error) {
 	raw := query.Get(key)
 	if raw == "" {
@@ -106,10 +102,6 @@ type EventConflict struct {
 // handleAvailability finds available meeting times.
 func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		// Use writeError so the body is JSON-shaped like the rest of
-		// the API. http.Error emits text/plain, which made every
-		// generic error-parser in the frontend hit a JSON syntax error
-		// on this branch alone.
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}

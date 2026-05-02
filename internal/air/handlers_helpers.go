@@ -31,15 +31,9 @@ func (s *Server) requireConfig(w http.ResponseWriter) bool {
 	return true
 }
 
-// parseJSONBody decodes a JSON request body into the provided destination.
-// Returns true if successful, false if not (error response already written).
-// Callers should return immediately when this returns false.
-//
-// The raw decoder error is logged via slog rather than echoed to the
-// client. encoding/json's UnmarshalTypeError carries Go struct field
-// paths and value fragments from the request body — fingerprintable
-// detail that does not belong in a browser toast. This mirrors the
-// writeUpstreamError discipline used at the upstream-error sites.
+// parseJSONBody decodes the request body into dest. Returns false on
+// error after writing a generic 400; the raw decoder error stays in slog
+// (it can quote request bytes — PII or attacker input).
 func parseJSONBody[T any](w http.ResponseWriter, r *http.Request, dest *T) bool {
 	if err := json.NewDecoder(limitedBody(w, r)).Decode(dest); err != nil {
 		slog.Warn("invalid JSON request body",
@@ -53,11 +47,8 @@ func parseJSONBody[T any](w http.ResponseWriter, r *http.Request, dest *T) bool 
 	return true
 }
 
-// writeBadParamError writes a generic 400 to the client and logs the
-// raw parsing error via slog. Callers pass the parameter key (e.g.
-// "start_time") which is safe to surface; the parser's err carries
-// the raw query value, which is NOT — `parseInt64Param` formats it
-// via %q and reflecting that back is gratuitous attacker-input echo.
+// writeBadParamError writes a generic 400 ("invalid <key>") and logs the
+// raw parser error via slog (it formats the raw query value with %q).
 func writeBadParamError(w http.ResponseWriter, key string, perr error) {
 	slog.Warn("invalid query parameter", "key", key, "err", perr)
 	writeError(w, http.StatusBadRequest, "invalid "+key)
@@ -90,17 +81,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
-// writeUpstreamError logs the raw upstream error via slog and writes a
-// generic JSON envelope to the client. Use when an upstream call (Nylas
-// API, cache, etc.) failed and the user-facing message must NOT include
-// raw error details — Nylas error strings can include grant IDs,
-// endpoint paths, or response-body fragments that don't belong in a
-// browser toast. The log line carries the raw err for debugging.
-//
-// `msg` is the user-facing string written as-is (no err.Error()
-// concatenation). `attrs` are extra slog key/value pairs appended after
-// "err". Callers in handlers_email_rsvp.go model the same pattern
-// inline; this helper makes the convention easy to apply elsewhere.
+// writeUpstreamError writes msg to the client and logs the raw err via
+// slog. Use whenever an upstream error string could leak grant IDs,
+// endpoint paths, or response fragments. attrs are extra slog kv pairs.
 func writeUpstreamError(w http.ResponseWriter, status int, msg string, err error, attrs ...any) {
 	slog.Error(msg, append([]any{"err", err}, attrs...)...)
 	writeError(w, status, msg)
