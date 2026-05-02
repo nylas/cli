@@ -77,6 +77,76 @@ const emailCommandSections = [
         }
     },
     {
+        title: 'Signatures',
+        commands: {
+            'signatures-list': { title: 'List', cmd: 'email signatures list', desc: 'List stored signatures' },
+            'signatures-show': { title: 'Show', cmd: 'email signatures show', desc: 'Show signature details', param: { name: 'signature-id', placeholder: 'Enter signature ID...' } },
+            'signatures-create': {
+                title: 'Create',
+                cmd: 'email signatures create',
+                desc: 'Create a new signature',
+                flags: [
+                    { name: 'name', type: 'text', label: 'Name', placeholder: 'Signature name', required: true, short: 'n' },
+                    { name: 'body', type: 'textarea', label: 'Body (HTML)', placeholder: '<p>Best,<br>Alex</p>', short: 'b' }
+                ]
+            },
+            'signatures-update': {
+                title: 'Update',
+                cmd: 'email signatures update',
+                desc: 'Update a signature',
+                param: { name: 'signature-id', placeholder: 'Enter signature ID...' },
+                flags: [
+                    { name: 'name', type: 'text', label: 'Name', placeholder: 'New signature name', short: 'n' },
+                    { name: 'body', type: 'textarea', label: 'Body (HTML)', placeholder: 'Updated HTML body', short: 'b' }
+                ]
+            },
+            'signatures-delete': { title: 'Delete', cmd: 'email signatures delete', desc: 'Delete a signature', param: { name: 'signature-id', placeholder: 'Enter signature ID...' } }
+        }
+    },
+    {
+        title: 'Templates',
+        commands: {
+            'templates-list': { title: 'List', cmd: 'email templates list', desc: 'List stored templates' },
+            'templates-show': { title: 'Show', cmd: 'email templates show', desc: 'Show template details', param: { name: 'template-id', placeholder: 'Enter template ID...' } },
+            'templates-create': {
+                title: 'Create',
+                cmd: 'email templates create',
+                desc: 'Create a new template',
+                flags: [
+                    { name: 'name', type: 'text', label: 'Name', placeholder: 'Template name', required: true, short: 'n' },
+                    { name: 'subject', type: 'text', label: 'Subject', placeholder: 'Subject (supports {{variables}})', short: 's' },
+                    { name: 'body', type: 'textarea', label: 'Body', placeholder: 'Body (supports {{variables}})', short: 'b' },
+                    { name: 'category', type: 'text', label: 'Category', placeholder: 'sales, support, marketing...', short: 'c' }
+                ]
+            },
+            'templates-update': {
+                title: 'Update',
+                cmd: 'email templates update',
+                desc: 'Update a template',
+                param: { name: 'template-id', placeholder: 'Enter template ID...' },
+                flags: [
+                    { name: 'name', type: 'text', label: 'Name', placeholder: 'New name', short: 'n' },
+                    { name: 'subject', type: 'text', label: 'Subject', placeholder: 'New subject', short: 's' },
+                    { name: 'body', type: 'textarea', label: 'Body', placeholder: 'New body', short: 'b' },
+                    { name: 'category', type: 'text', label: 'Category', placeholder: 'New category', short: 'c' }
+                ]
+            },
+            'templates-delete': { title: 'Delete', cmd: 'email templates delete', desc: 'Delete a template', param: { name: 'template-id', placeholder: 'Enter template ID...' } },
+            'templates-use': {
+                title: 'Use',
+                cmd: 'email templates use',
+                desc: 'Send an email using a template',
+                param: { name: 'template-id', placeholder: 'Enter template ID...' },
+                flags: [
+                    { name: 'to', type: 'text', label: 'To', placeholder: 'recipient@example.com', required: true, short: 't' },
+                    { name: 'cc', type: 'text', label: 'CC', placeholder: 'cc@example.com (optional)' },
+                    { name: 'bcc', type: 'text', label: 'BCC', placeholder: 'bcc@example.com (optional)' },
+                    { name: 'preview', type: 'checkbox', label: 'Preview only', short: 'p' }
+                ]
+            }
+        }
+    },
+    {
         title: 'Threads',
         commands: {
             'threads-list': {

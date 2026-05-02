@@ -88,4 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOtpCommands();
     renderAdminCommands();
     renderNotetakerCommands();
+    renderAgentCommands();
+    renderAuditCommands();
+    renderDashboardCommands();
 });

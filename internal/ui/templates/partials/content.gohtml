@@ -92,6 +92,25 @@
                         </svg>
                         <span>Admin</span>
                     </button>
+                    <button class="nav-item" data-page="agent" onclick="switchPage('agent')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 10v6m11-11h-6m-10 0H1"/>
+                            <path d="M19.07 4.93l-4.24 4.24m-5.66 5.66l-4.24 4.24"/>
+                            <path d="M19.07 19.07l-4.24-4.24m-5.66-5.66L4.93 4.93"/>
+                        </svg>
+                        <span>Agent</span>
+                    </button>
+                    <button class="nav-item" data-page="audit" onclick="switchPage('audit')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="9" y1="13" x2="15" y2="13"/>
+                            <line x1="9" y1="17" x2="15" y2="17"/>
+                            <line x1="9" y1="9" x2="11" y2="9"/>
+                        </svg>
+                        <span>Audit</span>
+                    </button>
                     <button class="nav-item" data-page="auth" onclick="switchPage('auth')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
@@ -116,6 +135,14 @@
                             <path d="M16 3.13a4 4 0 010 7.75"/>
                         </svg>
                         <span>Contacts</span>
+                    </button>
+                    <button class="nav-item" data-page="dashboard" onclick="switchPage('dashboard')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <span>Dashboard</span>
                     </button>
                     <button class="nav-item" data-page="email" onclick="switchPage('email')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -173,9 +200,12 @@
         <div class="dashboard-content">
             {{template "page-overview" .}}
             {{template "page-admin" .}}
+            {{template "page-agent" .}}
+            {{template "page-audit" .}}
             {{template "page-auth" .}}
             {{template "page-calendar" .}}
             {{template "page-contacts" .}}
+            {{template "page-dashboard" .}}
             {{template "page-email" .}}
             {{template "page-notetaker" .}}
             {{template "page-otp" .}}
