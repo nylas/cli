@@ -6,6 +6,7 @@ package nylas_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -342,9 +343,10 @@ func TestHTTPClient_UpdateThread(t *testing.T) {
 		},
 		{
 			name: "moves thread to folders",
-			request: &domain.UpdateMessageRequest{
-				Folders: []string{"Archive", "Work"},
-			},
+			request: func() *domain.UpdateMessageRequest {
+				folders := []string{"Archive", "Work"}
+				return &domain.UpdateMessageRequest{Folders: folders}
+			}(),
 			wantFields: []string{"folders"},
 		},
 		{
@@ -352,10 +354,11 @@ func TestHTTPClient_UpdateThread(t *testing.T) {
 			request: func() *domain.UpdateMessageRequest {
 				unread := true
 				starred := true
+				folders := []string{"INBOX"}
 				return &domain.UpdateMessageRequest{
 					Unread:  &unread,
 					Starred: &starred,
-					Folders: []string{"INBOX"},
+					Folders: folders,
 				}
 			}(),
 			wantFields: []string{"unread", "starred", "folders"},
@@ -402,6 +405,95 @@ func TestHTTPClient_UpdateThread(t *testing.T) {
 			assert.Equal(t, "thread-456", thread.ID)
 		})
 	}
+}
+
+// TestHTTPClient_UpdateThread_ForwardsEmptyFolders is the thread-level
+// twin of the same test on UpdateMessage: archiving a Gmail thread (drop
+// every label) sends &[]string{} to the adapter and the resulting PUT
+// body MUST contain "folders":[] verbatim. UpdateThread shares the same
+// "build payload then PUT" code shape as UpdateMessage, so a future
+// refactor that re-introduces the `len(req.Folders) > 0` guard would
+// silently regress thread archive on Gmail without this test.
+func TestHTTPClient_UpdateThread_ForwardsEmptyFolders(t *testing.T) {
+	t.Parallel()
+
+	var rawBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		rawBody = string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"id":       "thread-456",
+				"grant_id": "grant-123",
+				"subject":  "Archived",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateThread(context.Background(), "grant-123", "thread-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(rawBody), &parsed))
+	folders, present := parsed["folders"]
+	require.True(t, present, "folders key must be present so Gmail thread archive reaches the API; raw=%s", rawBody)
+	assert.Equal(t, []any{}, folders, "folders must serialize as an explicit empty array; got %#v", folders)
+}
+
+// TestHTTPClient_UpdateThread_EmptyFolders_PropagatesUpstreamError is
+// the thread-level twin of the same UpdateMessage test: a 4xx from
+// Nylas on archive must surface as a real error so Air's optimistic UI
+// can roll back, not silently report success.
+func TestHTTPClient_UpdateThread_EmptyFolders_PropagatesUpstreamError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(raw), `"folders":[]`,
+			"adapter must still send the empty-folders body even when the upstream errors; raw=%s", string(raw))
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"label permission denied"}`))
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateThread(context.Background(), "grant-123", "thread-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.Error(t, err, "4xx upstream must surface as a real error, not nil")
+}
+
+// TestHTTPClient_UpdateThread_EmptyFolders_PropagatesServerError pins
+// the 5xx path: a transient Nylas outage during thread archive must
+// surface so Air's offline queue can retry the action.
+func TestHTTPClient_UpdateThread_EmptyFolders_PropagatesServerError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"upstream timeout"}`))
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateThread(context.Background(), "grant-123", "thread-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.Error(t, err, "5xx upstream must surface as a real error so the offline queue can retry")
 }
 
 func TestHTTPClient_DeleteThread(t *testing.T) {

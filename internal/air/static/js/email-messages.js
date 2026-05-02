@@ -1,7 +1,35 @@
 /* Email Messages - Loading and pagination */
+
+// debug() gates the noisy lifecycle traces that were left behind during
+// the loadEmails refactor. Set window.AIR_DEBUG=true in devtools to
+// re-enable them; production output stays quiet so the dev console isn't
+// drowning every keystroke.
+function debug(...args) {
+    if (typeof window !== 'undefined' && window.AIR_DEBUG) {
+        console.debug(...args);
+    }
+}
+
 Object.assign(EmailListManager, {
+// loadEmails returns one of three string outcomes:
+//   - 'loaded'      → fetch succeeded and the list re-rendered
+//   - 'in-progress' → another loadEmails was already running; the caller
+//                     should treat this as a benign no-op, NOT a failure
+//   - 'failed'      → fetch raised; an error toast was shown internally
+//
+// Returning a string outcome — rather than rethrowing — keeps long-standing
+// callers (compose.js, app-init.js, settings.js) working unchanged. The
+// boolean predecessor conflated "skipped because already loading" with
+// "fetch failed", so the mobile pull-to-refresh handler showed
+// "Refresh failed" when the user pulled twice in quick succession even
+// though no fetch had failed.
+//
+// For backwards compatibility callers can still treat the return value
+// as truthy/falsy: 'loaded' and 'in-progress' are truthy, 'failed' is a
+// non-empty string but distinguishable; new callers should compare
+// explicitly via `result === 'loaded'`.
 async loadEmails(folderOrOptions = null) {
-    if (this.isLoading) return;
+    if (this.isLoading) return 'in-progress';
     this.isLoading = true;
 
     // Support both string (folder) and object (options) parameter
@@ -16,8 +44,9 @@ async loadEmails(folderOrOptions = null) {
         from = folderOrOptions.from || null;
     }
 
-    console.log('[loadEmails] Starting...', { folder, search, from, limit: 50 });
+    debug('[loadEmails] Starting...', { folder, search, from, limit: 50 });
 
+    let outcome = 'failed';
     try {
         const options = { limit: 50 }; // Increased from 10 to 50 to fill viewport
         if (folder) {
@@ -33,7 +62,7 @@ async loadEmails(folderOrOptions = null) {
         }
 
         const data = await AirAPI.getEmails(options);
-        console.log('[loadEmails] API response:', {
+        debug('[loadEmails] API response:', {
             emailCount: data.emails?.length || 0,
             hasMore: data.has_more,
             nextCursor: data.next_cursor
@@ -46,6 +75,7 @@ async loadEmails(folderOrOptions = null) {
         // Apply current filter
         this.applyFilter();
         this.renderEmails();
+        outcome = 'loaded';
     } catch (error) {
         console.error('[loadEmails] Failed to load emails:', error);
         if (typeof showToast === 'function') {
@@ -53,11 +83,12 @@ async loadEmails(folderOrOptions = null) {
         }
     } finally {
         this.isLoading = false;
-        console.log('[loadEmails] Complete. Triggering ensureScrollable...');
+        debug('[loadEmails] Complete. Triggering ensureScrollable...');
         // Auto-load more AFTER isLoading is set to false
         // Use setTimeout to ensure DOM has updated
         setTimeout(() => this.ensureScrollable(), 100);
     }
+    return outcome;
 },
 
 async loadMore() {
@@ -92,7 +123,7 @@ async loadMore() {
 ensureScrollable() {
     const emailList = document.querySelector('.email-list');
 
-    console.log('[ensureScrollable] Starting check...', {
+    debug('[ensureScrollable] Starting check...', {
         hasEmailList: !!emailList,
         hasMore: this.hasMore,
         isLoading: this.isLoading,
@@ -106,12 +137,12 @@ ensureScrollable() {
     }
 
     if (!this.hasMore) {
-        console.log('[ensureScrollable] No more emails to load (hasMore=false)');
+        debug('[ensureScrollable] No more emails to load (hasMore=false)');
         return;
     }
 
     if (this.isLoading) {
-        console.log('[ensureScrollable] Already loading, skipping');
+        debug('[ensureScrollable] Already loading, skipping');
         return;
     }
 
@@ -120,7 +151,7 @@ ensureScrollable() {
     const clientHeight = emailList.clientHeight;
     const needsMore = scrollHeight <= clientHeight;
 
-    console.log('[ensureScrollable] Viewport check:', {
+    debug('[ensureScrollable] Viewport check:', {
         scrollHeight,
         clientHeight,
         needsMore,
@@ -128,10 +159,10 @@ ensureScrollable() {
     });
 
     if (needsMore) {
-        console.log('[ensureScrollable] Loading more emails to fill viewport...');
+        debug('[ensureScrollable] Loading more emails to fill viewport...');
         setTimeout(() => this.loadMore(), 100);
     } else {
-        console.log('[ensureScrollable] Viewport is full, stopping auto-load');
+        debug('[ensureScrollable] Viewport is full, stopping auto-load');
     }
 },
 
@@ -142,7 +173,7 @@ renderEmails(append = false) {
     // Use filtered emails for display
     const displayEmails = this.getDisplayEmails();
 
-    console.log('[renderEmails]', {
+    debug('[renderEmails]', {
         totalEmails: this.emails.length,
         filteredEmails: this.filteredEmails.length,
         currentFilter: this.currentFilter,
@@ -152,9 +183,6 @@ renderEmails(append = false) {
     });
 
     if (displayEmails.length === 0 && !append) {
-        // Clear spacers for empty state
-        emailList.innerHTML = '';
-
         const isInbox = this.currentFolder === this.inboxFolderId ||
                        this.currentFolder === 'INBOX' ||
                        this.currentFolder === 'inbox';
@@ -166,14 +194,37 @@ renderEmails(append = false) {
                 : { icon: '📭', title: 'No emails', message: 'This folder is empty' }
         };
         const msg = emptyMessages[this.currentFilter] || emptyMessages.all;
-        emailList.innerHTML = `
-            <div class="empty-state inbox-zero${msg.celebrate ? ' celebration' : ''}">
-                <div class="empty-icon">${msg.icon}</div>
-                <div class="empty-title">${msg.title}</div>
-                <div class="empty-message">${msg.message}</div>
-                ${msg.celebrate ? '<div class="inbox-zero-subtitle">✨ Enjoy the moment</div>' : ''}
-            </div>
-        `;
+
+        // DOM-construct the empty state so future copy changes can't
+        // accidentally introduce HTML interpolation. icon/title/message
+        // are static today but the dictionary is a tempting place to
+        // start mixing in a folder name later.
+        const empty = document.createElement('div');
+        empty.className = 'empty-state inbox-zero' + (msg.celebrate ? ' celebration' : '');
+
+        const iconEl = document.createElement('div');
+        iconEl.className = 'empty-icon';
+        iconEl.textContent = msg.icon;
+        empty.appendChild(iconEl);
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'empty-title';
+        titleEl.textContent = msg.title;
+        empty.appendChild(titleEl);
+
+        const messageEl = document.createElement('div');
+        messageEl.className = 'empty-message';
+        messageEl.textContent = msg.message;
+        empty.appendChild(messageEl);
+
+        if (msg.celebrate) {
+            const sub = document.createElement('div');
+            sub.className = 'inbox-zero-subtitle';
+            sub.textContent = '✨ Enjoy the moment';
+            empty.appendChild(sub);
+        }
+
+        emailList.replaceChildren(empty);
 
         // Trigger celebration confetti for Inbox Zero
         if (msg.celebrate && typeof window.celebrateInboxZero === 'function') {

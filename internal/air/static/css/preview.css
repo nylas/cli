@@ -591,6 +591,22 @@
             outline-offset: 1px;
         }
 
+        .calendar-invite-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        /* Pulse the in-flight button so the user sees the click          */
+        /* registered while the RSVP round-trip is pending.               */
+        .calendar-invite-btn.is-loading {
+            animation: calendar-invite-pulse 1.1s ease-in-out infinite;
+        }
+
+        @keyframes calendar-invite-pulse {
+            0%, 100% { opacity: 0.55; }
+            50%      { opacity: 0.85; }
+        }
+
         /* Cancellation banner — shown when METHOD:CANCEL or            */
         /* STATUS:CANCELLED is present. Replaces the RSVP buttons so    */
         /* the user can't RSVP to a dead invitation.                    */

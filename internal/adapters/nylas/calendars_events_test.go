@@ -180,6 +180,17 @@ func TestHTTPClient_GetEventsWithCursor(t *testing.T) {
 			},
 			wantQueryKeys: []string{"page_token"},
 		},
+		{
+			// ical_uid is the bridge between an emailed invite and a Nylas
+			// event ID; the RSVP handler relies on the upstream filter so
+			// we don't have to scan the whole calendar.
+			name: "includes ical_uid filter",
+			params: &domain.EventQueryParams{
+				Limit:   1,
+				ICalUID: "abc-123@example.com",
+			},
+			wantQueryKeys: []string{"ical_uid"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -205,6 +216,29 @@ func TestHTTPClient_GetEventsWithCursor(t *testing.T) {
 			_, _ = client.GetEventsWithCursor(ctx, "grant-123", "cal-123", tt.params)
 		})
 	}
+
+	t.Run("ical_uid value is forwarded verbatim", func(t *testing.T) {
+		// Real iCal UIDs frequently contain '@' and '.', and Outlook
+		// occasionally emits ones with hex-tagged suffixes. URL-escaping
+		// must not corrupt them before Nylas sees the filter.
+		uid := "0123-DEF@calendar.example.com"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, uid, r.URL.Query().Get("ical_uid"))
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+		}))
+		defer server.Close()
+
+		client := nylas.NewHTTPClient()
+		client.SetCredentials("client-id", "secret", "api-key")
+		client.SetBaseURL(server.URL)
+
+		_, err := client.GetEventsWithCursor(context.Background(), "grant-123", "cal-123", &domain.EventQueryParams{
+			Limit:   1,
+			ICalUID: uid,
+		})
+		require.NoError(t, err)
+	})
 
 	t.Run("returns pagination info", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

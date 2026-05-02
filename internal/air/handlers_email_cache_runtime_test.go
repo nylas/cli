@@ -636,10 +636,11 @@ func TestProcessOfflineQueues_UsesQueuedGrantID(t *testing.T) {
 				t.Helper()
 				unread := false
 				starred := true
+				folders := []string{"archive"}
 				if err := server.enqueueMessageUpdate("grant-123", accountEmail, "email-2", &domain.UpdateMessageRequest{
 					Unread:  &unread,
 					Starred: &starred,
-					Folders: []string{"archive"},
+					Folders: folders,
 				}); err != nil {
 					t.Fatalf("enqueue update: %v", err)
 				}

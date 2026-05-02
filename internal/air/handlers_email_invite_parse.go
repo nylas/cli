@@ -1,11 +1,17 @@
 package air
 
 import (
-	"errors"
 	"strings"
 
 	ical "github.com/arran4/golang-ical"
 )
+
+// maxICalUIDBytes caps the iCalendar UID we will round-trip into Nylas
+// query parameters. RFC 5545 doesn't define a maximum, but a hostile
+// inviter could craft a multi-MB UID — URL-encoded that becomes a giant
+// query string. 1KB comfortably covers Outlook's 200-char defaults and
+// Google's 100-byte UIDs while clamping the worst case.
+const maxICalUIDBytes = 1024
 
 // parseICS parses an iCalendar payload and returns the first VEVENT in a
 // shape the Air invite card understands. Backed by golang-ical so we
@@ -59,6 +65,16 @@ func calendarMethod(cal *ical.Calendar) string {
 func mapVEvent(ev *ical.VEvent) CalendarInviteResponse {
 	var resp CalendarInviteResponse
 
+	if p := ev.GetProperty(ical.ComponentPropertyUniqueId); p != nil {
+		uid := strings.TrimSpace(p.Value)
+		// Clamp pathological UIDs. A UID we cannot trust is preferable to
+		// dropping the invite, so keep the prefix and let the downstream
+		// ical_uid filter still find the event.
+		if len(uid) > maxICalUIDBytes {
+			uid = uid[:maxICalUIDBytes]
+		}
+		resp.ICalUID = uid
+	}
 	if p := ev.GetProperty(ical.ComponentPropertySummary); p != nil {
 		resp.Title = p.Value
 	}
@@ -193,7 +209,3 @@ func firstParam(params map[string][]string, key string) string {
 	}
 	return ""
 }
-
-// Sanity check that errNoUsableEvent is wired — a regression where the
-// parser silently ignored bad input would let the UI render a blank card.
-var _ = errors.New

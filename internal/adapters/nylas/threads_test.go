@@ -428,8 +428,9 @@ func TestHTTPClient_UpdateThread_WithFolders(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
+	folders := []string{"folder-archive", "folder-done"}
 	req := &domain.UpdateMessageRequest{
-		Folders: []string{"folder-archive", "folder-done"},
+		Folders: folders,
 	}
 
 	thread, err := client.UpdateThread(ctx, "grant-folders", "thread-move", req)

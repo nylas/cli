@@ -221,6 +221,7 @@ type EventQueryParams struct {
 	Busy            *bool  `json:"busy,omitempty"`
 	OrderBy         string `json:"order_by,omitempty"` // start, end
 	ExpandRecurring bool   `json:"expand_recurring,omitempty"`
+	ICalUID         string `json:"ical_uid,omitempty"` // resolves an emailed invite (VEVENT UID) to a Nylas event ID
 }
 
 // CreateEventRequest for creating a new event.

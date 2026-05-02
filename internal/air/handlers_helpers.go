@@ -3,7 +3,9 @@ package air
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -32,14 +34,33 @@ func (s *Server) requireConfig(w http.ResponseWriter) bool {
 // parseJSONBody decodes a JSON request body into the provided destination.
 // Returns true if successful, false if not (error response already written).
 // Callers should return immediately when this returns false.
+//
+// The raw decoder error is logged via slog rather than echoed to the
+// client. encoding/json's UnmarshalTypeError carries Go struct field
+// paths and value fragments from the request body — fingerprintable
+// detail that does not belong in a browser toast. This mirrors the
+// writeUpstreamError discipline used at the upstream-error sites.
 func parseJSONBody[T any](w http.ResponseWriter, r *http.Request, dest *T) bool {
 	if err := json.NewDecoder(limitedBody(w, r)).Decode(dest); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body: " + err.Error(),
-		})
+		slog.Warn("invalid JSON request body",
+			"err", err,
+			"path", r.URL.Path,
+			"method", r.Method,
+		)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return false
 	}
 	return true
+}
+
+// writeBadParamError writes a generic 400 to the client and logs the
+// raw parsing error via slog. Callers pass the parameter key (e.g.
+// "start_time") which is safe to surface; the parser's err carries
+// the raw query value, which is NOT — `parseInt64Param` formats it
+// via %q and reflecting that back is gratuitous attacker-input echo.
+func writeBadParamError(w http.ResponseWriter, key string, perr error) {
+	slog.Warn("invalid query parameter", "key", key, "err", perr)
+	writeError(w, http.StatusBadRequest, "invalid "+key)
 }
 
 // handleDemoMode returns the demo response if in demo mode.
@@ -58,7 +79,7 @@ func (s *Server) handleDemoMode(w http.ResponseWriter, data any) bool {
 // Callers should return immediately when this returns false.
 func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 	if r.Method != method {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return false
 	}
 	return true
@@ -67,6 +88,39 @@ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// writeUpstreamError logs the raw upstream error via slog and writes a
+// generic JSON envelope to the client. Use when an upstream call (Nylas
+// API, cache, etc.) failed and the user-facing message must NOT include
+// raw error details — Nylas error strings can include grant IDs,
+// endpoint paths, or response-body fragments that don't belong in a
+// browser toast. The log line carries the raw err for debugging.
+//
+// `msg` is the user-facing string written as-is (no err.Error()
+// concatenation). `attrs` are extra slog key/value pairs appended after
+// "err". Callers in handlers_email_rsvp.go model the same pattern
+// inline; this helper makes the convention easy to apply elsewhere.
+func writeUpstreamError(w http.ResponseWriter, status int, msg string, err error, attrs ...any) {
+	slog.Error(msg, append([]any{"err", err}, attrs...)...)
+	writeError(w, status, msg)
+}
+
+// redactEmail returns a log-safe rendering of an email address: the
+// local part is replaced with "***" so the domain remains debuggable
+// without writing the full address into log files. Empty input stays
+// empty so missing-account branches don't gain a misleading "***".
+//
+// Example: "alice@example.com" → "***@example.com".
+func redactEmail(email string) string {
+	if email == "" {
+		return ""
+	}
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return "***"
+	}
+	return "***" + email[at:]
 }
 
 // withAuthGrant combines demo mode check, config check, and grant ID retrieval.

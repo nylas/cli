@@ -173,7 +173,8 @@ func (c *HTTPClient) UpdateMessage(ctx context.Context, grantID, messageID strin
 	if req.Starred != nil {
 		payload["starred"] = *req.Starred
 	}
-	if len(req.Folders) > 0 {
+	// nil = leave alone; non-nil (incl. empty) = set; empty archives in Gmail.
+	if req.Folders != nil {
 		payload["folders"] = req.Folders
 	}
 

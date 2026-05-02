@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/nylas/cli/internal/air/cache"
 	"github.com/nylas/cli/internal/domain"
@@ -33,6 +34,11 @@ func (s *Server) processOfflineQueue(email string) {
 		grantID, err := s.resolveQueuedActionGrantID(email, action)
 		if err != nil {
 			if action.Attempts >= 3 {
+				slog.Error("offline action permanently dropped: grant unresolvable",
+					"type", action.Type,
+					"resource_id", action.ResourceID,
+					"attempts", action.Attempts,
+					"err", err.Error())
 				_ = s.removeOfflineAction(email, action.ID)
 			} else {
 				_ = s.markOfflineActionFailed(email, action.ID, err)
@@ -43,6 +49,11 @@ func (s *Server) processOfflineQueue(email string) {
 		err = s.processOfflineAction(ctx, grantID, action)
 		if err != nil {
 			if action.Attempts >= 3 {
+				slog.Error("offline action permanently dropped after 3 attempts",
+					"type", action.Type,
+					"resource_id", action.ResourceID,
+					"attempts", action.Attempts,
+					"last_error", err.Error())
 				_ = s.removeOfflineAction(email, action.ID)
 			} else {
 				_ = s.markOfflineActionFailed(email, action.ID, err)

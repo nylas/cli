@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +134,40 @@ func TestGrant(t *testing.T) {
 		invalidGrant := Grant{GrantStatus: "error"}
 		if invalidGrant.IsValid() {
 			t.Error("Grant with 'error' status should not be valid")
+		}
+	})
+
+	// Locks the invariant that AccessToken and RefreshToken NEVER appear
+	// in JSON output. `nylas admin grants list --format json` and similar
+	// commands serialise Grant directly to stdout — leaking OAuth tokens
+	// would expose them to shell history, CI logs, and any process able
+	// to read fd 1. The struct fields stay populated programmatically
+	// (ExchangeCode still uses them), but the json:"-" tag must hold.
+	t.Run("tokens_never_serialised_to_json", func(t *testing.T) {
+		grant := Grant{
+			ID:           "grant-id",
+			Email:        "user@example.com",
+			Provider:     ProviderGoogle,
+			GrantStatus:  "valid",
+			AccessToken:  "should-not-leak-access-token",
+			RefreshToken: "should-not-leak-refresh-token",
+		}
+
+		out, err := json.Marshal(grant)
+		if err != nil {
+			t.Fatalf("json.Marshal: %v", err)
+		}
+
+		got := string(out)
+		for _, forbidden := range []string{
+			"access_token",
+			"refresh_token",
+			"should-not-leak-access-token",
+			"should-not-leak-refresh-token",
+		} {
+			if strings.Contains(got, forbidden) {
+				t.Errorf("Grant JSON must not contain %q; got %s", forbidden, got)
+			}
 		}
 	})
 }

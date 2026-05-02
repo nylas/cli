@@ -1,7 +1,9 @@
 package air
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +14,35 @@ import (
 // ====================================
 // AVAILABILITY & FIND TIME HANDLERS
 // ====================================
+
+// parseInt64Param reads an int64 query parameter or returns an error
+// describing the bad value. An absent param is treated as a valid zero so
+// callers keep the existing "use default when not specified" semantics
+// without having to track presence separately.
+func parseInt64Param(query url.Values, key string) (int64, error) {
+	raw := query.Get(key)
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %q is not a valid integer", key, raw)
+	}
+	return v, nil
+}
+
+// parseIntParam is the int twin of parseInt64Param.
+func parseIntParam(query url.Values, key string) (int, error) {
+	raw := query.Get(key)
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %q is not a valid integer", key, raw)
+	}
+	return v, nil
+}
 
 // AvailabilityRequest represents a request to find available times.
 type AvailabilityRequest struct {
@@ -75,7 +106,11 @@ type EventConflict struct {
 // handleAvailability finds available meeting times.
 func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		// Use writeError so the body is JSON-shaped like the rest of
+		// the API. http.Error emits text/plain, which made every
+		// generic error-parser in the frontend hit a JSON syntax error
+		// on this branch alone.
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
@@ -108,22 +143,30 @@ func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Parse from query params for GET
+		// Parse from query params for GET. We validate each numeric param
+		// rather than swallowing errors — the previous version silently
+		// fell through to the default 7-day window when callers sent
+		// malformed input, which masked client bugs in test harnesses.
 		query := r.URL.Query()
-		if startStr := query.Get("start_time"); startStr != "" {
-			req.StartTime, _ = strconv.ParseInt(startStr, 10, 64)
+		var perr error
+		if req.StartTime, perr = parseInt64Param(query, "start_time"); perr != nil {
+			writeBadParamError(w, "start_time", perr)
+			return
 		}
-		if endStr := query.Get("end_time"); endStr != "" {
-			req.EndTime, _ = strconv.ParseInt(endStr, 10, 64)
+		if req.EndTime, perr = parseInt64Param(query, "end_time"); perr != nil {
+			writeBadParamError(w, "end_time", perr)
+			return
 		}
-		if durationStr := query.Get("duration_minutes"); durationStr != "" {
-			req.DurationMinutes, _ = strconv.Atoi(durationStr)
+		if req.DurationMinutes, perr = parseIntParam(query, "duration_minutes"); perr != nil {
+			writeBadParamError(w, "duration_minutes", perr)
+			return
 		}
 		if participants := query.Get("participants"); participants != "" {
 			req.Participants = strings.Split(participants, ",")
 		}
-		if intervalStr := query.Get("interval_minutes"); intervalStr != "" {
-			req.IntervalMinutes, _ = strconv.Atoi(intervalStr)
+		if req.IntervalMinutes, perr = parseIntParam(query, "interval_minutes"); perr != nil {
+			writeBadParamError(w, "interval_minutes", perr)
+			return
 		}
 	}
 
@@ -180,9 +223,8 @@ func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.nylasClient.GetAvailability(ctx, domainReq)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to get availability: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError,
+			"Failed to get availability — please try again", err)
 		return
 	}
 
@@ -204,7 +246,7 @@ func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {
 // handleFreeBusy returns free/busy information for participants.
 func (s *Server) handleFreeBusy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
@@ -238,13 +280,17 @@ func (s *Server) handleFreeBusy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Parse from query params for GET
+		// Parse from query params for GET (see availability handler for
+		// rationale on validating instead of swallowing parse errors).
 		query := r.URL.Query()
-		if startStr := query.Get("start_time"); startStr != "" {
-			req.StartTime, _ = strconv.ParseInt(startStr, 10, 64)
+		var perr error
+		if req.StartTime, perr = parseInt64Param(query, "start_time"); perr != nil {
+			writeBadParamError(w, "start_time", perr)
+			return
 		}
-		if endStr := query.Get("end_time"); endStr != "" {
-			req.EndTime, _ = strconv.ParseInt(endStr, 10, 64)
+		if req.EndTime, perr = parseInt64Param(query, "end_time"); perr != nil {
+			writeBadParamError(w, "end_time", perr)
+			return
 		}
 		if emails := query.Get("emails"); emails != "" {
 			req.Emails = strings.Split(emails, ",")
@@ -287,9 +333,8 @@ func (s *Server) handleFreeBusy(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.nylasClient.GetFreeBusy(ctx, grantID, domainReq)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to get free/busy: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError,
+			"Failed to get free/busy — please try again", err)
 		return
 	}
 
@@ -361,12 +406,15 @@ func (s *Server) handleConflicts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse time range
-	var startTime, endTime int64
-	if startStr := query.Get("start_time"); startStr != "" {
-		startTime, _ = strconv.ParseInt(startStr, 10, 64)
+	startTime, perr := parseInt64Param(query, "start_time")
+	if perr != nil {
+		writeBadParamError(w, "start_time", perr)
+		return
 	}
-	if endStr := query.Get("end_time"); endStr != "" {
-		endTime, _ = strconv.ParseInt(endStr, 10, 64)
+	endTime, perr := parseInt64Param(query, "end_time")
+	if perr != nil {
+		writeBadParamError(w, "end_time", perr)
+		return
 	}
 
 	// Default to current week
@@ -392,9 +440,9 @@ func (s *Server) handleConflicts(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.nylasClient.GetEventsWithCursor(ctx, grantID, calendarID, params)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch events: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError,
+			"Failed to fetch events — please try again", err,
+			"calendarID", calendarID)
 		return
 	}
 

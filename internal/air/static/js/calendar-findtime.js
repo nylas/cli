@@ -81,12 +81,25 @@ const FindTimeModal = {
 
         } catch (error) {
             console.error('Find time error:', error);
-            resultsContainer.innerHTML = `
-                <div class="error-state">
-                    <div class="error-icon">❌</div>
-                    <div class="error-message">${error.message || 'Failed to find available times'}</div>
-                </div>
-            `;
+            // Build the error UI with DOM nodes + textContent so an
+            // untrusted error.message (e.g. from a hostile network
+            // response) can never inject markup. Project rule from
+            // CLAUDE.md: prefer textContent over innerHTML for any
+            // non-static value.
+            resultsContainer.replaceChildren();
+            const wrap = document.createElement('div');
+            wrap.className = 'error-state';
+            const icon = document.createElement('div');
+            icon.className = 'error-icon';
+            icon.textContent = '❌';
+            const msg = document.createElement('div');
+            msg.className = 'error-message';
+            msg.textContent = (error && typeof error.message === 'string' && error.message)
+                ? error.message
+                : 'Failed to find available times';
+            wrap.appendChild(icon);
+            wrap.appendChild(msg);
+            resultsContainer.appendChild(wrap);
         } finally {
             if (searchBtn) {
                 searchBtn.disabled = false;

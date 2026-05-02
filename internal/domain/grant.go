@@ -34,6 +34,8 @@ func (ut *UnixTime) UnmarshalJSON(data []byte) error {
 }
 
 // Grant represents a Nylas grant (authenticated account).
+// AccessToken/RefreshToken use json:"-" so list/get JSON output never
+// leaks OAuth secrets; they are populated by ExchangeCode in adapters/nylas/auth.go.
 type Grant struct {
 	ID           string   `json:"id"`
 	Provider     Provider `json:"provider"`
@@ -42,8 +44,8 @@ type Grant struct {
 	Scope        []string `json:"scope,omitempty"`
 	CreatedAt    UnixTime `json:"created_at,omitempty"`
 	UpdatedAt    UnixTime `json:"updated_at,omitempty"`
-	AccessToken  string   `json:"access_token,omitempty"`
-	RefreshToken string   `json:"refresh_token,omitempty"`
+	AccessToken  string   `json:"-"`
+	RefreshToken string   `json:"-"`
 }
 
 // IsValid returns true if the grant is in a valid state.

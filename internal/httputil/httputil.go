@@ -4,6 +4,7 @@ package httputil
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 )
 
@@ -19,10 +20,19 @@ func LimitedBody(w http.ResponseWriter, r *http.Request, maxBytes int64) io.Read
 
 // WriteJSON writes a JSON response with the given status code.
 // It sets the Content-Type header to application/json.
+//
+// Encoder errors are logged rather than swallowed: once WriteHeader has
+// fired we can't change the status code, but we *can* leave a server-side
+// breadcrumb so that "client received truncated JSON" is debuggable
+// instead of invisible. Common failure modes are client disconnect
+// mid-write and unmarshallable values (e.g. NaN, channels) — both of
+// which a developer would want to know about.
 func WriteJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		slog.Error("WriteJSON encode failed", "status", status, "err", err)
+	}
 }
 
 // DecodeJSON decodes JSON from the request body into the target.

@@ -174,11 +174,19 @@ type ThreadQueryParams struct {
 	SearchQuery     string   `json:"q,omitempty"`
 }
 
-// UpdateMessageRequest for updating message properties.
+// UpdateMessageRequest for updating message properties. Folders uses
+// Go's nil-vs-empty distinction:
+//
+//	nil              → leave folders alone
+//	[]string{}       → set to empty (Gmail archive — drops INBOX label)
+//	[]string{"x"...} → set to this list
+//
+// The JSON tag omits `omitempty` so Marshal preserves nil → null and
+// []string{} → []; Nylas treats null and absent equivalently.
 type UpdateMessageRequest struct {
 	Unread  *bool    `json:"unread,omitempty"`
 	Starred *bool    `json:"starred,omitempty"`
-	Folders []string `json:"folders,omitempty"`
+	Folders []string `json:"folders"`
 }
 
 // CreateDraftRequest for creating a new draft.

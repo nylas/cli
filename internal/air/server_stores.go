@@ -29,7 +29,7 @@ func (s *Server) cacheAvailable() bool {
 	return s.cacheSettings != nil && s.cacheSettings.IsCacheEnabled() && s.hasCacheRuntime()
 }
 
-func (s *Server) offlineQueueConfigured() bool {
+func (s *Server) offlineQueueEnabled() bool {
 	return s.cacheSettings != nil && s.cacheSettings.Get().OfflineQueueEnabled && s.hasCacheRuntime()
 }
 

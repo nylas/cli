@@ -115,6 +115,8 @@ type EmailsResponse struct {
 }
 
 // UpdateEmailRequest represents a request to update an email.
+// Folders: nil = leave alone; non-nil empty = Gmail archive
+// (json.Unmarshal preserves this; see domain.UpdateMessageRequest).
 type UpdateEmailRequest struct {
 	Unread  *bool    `json:"unread,omitempty"`
 	Starred *bool    `json:"starred,omitempty"`
