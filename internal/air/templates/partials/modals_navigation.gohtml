@@ -164,7 +164,11 @@
 <!-- toggleCcBcc() is now in /js/modals-navigation.js -->
 
 <!-- Toast Container -->
-<div class="toast-container" id="toastContainer" data-testid="toast-container"></div>
+<!-- aria-live=polite + role=status: archive/RSVP outcomes are announced
+     to screen readers without interrupting reading. Toast text is built
+     via textContent in app-core.js so it is safe to read aloud. -->
+<div class="toast-container" id="toastContainer" data-testid="toast-container"
+     role="status" aria-live="polite" aria-atomic="false"></div>
 
 <!-- Send Animation -->
 <div class="send-animation" id="sendAnimation">

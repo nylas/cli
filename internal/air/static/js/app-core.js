@@ -2,9 +2,21 @@
  * App Core - Toast system, animations, view switching, and modal toggles
  */
         // Toast System with action button support
+        // Cap concurrent toasts so a burst of archive/RSVP/error events
+        // can't stack up, scroll the screen, or pile up Undo timers
+        // pointing at stale closures.
+        const TOAST_MAX_VISIBLE = 4;
+
         function showToast(type, title, message, options = null) {
             const container = document.getElementById('toastContainer');
             if (!container) return;
+
+            // Drop oldest toasts beyond the cap. Children are appended
+            // to the bottom of the container, so the FIRST child is the
+            // oldest — pop it before adding a new one.
+            while (container.children.length >= TOAST_MAX_VISIBLE && container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
 
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -20,9 +32,14 @@
             messageDiv.className = 'toast-message';
             // Use textContent for XSS prevention - user data may be in title/message
             const strong = document.createElement('strong');
-            strong.textContent = title;
+            // Truncate user-supplied strings so a runaway upstream error
+            // (e.g. a 200kB HTML body parsed as JSON) can't blow up the UI.
+            const TOAST_MAX_TEXT = 200;
+            const safeTitle = String(title == null ? '' : title).slice(0, TOAST_MAX_TEXT);
+            const safeMessage = String(message == null ? '' : message).slice(0, TOAST_MAX_TEXT);
+            strong.textContent = safeTitle;
             messageDiv.appendChild(strong);
-            messageDiv.appendChild(document.createTextNode(' — ' + message));
+            messageDiv.appendChild(document.createTextNode(' — ' + safeMessage));
 
             toast.appendChild(iconSpan);
             toast.appendChild(messageDiv);

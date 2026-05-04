@@ -33,7 +33,7 @@ func NewTableWriter(w io.Writer, colored bool) *TableWriter {
 func (tw *TableWriter) Write(data any) error {
 	// For single objects, output as key: value pairs
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -69,7 +69,7 @@ func (tw *TableWriter) Write(data any) error {
 // WriteList outputs a list of objects as a table
 func (tw *TableWriter) WriteList(data any, columns []ports.Column) error {
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -93,7 +93,7 @@ func (tw *TableWriter) WriteList(data any, columns []ports.Column) error {
 	// Write rows
 	for i := range v.Len() {
 		row := v.Index(i)
-		if row.Kind() == reflect.Ptr {
+		if row.Kind() == reflect.Pointer {
 			row = row.Elem()
 		}
 
@@ -144,7 +144,7 @@ func (tw *TableWriter) WriteError(err error) error {
 
 // getFieldValue extracts a field value from a struct or map
 func getFieldValue(v reflect.Value, field string) any {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 

@@ -2,6 +2,7 @@ package air
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -323,7 +324,8 @@ func (s *Server) handleUpdateBundle(w http.ResponseWriter, r *http.Request) {
 
 	for i, rule := range bundle.Rules {
 		if err := validateBundleRule(rule); err != nil {
-			http.Error(w, "Invalid regex in rule "+strconv.Itoa(i)+": "+err.Error(), http.StatusBadRequest)
+			slog.Warn("invalid bundle rule regex", "rule_index", i, "err", err)
+			http.Error(w, "Invalid regex in rule "+strconv.Itoa(i), http.StatusBadRequest)
 			return
 		}
 	}

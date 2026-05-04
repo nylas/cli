@@ -42,20 +42,34 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 		},
 		{
 			name: "moves to folders",
-			request: &domain.UpdateMessageRequest{
-				Folders: []string{"Archive", "Important"},
-			},
+			request: func() *domain.UpdateMessageRequest {
+				folders := []string{"Archive", "Important"}
+				return &domain.UpdateMessageRequest{Folders: folders}
+			}(),
 			wantFields: map[string]any{"folders": []string{"Archive", "Important"}},
+		},
+		{
+			// Regression: Gmail archive (drop INBOX) sends folders:[]. The
+			// adapter must forward an explicit empty array — silently
+			// dropping it leaves the message in the inbox while the UI
+			// reports success.
+			name: "archives to empty folders (gmail)",
+			request: func() *domain.UpdateMessageRequest {
+				empty := []string{}
+				return &domain.UpdateMessageRequest{Folders: empty}
+			}(),
+			wantFields: map[string]any{"folders": []any{}},
 		},
 		{
 			name: "updates multiple fields",
 			request: func() *domain.UpdateMessageRequest {
 				unread := true
 				starred := true
+				folders := []string{"INBOX"}
 				return &domain.UpdateMessageRequest{
 					Unread:  &unread,
 					Starred: &starred,
-					Folders: []string{"INBOX"},
+					Folders: folders,
 				}
 			}(),
 			wantFields: map[string]any{
@@ -104,6 +118,106 @@ func TestHTTPClient_UpdateMessage(t *testing.T) {
 			assert.Equal(t, "msg-456", message.ID)
 		})
 	}
+}
+
+// TestHTTPClient_UpdateMessage_ForwardsEmptyFolders pins the Gmail-archive
+// contract: when the caller passes []string{} (drop all labels), the PUT
+// body MUST contain "folders":[] verbatim. The previous len()>0 guard
+// silently elided the array, so archive succeeded in the UI but never
+// happened upstream — a particularly nasty class of bug because the
+// browser optimistically removes the row before the server lies. Today
+// the adapter uses `!= nil` so a non-nil empty slice forwards correctly
+// while nil is skipped (leave-alone).
+func TestHTTPClient_UpdateMessage_ForwardsEmptyFolders(t *testing.T) {
+	t.Parallel()
+
+	var rawBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		rawBody = string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"id":       "msg-456",
+				"grant_id": "grant-123",
+				"subject":  "Archived",
+				"date":     1704067200,
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateMessage(context.Background(), "grant-123", "msg-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.NoError(t, err)
+
+	// Decode and assert the exact key shape — a nil Folders is skipped
+	// by the adapter so the key would be absent; only a non-nil empty
+	// slice produces "folders":[].
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(rawBody), &parsed))
+	folders, present := parsed["folders"]
+	require.True(t, present, "folders key must be present so Gmail archive reaches the API; raw=%s", rawBody)
+	assert.Equal(t, []any{}, folders, "folders must serialize as an explicit empty array; got %#v", folders)
+}
+
+// TestHTTPClient_UpdateMessage_EmptyFolders_PropagatesUpstreamError pins
+// that a 4xx from Nylas on an archive PUT (e.g. Gmail rate limit, label
+// permission denied) is surfaced as a real error rather than silently
+// reported as success. The optimistic UI in Air relies on this — without
+// error propagation the row stays visually archived while the server
+// rejects the change, and the next refresh re-introduces the email.
+func TestHTTPClient_UpdateMessage_EmptyFolders_PropagatesUpstreamError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Pin that we even saw the request (no early exit on empty
+		// folders) — a regression that elided the body would never
+		// reach this assertion.
+		raw, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(raw), `"folders":[]`,
+			"adapter must still send the empty-folders body even when the upstream errors; raw=%s", string(raw))
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"label permission denied"}`))
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateMessage(context.Background(), "grant-123", "msg-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.Error(t, err, "4xx upstream must surface as a real error, not nil")
+}
+
+// TestHTTPClient_UpdateMessage_EmptyFolders_PropagatesServerError pins
+// the 5xx path: a transient Nylas outage during archive must not be
+// silently swallowed. Air's offline queue keys off this error to retry
+// the action when connectivity returns.
+func TestHTTPClient_UpdateMessage_EmptyFolders_PropagatesServerError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"upstream timeout"}`))
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.UpdateMessage(context.Background(), "grant-123", "msg-456", &domain.UpdateMessageRequest{
+		Folders: []string{},
+	})
+	require.Error(t, err, "5xx upstream must surface as a real error so the offline queue can retry")
 }
 
 func TestHTTPClient_UpdateMessage_RetriesReplayBody(t *testing.T) {

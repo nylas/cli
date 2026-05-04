@@ -21,6 +21,33 @@ const adminCommandSections = [
         }
     },
     {
+        title: 'Callback URIs',
+        commands: {
+            'callback-uris-list': { title: 'List', cmd: 'admin callback-uris list', desc: 'List callback URIs' },
+            'callback-uris-show': { title: 'Show', cmd: 'admin callback-uris show', desc: 'Show callback URI details', param: { name: 'uri-id', placeholder: 'Enter URI ID...' } },
+            'callback-uris-create': {
+                title: 'Create',
+                cmd: 'admin callback-uris create',
+                desc: 'Create a callback URI',
+                flags: [
+                    { name: 'url', type: 'text', label: 'URL', placeholder: 'https://example.com/callback', required: true },
+                    { name: 'platform', type: 'text', label: 'Platform', placeholder: 'web, ios, android' }
+                ]
+            },
+            'callback-uris-update': {
+                title: 'Update',
+                cmd: 'admin callback-uris update',
+                desc: 'Update a callback URI',
+                param: { name: 'uri-id', placeholder: 'Enter URI ID...' },
+                flags: [
+                    { name: 'url', type: 'text', label: 'URL', placeholder: 'https://example.com/new-callback' },
+                    { name: 'platform', type: 'text', label: 'Platform', placeholder: 'web, ios, android' }
+                ]
+            },
+            'callback-uris-delete': { title: 'Delete', cmd: 'admin callback-uris delete', desc: 'Delete a callback URI', param: { name: 'uri-id', placeholder: 'Enter URI ID...' } }
+        }
+    },
+    {
         title: 'Connectors',
         commands: {
             'connectors-list': { title: 'List', cmd: 'admin connectors list', desc: 'List connectors' },

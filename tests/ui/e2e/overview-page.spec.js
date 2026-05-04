@@ -197,15 +197,15 @@ test.describe('Resources Card', () => {
 
     const docLink = page.getByRole('link', { name: /Documentation/i });
     await expect(docLink).toBeVisible();
-    await expect(docLink).toHaveAttribute('href', 'https://developer.nylas.com/docs');
+    await expect(docLink).toHaveAttribute('href', 'https://developer.nylas.com/');
   });
 
-  test('API v3 Reference link is present', async ({ page }, testInfo) => {
+  test('CLI Command Reference link is present', async ({ page }, testInfo) => {
     await skipIfNotConfigured(page, testInfo);
 
-    const apiLink = page.getByRole('link', { name: /API v3 Reference/i });
+    const apiLink = page.getByRole('link', { name: /CLI Command Reference/i });
     await expect(apiLink).toBeVisible();
-    await expect(apiLink).toHaveAttribute('href', 'https://developer.nylas.com/docs/v3');
+    await expect(apiLink).toHaveAttribute('href', 'https://cli.nylas.com/docs/commands');
   });
 
   test('GitHub link is present', async ({ page }, testInfo) => {
@@ -229,7 +229,7 @@ test.describe('Resources Card', () => {
 
     // Check for descriptions
     await expect(page.getByText('API reference & guides')).toBeVisible();
-    await expect(page.getByText('Endpoints & schemas')).toBeVisible();
+    await expect(page.getByText('Commands & flags')).toBeVisible();
     await expect(page.getByText('SDKs & examples')).toBeVisible();
     await expect(page.getByText('Get help from our team')).toBeVisible();
   });
@@ -348,7 +348,7 @@ test.describe('Overview Page Responsiveness', () => {
 
     // Overview should still be visible
     await expect(page.locator(selectors.pages.overview)).toBeVisible();
-    await expect(page.getByText('Dashboard')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
   test('overview page is visible on tablet viewport', async ({ page }, testInfo) => {
@@ -360,6 +360,6 @@ test.describe('Overview Page Responsiveness', () => {
 
     // Overview should still be visible
     await expect(page.locator(selectors.pages.overview)).toBeVisible();
-    await expect(page.getByText('Dashboard')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 });

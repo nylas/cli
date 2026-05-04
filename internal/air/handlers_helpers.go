@@ -3,7 +3,9 @@ package air
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -29,17 +31,27 @@ func (s *Server) requireConfig(w http.ResponseWriter) bool {
 	return true
 }
 
-// parseJSONBody decodes a JSON request body into the provided destination.
-// Returns true if successful, false if not (error response already written).
-// Callers should return immediately when this returns false.
+// parseJSONBody decodes the request body into dest. Returns false on
+// error after writing a generic 400; the raw decoder error stays in slog
+// (it can quote request bytes — PII or attacker input).
 func parseJSONBody[T any](w http.ResponseWriter, r *http.Request, dest *T) bool {
 	if err := json.NewDecoder(limitedBody(w, r)).Decode(dest); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Invalid request body: " + err.Error(),
-		})
+		slog.Warn("invalid JSON request body",
+			"err", err,
+			"path", r.URL.Path,
+			"method", r.Method,
+		)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return false
 	}
 	return true
+}
+
+// writeBadParamError writes a generic 400 ("invalid <key>") and logs the
+// raw parser error via slog (it formats the raw query value with %q).
+func writeBadParamError(w http.ResponseWriter, key string, perr error) {
+	slog.Warn("invalid query parameter", "key", key, "err", perr)
+	writeError(w, http.StatusBadRequest, "invalid "+key)
 }
 
 // handleDemoMode returns the demo response if in demo mode.
@@ -58,7 +70,7 @@ func (s *Server) handleDemoMode(w http.ResponseWriter, data any) bool {
 // Callers should return immediately when this returns false.
 func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 	if r.Method != method {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return false
 	}
 	return true
@@ -67,6 +79,31 @@ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// writeUpstreamError writes msg to the client and logs the raw err via
+// slog. Use whenever an upstream error string could leak grant IDs,
+// endpoint paths, or response fragments. attrs are extra slog kv pairs.
+func writeUpstreamError(w http.ResponseWriter, status int, msg string, err error, attrs ...any) {
+	slog.Error(msg, append([]any{"err", err}, attrs...)...)
+	writeError(w, status, msg)
+}
+
+// redactEmail returns a log-safe rendering of an email address: the
+// local part is replaced with "***" so the domain remains debuggable
+// without writing the full address into log files. Empty input stays
+// empty so missing-account branches don't gain a misleading "***".
+//
+// Example: "alice@example.com" → "***@example.com".
+func redactEmail(email string) string {
+	if email == "" {
+		return ""
+	}
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return "***"
+	}
+	return "***" + email[at:]
 }
 
 // withAuthGrant combines demo mode check, config check, and grant ID retrieval.

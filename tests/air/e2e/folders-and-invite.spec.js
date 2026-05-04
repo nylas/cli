@@ -229,7 +229,10 @@ test.describe('Folders + calendar invite — Air', () => {
       window.__inviteXss = false;
       // Try injecting via a synthetic invite render.
       const slot = document.getElementById('inviteSlot-demo-email-invite-001');
-      const html = EmailListManager.renderCalendarInviteCard(
+      // buildCalendarInviteCard returns a DOM node (HTMLElement) — see
+      // email-selection.js. We mount it directly via replaceChildren so
+      // there is no HTML-string surface for hostile fields to land in.
+      const cardNode = EmailListManager.buildCalendarInviteCard(
         {
           has_invite: true,
           title: '<img src=x onerror="window.__inviteXss=true">Hi',
@@ -242,8 +245,7 @@ test.describe('Folders + calendar invite — Air', () => {
         },
         'demo-email-invite-001',
       );
-      slot.replaceChildren();
-      slot.insertAdjacentHTML('beforeend', html);
+      slot.replaceChildren(cardNode);
 
       // Click Yes.
       const yesBtn = slot.querySelector('[data-rsvp="yes"]');
@@ -325,12 +327,15 @@ test.describe('Folders + calendar invite — Air', () => {
   // cancellation banner. Test renders a synthetic card directly so we
   // exercise the conditional UI without needing a real cancelled demo
   // email.
-  test('renderCalendarInviteCard: METHOD=CANCEL replaces RSVP buttons with banner', async ({ page }) => {
+  test('buildCalendarInviteCard: METHOD=CANCEL replaces RSVP buttons with banner', async ({ page }) => {
     const result = await page.evaluate(() => {
       if (typeof EmailListManager === 'undefined' || !EmailListManager) {
         return { skipped: true };
       }
-      const html = EmailListManager.renderCalendarInviteCard(
+      // buildCalendarInviteCard returns a DOM node — query it directly.
+      // No DOMParser dance needed: the node is detached but fully
+      // queryable, and it's never serialised to/from HTML.
+      const node = EmailListManager.buildCalendarInviteCard(
         {
           has_invite: true,
           title: 'Quarterly Sync',
@@ -341,15 +346,12 @@ test.describe('Folders + calendar invite — Air', () => {
         'cancelled-test-id',
       );
 
-      // Parse via DOMParser so we never assign untrusted strings to
-      // innerHTML — even in test code, that's the codebase rule.
-      const doc = new DOMParser().parseFromString(html, 'text/html');
       return {
         skipped: false,
-        hasBanner: !!doc.querySelector('.calendar-invite-banner-cancel'),
-        bannerText: doc.querySelector('.calendar-invite-banner-cancel')?.textContent?.trim(),
-        rsvpButtonCount: doc.querySelectorAll('.calendar-invite-btn').length,
-        cardHasCancelClass: doc.querySelector('.calendar-invite-card.is-cancelled') !== null,
+        hasBanner: !!node.querySelector('.calendar-invite-banner-cancel'),
+        bannerText: node.querySelector('.calendar-invite-banner-cancel')?.textContent?.trim(),
+        rsvpButtonCount: node.querySelectorAll('.calendar-invite-btn').length,
+        cardHasCancelClass: node.classList.contains('is-cancelled'),
       };
     });
 

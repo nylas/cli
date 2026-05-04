@@ -74,6 +74,9 @@ exports.nav = {
   scheduler: '[data-page="scheduler"]',
   timezone: '[data-page="timezone"]',
   webhook: '[data-page="webhook"]',
+  agent: '[data-page="agent"]',
+  audit: '[data-page="audit"]',
+  dashboardCmd: '[data-page="dashboard"]',
 };
 
 // Pages
@@ -89,6 +92,9 @@ exports.pages = {
   scheduler: '#page-scheduler',
   timezone: '#page-timezone',
   webhook: '#page-webhook',
+  agent: '#page-agent',
+  audit: '#page-audit',
+  dashboardCmd: '#page-dashboard',
   activePage: '.page.active',
 };
 

@@ -307,3 +307,27 @@ func TestParseICS_CancelMethod(t *testing.T) {
 		t.Errorf("Status=%q, want CANCELLED", resp.Status)
 	}
 }
+
+// TestParseICS_ClampsOversizedUID pins the UID-length cap. A hostile
+// inviter could craft a multi-MB UID; without the clamp we'd round-trip
+// it into the Nylas ical_uid query parameter and form a giant URL. The
+// prefix is kept (so the lookup can still succeed for legitimate long
+// UIDs that happen to share a prefix) but the byte budget is bounded.
+func TestParseICS_ClampsOversizedUID(t *testing.T) {
+	huge := strings.Repeat("a", 64*1024) // 64KB UID
+	body := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\nMETHOD:REQUEST\r\n" +
+		"BEGIN:VEVENT\r\nUID:" + huge + "\r\nSUMMARY:OversizedUID\r\n" +
+		"DTSTART:20260501T140000Z\r\nDTEND:20260501T150000Z\r\n" +
+		"END:VEVENT\r\nEND:VCALENDAR\r\n"
+
+	resp, err := parseICS(body)
+	if err != nil {
+		t.Fatalf("parseICS: %v", err)
+	}
+	if got := len(resp.ICalUID); got > 1024 {
+		t.Errorf("ICalUID len=%d, want <=1024 after clamp", got)
+	}
+	if !strings.HasPrefix(huge, resp.ICalUID) {
+		t.Errorf("ICalUID=%q does not look like a prefix of the input", resp.ICalUID)
+	}
+}

@@ -48,98 +48,240 @@ async selectEmail(emailId) {
     }
 },
 
+// renderEmailDetail builds the right-pane email view. We use DOM
+// construction (createElement + textContent + setAttribute) instead of a
+// single innerHTML template so:
+//   1. There is no template-literal interpolation of user data, so a
+//      future change can't accidentally introduce an XSS vector by
+//      forgetting to escape one field.
+//   2. IDs derived from email.id round-trip cleanly between write
+//      (setAttribute stores the raw string) and lookup (getElementById
+//      reads the raw string) — no HTML-encoding dance required.
+//   3. Static SVG markup is the only innerHTML use, kept inline because
+//      DOM-constructing each path tag would dwarf the actual logic.
 renderEmailDetail(email) {
     const detailPane = document.querySelector('.email-detail');
     if (!detailPane) return;
 
     const sender = EmailRenderer.getSenderInfo(email.from);
     const time = new Date(email.date * 1000).toLocaleString();
+    const toList = (email.to || []).map(p => p.name || p.email).join(', ');
 
-    const toList = (email.to || [])
-        .map(p => p.name || p.email)
-        .join(', ');
+    detailPane.replaceChildren(
+        this.buildDetailHeader(email, sender, toList, time),
+        this.buildDetailActions(email),
+        this.buildSmartRepliesSlot(email.id),
+        this.buildInviteSlot(email.id),
+    );
 
-    detailPane.innerHTML = `
-        <div class="email-detail-header">
-            <div class="email-detail-subject">${EmailRenderer.escapeHtml(email.subject || '(No Subject)')}</div>
-            <div class="email-detail-meta">
-                <div class="email-detail-avatar" style="background: var(--gradient-1)">${sender.initials}</div>
-                <div class="email-detail-info">
-                    <div class="email-detail-from">${EmailRenderer.escapeHtml(sender.name)} <span class="email-detail-email">&lt;${EmailRenderer.escapeHtml(sender.email)}&gt;</span></div>
-                    <div class="email-detail-to">To: ${EmailRenderer.escapeHtml(toList || 'me')}</div>
-                </div>
-                <div class="email-detail-time">${time}</div>
-            </div>
-        </div>
-        <div class="email-detail-actions">
-            <button class="action-btn" data-action="reply-email" data-email-id="${escapeHtml(email.id)}" title="Reply">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-5 5v-5z"/>
-                </svg>
-                Reply
-            </button>
-            <button class="action-btn" data-action="toggle-star" data-email-id="${escapeHtml(email.id)}" title="Star">
-                <svg width="16" height="16" fill="${email.starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                ${email.starred ? 'Starred' : 'Star'}
-            </button>
-            <button class="action-btn" data-action="archive-email" data-email-id="${escapeHtml(email.id)}" title="Archive">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <rect x="2" y="4" width="20" height="5" rx="1"/>
-                    <path d="M4 9v9a2 2 0 002 2h12a2 2 0 002-2V9M10 13h4"/>
-                </svg>
-                Archive
-            </button>
-            <button class="action-btn" data-action="delete-email" data-email-id="${escapeHtml(email.id)}" title="Delete">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                </svg>
-                Delete
-            </button>
-            <button class="action-btn ai-btn" id="summarizeBtn-${escapeHtml(email.id)}" data-action="summarize-email" data-email-id="${escapeHtml(email.id)}" title="Summarize with AI">
-                <svg class="ai-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/>
-                    <path d="M12 6v6l4 2"/>
-                </svg>
-                <svg class="ai-spinner" width="16" height="16" viewBox="0 0 24 24" style="display:none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.4" stroke-dashoffset="10">
-                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-                <span class="ai-btn-text">✨ Summarize</span>
-            </button>
-        </div>
-        <div class="smart-replies-container" id="smartReplies-${escapeHtml(email.id)}">
-            <button class="smart-replies-trigger" data-action="load-smart-replies" data-email-id="${escapeHtml(email.id)}">
-                <span class="smart-replies-icon">💬</span>
-                <span>Get smart reply suggestions</span>
-            </button>
-        </div>
-        <div class="calendar-invite-card-slot" id="inviteSlot-${escapeHtml(email.id)}" hidden></div>
-        ${email.attachments && email.attachments.length > 0 ? `
-            <div class="email-detail-attachments">
-                <div class="attachments-header">Attachments (${email.attachments.length})</div>
-                <div class="attachments-list">
-                    ${email.attachments.map(a => `
-                        <div class="attachment-item">
-                            <span class="attachment-icon">&#128206;</span>
-                            <span class="attachment-name">${EmailRenderer.escapeHtml(a.filename)}</span>
-                            <span class="attachment-size">${this.formatSize(a.size)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        ` : ''}
-        <div class="email-detail-body">
-            <div class="email-iframe-container" id="emailBodyContainer-${email.id}">
-                <div class="email-loading-state">
-                    <div class="email-loading-spinner"></div>
-                    <span>Loading email...</span>
-                </div>
-            </div>
-        </div>
-    `;
+    if (email.attachments && email.attachments.length > 0) {
+        detailPane.appendChild(this.buildAttachmentsSection(email.attachments));
+    }
+
+    detailPane.appendChild(this.buildBodyContainer(email.id));
+
+    // Move keyboard focus to the subject heading so screen-reader and
+    // keyboard users land on the new email instead of staying on the
+    // previous list-item context. tabindex=-1 makes the heading
+    // programmatically focusable without entering the tab order.
+    const subjectEl = detailPane.querySelector('.email-detail-subject');
+    if (subjectEl) {
+        subjectEl.setAttribute('tabindex', '-1');
+        try { subjectEl.focus({ preventScroll: true }); } catch (_) { /* older browsers */ }
+    }
+},
+
+// buildDetailHeader renders the subject + sender + recipient + timestamp
+// block. All text uses textContent so subject/from/to interpolation is
+// safe by construction.
+buildDetailHeader(email, sender, toList, time) {
+    const header = document.createElement('div');
+    header.className = 'email-detail-header';
+
+    const subjectEl = document.createElement('div');
+    subjectEl.className = 'email-detail-subject';
+    subjectEl.textContent = email.subject || '(No Subject)';
+    header.appendChild(subjectEl);
+
+    const meta = document.createElement('div');
+    meta.className = 'email-detail-meta';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'email-detail-avatar';
+    avatar.style.background = 'var(--gradient-1)';
+    avatar.textContent = sender.initials || '';
+    meta.appendChild(avatar);
+
+    const info = document.createElement('div');
+    info.className = 'email-detail-info';
+
+    const fromEl = document.createElement('div');
+    fromEl.className = 'email-detail-from';
+    fromEl.appendChild(document.createTextNode((sender.name || '') + ' '));
+    const fromAddr = document.createElement('span');
+    fromAddr.className = 'email-detail-email';
+    fromAddr.textContent = '<' + (sender.email || '') + '>';
+    fromEl.appendChild(fromAddr);
+    info.appendChild(fromEl);
+
+    const toEl = document.createElement('div');
+    toEl.className = 'email-detail-to';
+    toEl.textContent = 'To: ' + (toList || 'me');
+    info.appendChild(toEl);
+
+    meta.appendChild(info);
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'email-detail-time';
+    timeEl.textContent = time;
+    meta.appendChild(timeEl);
+
+    header.appendChild(meta);
+    return header;
+},
+
+// buildDetailActions returns the button row (reply/star/archive/delete +
+// summarize). The SVG icon strings are static literals from this file,
+// so insertAdjacentHTML is safe; everything else uses setAttribute /
+// textContent so email.id round-trips without HTML encoding tricks.
+buildDetailActions(email) {
+    const actions = document.createElement('div');
+    actions.className = 'email-detail-actions';
+
+    // Decorative SVG icons — labelled by the trailing text node, so
+    // aria-hidden keeps screen readers from announcing the path data
+    // alongside the button text. STAR_FILL is interpolated; the rest
+    // of the SVG bodies are static literals owned by this file.
+    const REPLY_SVG = '<svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>';
+    const ARCHIVE_SVG = '<svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 002 2h12a2 2 0 002-2V9M10 13h4"/></svg>';
+    const DELETE_SVG = '<svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>';
+    const STAR_FILL = email.starred ? 'currentColor' : 'none';
+    const STAR_SVG = `<svg aria-hidden="true" width="16" height="16" fill="${STAR_FILL}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
+    actions.appendChild(this.buildActionButton(email.id, 'reply-email', 'Reply', REPLY_SVG));
+    actions.appendChild(this.buildActionButton(email.id, 'toggle-star', email.starred ? 'Starred' : 'Star', STAR_SVG));
+    actions.appendChild(this.buildActionButton(email.id, 'archive-email', 'Archive', ARCHIVE_SVG));
+    actions.appendChild(this.buildActionButton(email.id, 'delete-email', 'Delete', DELETE_SVG));
+    actions.appendChild(this.buildSummarizeButton(email.id));
+
+    return actions;
+},
+
+buildActionButton(emailId, action, label, iconHTML) {
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.setAttribute('data-action', action);
+    btn.setAttribute('data-email-id', emailId);
+    btn.title = label;
+    // iconHTML is a static SVG literal owned by this file — never
+    // touched by user input. Trailing label uses textContent.
+    btn.insertAdjacentHTML('beforeend', iconHTML);
+    btn.appendChild(document.createTextNode(' ' + label));
+    return btn;
+},
+
+buildSummarizeButton(emailId) {
+    const SUMMARIZE_ICON = '<svg aria-hidden="true" class="ai-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>';
+    const SPINNER_ICON = '<svg aria-hidden="true" class="ai-spinner" width="16" height="16" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="31.4" stroke-dashoffset="10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg>';
+
+    const btn = document.createElement('button');
+    btn.className = 'action-btn ai-btn';
+    btn.setAttribute('id', 'summarizeBtn-' + emailId);
+    btn.setAttribute('data-action', 'summarize-email');
+    btn.setAttribute('data-email-id', emailId);
+    btn.title = 'Summarize with AI';
+    btn.insertAdjacentHTML('beforeend', SUMMARIZE_ICON + SPINNER_ICON);
+    const text = document.createElement('span');
+    text.className = 'ai-btn-text';
+    text.textContent = '✨ Summarize';
+    btn.appendChild(text);
+    return btn;
+},
+
+buildSmartRepliesSlot(emailId) {
+    const wrap = document.createElement('div');
+    wrap.className = 'smart-replies-container';
+    wrap.setAttribute('id', 'smartReplies-' + emailId);
+
+    const trigger = document.createElement('button');
+    trigger.className = 'smart-replies-trigger';
+    trigger.setAttribute('data-action', 'load-smart-replies');
+    trigger.setAttribute('data-email-id', emailId);
+    const icon = document.createElement('span');
+    icon.className = 'smart-replies-icon';
+    icon.textContent = '💬'; // 💬
+    trigger.appendChild(icon);
+    const label = document.createElement('span');
+    label.textContent = 'Get smart reply suggestions';
+    trigger.appendChild(label);
+    wrap.appendChild(trigger);
+    return wrap;
+},
+
+buildInviteSlot(emailId) {
+    const slot = document.createElement('div');
+    slot.className = 'calendar-invite-card-slot';
+    slot.setAttribute('id', 'inviteSlot-' + emailId);
+    slot.hidden = true;
+    return slot;
+},
+
+buildAttachmentsSection(attachments) {
+    const wrap = document.createElement('div');
+    wrap.className = 'email-detail-attachments';
+
+    const header = document.createElement('div');
+    header.className = 'attachments-header';
+    header.textContent = 'Attachments (' + attachments.length + ')';
+    wrap.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'attachments-list';
+    attachments.forEach((a) => {
+        const item = document.createElement('div');
+        item.className = 'attachment-item';
+
+        const icon = document.createElement('span');
+        icon.className = 'attachment-icon';
+        icon.textContent = '📎'; // 📎
+        item.appendChild(icon);
+
+        const name = document.createElement('span');
+        name.className = 'attachment-name';
+        name.textContent = a.filename || '';
+        item.appendChild(name);
+
+        const size = document.createElement('span');
+        size.className = 'attachment-size';
+        size.textContent = this.formatSize(a.size);
+        item.appendChild(size);
+
+        list.appendChild(item);
+    });
+    wrap.appendChild(list);
+    return wrap;
+},
+
+buildBodyContainer(emailId) {
+    const wrap = document.createElement('div');
+    wrap.className = 'email-detail-body';
+
+    const container = document.createElement('div');
+    container.className = 'email-iframe-container';
+    container.setAttribute('id', 'emailBodyContainer-' + emailId);
+
+    const loading = document.createElement('div');
+    loading.className = 'email-loading-state';
+    const spinner = document.createElement('div');
+    spinner.className = 'email-loading-spinner';
+    loading.appendChild(spinner);
+    const loadingText = document.createElement('span');
+    loadingText.textContent = 'Loading email...';
+    loading.appendChild(loadingText);
+    container.appendChild(loading);
+
+    wrap.appendChild(container);
+    return wrap;
 },
 
 // Render email body into a sandboxed iframe for security and proper HTML rendering
@@ -173,17 +315,25 @@ renderEmailBodyIframe(emailId, bodyHtml) {
     };
 
     iframe.onerror = () => {
-        container.innerHTML = `
-            <div class="email-error-state">
-                <span class="error-icon">⚠️</span>
-                <span>Failed to load email content</span>
-            </div>
-        `;
+        // DOM-construct the error state for consistency with the rest
+        // of the file. Strings are static literals, but using
+        // replaceChildren keeps every container mutation in this file
+        // free of innerHTML so no future contributor lands user data
+        // through a "just like this one" copy.
+        const errState = document.createElement('div');
+        errState.className = 'email-error-state';
+        const icon = document.createElement('span');
+        icon.className = 'error-icon';
+        icon.textContent = '⚠️';
+        const label = document.createElement('span');
+        label.textContent = 'Failed to load email content';
+        errState.appendChild(icon);
+        errState.appendChild(label);
+        container.replaceChildren(errState);
     };
 
     // Clear loading state and add iframe
-    container.innerHTML = '';
-    container.appendChild(iframe);
+    container.replaceChildren(iframe);
 },
 
 // Build the HTML content for the email iframe with embedded styles
@@ -509,12 +659,13 @@ async loadAndRenderInvite(emailId) {
     // was kicked off.
     if (this.selectedEmailId !== emailId) return;
 
-    // Replace existing children safely, then insert sanitised markup.
-    // All interpolated strings pass through EmailRenderer.escapeHtml; URL
-    // is screened by isSafeUrl. We use insertAdjacentHTML rather than
-    // direct DOM construction to keep the markup colocated and readable.
-    slot.replaceChildren();
-    slot.insertAdjacentHTML('beforeend', this.renderCalendarInviteCard(invite, emailId));
+    // Construct the card via DOM nodes (createElement + textContent +
+    // setAttribute) so every interpolation of upstream-provided strings
+    // (title, organizer name/email, attendees, location) is safe by
+    // construction. Mirrors the renderEmailDetail rewrite — keeping
+    // both blocks consistent prevents an "escapeHtml drift" where a
+    // future template-literal contributor forgets to escape one field.
+    slot.replaceChildren(this.buildCalendarInviteCard(invite, emailId));
     slot.removeAttribute('hidden');
 
     // Mirror Gmail's behaviour by surfacing the ICS as a regular
@@ -526,7 +677,9 @@ async loadAndRenderInvite(emailId) {
 
 // ensureInviteAttachmentRow appends a calendar-attachment row to the
 // email detail view when one isn't already rendered. Used for inline
-// calendar parts that Nylas does not surface in attachments[].
+// calendar parts that Nylas does not surface in attachments[]. All
+// nodes are constructed via createElement+textContent so an attacker-
+// controlled invite.filename can never inject markup.
 ensureInviteAttachmentRow(emailId, invite) {
     if (!invite || !invite.filename) return;
     if (this.selectedEmailId !== emailId) return;
@@ -544,18 +697,9 @@ ensureInviteAttachmentRow(emailId, invite) {
         }
     }
 
-    const esc = EmailRenderer.escapeHtml;
-    const rowHTML = `
-        <div class="attachment-item" data-inline-calendar="true">
-            <span class="attachment-icon">&#128206;</span>
-            <span class="attachment-name">${esc(invite.filename)}</span>
-            <span class="attachment-size">Calendar invitation</span>
-        </div>
-    `;
-
     const list = detail.querySelector('.email-detail-attachments .attachments-list');
     if (list) {
-        list.insertAdjacentHTML('beforeend', rowHTML);
+        list.appendChild(this.buildInviteAttachmentRow(invite));
         const header = detail.querySelector('.email-detail-attachments .attachments-header');
         if (header) {
             const count = list.querySelectorAll('.attachment-item').length;
@@ -568,74 +712,171 @@ ensureInviteAttachmentRow(emailId, invite) {
     // directly after the invite card so it sits where the user expects.
     const slot = document.getElementById(`inviteSlot-${emailId}`);
     if (!slot) return;
-    const sectionHTML = `
-        <div class="email-detail-attachments">
-            <div class="attachments-header">Attachments (1)</div>
-            <div class="attachments-list">${rowHTML}</div>
-        </div>
-    `;
-    slot.insertAdjacentHTML('afterend', sectionHTML);
+    slot.after(this.buildInviteAttachmentSection(invite));
 },
 
-// renderCalendarInviteCard returns the HTML for a Gmail-style invite
-// card. All untrusted strings are escaped; the URL is also screened by
-// isSafeUrl before being placed in href.
-renderCalendarInviteCard(invite, emailId) {
-    const esc = EmailRenderer.escapeHtml;
+// buildInviteAttachmentRow constructs a single .attachment-item row for
+// an inline calendar part. The filename is set via textContent, so any
+// shape of invite.filename is safe.
+buildInviteAttachmentRow(invite) {
+    const item = document.createElement('div');
+    item.className = 'attachment-item';
+    item.setAttribute('data-inline-calendar', 'true');
+
+    const icon = document.createElement('span');
+    icon.className = 'attachment-icon';
+    icon.textContent = '📎';
+    item.appendChild(icon);
+
+    const name = document.createElement('span');
+    name.className = 'attachment-name';
+    name.textContent = invite.filename || '';
+    item.appendChild(name);
+
+    const size = document.createElement('span');
+    size.className = 'attachment-size';
+    size.textContent = 'Calendar invitation';
+    item.appendChild(size);
+
+    return item;
+},
+
+// buildInviteAttachmentSection builds a fresh
+// .email-detail-attachments section containing exactly the inline-
+// calendar row. Used when no attachments section exists yet.
+buildInviteAttachmentSection(invite) {
+    const wrap = document.createElement('div');
+    wrap.className = 'email-detail-attachments';
+
+    const header = document.createElement('div');
+    header.className = 'attachments-header';
+    header.textContent = 'Attachments (1)';
+    wrap.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'attachments-list';
+    list.appendChild(this.buildInviteAttachmentRow(invite));
+    wrap.appendChild(list);
+
+    return wrap;
+},
+
+// buildCalendarInviteCard returns the DOM node for a Gmail-style invite
+// card. Builds the entire tree with createElement + textContent +
+// setAttribute so untrusted invite fields (title, location, organizer,
+// attendees) can never inject markup — there is no template-literal
+// interpolation to forget to escape. Conferencing URL is screened via
+// isSafeUrl before being assigned to <a>.href.
+buildCalendarInviteCard(invite, emailId) {
     const fmtRange = this.formatInviteRange(invite);
     const safeURL = (typeof isSafeUrl === 'function' && invite.conferencing_url &&
         isSafeUrl(invite.conferencing_url)) ? invite.conferencing_url : '';
-
-    const orgLine = invite.organizer_email
-        ? `${esc(invite.organizer_name || invite.organizer_email)} · Organizer`
-        : '';
-
     const isCancelled = String(invite.method || '').toUpperCase() === 'CANCEL' ||
         String(invite.status || '').toUpperCase() === 'CANCELLED';
-    const banner = isCancelled
-        ? `<div class="calendar-invite-banner calendar-invite-banner-cancel" role="alert">This event was cancelled</div>`
-        : '';
 
-    const attendeesBlock = this.renderInviteAttendees(invite.attendees);
-    const actions = isCancelled
-        ? ''
-        : `<div class="calendar-invite-actions">
-                <button type="button" class="calendar-invite-btn primary"
-                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="yes">Yes</button>
-                <button type="button" class="calendar-invite-btn"
-                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="maybe">Maybe</button>
-                <button type="button" class="calendar-invite-btn"
-                        data-action="invite-rsvp" data-email-id="${esc(emailId)}" data-rsvp="no">No</button>
-            </div>`;
+    const card = document.createElement('section');
+    card.className = 'calendar-invite-card' + (isCancelled ? ' is-cancelled' : '');
+    card.setAttribute('role', 'region');
+    card.setAttribute('aria-label', 'Calendar invitation');
 
-    return `
-        <section class="calendar-invite-card${isCancelled ? ' is-cancelled' : ''}" role="region" aria-label="Calendar invitation">
-            ${banner}
-            <header class="calendar-invite-header">
-                <div class="calendar-invite-icon" aria-hidden="true">📅</div>
-                <div class="calendar-invite-when">
-                    <div class="calendar-invite-time">${esc(fmtRange)}</div>
-                    <div class="calendar-invite-title">${esc(invite.title || 'Untitled event')}</div>
-                </div>
-            </header>
-            ${invite.location ? `<div class="calendar-invite-location">📍 ${esc(invite.location)}</div>` : ''}
-            ${orgLine ? `<div class="calendar-invite-org">${orgLine}</div>` : ''}
-            ${safeURL ? `<a class="calendar-invite-link" href="${esc(safeURL)}" target="_blank" rel="noopener noreferrer">Join with conferencing</a>` : ''}
-            ${attendeesBlock}
-            ${actions}
-        </section>
-    `;
+    if (isCancelled) {
+        const banner = document.createElement('div');
+        banner.className = 'calendar-invite-banner calendar-invite-banner-cancel';
+        banner.setAttribute('role', 'alert');
+        banner.textContent = 'This event was cancelled';
+        card.appendChild(banner);
+    }
+
+    const header = document.createElement('header');
+    header.className = 'calendar-invite-header';
+    const iconEl = document.createElement('div');
+    iconEl.className = 'calendar-invite-icon';
+    iconEl.setAttribute('aria-hidden', 'true');
+    iconEl.textContent = '📅';
+    header.appendChild(iconEl);
+
+    const when = document.createElement('div');
+    when.className = 'calendar-invite-when';
+    const timeEl = document.createElement('div');
+    timeEl.className = 'calendar-invite-time';
+    timeEl.textContent = fmtRange;
+    when.appendChild(timeEl);
+    const titleEl = document.createElement('div');
+    titleEl.className = 'calendar-invite-title';
+    titleEl.textContent = invite.title || 'Untitled event';
+    when.appendChild(titleEl);
+    header.appendChild(when);
+    card.appendChild(header);
+
+    if (invite.location) {
+        const loc = document.createElement('div');
+        loc.className = 'calendar-invite-location';
+        // 📍 is a static literal owned by this file — keep as a separate
+        // text node so the user-supplied location text uses textContent.
+        loc.appendChild(document.createTextNode('📍 '));
+        loc.appendChild(document.createTextNode(invite.location));
+        card.appendChild(loc);
+    }
+
+    if (invite.organizer_email) {
+        const org = document.createElement('div');
+        org.className = 'calendar-invite-org';
+        org.textContent = (invite.organizer_name || invite.organizer_email) + ' · Organizer';
+        card.appendChild(org);
+    }
+
+    if (safeURL) {
+        const link = document.createElement('a');
+        link.className = 'calendar-invite-link';
+        // Assigning to .href via property does NOT HTML-escape the URL,
+        // but isSafeUrl already screened the scheme/host above.
+        link.href = safeURL;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Join with conferencing';
+        card.appendChild(link);
+    }
+
+    const attendees = this.buildInviteAttendees(invite.attendees);
+    if (attendees) card.appendChild(attendees);
+
+    if (!isCancelled) {
+        card.appendChild(this.buildInviteActions(emailId));
+    }
+    return card;
 },
 
-// renderInviteAttendees produces the attendee summary that mirrors
-// Gmail's "3 going, 1 declined" line and the per-attendee chip list.
-// Returns an empty string when no attendees are present so the card
-// stays compact for invitations without an explicit attendee list
-// (Outlook sometimes omits ATTENDEE on REQUEST).
-renderInviteAttendees(attendees) {
-    if (!Array.isArray(attendees) || attendees.length === 0) return '';
+// buildInviteActions constructs the Yes/Maybe/No RSVP button row.
+buildInviteActions(emailId) {
+    const wrap = document.createElement('div');
+    wrap.className = 'calendar-invite-actions';
+    [
+        { rsvp: 'yes',   label: 'Yes',   primary: true },
+        { rsvp: 'maybe', label: 'Maybe', primary: false },
+        { rsvp: 'no',    label: 'No',    primary: false },
+    ].forEach(({ rsvp, label, primary }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = primary ? 'calendar-invite-btn primary' : 'calendar-invite-btn';
+        btn.setAttribute('data-action', 'invite-rsvp');
+        btn.setAttribute('data-email-id', emailId);
+        btn.setAttribute('data-rsvp', rsvp);
+        btn.textContent = label;
+        wrap.appendChild(btn);
+    });
+    return wrap;
+},
 
-    const esc = EmailRenderer.escapeHtml;
+// buildInviteAttendees produces the attendee summary that mirrors
+// Gmail's "3 going, 1 declined" line and the per-attendee chip list.
+// Returns null when no attendees are present so the card stays compact
+// for invitations without an explicit attendee list (Outlook sometimes
+// omits ATTENDEE on REQUEST). Every interpolation of attendee data
+// (name, email, role) goes through textContent / setAttribute, never
+// HTML-string concatenation.
+buildInviteAttendees(attendees) {
+    if (!Array.isArray(attendees) || attendees.length === 0) return null;
+
     const counts = { ACCEPTED: 0, DECLINED: 0, TENTATIVE: 0, OTHER: 0 };
     attendees.forEach((a) => {
         const status = String(a.status || '').toUpperCase();
@@ -643,38 +884,49 @@ renderInviteAttendees(attendees) {
         else counts.OTHER++;
     });
 
+    const wrap = document.createElement('div');
+    wrap.className = 'calendar-invite-attendees';
+
     const parts = [];
     if (counts.ACCEPTED > 0) parts.push(`${counts.ACCEPTED} going`);
     if (counts.DECLINED > 0) parts.push(`${counts.DECLINED} declined`);
     if (counts.TENTATIVE > 0) parts.push(`${counts.TENTATIVE} maybe`);
     if (counts.OTHER > 0) parts.push(`${counts.OTHER} no response`);
+    if (parts.length > 0) {
+        const summary = document.createElement('div');
+        summary.className = 'calendar-invite-summary';
+        summary.textContent = parts.join(' · ');
+        wrap.appendChild(summary);
+    }
 
-    const summary = parts.length > 0
-        ? `<div class="calendar-invite-summary">${esc(parts.join(' · '))}</div>`
-        : '';
-
-    const chips = attendees.slice(0, 8).map((a) => {
+    const list = document.createElement('div');
+    list.className = 'calendar-invite-attendee-list';
+    attendees.slice(0, 8).forEach((a) => {
         const label = a.name || a.email || '';
-        if (!label) return '';
+        if (!label) return;
         const status = String(a.status || '').toUpperCase();
         const cls = status === 'ACCEPTED' ? 'is-accepted'
             : status === 'DECLINED' ? 'is-declined'
             : status === 'TENTATIVE' ? 'is-tentative'
             : 'is-pending';
+        const chip = document.createElement('span');
+        chip.className = 'calendar-invite-attendee ' + cls;
+        // setAttribute does not HTML-encode; the title is read by
+        // browsers as a plain string. Concatenation of the email and
+        // role is safe because both are textual values, never HTML.
         const role = a.is_organizer ? ' · Organizer' : '';
-        return `<span class="calendar-invite-attendee ${cls}" title="${esc(a.email || '')}${esc(role)}">${esc(label)}</span>`;
-    }).filter(Boolean).join('');
-
-    const overflow = attendees.length > 8
-        ? `<span class="calendar-invite-attendee is-overflow">+${attendees.length - 8} more</span>`
-        : '';
-
-    return `
-        <div class="calendar-invite-attendees">
-            ${summary}
-            <div class="calendar-invite-attendee-list">${chips}${overflow}</div>
-        </div>
-    `;
+        chip.setAttribute('title', (a.email || '') + role);
+        chip.textContent = label;
+        list.appendChild(chip);
+    });
+    if (attendees.length > 8) {
+        const overflow = document.createElement('span');
+        overflow.className = 'calendar-invite-attendee is-overflow';
+        overflow.textContent = `+${attendees.length - 8} more`;
+        list.appendChild(overflow);
+    }
+    wrap.appendChild(list);
+    return wrap;
 },
 
 // formatInviteRange turns Unix-second start/end into a human string.
@@ -699,25 +951,102 @@ formatInviteRange(invite) {
     return 'Time not specified';
 },
 
-// rsvpToInvite handles a Yes/No/Maybe click. Currently a stub — shows a
-// toast confirming the choice and updates button state. Backend wiring
-// will plug into PUT /api/events/{id}/rsvp once the embedded event ID is
-// surfaced from the parser.
-rsvpToInvite(emailId, response) {
+// rsvpToInvite forwards the user's choice to POST /api/emails/{id}/rsvp
+// which resolves the invite to a Nylas event and calls send-rsvp.
+//
+// Buttons are disabled for the duration of the request so a frustrated
+// user doesn't double-fire (each call sends a real email to the
+// organiser). The active state is only applied after the server confirms
+// — a click that fails leaves the previous selection alone.
+async rsvpToInvite(emailId, response) {
     const valid = new Set(['yes', 'no', 'maybe']);
     const choice = String(response || '').toLowerCase();
     if (!valid.has(choice)) return;
 
-    if (typeof showToast === 'function') {
-        const labels = { yes: 'Accepted', no: 'Declined', maybe: 'Tentative' };
-        showToast('success', labels[choice], `Invite ${labels[choice].toLowerCase()}`);
-    }
-
-    // Visual feedback — mark the chosen button as active.
     const slot = document.getElementById(`inviteSlot-${emailId}`);
-    if (slot) {
-        slot.querySelectorAll('.calendar-invite-btn').forEach((btn) => {
-            btn.classList.toggle('active', btn.dataset.rsvp === choice);
+    const buttons = slot ? Array.from(slot.querySelectorAll('.calendar-invite-btn')) : [];
+    const previouslyActive = buttons.find((btn) => btn.classList.contains('active')) || null;
+
+    // Disable all RSVP buttons and mark the clicked one as in-flight so
+    // the user gets immediate visual feedback while we wait on Nylas.
+    buttons.forEach((btn) => {
+        btn.disabled = true;
+        btn.classList.toggle('is-loading', btn.dataset.rsvp === choice);
+    });
+
+    try {
+        // No CSRF token: Air binds the listener to localhost via the
+        // shared internal/webguard package, and cross-origin requests
+        // to localhost are blocked by the browser's PNA / origin
+        // checks. If Air is ever ported to a hosted URL, this fetch
+        // (and the matching /rsvp handler) MUST gain a CSRF token.
+        const resp = await fetch(`/api/emails/${encodeURIComponent(emailId)}/rsvp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: choice }),
+        });
+
+        if (!resp.ok) {
+            let message = 'Failed to send RSVP';
+            try {
+                const errBody = await resp.json();
+                if (errBody && typeof errBody.error === 'string' && errBody.error) {
+                    // Cap the upstream message so a 200 KB HTML body
+                    // parsed as JSON, or a maliciously long Nylas error,
+                    // can't blow up the toast layout. showToast also
+                    // truncates defensively, but we narrow at the source.
+                    message = errBody.error.slice(0, 200);
+                }
+            } catch (e) {
+                // Body wasn't JSON — fall back to the generic message.
+                // Log the parse failure so degraded errors (server
+                // returned HTML, body too large, etc.) are debuggable.
+                console.warn('[invite] RSVP error body parse failed:', e);
+            }
+            if (typeof showToast === 'function') {
+                showToast('error', 'RSVP failed', message);
+            }
+            return;
+        }
+
+        if (typeof showToast === 'function') {
+            const labels = { yes: 'Accepted', no: 'Declined', maybe: 'Tentative' };
+            showToast('success', labels[choice], `Invite ${labels[choice].toLowerCase()}`);
+        }
+
+        // Apply the new active state only if the user is STILL on this
+        // email AND the slot still exists. Without these guards, a user
+        // who clicks RSVP, navigates away mid-flight, then returns,
+        // would see success applied to a card that's now showing a
+        // different invite — a confusing reality drift.
+        if (this.selectedEmailId === emailId) {
+            const liveSlot = document.getElementById(`inviteSlot-${emailId}`);
+            if (liveSlot) {
+                liveSlot.querySelectorAll('.calendar-invite-btn').forEach((btn) => {
+                    btn.classList.toggle('active', btn.dataset.rsvp === choice);
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('[invite] RSVP failed:', err);
+        if (typeof showToast === 'function') {
+            showToast('error', 'RSVP failed', 'Could not reach the server. Check your connection.');
+        }
+        // Restore prior selection so the UI doesn't lie about state.
+        // Skip the restore if the user has already navigated away (the
+        // node is no longer connected to the document) — touching a
+        // detached element is harmless but pollutes the heap.
+        if (previouslyActive && previouslyActive.isConnected) {
+            previouslyActive.classList.add('active');
+        }
+    } finally {
+        // Only re-enable the buttons that are still live — captured
+        // references can be detached if the user navigated away, in
+        // which case the toggles are no-ops on a stale reference.
+        buttons.forEach((btn) => {
+            if (!btn.isConnected) return;
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
         });
     }
 },

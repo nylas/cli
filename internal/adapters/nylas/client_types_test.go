@@ -150,14 +150,16 @@ func TestCreateFolderRequest(t *testing.T) {
 func TestUpdateMessageRequest(t *testing.T) {
 	unread := false
 	starred := true
+	folders := []string{"folder-1", "folder-2"}
 	req := &domain.UpdateMessageRequest{
 		Unread:  &unread,
 		Starred: &starred,
-		Folders: []string{"folder-1", "folder-2"},
+		Folders: folders,
 	}
 
 	assert.False(t, *req.Unread)
 	assert.True(t, *req.Starred)
+	require.NotNil(t, req.Folders)
 	assert.Len(t, req.Folders, 2)
 }
 

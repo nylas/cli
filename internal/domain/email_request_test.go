@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -184,11 +185,12 @@ func TestThreadQueryParams_Creation(t *testing.T) {
 func TestUpdateMessageRequest_Creation(t *testing.T) {
 	unread := false
 	starred := true
+	folders := []string{"archive", "important"}
 
 	req := UpdateMessageRequest{
 		Unread:  &unread,
 		Starred: &starred,
-		Folders: []string{"archive", "important"},
+		Folders: folders,
 	}
 
 	if req.Unread == nil || *req.Unread {
@@ -199,6 +201,68 @@ func TestUpdateMessageRequest_Creation(t *testing.T) {
 	}
 	if len(req.Folders) != 2 {
 		t.Errorf("UpdateMessageRequest.Folders length = %d, want 2", len(req.Folders))
+	}
+}
+
+// TestUpdateMessageRequest_FoldersWireFormat pins the three documented
+// caller intents that the plain []string type carries:
+//
+//	nil               → "leave folders alone" (encodes as "folders":null,
+//	                    which Nylas treats equivalently to absent)
+//	[]string{}        → "set folders to empty" (Gmail archive)
+//	[]string{"x",...} → "set folders to this list"
+//
+// The JSON tag intentionally omits `omitempty` because Go's omitempty
+// would elide both nil and empty slices, collapsing the archive intent
+// into the leave-alone intent. The adapter cherry-picks via `!= nil` so
+// only nil-vs-empty matters at the API boundary; this test pins the
+// struct's own marshal shape so a future refactor that adds back
+// `omitempty` (or replaces []string with a different type) trips here
+// rather than reintroducing the silent no-op.
+func TestUpdateMessageRequest_FoldersWireFormat(t *testing.T) {
+	cases := []struct {
+		name             string
+		req              UpdateMessageRequest
+		wantFoldersValue string
+	}{
+		{
+			name:             "nil slice → null",
+			req:              UpdateMessageRequest{Folders: nil},
+			wantFoldersValue: "null",
+		},
+		{
+			name:             "empty slice → []",
+			req:              UpdateMessageRequest{Folders: []string{}},
+			wantFoldersValue: "[]",
+		},
+		{
+			name:             `one-element slice → ["archive"]`,
+			req:              UpdateMessageRequest{Folders: []string{"archive"}},
+			wantFoldersValue: `["archive"]`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(tc.req)
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
+
+			var parsed map[string]json.RawMessage
+			if err := json.Unmarshal(data, &parsed); err != nil {
+				t.Fatalf("json.Unmarshal: %v", err)
+			}
+
+			raw, present := parsed["folders"]
+			if !present {
+				t.Fatalf("folders key must be present (no omitempty); body=%s", string(data))
+			}
+			if string(raw) != tc.wantFoldersValue {
+				t.Errorf("folders raw=%s, want %s; body=%s",
+					string(raw), tc.wantFoldersValue, string(data))
+			}
+		})
 	}
 }
 

@@ -376,11 +376,17 @@ test.describe('Form Keyboard Navigation', () => {
 
     await expect(apiKeyInput).toBeFocused();
 
-    // Tab to region select
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(100);
-
+    // The setup form has a "show password" toggle button between the API key
+    // input and the region select, so tab past it to reach the region select.
     const regionSelect = page.locator(selectors.setup.regionSelect);
+    for (let i = 0; i < 5; i++) {
+      if (await regionSelect.evaluate((el) => el === document.activeElement)) {
+        break;
+      }
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(50);
+    }
+
     await expect(regionSelect).toBeFocused();
   });
 });

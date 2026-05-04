@@ -3,7 +3,9 @@ package air
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +25,7 @@ type CalendarInviteResponse struct {
 	HasInvite       bool             `json:"has_invite"`
 	AttachmentID    string           `json:"attachment_id,omitempty"`
 	Filename        string           `json:"filename,omitempty"`
+	ICalUID         string           `json:"ical_uid,omitempty"` // VEVENT UID; lets the RSVP endpoint resolve a Nylas event ID
 	Title           string           `json:"title,omitempty"`
 	Location        string           `json:"location,omitempty"`
 	Description     string           `json:"description,omitempty"`
@@ -50,14 +53,20 @@ type InviteAttendee struct {
 	IsOrganizer bool   `json:"is_organizer,omitempty"`
 }
 
+// errInviteFetchFailed flags a transient upstream failure on the second
+// raw_mime fetch (the fallback after attachment download fails). Callers
+// distinguish it from "the email simply has no invite" so they can choose
+// between silent degrade (preview card) and 502 (RSVP — the user is
+// actively trying to do something and deserves an actionable error).
+var errInviteFetchFailed = errors.New("invite: failed to fetch raw_mime")
+
 // handleEmailInvite returns parsed iCalendar invite data for an email.
-// Resolution order:
-//  1. attachments[] entry with text/calendar or .ics filename — Microsoft,
-//     custom senders typically arrive this way.
-//  2. inline text/calendar part inside raw_mime (Gmail's invitation
-//     shape — the ICS rides as a multipart/alternative leaf).
-//
-// Returns has_invite=false when neither path yields a calendar payload.
+// Returns has_invite=false when neither attachments[] nor raw_mime yields
+// a calendar payload — the frontend silently degrades to the regular
+// email render in that case. Transient raw_mime fetch failures are also
+// silently degraded here so a flaky upstream doesn't break the inbox
+// view; the RSVP endpoint surfaces the same condition as 502 because the
+// user is actively trying to act on the invite.
 func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, emailID string) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
@@ -76,19 +85,42 @@ func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, email
 	ctx, cancel := s.withTimeout(r)
 	defer cancel()
 
+	resp, err := s.resolveEmailInvite(ctx, grantID, emailID)
+	if err != nil {
+		// Preserve the legacy "preview card silently disappears" UX even
+		// when raw_mime can't be fetched. Only the initial GetMessage
+		// failure (a hard error) reaches here.
+		if errors.Is(err, errInviteFetchFailed) {
+			writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
+			return
+		}
+		writeUpstreamError(w, http.StatusInternalServerError,
+			"Failed to fetch email — please try again", err,
+			"emailID", emailID)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// resolveEmailInvite parses a message's iCalendar invite, if any.
+// Resolution order:
+//  1. attachments[] with text/calendar or .ics (Microsoft/custom senders).
+//  2. inline text/calendar in raw_mime (Gmail's multipart/alternative shape).
+//
+// Returns HasInvite=false on no-invite. Non-nil error only on initial
+// GetMessage failure — attachment-download and raw_mime errors are swallowed.
+func (s *Server) resolveEmailInvite(ctx context.Context, grantID, emailID string) (CalendarInviteResponse, error) {
 	msg, err := s.nylasClient.GetMessage(ctx, grantID, emailID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to fetch email: "+err.Error())
-		return
+		return CalendarInviteResponse{}, err
 	}
 
 	att := findCalendarAttachment(msg.Attachments)
 	if att != nil {
 		if parsed, ok := s.tryParseAttachmentInvite(ctx, grantID, emailID, att); ok {
-			writeJSON(w, http.StatusOK, parsed)
-			return
+			return parsed, nil
 		}
-		// Download or parse failed. Don't surface a 5xx — Nylas
+		// Download or parse failed. Don't surface as an error — Nylas
 		// frequently returns synthetic attachment IDs (v0:base64(...):...)
 		// that look like real attachments but cannot be downloaded.
 		// Falling through to the raw_mime walker recovers the calendar
@@ -97,22 +129,28 @@ func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, email
 
 	// Fetch raw MIME and look for a text/calendar part — both Gmail's
 	// inline-multipart shape AND Nylas's "synthetic attachment that
-	// can't be downloaded" case land here.
+	// can't be downloaded" case land here. A network error on this call
+	// is *transient* and distinguishable from "email has no invite", so
+	// we surface it as errInviteFetchFailed: callers in actionable paths
+	// (RSVP) can return 502, while the preview path silently degrades.
 	full, err := s.nylasClient.GetMessageWithFields(ctx, grantID, emailID, "raw_mime")
-	if err != nil || full == nil || full.RawMIME == "" {
-		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
-		return
+	if err != nil {
+		// Double-wrap so callers can errors.Is against errInviteFetchFailed
+		// (the sentinel) AND unwrap the underlying transport error for
+		// logging. Go 1.20+ supports multiple %w in a single Errorf.
+		return CalendarInviteResponse{}, fmt.Errorf("%w: %w", errInviteFetchFailed, err)
+	}
+	if full == nil || full.RawMIME == "" {
+		return CalendarInviteResponse{HasInvite: false}, nil
 	}
 	parts := findInlineCalendarParts(full.RawMIME)
 	if len(parts) == 0 {
-		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
-		return
+		return CalendarInviteResponse{HasInvite: false}, nil
 	}
 
 	parsed, err := parseICS(parts[0].Body)
 	if err != nil {
-		writeJSON(w, http.StatusOK, CalendarInviteResponse{HasInvite: false})
-		return
+		return CalendarInviteResponse{HasInvite: false}, nil
 	}
 	parsed.HasInvite = true
 	// If we had a Nylas attachment entry (even an undownloadable
@@ -133,28 +171,33 @@ func (s *Server) handleEmailInvite(w http.ResponseWriter, r *http.Request, email
 	if parsed.Method == "" && parts[0].Method != "" {
 		parsed.Method = parts[0].Method
 	}
-	writeJSON(w, http.StatusOK, parsed)
+	return parsed, nil
 }
 
-// tryParseAttachmentInvite attempts the legacy path: download an ICS
-// attachment via the Nylas attachments endpoint and parse it. Returns
-// ok=false on any failure so the caller can fall back to raw_mime.
-// Errors are intentionally swallowed: we don't want 5xxs for transient
-// download problems when the calendar payload is recoverable from MIME.
+// tryParseAttachmentInvite downloads and parses an ICS attachment.
+// Returns ok=false on any failure so the caller falls back to raw_mime;
+// each failure logs at slog.Debug for diagnosability.
 func (s *Server) tryParseAttachmentInvite(ctx context.Context, grantID, emailID string, att *domain.Attachment) (CalendarInviteResponse, bool) {
 	body, err := s.nylasClient.DownloadAttachment(ctx, grantID, emailID, att.ID)
 	if err != nil {
+		slog.Debug("invite attachment download failed",
+			"attachment_id", att.ID, "filename", att.Filename, "err", err)
 		return CalendarInviteResponse{}, false
 	}
 	defer func() { _ = body.Close() }()
 
 	raw, err := io.ReadAll(io.LimitReader(body, maxICSBytes+1))
 	if err != nil || len(raw) > maxICSBytes {
+		slog.Debug("invite attachment read failed or oversized",
+			"attachment_id", att.ID, "filename", att.Filename,
+			"size", len(raw), "max", maxICSBytes, "err", err)
 		return CalendarInviteResponse{}, false
 	}
 
 	parsed, err := parseICS(string(raw))
 	if err != nil {
+		slog.Debug("invite attachment ICS parse failed",
+			"attachment_id", att.ID, "filename", att.Filename, "err", err)
 		return CalendarInviteResponse{}, false
 	}
 	parsed.HasInvite = true
@@ -227,6 +270,7 @@ func demoInviteFor(emailID string) CalendarInviteResponse {
 		HasInvite:       true,
 		AttachmentID:    "att-invite-001",
 		Filename:        "invite.ics",
+		ICalUID:         "demo-invite-001@nylas.example",
 		Title:           "Quarterly Sync",
 		Location:        "Conference Room A / Online",
 		Description:     "Quarterly review with the partner team.",

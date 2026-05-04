@@ -124,34 +124,52 @@ function handleTouchMove(e) {
     }
 }
 
-function handleTouchEnd(e) {
+async function handleTouchEnd(e) {
     if (!currentSwipeItem) return;
 
     const transform = currentSwipeItem.style.transform;
     const match = transform.match(/translateX\((-?\d+)px\)/);
     const swipeDistance = match ? parseInt(match[1]) : 0;
+    const emailId = currentSwipeItem.dataset.emailId;
+    const swipedItem = currentSwipeItem;
+
+    // Reset transient state up-front so the EmailListManager can
+    // re-render without our half-finished gesture sticking around.
+    swipedItem.classList.remove('swipe-archive', 'swipe-delete');
+    currentSwipeItem = null;
 
     if (swipeDistance > 80) {
-        // Archive
-        currentSwipeItem.style.transform = 'translateX(100%)';
-        currentSwipeItem.style.opacity = '0';
-        setTimeout(() => {
-            showToast('success', 'Archived', 'Email moved to archive');
-        }, 200);
+        // Archive — animate, then dispatch the same handler the desktop
+        // archive button uses so the swipe actually moves the email.
+        swipedItem.style.transform = 'translateX(100%)';
+        swipedItem.style.opacity = '0';
+        let archived = false;
+        if (emailId && typeof EmailListManager !== 'undefined' &&
+            typeof EmailListManager.archiveEmail === 'function') {
+            archived = await EmailListManager.archiveEmail(emailId);
+        }
+        if (!archived && swipedItem.isConnected) {
+            swipedItem.style.transform = '';
+            swipedItem.style.opacity = '';
+        }
     } else if (swipeDistance < -80) {
-        // Delete
-        currentSwipeItem.style.transform = 'translateX(-100%)';
-        currentSwipeItem.style.opacity = '0';
-        setTimeout(() => {
-            showToast('warning', 'Deleted', 'Email moved to trash');
-        }, 200);
+        // Delete — same routing as archive, but to the delete handler.
+        swipedItem.style.transform = 'translateX(-100%)';
+        swipedItem.style.opacity = '0';
+        let deleted = false;
+        if (emailId && typeof EmailListManager !== 'undefined' &&
+            typeof EmailListManager.deleteEmail === 'function') {
+            deleted = await EmailListManager.deleteEmail(emailId);
+        }
+        if (!deleted && swipedItem.isConnected) {
+            swipedItem.style.transform = '';
+            swipedItem.style.opacity = '';
+        }
     } else {
-        // Reset
-        currentSwipeItem.style.transform = '';
+        // Insufficient distance — snap back.
+        swipedItem.style.transform = '';
+        swipedItem.style.opacity = '';
     }
-
-    currentSwipeItem.classList.remove('swipe-archive', 'swipe-delete');
-    currentSwipeItem = null;
 }
 
 // Initialize pull to refresh
@@ -163,12 +181,25 @@ function initPullToRefresh() {
     if (!pullIndicator) {
         pullIndicator = document.createElement('div');
         pullIndicator.className = 'pull-to-refresh';
-        pullIndicator.innerHTML = `
-            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M23 4v6h-6M1 20v-6h6"/>
-                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-            </svg>
-        `;
+        // Decorative refresh icon — built via createElementNS so we
+        // don't need innerHTML for a static SVG. aria-hidden because
+        // the indicator is visual feedback, not a labelled control.
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        const p1 = document.createElementNS(svgNS, 'path');
+        p1.setAttribute('d', 'M23 4v6h-6M1 20v-6h6');
+        const p2 = document.createElementNS(svgNS, 'path');
+        p2.setAttribute('d', 'M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15');
+        svg.appendChild(p1);
+        svg.appendChild(p2);
+        pullIndicator.appendChild(svg);
         emailList.style.position = 'relative';
         emailList.insertBefore(pullIndicator, emailList.firstChild);
     }
@@ -196,13 +227,51 @@ function initPullToRefresh() {
         }
     }, { passive: true });
 
-    emailList.addEventListener('touchend', () => {
+    emailList.addEventListener('touchend', async () => {
         if (pullIndicator.classList.contains('active')) {
-            // Trigger refresh
-            showToast('info', 'Refreshing', 'Checking for new emails...');
-            setTimeout(() => {
+            // Trigger a real refresh — the previous version showed a
+            // canned "Updated" toast on a 1.5s timer without ever
+            // re-fetching, so the inbox could be stale by minutes.
+            showToast('info', 'Refreshing', 'Checking for new emails…');
+            // Re-load WITH the user's current view restored. Calling
+            // loadEmails() with no args used to drop the active folder
+            // filter (Sent / Archive / search results would silently swap
+            // to an unfiltered list while the sidebar still highlighted
+            // the wrong folder). Pass the cached selection through.
+            const opts = {};
+            if (typeof EmailListManager !== 'undefined') {
+                if (EmailListManager.currentFolder) opts.folder = EmailListManager.currentFolder;
+                if (EmailListManager.currentSearch) opts.search = EmailListManager.currentSearch;
+            }
+            // loadEmails returns one of:
+            //   'loaded'      → fetch succeeded
+            //   'in-progress' → another load was already running; treat
+            //                   as a benign no-op, NOT a failure
+            //   'failed'      → fetch raised; an error toast was already
+            //                   shown internally
+            // Older bundles may still return a boolean — coerce so the
+            // contract stays backwards-compatible during rollout.
+            let outcome = 'failed';
+            if (typeof EmailListManager !== 'undefined' &&
+                typeof EmailListManager.loadEmails === 'function') {
+                const result = await EmailListManager.loadEmails(opts);
+                if (typeof result === 'string') {
+                    outcome = result;
+                } else if (result === true) {
+                    outcome = 'loaded';
+                } else if (result === false) {
+                    outcome = 'failed';
+                }
+            }
+            if (outcome === 'loaded') {
                 showToast('success', 'Updated', 'Inbox is up to date');
-            }, 1500);
+            } else if (outcome === 'in-progress') {
+                // Another load is in flight — keep the existing pull
+                // indicator UX silent so users don't see a confusing
+                // toast just because they pulled twice quickly.
+            } else {
+                showToast('error', 'Refresh failed', 'Could not load new emails');
+            }
         }
 
         pullIndicator.style.top = '-50px';

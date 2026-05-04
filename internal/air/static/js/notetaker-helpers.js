@@ -103,21 +103,40 @@ buildNotetakerItem(nt) {
     titleRow.appendChild(badge);
     body.appendChild(titleRow);
 
-    // Meta info (date/time)
+    // Meta info (date/time). DOM-construct so localized date/time
+    // strings can never inject markup (toLocaleDateString output is
+    // formally locale-controlled and could in theory contain user-
+    // configured separators).
     const meta = this.createElement('div', 'nt-card-meta');
     if (nt.createdAt) {
         const d = new Date(nt.createdAt);
-        meta.innerHTML = `<span>📅 ${d.toLocaleDateString()}</span><span>🕐 ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>`;
+        const dateSpan = document.createElement('span');
+        dateSpan.textContent = '📅 ' + d.toLocaleDateString();
+        meta.appendChild(dateSpan);
+        const timeSpan = document.createElement('span');
+        timeSpan.textContent = '🕐 ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        meta.appendChild(timeSpan);
     }
     body.appendChild(meta);
 
-    // Details section (collapsed by default)
+    // Details section (collapsed by default). Build with DOM nodes +
+    // textContent so the provider value (which falls through to
+    // `nt.provider` for unknown enums) can never inject markup.
     const details = this.createElement('div', 'nt-card-details');
     details.style.display = 'none';
-    const detailsLink = nt.meetingLink && isSafeUrl(nt.meetingLink)
-        ? `<p><a href="${escapeHtml(nt.meetingLink)}" target="_blank" rel="noopener noreferrer">🔗 Meeting Link</a></p>`
-        : '';
-    details.innerHTML = `<p>${this.getProviderName(nt.provider)}</p>${detailsLink}`;
+    const providerEl = document.createElement('p');
+    providerEl.textContent = this.getProviderName(nt.provider);
+    details.appendChild(providerEl);
+    if (nt.meetingLink && isSafeUrl(nt.meetingLink)) {
+        const linkWrap = document.createElement('p');
+        const linkEl = document.createElement('a');
+        linkEl.href = nt.meetingLink;
+        linkEl.target = '_blank';
+        linkEl.rel = 'noopener noreferrer';
+        linkEl.textContent = '🔗 Meeting Link';
+        linkWrap.appendChild(linkEl);
+        details.appendChild(linkWrap);
+    }
     body.appendChild(details);
 
     // Toggle details button

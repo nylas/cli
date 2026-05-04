@@ -2,6 +2,15 @@
  * Email Bundles Module
  * Smart email categorization inspired by Shortwave/Google Inbox
  * Groups emails by type: newsletters, receipts, social, etc.
+ *
+ * STATUS: This module is NOT currently included by base.gohtml — the
+ * backend `/api/bundles*` routes ship and have integration tests, but
+ * the front-end UI is gated on a future sidebar redesign. The defensive
+ * cleanup in this file (fallback bundles when the API 5xx's, localStorage
+ * collapse persistence, no PUT-to-GET-only route) is kept intact so the
+ * module is ready to wire up via a single `<script>` include in
+ * base.gohtml when the redesign lands. Until then, treat changes here
+ * as exercising the defensive paths only — there is no live UX impact.
  */
 
 const Bundles = {
@@ -37,17 +46,67 @@ const Bundles = {
     },
 
     /**
-     * Load bundles from server
+     * Load bundles from server, then layer on per-user collapse state from
+     * localStorage. Collapse is a UI preference that doesn't need a server
+     * round-trip — keeping it client-side avoids the 405s the old code
+     * silently hit when it tried to PUT /api/bundles.
      */
     async loadBundles() {
         try {
             const response = await fetch('/api/bundles');
             if (response.ok) {
                 this.bundles = await response.json();
+            } else {
+                // fetch() does NOT throw on !response.ok (only on network
+                // failure), so a 5xx from /api/bundles previously left
+                // this.bundles as the empty initial value and the user
+                // saw no fallback grouping at all. Surface the defaults
+                // so the inbox is at least usable on partial outage.
+                console.warn('[bundles] /api/bundles returned', response.status, '- using defaults');
+                this.bundles = this.getDefaultBundles();
             }
         } catch (error) {
             console.error('Failed to load bundles:', error);
             this.bundles = this.getDefaultBundles();
+        }
+        this.applyStoredCollapseState();
+    },
+
+    /**
+     * applyStoredCollapseState rehydrates bundle.collapsed from
+     * localStorage. Tolerates corrupt JSON (e.g. user editing the value
+     * in devtools) by falling through to the server-provided defaults.
+     */
+    applyStoredCollapseState() {
+        const map = this.readCollapseMap();
+        if (!map) return;
+        this.bundles.forEach((bundle) => {
+            if (Object.prototype.hasOwnProperty.call(map, bundle.id)) {
+                bundle.collapsed = !!map[bundle.id];
+            }
+        });
+    },
+
+    readCollapseMap() {
+        try {
+            const raw = localStorage.getItem('air.bundles.collapsed');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    writeCollapseState(bundleId, collapsed) {
+        const map = this.readCollapseMap() || {};
+        map[bundleId] = !!collapsed;
+        try {
+            localStorage.setItem('air.bundles.collapsed', JSON.stringify(map));
+        } catch (err) {
+            // Quota exceeded / storage disabled — non-fatal; the toggle
+            // still works for the current session.
+            console.warn('[bundles] could not persist collapse state:', err);
         }
     },
 
@@ -204,25 +263,19 @@ const Bundles = {
     },
 
     /**
-     * Toggle bundle collapsed state
+     * Toggle bundle collapsed state and persist to localStorage so the
+     * preference survives a reload. The previous implementation tried to
+     * PUT /api/bundles, but that route only handles GET — every toggle
+     * silently produced a 405 (caught by `.catch` but never reported), so
+     * collapse state was effectively per-tab.
      * @param {string} bundleId - Bundle ID
      */
-    async toggleBundle(bundleId) {
+    toggleBundle(bundleId) {
         const bundle = this.bundles.find(b => b.id === bundleId);
         if (!bundle) return;
 
         bundle.collapsed = !bundle.collapsed;
-
-        try {
-            await fetch('/api/bundles', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bundle),
-            });
-        } catch (error) {
-            console.error('Failed to update bundle:', error);
-        }
-
+        this.writeCollapseState(bundle.id, bundle.collapsed);
         this.setupUI();
     },
 

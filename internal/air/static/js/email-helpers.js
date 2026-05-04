@@ -2,7 +2,6 @@
 
 // ====================================
 
-let currentEmailIndex = 0;
 let selectedEmails = new Set();
 
 // Virtual scrolling config
@@ -14,31 +13,49 @@ function getEmailItems() {
     return document.querySelectorAll('.email-item');
 }
 
+// Resolve the current keyboard cursor from the DOM rather than a module
+// global. The global drifted after archive/delete (the list shrinks but
+// the index doesn't), so arrow keys could target a removed element. The
+// keydown handler below already reads from DOM — these wrappers now
+// match its policy so all keyboard nav agrees on a single source of
+// truth.
+function currentEmailItemIndex(items) {
+    const list = items || getEmailItems();
+    for (let i = 0; i < list.length; i++) {
+        if (list[i].classList.contains('selected') || list[i].classList.contains('focused')) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // Select next email
 function selectNextEmail() {
     const emailItems = getEmailItems();
-    if (currentEmailIndex < emailItems.length - 1) {
-        emailItems[currentEmailIndex]?.classList.remove('selected');
-        currentEmailIndex++;
-        emailItems[currentEmailIndex].classList.add('selected');
-        emailItems[currentEmailIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        if (typeof announce === 'function') {
-            announce(`Email ${currentEmailIndex + 1} of ${emailItems.length}`);
-        }
+    if (emailItems.length === 0) return;
+    const current = currentEmailItemIndex(emailItems);
+    const next = current < 0 ? 0 : current + 1;
+    if (next >= emailItems.length) return;
+    if (current >= 0) emailItems[current]?.classList.remove('selected');
+    emailItems[next].classList.add('selected');
+    emailItems[next].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (typeof announce === 'function') {
+        announce(`Email ${next + 1} of ${emailItems.length}`);
     }
 }
 
 // Select previous email
 function selectPrevEmail() {
     const emailItems = getEmailItems();
-    if (currentEmailIndex > 0) {
-        emailItems[currentEmailIndex]?.classList.remove('selected');
-        currentEmailIndex--;
-        emailItems[currentEmailIndex].classList.add('selected');
-        emailItems[currentEmailIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        if (typeof announce === 'function') {
-            announce(`Email ${currentEmailIndex + 1} of ${emailItems.length}`);
-        }
+    if (emailItems.length === 0) return;
+    const current = currentEmailItemIndex(emailItems);
+    const prev = current <= 0 ? -1 : current - 1;
+    if (prev < 0) return;
+    emailItems[current]?.classList.remove('selected');
+    emailItems[prev].classList.add('selected');
+    emailItems[prev].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (typeof announce === 'function') {
+        announce(`Email ${prev + 1} of ${emailItems.length}`);
     }
 }
 
@@ -74,93 +91,13 @@ function updateBatchActionsUI() {
     }
 }
 
-// Archive selected emails
-function archiveSelected() {
-    if (selectedEmails.size === 0) return;
-    if (typeof showToast === 'function') {
-        showToast('success', 'Archived', `${selectedEmails.size} emails moved to archive`);
-    }
-    clearEmailSelections();
-}
-
-// Delete selected emails
-function deleteSelected() {
-    if (selectedEmails.size === 0) return;
-    if (typeof showToast === 'function') {
-        showToast('warning', 'Deleted', `${selectedEmails.size} emails moved to trash`);
-    }
-    clearEmailSelections();
-}
-
-// Mark selected as read/unread
-function markSelectedAsRead(read = true) {
-    if (selectedEmails.size === 0) return;
-    if (typeof showToast === 'function') {
-        showToast('info', read ? 'Marked Read' : 'Marked Unread', `${selectedEmails.size} emails updated`);
-    }
-    clearEmailSelections();
-}
-
-// Send email (legacy function for compatibility)
-function sendEmail() {
-    if (typeof showSendAnimation === 'function') {
-        showSendAnimation();
-    }
-    setTimeout(() => {
-        if (typeof showToast === 'function') {
-            showToast('success', 'Email Sent', 'Your message has been delivered');
-        }
-        if (typeof toggleCompose === 'function') {
-            toggleCompose();
-        }
-    }, 1000);
-}
-
-// Generate AI Summary (button-triggered)
-function generateAISummary() {
-    const btn = document.getElementById('aiSummaryBtn');
-    const summaryDiv = document.getElementById('aiSummary');
-    const summaryText = document.getElementById('aiSummaryText');
-
-    if (!btn || !summaryDiv || !summaryText) return;
-
-    // Show loading state
-    btn.classList.add('loading');
-    btn.innerHTML = '<span class="ai-icon">⏳</span><span>Generating summary...</span>';
-
-    // Simulate AI processing
-    setTimeout(() => {
-        const summaries = [
-            "This email discusses the Q4 product roadmap. Key points: 3 new features planned, design mockups attached, stakeholder meeting scheduled for next Tuesday.",
-            "Sarah is requesting approval for the marketing budget. The proposal includes increased social media spend and a new influencer campaign targeting Gen Z.",
-            "Technical review notes: Performance improvements show 40% faster load times. Minor bugs identified in mobile view need addressing before launch.",
-            "Team sync summary: Sprint progress on track, two blockers identified for the auth module, new hire starting Monday needs onboarding setup."
-        ];
-
-        const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
-
-        // Reset button
-        btn.classList.remove('loading');
-        btn.innerHTML = '<span class="ai-icon">✨</span><span>Summarize with AI</span>';
-
-        // Show summary with typing effect
-        summaryDiv.classList.remove('hidden');
-        if (typeof showAITyping === 'function') {
-            showAITyping(summaryText, randomSummary);
-        } else {
-            summaryText.textContent = randomSummary;
-        }
-
-    }, 1500 + Math.random() * 1000);
-}
-
-// Hide AI Summary
-function hideAISummary() {
-    const summaryDiv = document.getElementById('aiSummary');
-    if (summaryDiv) {
-        summaryDiv.classList.add('hidden');
-    }
-}
+// Note: previous versions of this file shipped five "fake action" helpers
+// (archiveSelected, deleteSelected, markSelectedAsRead, sendEmail,
+// generateAISummary) that showed success toasts without making any API
+// calls. None of them were referenced from templates or other modules —
+// they were dead code that misled audits — so they have been removed.
+// The real implementations live in email-actions.js (CRUD + read/star)
+// and email-ai.js (summarize) and run through AirAPI / fetch.
 
 // Initialize email keyboard navigation
 function initEmailKeyboard() {
@@ -178,7 +115,7 @@ function initEmailKeyboard() {
         item.setAttribute('aria-selected', item.classList.contains('selected') ? 'true' : 'false');
     });
 
-    emailList.addEventListener('keydown', function(e) {
+    emailList.addEventListener('keydown', async function(e) {
         const items = emailList.querySelectorAll('.email-item');
         const currentIndex = Array.from(items).findIndex(item =>
             item.classList.contains('focused') || item.classList.contains('selected')
@@ -218,11 +155,28 @@ function initEmailKeyboard() {
             case 'Delete':
             case 'Backspace':
                 e.preventDefault();
-                if (typeof announce === 'function') {
-                    announce('Email deleted');
-                }
-                if (typeof showToast === 'function') {
-                    showToast('warning', 'Deleted', 'Email moved to trash');
+                // Route through EmailListManager so the keystroke
+                // matches the click-Delete behaviour: optimistic
+                // removal, real fetch, server-side persistence.
+                //
+                // Await the deletion before announcing — the previous
+                // version fired the screen-reader announcement
+                // synchronously, so users heard "Email deleted" even
+                // when the underlying fetch failed and the email was
+                // rolled back into the list. deleteEmail returns true
+                // on a successful round-trip, false on rollback.
+                {
+                    const focused = items[currentIndex];
+                    const id = focused && focused.dataset && focused.dataset.emailId;
+                    if (id && typeof EmailListManager !== 'undefined' &&
+                        typeof EmailListManager.deleteEmail === 'function') {
+                        const ok = await EmailListManager.deleteEmail(id);
+                        if (ok && typeof announce === 'function') {
+                            announce('Email deleted');
+                        } else if (!ok && typeof announce === 'function') {
+                            announce('Delete failed');
+                        }
+                    }
                 }
                 break;
             case 'x':

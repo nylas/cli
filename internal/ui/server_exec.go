@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -225,6 +226,85 @@ var allowedCommands = map[string]bool{
 	"notetaker create": true,
 	"notetaker delete": true,
 	"notetaker media":  true,
+	// Email signatures subcommands
+	"email signatures":        true,
+	"email signatures list":   true,
+	"email signatures show":   true,
+	"email signatures create": true,
+	"email signatures update": true,
+	"email signatures delete": true,
+	// Email templates subcommands
+	"email templates":        true,
+	"email templates list":   true,
+	"email templates show":   true,
+	"email templates create": true,
+	"email templates update": true,
+	"email templates delete": true,
+	"email templates use":    true,
+	// Admin applications create / grants stats (referenced by UI, not previously in allowlist)
+	"admin applications create": true,
+	"admin grants stats":        true,
+	// Admin callback-uris subcommands
+	"admin callback-uris":        true,
+	"admin callback-uris list":   true,
+	"admin callback-uris show":   true,
+	"admin callback-uris create": true,
+	"admin callback-uris update": true,
+	"admin callback-uris delete": true,
+	// Agent commands
+	"agent status":         true,
+	"agent account":        true,
+	"agent account list":   true,
+	"agent account get":    true,
+	"agent account create": true,
+	"agent account update": true,
+	"agent account delete": true,
+	"agent policy":         true,
+	"agent policy list":    true,
+	"agent policy get":     true,
+	"agent policy read":    true,
+	"agent policy create":  true,
+	"agent policy update":  true,
+	"agent policy delete":  true,
+	"agent rule":           true,
+	"agent rule list":      true,
+	"agent rule get":       true,
+	"agent rule read":      true,
+	"agent rule create":    true,
+	"agent rule update":    true,
+	"agent rule delete":    true,
+	// Audit commands
+	"audit init":         true,
+	"audit logs":         true,
+	"audit logs show":    true,
+	"audit logs enable":  true,
+	"audit logs disable": true,
+	"audit logs status":  true,
+	"audit logs clear":   true,
+	"audit logs summary": true,
+	"audit config":       true,
+	"audit config show":  true,
+	"audit config set":   true,
+	"audit export":       true,
+	// Dashboard commands (Nylas Dashboard SaaS)
+	"dashboard status":         true,
+	"dashboard register":       true,
+	"dashboard login":          true,
+	"dashboard logout":         true,
+	"dashboard refresh":        true,
+	"dashboard switch":         true,
+	"dashboard sso":            true,
+	"dashboard sso login":      true,
+	"dashboard sso register":   true,
+	"dashboard apps":           true,
+	"dashboard apps list":      true,
+	"dashboard apps create":    true,
+	"dashboard apps use":       true,
+	"dashboard apikeys":        true,
+	"dashboard apikeys list":   true,
+	"dashboard apikeys create": true,
+	"dashboard orgs":           true,
+	"dashboard orgs list":      true,
 	// Other
 	"version": true,
 }
@@ -326,14 +406,19 @@ func (s *Server) handleExecCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		// Command failed but may still have useful output
+		// Command failed but may still have useful output. The raw exec
+		// error is exit-status text plus, on some failures, fragments
+		// of the path or invocation; log it via slog and return a
+		// generic message so the localhost UI matches the air doctrine
+		// of "no upstream errors echoed to clients".
 		if output != "" {
 			writeJSON(w, http.StatusOK, ExecResponse{
 				Output: output,
 			})
 		} else {
+			slog.Error("command exec failed", "args", args, "err", err)
 			writeJSON(w, http.StatusOK, ExecResponse{
-				Error: "Command failed: " + err.Error(),
+				Error: "Command failed",
 			})
 		}
 		return

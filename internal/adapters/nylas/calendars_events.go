@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -25,6 +26,12 @@ func (c *HTTPClient) GetEvents(ctx context.Context, grantID, calendarID string, 
 
 // GetEventsWithCursor retrieves events with pagination cursor support.
 func (c *HTTPClient) GetEventsWithCursor(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error) {
+	if err := validateRequired("grant ID", grantID); err != nil {
+		return nil, err
+	}
+	if err := validateRequired("calendar ID", calendarID); err != nil {
+		return nil, err
+	}
 	if params == nil {
 		params = &domain.EventQueryParams{Limit: 10}
 	}
@@ -45,6 +52,7 @@ func (c *HTTPClient) GetEventsWithCursor(ctx context.Context, grantID, calendarI
 		AddBool("expand_recurring", params.ExpandRecurring).
 		AddBoolPtr("busy", params.Busy).
 		Add("order_by", params.OrderBy).
+		Add("ical_uid", params.ICalUID).
 		BuildURL(baseURL)
 
 	var result struct {
@@ -201,13 +209,46 @@ func (c *HTTPClient) DeleteEvent(ctx context.Context, grantID, calendarID, event
 	return c.doDelete(ctx, queryURL)
 }
 
+// rsvpCommentMaxBytes caps the free-form RSVP comment forwarded to Nylas.
+// Defense-in-depth alongside the Air handler's own 1024-byte cap: any
+// future caller (CLI, SDK consumer) gets the same protection without
+// having to re-implement the rule.
+const rsvpCommentMaxBytes = 1024
+
 // SendRSVP sends an RSVP response to an event invitation.
+//
+// Validation errors are wrapped in domain.ErrInvalidInput so callers can
+// classify them with errors.Is — matches the rest of this client.
 func (c *HTTPClient) SendRSVP(ctx context.Context, grantID, calendarID, eventID string, req *domain.SendRSVPRequest) error {
+	if err := validateRequired("grant ID", grantID); err != nil {
+		return err
+	}
+	if err := validateRequired("calendar ID", calendarID); err != nil {
+		return err
+	}
+	if err := validateRequired("event ID", eventID); err != nil {
+		return err
+	}
+	if req == nil {
+		return fmt.Errorf("%w: RSVP request cannot be nil", domain.ErrInvalidInput)
+	}
+	// Normalise so case/whitespace differences from CLI/TUI/SDK callers
+	// don't bypass the allow-list. Nylas itself only accepts lowercase.
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	switch status {
+	case "yes", "no", "maybe":
+	default:
+		return fmt.Errorf("%w: RSVP status must be one of: yes, no, maybe (got %q)", domain.ErrInvalidInput, req.Status)
+	}
+	if len(req.Comment) > rsvpCommentMaxBytes {
+		return fmt.Errorf("%w: RSVP comment must be %d bytes or fewer", domain.ErrInvalidInput, rsvpCommentMaxBytes)
+	}
+
 	baseURL := fmt.Sprintf("%s/v3/grants/%s/events/%s/send-rsvp", c.baseURL, url.PathEscape(grantID), url.PathEscape(eventID))
 	queryURL := NewQueryBuilder().Add("calendar_id", calendarID).BuildURL(baseURL)
 
 	payload := map[string]any{
-		"status": req.Status,
+		"status": status,
 	}
 	if req.Comment != "" {
 		payload["comment"] = req.Comment

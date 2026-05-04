@@ -15,6 +15,9 @@ func (m *MockClient) GetEvents(ctx context.Context, grantID, calendarID string, 
 
 // GetEventsWithCursor retrieves events with pagination.
 func (m *MockClient) GetEventsWithCursor(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error) {
+	if m.GetEventsWithCursorFunc != nil {
+		return m.GetEventsWithCursorFunc(ctx, grantID, calendarID, params)
+	}
 	return &domain.EventListResponse{Data: []domain.Event{}}, nil
 }
 
@@ -67,6 +70,9 @@ func (m *MockClient) DeleteEvent(ctx context.Context, grantID, calendarID, event
 
 // SendRSVP sends an RSVP response to an event invitation.
 func (m *MockClient) SendRSVP(ctx context.Context, grantID, calendarID, eventID string, req *domain.SendRSVPRequest) error {
+	if m.SendRSVPFunc != nil {
+		return m.SendRSVPFunc(ctx, grantID, calendarID, eventID, req)
+	}
 	return nil
 }
 

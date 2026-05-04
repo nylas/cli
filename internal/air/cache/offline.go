@@ -262,13 +262,15 @@ type MarkReadPayload struct {
 	Unread  bool   `json:"unread"`
 }
 
-// UpdateMessagePayload is the payload for a generic message update.
+// UpdateMessagePayload is the queued form of domain.UpdateMessageRequest.
+// Folders has no `omitempty` so the nil-vs-empty distinction round-trips
+// through SQLite; see domain.UpdateMessageRequest.
 type UpdateMessagePayload struct {
 	GrantID string   `json:"grant_id,omitempty"`
 	EmailID string   `json:"email_id"`
 	Unread  *bool    `json:"unread,omitempty"`
 	Starred *bool    `json:"starred,omitempty"`
-	Folders []string `json:"folders,omitempty"`
+	Folders []string `json:"folders"`
 }
 
 // StarPayload is the payload for star/unstar actions.

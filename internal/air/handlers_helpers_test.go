@@ -284,3 +284,81 @@ func TestWriteError(t *testing.T) {
 		assert.Contains(t, body, "quotes")
 	})
 }
+
+// TestParseJSONBody_DoesNotLeakDecoderError pins the privacy contract on
+// the JSON-body intake helper. Today it returns
+//
+//	"Invalid request body: " + err.Error()
+//
+// to the client. encoding/json's decode errors fingerprint the request
+// — they include the Go struct field path, the wire type, and (for
+// UnmarshalTypeError) value fragments from the body. None of that
+// belongs in a browser toast or a customer-visible error envelope.
+//
+// The same writeUpstreamError discipline applied at six handler sites in
+// the air-i003 review-pass should apply here. Until parseJSONBody is
+// migrated, this test fails on the substring assertions and serves as
+// the bug receipt.
+//
+// EXPECTED FAILURE today: response body contains "cannot unmarshal" and
+// the field path. After the fix the body is a generic message and the
+// raw decoder error lives in slog only.
+func TestParseJSONBody_DoesNotLeakDecoderError(t *testing.T) {
+	t.Parallel()
+
+	body := strings.NewReader(`{"unread":"not-a-bool"}`)
+	req := httptest.NewRequest(http.MethodPost, "/x", body)
+	w := httptest.NewRecorder()
+
+	var dest struct {
+		Unread *bool `json:"unread"`
+	}
+	ok := parseJSONBody(w, req, &dest)
+
+	assert.False(t, ok, "parseJSONBody should reject malformed body")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	got := w.Body.String()
+	// Substrings drawn from encoding/json's UnmarshalTypeError format.
+	// Any of them in the response body proves the decoder error leaked.
+	forbidden := []string{
+		"cannot unmarshal",
+		"Go struct field",
+		".unread",
+		"of type bool",
+	}
+	for _, s := range forbidden {
+		assert.NotContains(t, got, s,
+			"response body must not echo decoder detail %q; got %s", s, got)
+	}
+}
+
+// TestRedactEmail pins the local-part-only redaction. Six-line privacy
+// helper, exercised today only indirectly through slog calls — a
+// regression that returned the full address would only show up in logs
+// (which tests don't observe) until a customer report surfaced it.
+func TestRedactEmail(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{"alice@example.com", "***@example.com"},
+		{"a@b.example", "***@b.example"},
+		// LastIndex semantics: only the final @ is treated as the boundary.
+		{"user@inner@outer.example", "***@outer.example"},
+		// Degenerate inputs: no local part, no domain, no @ at all.
+		{"@example.com", "***"},
+		{"user@", "***"},
+		{"no-at-sign", "***"},
+		{"@", "***"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, redactEmail(tc.in))
+		})
+	}
+}

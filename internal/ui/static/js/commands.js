@@ -51,8 +51,9 @@ function setOutputError(output, message) {
 
 /**
  * Set output to success state with formatted content.
- * Uses formatOutput which returns HTML for ANSI colors and table formatting.
- * Content is escaped via esc() before processing.
+ * formatOutput returns a DOM node (table or ANSI-styled fragment) built
+ * entirely via textContent — no innerHTML, no escaping required at the
+ * call site.
  * @param {HTMLElement} output - The output element
  * @param {string} content - The output content
  */
@@ -60,11 +61,9 @@ function setOutputSuccess(output, content) {
     if (!content) {
         output.textContent = 'Command completed successfully.';
     } else {
-        // formatOutput returns safe HTML (content is escaped via esc())
         const formatted = formatOutput(content);
-        if (formatted) {
-            // Safe: formatOutput escapes content via esc() before processing
-            output.innerHTML = formatted;
+        if (formatted && (formatted.nodeType === 1 || (formatted.childNodes && formatted.childNodes.length > 0))) {
+            output.replaceChildren(formatted);
         } else {
             output.textContent = 'Command completed successfully.';
         }
@@ -88,4 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOtpCommands();
     renderAdminCommands();
     renderNotetakerCommands();
+    renderAgentCommands();
+    renderAuditCommands();
+    renderDashboardCommands();
 });

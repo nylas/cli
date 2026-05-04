@@ -2,6 +2,8 @@
 
 Quick command reference. For detailed docs, see `docs/commands/<feature>.md`
 
+> **📖 Full per-command reference:** [cli.nylas.com/docs/commands](https://cli.nylas.com/docs/commands) — every command has a dedicated page with flags, examples, and exit codes.
+
 > **Quick Links:** [README](../README.md) | [Development](DEVELOPMENT.md) | [Architecture](ARCHITECTURE.md)
 
 ---
