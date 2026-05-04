@@ -26,6 +26,12 @@ func (c *HTTPClient) GetEvents(ctx context.Context, grantID, calendarID string, 
 
 // GetEventsWithCursor retrieves events with pagination cursor support.
 func (c *HTTPClient) GetEventsWithCursor(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error) {
+	if err := validateRequired("grant ID", grantID); err != nil {
+		return nil, err
+	}
+	if err := validateRequired("calendar ID", calendarID); err != nil {
+		return nil, err
+	}
 	if params == nil {
 		params = &domain.EventQueryParams{Limit: 10}
 	}

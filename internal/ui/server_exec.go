@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -405,14 +406,19 @@ func (s *Server) handleExecCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		// Command failed but may still have useful output
+		// Command failed but may still have useful output. The raw exec
+		// error is exit-status text plus, on some failures, fragments
+		// of the path or invocation; log it via slog and return a
+		// generic message so the localhost UI matches the air doctrine
+		// of "no upstream errors echoed to clients".
 		if output != "" {
 			writeJSON(w, http.StatusOK, ExecResponse{
 				Output: output,
 			})
 		} else {
+			slog.Error("command exec failed", "args", args, "err", err)
 			writeJSON(w, http.StatusOK, ExecResponse{
-				Error: "Command failed: " + err.Error(),
+				Error: "Command failed",
 			})
 		}
 		return

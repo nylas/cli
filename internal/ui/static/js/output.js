@@ -1,31 +1,33 @@
 // =============================================================================
 // Output Formatting (ANSI parsing, table parsing)
 // =============================================================================
+//
+// formatOutput / parseTable / parseAnsi return DOM nodes (or null), never
+// HTML strings. Every cell, header, and text run is set via textContent
+// so the call site can always use replaceChildren without needing to
+// think about escaping. Mirrors the Air UI's "interpolation goes through
+// textContent" doctrine.
 
-// Table Parser - converts CLI table output to HTML table
+// Table Parser - converts CLI table output to a <table> element, or
+// null when the input doesn't look like a table.
 function parseTable(text) {
     if (!text) return null;
 
     const lines = text.trim().split('\n');
     if (lines.length < 2) return null;
 
-    // Check if first line looks like a header (has multiple words separated by spaces)
     const headerLine = lines[0].trim();
-
-    // Common CLI table patterns - check for column headers
     const tablePatterns = [
         /^\s*(GRANT\s*ID|ID|EMAIL|NAME|SUBJECT|TITLE|CALENDAR)/i,
-        /^\s*\w+\s{2,}\w+/  // At least two words separated by multiple spaces
+        /^\s*\w+\s{2,}\w+/
     ];
 
     const looksLikeTable = tablePatterns.some(p => p.test(headerLine));
     if (!looksLikeTable) return null;
 
-    // Parse header - split by 2+ spaces
     const headerParts = headerLine.split(/\s{2,}/).filter(h => h.trim());
     if (headerParts.length < 2) return null;
 
-    // Find column positions based on header
     const colPositions = [];
     let pos = 0;
     for (const header of headerParts) {
@@ -34,7 +36,6 @@ function parseTable(text) {
         pos = idx + header.length;
     }
 
-    // Parse rows
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
@@ -55,109 +56,121 @@ function parseTable(text) {
 
     if (rows.length === 0) return null;
 
-    // Build HTML table
-    let html = '<table class="formatted-table"><thead><tr>';
-    for (const header of headerParts) {
-        html += `<th>${esc(header)}</th>`;
-    }
-    html += '</tr></thead><tbody>';
+    const table = document.createElement('table');
+    table.className = 'formatted-table';
 
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    for (const header of headerParts) {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
     for (const row of rows) {
-        html += '<tr>';
+        const tr = document.createElement('tr');
         for (let i = 0; i < headerParts.length; i++) {
             const cell = row[i] || '';
             const headerLower = headerParts[i].toLowerCase();
-
-            // Add special classes based on column type
-            let cellClass = '';
+            const td = document.createElement('td');
             if (headerLower.includes('id') || headerLower.includes('grant')) {
-                cellClass = 'cell-id';
+                td.className = 'cell-id';
             } else if (headerLower.includes('email')) {
-                cellClass = 'cell-email';
+                td.className = 'cell-email';
             } else if (cell === '✓' || cell === '✔') {
-                cellClass = 'cell-check';
+                td.className = 'cell-check';
             }
-
-            html += `<td class="${cellClass}">${esc(cell)}</td>`;
+            td.textContent = cell;
+            tr.appendChild(td);
         }
-        html += '</tr>';
+        tbody.appendChild(tr);
     }
-
-    html += '</tbody></table>';
-    return html;
+    table.appendChild(tbody);
+    return table;
 }
 
-// Format output - try table first, then ANSI
+// formatOutput - try table first, then ANSI. Returns a Node (table or
+// DocumentFragment) or null when there is no content to render.
 function formatOutput(text) {
-    if (!text) return '';
+    if (!text) return null;
 
-    // Try to parse as table
-    const tableHtml = parseTable(text);
-    if (tableHtml) {
-        return tableHtml;
+    const table = parseTable(text);
+    if (table) {
+        return table;
     }
 
-    // Fall back to ANSI parsing
     return parseAnsi(text);
 }
 
-// ANSI Color Parser
+// ANSI class mapping. Each entry is the digits between CSI `[` and `m`.
+const ANSI_CLASS_BY_CODE = {
+    '1': 'ansi-bold',
+    '2': 'ansi-dim',
+    '4': 'ansi-underline',
+    '30': 'ansi-gray', '90': 'ansi-gray',
+    '31': 'ansi-red', '91': 'ansi-red',
+    '32': 'ansi-green', '92': 'ansi-green',
+    '33': 'ansi-yellow', '93': 'ansi-yellow',
+    '34': 'ansi-blue', '94': 'ansi-blue',
+    '35': 'ansi-magenta', '95': 'ansi-magenta',
+    '36': 'ansi-cyan', '96': 'ansi-cyan',
+    '37': 'ansi-white', '97': 'ansi-white',
+    '1;32': 'ansi-bold ansi-green',
+    '1;31': 'ansi-bold ansi-red',
+    '1;33': 'ansi-bold ansi-yellow',
+    '1;34': 'ansi-bold ansi-blue',
+    '1;36': 'ansi-bold ansi-cyan',
+};
+
+// Matches a real ANSI CSI SGR sequence plus the two literal-escape forms
+// that occasionally arrive after JSON / HTML round-trips.
+const ANSI_SEQUENCE_RE = /\x1b\[([0-9;]*)m|\\x1b\[([0-9;]*)m|&#x1b;\[([0-9;]*)m/g;
+
+// parseAnsi walks the input and returns a DocumentFragment whose text
+// runs are plain text nodes wrapped in <span class="ansi-..."> for each
+// active style. Resets pop one level off the style stack — matches the
+// original string parser's per-reset behavior. Codes outside the
+// allow-list (and stray escape forms) are silently dropped.
 function parseAnsi(text) {
-    if (!text) return '';
+    const fragment = document.createDocumentFragment();
+    if (!text) return fragment;
 
-    // First escape HTML
-    let html = esc(text);
+    const stack = [fragment];
+    let lastIndex = 0;
+    let match;
 
-    // ANSI escape code patterns
-    const ansiMap = {
-        // Reset
-        '\\x1b\\[0m': '</span>',
-        '\\x1b\\[m': '</span>',
+    ANSI_SEQUENCE_RE.lastIndex = 0;
+    while ((match = ANSI_SEQUENCE_RE.exec(text)) !== null) {
+        const parent = stack[stack.length - 1];
 
-        // Bold/Dim
-        '\\x1b\\[1m': '<span class="ansi-bold">',
-        '\\x1b\\[2m': '<span class="ansi-dim">',
-        '\\x1b\\[4m': '<span class="ansi-underline">',
+        if (match.index > lastIndex) {
+            parent.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        }
 
-        // Foreground colors (standard)
-        '\\x1b\\[30m': '<span class="ansi-gray">',
-        '\\x1b\\[31m': '<span class="ansi-red">',
-        '\\x1b\\[32m': '<span class="ansi-green">',
-        '\\x1b\\[33m': '<span class="ansi-yellow">',
-        '\\x1b\\[34m': '<span class="ansi-blue">',
-        '\\x1b\\[35m': '<span class="ansi-magenta">',
-        '\\x1b\\[36m': '<span class="ansi-cyan">',
-        '\\x1b\\[37m': '<span class="ansi-white">',
+        const code = match[1] ?? match[2] ?? match[3] ?? '';
+        if (code === '' || code === '0') {
+            if (stack.length > 1) {
+                stack.pop();
+            }
+        } else {
+            const className = ANSI_CLASS_BY_CODE[code];
+            if (className) {
+                const span = document.createElement('span');
+                span.className = className;
+                parent.appendChild(span);
+                stack.push(span);
+            }
+        }
 
-        // Bright foreground colors
-        '\\x1b\\[90m': '<span class="ansi-gray">',
-        '\\x1b\\[91m': '<span class="ansi-red">',
-        '\\x1b\\[92m': '<span class="ansi-green">',
-        '\\x1b\\[93m': '<span class="ansi-yellow">',
-        '\\x1b\\[94m': '<span class="ansi-blue">',
-        '\\x1b\\[95m': '<span class="ansi-magenta">',
-        '\\x1b\\[96m': '<span class="ansi-cyan">',
-        '\\x1b\\[97m': '<span class="ansi-white">',
-
-        // Bold + color combinations
-        '\\x1b\\[1;32m': '<span class="ansi-bold ansi-green">',
-        '\\x1b\\[1;31m': '<span class="ansi-bold ansi-red">',
-        '\\x1b\\[1;33m': '<span class="ansi-bold ansi-yellow">',
-        '\\x1b\\[1;34m': '<span class="ansi-bold ansi-blue">',
-        '\\x1b\\[1;36m': '<span class="ansi-bold ansi-cyan">',
-    };
-
-    // Replace ANSI codes with HTML spans
-    for (const [code, replacement] of Object.entries(ansiMap)) {
-        html = html.replace(new RegExp(code, 'g'), replacement);
+        lastIndex = ANSI_SEQUENCE_RE.lastIndex;
     }
 
-    // Remove any remaining ANSI codes we didn't handle
-    html = html.replace(/\x1b\[[0-9;]*m/g, '');
+    if (lastIndex < text.length) {
+        stack[stack.length - 1].appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
 
-    // Also handle escaped versions that might come through
-    html = html.replace(/\\x1b\[[0-9;]*m/g, '');
-    html = html.replace(/&#x1b;\[[0-9;]*m/g, '');
-
-    return html;
+    return fragment;
 }
