@@ -95,7 +95,7 @@ func (f *Formatter) formatCSV(data any) error {
 
 	// Handle slice of structs
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -110,7 +110,7 @@ func (f *Formatter) formatCSV(data any) error {
 
 	// Get headers from first element
 	first := v.Index(0)
-	if first.Kind() == reflect.Ptr {
+	if first.Kind() == reflect.Pointer {
 		first = first.Elem()
 	}
 
@@ -130,7 +130,7 @@ func (f *Formatter) formatCSV(data any) error {
 	// Write rows using cached field info
 	for i := 0; i < v.Len(); i++ {
 		elem := v.Index(i)
-		if elem.Kind() == reflect.Ptr {
+		if elem.Kind() == reflect.Pointer {
 			elem = elem.Elem()
 		}
 		getCSVRowInto(elem, fields, row)
@@ -145,7 +145,7 @@ func (f *Formatter) formatCSV(data any) error {
 // formatCSVSingle formats a single item as CSV.
 func (f *Formatter) formatCSVSingle(writer *csv.Writer, data any) error {
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -239,7 +239,7 @@ func formatValue(v reflect.Value) string {
 	}
 
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		if v.IsNil() {
 			return ""
 		}

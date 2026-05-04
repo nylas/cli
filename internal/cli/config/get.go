@@ -61,7 +61,7 @@ func getConfigValue(cfg any, key string) (string, error) {
 	parts := strings.Split(key, ".")
 
 	v := reflect.ValueOf(cfg)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -79,7 +79,7 @@ func getConfigValue(cfg any, key string) (string, error) {
 		}
 
 		// If field is a pointer, dereference it
-		if field.Kind() == reflect.Ptr {
+		if field.Kind() == reflect.Pointer {
 			if field.IsNil() {
 				return "", nil
 			}

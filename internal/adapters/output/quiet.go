@@ -30,7 +30,7 @@ func (qw *QuietWriter) Write(data any) error {
 // WriteList outputs IDs only, one per line.
 func (qw *QuietWriter) WriteList(data any, _ []ports.Column) error {
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -64,7 +64,7 @@ func extractQuietField(data any) string {
 	}
 
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 

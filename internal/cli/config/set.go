@@ -77,7 +77,7 @@ func setConfigValue(cfg any, key, value string) error {
 	parts := strings.Split(key, ".")
 
 	v := reflect.ValueOf(cfg)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -99,7 +99,7 @@ func setConfigValue(cfg any, key, value string) error {
 		}
 
 		// If field is a pointer, dereference or initialize
-		if field.Kind() == reflect.Ptr {
+		if field.Kind() == reflect.Pointer {
 			if field.IsNil() {
 				// Initialize the struct
 				field.Set(reflect.New(field.Type().Elem()))
