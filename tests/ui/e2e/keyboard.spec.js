@@ -1,4 +1,9 @@
 // @ts-check
+const { spawn } = require('node:child_process');
+const fs = require('node:fs/promises');
+const net = require('node:net');
+const os = require('node:os');
+const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const selectors = require('../../shared/helpers/ui-selectors');
 
@@ -22,6 +27,148 @@ async function isDashboardActive(page) {
 async function skipIfNotConfigured(page, testInfo) {
   if (!(await isDashboardActive(page))) {
     testInfo.skip();
+  }
+}
+
+function getAvailablePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('failed to allocate TCP port')));
+        return;
+      }
+      server.close(() => resolve(address.port));
+    });
+  });
+}
+
+async function waitForServer(url, child, output) {
+  const deadline = Date.now() + 60000;
+
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`unconfigured UI server exited early with ${child.exitCode}\n${output()}`);
+    }
+
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // Server is not ready yet.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error(`timed out waiting for unconfigured UI server\n${output()}`);
+}
+
+async function stopServer(child) {
+  if (child.exitCode !== null) {
+    return;
+  }
+
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill('SIGTERM');
+  await Promise.race([
+    exited,
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
+
+  if (child.exitCode === null) {
+    child.kill('SIGKILL');
+    await exited;
+  }
+}
+
+async function uiServerCommand(repoRoot, port) {
+  const binary = path.join(repoRoot, 'bin', 'nylas');
+  try {
+    await fs.access(binary);
+    return {
+      command: binary,
+      args: ['ui', '--no-browser', '--port', String(port)],
+    };
+  } catch {
+    return {
+      command: 'go',
+      args: ['run', 'cmd/nylas/main.go', 'ui', '--no-browser', '--port', String(port)],
+    };
+  }
+}
+
+async function startUnconfiguredUIServer(repoRoot, env) {
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const port = await getAvailablePort();
+    const { command, args } = await uiServerCommand(repoRoot, port);
+    const child = spawn(
+      command,
+      args,
+      {
+        cwd: repoRoot,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    try {
+      const url = `http://127.0.0.1:${port}`;
+      await waitForServer(url, child, () => output);
+      return { child, url };
+    } catch (err) {
+      lastError = err;
+      await stopServer(child);
+      if (!String(err.message || err).includes('address already in use')) {
+        throw err;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function withUnconfiguredUIServer(callback) {
+  const repoRoot = path.resolve(__dirname, '../../..');
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nylas-ui-unconfigured-'));
+  const configDir = path.join(homeDir, 'config');
+  await fs.mkdir(configDir, { recursive: true });
+
+  const env = {
+    ...process.env,
+    HOME: homeDir,
+    XDG_CONFIG_HOME: configDir,
+    NYLAS_DISABLE_KEYRING: 'true',
+  };
+  delete env.NYLAS_API_KEY;
+  delete env.NYLAS_CLIENT_ID;
+  delete env.NYLAS_GRANT_ID;
+  delete env.UI_E2E_DEMO;
+
+  let server;
+  try {
+    server = await startUnconfiguredUIServer(repoRoot, env);
+    const { child, url } = server;
+    await callback(url);
+  } finally {
+    if (server) {
+      await stopServer(server.child);
+    }
+    await fs.rm(homeDir, { recursive: true, force: true });
   }
 }
 
@@ -362,32 +509,31 @@ test.describe('Form Keyboard Navigation', () => {
   });
 
   test('setup form fields are keyboard accessible', async ({ page }) => {
-    const setupView = page.locator(selectors.setup.view);
-    const isActive = await setupView.evaluate((el) => el.classList.contains('active'));
+    await withUnconfiguredUIServer(async (baseURL) => {
+      await page.goto(baseURL);
 
-    if (!isActive) {
-      test.skip();
-      return;
-    }
+      const setupView = page.locator(selectors.setup.view);
+      await expect(setupView).toHaveClass(/active/);
 
-    // Tab to API key input
-    const apiKeyInput = page.locator(selectors.setup.apiKeyInput);
-    await apiKeyInput.focus();
+      // Tab to API key input
+      const apiKeyInput = page.locator(selectors.setup.apiKeyInput);
+      await apiKeyInput.focus();
 
-    await expect(apiKeyInput).toBeFocused();
+      await expect(apiKeyInput).toBeFocused();
 
-    // The setup form has a "show password" toggle button between the API key
-    // input and the region select, so tab past it to reach the region select.
-    const regionSelect = page.locator(selectors.setup.regionSelect);
-    for (let i = 0; i < 5; i++) {
-      if (await regionSelect.evaluate((el) => el === document.activeElement)) {
-        break;
+      // The setup form has a "show password" toggle button between the API key
+      // input and the region select, so tab past it to reach the region select.
+      const regionSelect = page.locator(selectors.setup.regionSelect);
+      for (let i = 0; i < 5; i++) {
+        if (await regionSelect.evaluate((el) => el === document.activeElement)) {
+          break;
+        }
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(50);
       }
-      await page.keyboard.press('Tab');
-      await page.waitForTimeout(50);
-    }
 
-    await expect(regionSelect).toBeFocused();
+      await expect(regionSelect).toBeFocused();
+    });
   });
 });
 

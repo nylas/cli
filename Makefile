@@ -168,7 +168,7 @@ test-cli-regressions: build
 	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
 	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
 	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
-		-run 'TestCLI_(InboundRemoved|InboxAliasRemoved|HelpOmitsInbound|AuthLoginRejectsInboxProvider|ConnectorSurfaces_HideInboxProvider|AdminConnectorsCreate_RejectsInboxProvider|AdminConnectorsShow_HidesInboxProvider)$$'
+		-run 'TestCLI_(InboundRemoved|InboxAliasRemoved|HelpOmitsInbound|AuthLoginRejectsInboxProvider|ConnectorSurfaces_HideInboxProvider|AdminConnectorsCreate_RejectsInboxProvider|AdminConnectorsShow_HidesInboxProvider|EmailSendValidationShowsFormattedSuggestion)$$'
 	@echo "✓ CLI regression checks passed"
 
 # Agent integration checks require explicit credentials plus an agent domain so the lifecycle suites do not self-skip.
@@ -268,9 +268,10 @@ test-playwright:
 	@echo ""
 	@echo "Installing Playwright dependencies..."
 	@cd tests && npm install
+	@cd tests && npm run test:config
 	@echo ""
 	@echo "Running E2E tests..."
-	@cd tests && npx playwright test
+	@cd tests && UI_E2E_DEMO=true npx playwright test
 	@echo ""
 	@echo "✓ Playwright E2E tests complete!"
 	@echo "  Report: tests/playwright-report/index.html"
@@ -294,7 +295,8 @@ test-playwright-ui:
 	}
 	@$(MAKE) --no-print-directory build
 	@cd tests && npm install
-	@cd tests && npx playwright test --project=ui-chromium
+	@cd tests && npm run test:config
+	@cd tests && UI_E2E_DEMO=true npx playwright test --project=ui-chromium
 	@echo "✓ UI E2E tests complete!"
 
 test-playwright-interactive:
@@ -313,20 +315,7 @@ test-playwright-headed:
 # Security Targets
 # ============================================================================
 security:
-	@echo "=== Security Scan ==="
-	@echo "Checking for hardcoded API keys..."
-	@grep -rE "nyk_v0[a-zA-Z0-9_]{20,}" --include="*.go" . | grep -v "_test.go" && echo "WARNING: Possible API key found!" || echo "✓ No API keys found"
-	@echo ""
-	@echo "Checking for credential patterns..."
-	@grep -rE "(api_key|password|secret)\s*=\s*\"[^\"]+\"" --include="*.go" . | grep -v "_test.go" | grep -v "mock.go" && echo "WARNING: Possible credentials found!" || echo "✓ No hardcoded credentials"
-	@echo ""
-	@echo "Checking for full credential logging..."
-	@grep -rE "fmt\.(Print|Fprint|Sprint).*[Aa]pi[Kk]ey[^:\[]" --include="*.go" . | grep -v "token.go" | grep -v "doctor.go" && echo "WARNING: Possible credential logging!" || echo "✓ No credential logging"
-	@echo ""
-	@echo "Checking staged files..."
-	@git diff --cached --name-only | grep -E "\.(env|key|pem|json)$$" && echo "WARNING: Sensitive file staged!" || echo "✓ No sensitive files staged"
-	@echo ""
-	@echo "=== Security scan complete ==="
+	@sh scripts/security-scan.sh .
 
 # ============================================================================
 # CI Targets
