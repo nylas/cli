@@ -17,6 +17,10 @@ const isCI = !!process.env.CI;
 const airPort = parseInt(process.env.AIR_PORT || '7365', 10);
 const uiPort = parseInt(process.env.UI_PORT || '7363', 10);
 const chatPort = parseInt(process.env.CHAT_PORT || '7367', 10);
+const uiE2EDemo = process.env.UI_E2E_DEMO === 'true';
+const uiCommand = uiE2EDemo
+  ? 'cd .. && go run cmd/nylas/main.go demo ui --no-browser --port ' + uiPort
+  : 'cd .. && go run cmd/nylas/main.go ui --no-browser --port ' + uiPort;
 
 module.exports = defineConfig({
   // Run tests in parallel within files
@@ -120,10 +124,10 @@ module.exports = defineConfig({
     },
     // Nylas UI server (port 7363)
     {
-      command: 'cd .. && go run cmd/nylas/main.go ui --no-browser --port ' + uiPort,
+      command: uiCommand,
       port: uiPort,
       timeout: 60000,
-      reuseExistingServer: !isCI,
+      reuseExistingServer: !isCI && !uiE2EDemo,
     },
     // Nylas Chat server (port 7367)
     {

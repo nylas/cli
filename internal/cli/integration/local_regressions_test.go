@@ -196,7 +196,7 @@ func TestCLI_AuthRemove_UpdatesDefaultGrantAndConfig(t *testing.T) {
 		t.Fatalf("failed to set default grant: %v", err)
 	}
 
-	stdout, stderr, err := runCLIWithOverrides(30*time.Second, map[string]string{
+	stdout, stderr, err := runCLIWithOverrides(5*time.Second, map[string]string{
 		"XDG_CONFIG_HOME":       configHome,
 		"XDG_CACHE_HOME":        cacheHome,
 		"HOME":                  tempDir,
@@ -255,7 +255,7 @@ func TestCLI_AuthList_DoesNotRequireFileStorePassphrase(t *testing.T) {
 	configHome := filepath.Join(tempDir, "xdg")
 	cacheHome := filepath.Join(tempDir, "cache")
 
-	stdout, stderr, err := runCLIWithOverrides(30*time.Second, map[string]string{
+	stdout, stderr, err := runCLIWithOverrides(5*time.Second, map[string]string{
 		"XDG_CONFIG_HOME":             configHome,
 		"XDG_CACHE_HOME":              cacheHome,
 		"HOME":                        tempDir,
@@ -272,6 +272,35 @@ func TestCLI_AuthList_DoesNotRequireFileStorePassphrase(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "access credential") && !strings.Contains(stderr, "API key") {
 		t.Fatalf("stderr %q does not mention API credential failure", stderr)
+	}
+}
+
+func TestCLI_EmailSendValidationShowsFormattedSuggestion(t *testing.T) {
+	if testBinary == "" {
+		t.Skip("CLI binary not found")
+	}
+
+	tempDir := t.TempDir()
+	stdout, stderr, err := runCLIWithOverrides(5*time.Second, map[string]string{
+		"XDG_CONFIG_HOME":             filepath.Join(tempDir, "xdg"),
+		"XDG_CACHE_HOME":              filepath.Join(tempDir, "cache"),
+		"HOME":                        tempDir,
+		"NYLAS_API_KEY":               "",
+		"NYLAS_GRANT_ID":              "",
+		"NYLAS_DISABLE_KEYRING":       "true",
+		"NYLAS_FILE_STORE_PASSPHRASE": "integration-test-file-store-passphrase",
+	}, "email", "send", "--to", "user@example.com", "--body", "hi", "--yes")
+	if err == nil {
+		t.Fatalf("expected email send validation to fail\nstdout: %s\nstderr: %s", stdout, stderr)
+	}
+	for _, want := range []string{
+		"subject is required",
+		"Suggestion:",
+		"Use --subject to specify the email subject",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr %q does not contain %q", stderr, want)
+		}
 	}
 }
 

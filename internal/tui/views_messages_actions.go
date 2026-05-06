@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -188,11 +189,15 @@ func (v *MessagesView) downloadAttachment(messageID, attachmentID, filename stri
 		}
 
 		// Create file with unique name if exists
-		destPath := filepath.Join(downloadDir, filename)
-		destPath = v.getUniqueFilename(destPath)
-
-		// #nosec G304 -- destPath is validated through getUniqueFilename() and constrained to downloadDir
-		file, err := os.Create(destPath)
+		destPath, err := safeAttachmentDownloadPath(downloadDir, filename)
+		if err != nil {
+			v.app.QueueUpdateDraw(func() {
+				v.app.Flash(FlashError, "Cannot create file: %v", err)
+			})
+			return
+		}
+		// #nosec G304 -- destPath is sanitized and constrained to downloadDir by safeAttachmentDownloadPath.
+		file, destPath, err := v.createUniqueAttachmentFile(destPath)
 		if err != nil {
 			v.app.QueueUpdateDraw(func() {
 				v.app.Flash(FlashError, "Cannot create file: %v", err)
@@ -217,22 +222,86 @@ func (v *MessagesView) downloadAttachment(messageID, attachmentID, filename stri
 	}()
 }
 
+func safeAttachmentDownloadPath(downloadDir, filename string) (string, error) {
+	safeName := filepath.Base(filename)
+	if safeName == "." || safeName == ".." || safeName == string(filepath.Separator) {
+		safeName = "attachment"
+	}
+
+	// filepath.Abs cleans traversal but intentionally does not resolve symlinked download directories.
+	downloadDirAbs, err := filepath.Abs(downloadDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve download directory: %w", err)
+	}
+
+	destPath := filepath.Join(downloadDirAbs, safeName)
+	destPathAbs, err := filepath.Abs(destPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve attachment path: %w", err)
+	}
+
+	rel, err := filepath.Rel(downloadDirAbs, destPathAbs)
+	if err != nil {
+		return "", fmt.Errorf("validate attachment path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("attachment filename %q resolves outside Downloads", filename)
+	}
+
+	return destPathAbs, nil
+}
+
 func (v *MessagesView) getUniqueFilename(path string) string {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	// Caller must pass a path already sanitized and constrained to the download directory.
+	for i := 0; i < 1000; i++ {
+		candidate := uniqueAttachmentFilename(path, i)
+		if _, err := os.Lstat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+
+	// Fallback: append timestamp
+	return timestampAttachmentFilename(path)
+}
+
+func (v *MessagesView) createUniqueAttachmentFile(path string) (*os.File, string, error) {
+	// Caller must pass a path already sanitized and constrained to the download directory.
+	for i := 0; i < 1000; i++ {
+		candidate := uniqueAttachmentFilename(path, i)
+		// #nosec G304 -- candidate is derived from a path constrained by safeAttachmentDownloadPath.
+		file, err := os.OpenFile(candidate, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err == nil {
+			return file, candidate, nil
+		}
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return nil, "", err
+	}
+
+	fallback := timestampAttachmentFilename(path)
+	// #nosec G304 -- fallback is derived from a path constrained by safeAttachmentDownloadPath.
+	file, err := os.OpenFile(fallback, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return nil, "", err
+	}
+	return file, fallback, nil
+}
+
+func uniqueAttachmentFilename(path string, index int) string {
+	if index == 0 {
 		return path
 	}
 
 	dir := filepath.Dir(path)
 	ext := filepath.Ext(path)
 	name := strings.TrimSuffix(filepath.Base(path), ext)
+	return filepath.Join(dir, fmt.Sprintf("%s (%d)%s", name, index, ext))
+}
 
-	for i := 1; i < 1000; i++ {
-		newPath := filepath.Join(dir, fmt.Sprintf("%s (%d)%s", name, i, ext))
-		if _, err := os.Stat(newPath); os.IsNotExist(err) {
-			return newPath
-		}
-	}
-
-	// Fallback: append timestamp
-	return filepath.Join(dir, fmt.Sprintf("%s_%d%s", name, time.Now().Unix(), ext))
+func timestampAttachmentFilename(path string) string {
+	dir := filepath.Dir(path)
+	ext := filepath.Ext(path)
+	name := strings.TrimSuffix(filepath.Base(path), ext)
+	return filepath.Join(dir, fmt.Sprintf("%s_%d%s", name, time.Now().UnixNano(), ext))
 }

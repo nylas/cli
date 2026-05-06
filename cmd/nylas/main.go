@@ -14,6 +14,7 @@ import (
 	"github.com/nylas/cli/internal/cli/audit"
 	"github.com/nylas/cli/internal/cli/auth"
 	"github.com/nylas/cli/internal/cli/calendar"
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/config"
 	"github.com/nylas/cli/internal/cli/contacts"
 	"github.com/nylas/cli/internal/cli/dashboard"
@@ -68,7 +69,7 @@ func main() {
 
 	if err := cli.Execute(); err != nil {
 		cli.LogAuditError(err)
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		fmt.Fprint(os.Stderr, common.FormatError(err))
 		os.Exit(1)
 	}
 }

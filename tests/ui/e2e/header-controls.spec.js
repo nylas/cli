@@ -80,10 +80,14 @@ test.describe('Client Dropdown', () => {
     await skipIfNotConfigured(page, testInfo);
 
     const clientDropdown = page.locator(selectors.header.clientDropdown);
-    const clientText = await clientDropdown.textContent();
+    const selectedClient = clientDropdown.locator(selectors.header.selectedClient);
+    const clientText = (await selectedClient.textContent())?.trim() || '';
 
-    // Should contain a truncated client ID
-    expect(clientText).toMatch(/[a-f0-9]{8}/i);
+    if (process.env.UI_E2E_DEMO === 'true') {
+      expect(clientText).toBe('demo-cli...');
+    } else {
+      expect(clientText).toMatch(/^[a-f0-9]{8}\.\.\.$/i);
+    }
   });
 
   test('client dropdown opens on click', async ({ page }, testInfo) => {
