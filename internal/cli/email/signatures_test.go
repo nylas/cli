@@ -135,7 +135,7 @@ func TestValidateSignatureSelection(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, signatures)
-		assert.ErrorContains(t, err, "`--signature-id` is not supported for managed transactional sends")
+		assert.ErrorContains(t, err, "`--signature-id` is not supported for Agent Account sends")
 		assert.False(t, mock.GetGrantCalled)
 		assert.False(t, mock.GetSignaturesCalled)
 	})

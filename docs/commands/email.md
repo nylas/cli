@@ -130,10 +130,11 @@ nylas email send --to "to@example.com" --subject "Hello" --body "Body" --yes
 - `--signature-id` - Append a stored signature when sending, creating a draft, or sending a draft
 
 **Managed provider (`nylas`):**
-- `nylas email send` uses the managed transactional send path automatically
-- the sender address is taken from the active grant email
-- `--signature-id` is not supported for managed transactional sends
-- `--sign` and `--encrypt` are not supported for managed transactional sends
+- `nylas email send` uses per-grant send: `/v3/grants/{grant_id}/messages/send`
+- the sender address is taken from the active grant email when one is not supplied
+- Agent Account sends do not use the domain transactional relay endpoint
+- `--signature-id` is not supported for Agent Account sends in the CLI
+- `--sign` and `--encrypt` are not supported for Agent Account sends in the CLI
 
 **Example output (scheduled):**
 ```bash
@@ -198,7 +199,7 @@ nylas email send --list-gpg-keys
 
 `--signature-id` can't be combined with `--sign` or `--encrypt`, because stored signatures are only supported on the standard JSON send and draft endpoints.
 
-Managed transactional sends from `provider=nylas` also do not support `--sign`, `--encrypt`, or `--signature-id`.
+Agent Account sends from `provider=nylas` use per-grant send and do not support `--sign`, `--encrypt`, or `--signature-id` in the CLI.
 
 ### Signatures
 
