@@ -219,10 +219,10 @@ nylas email read <message-id> --decrypt                        # Decrypt encrypt
 nylas email read <message-id> --decrypt --verify               # Decrypt + verify signature
 ```
 
-**Managed send behavior:**
-- Grants with provider `nylas` use the managed transactional send path automatically.
-- The sender address comes from the active grant email for those managed accounts.
-- GPG signing/encryption and `--signature-id` are not supported for managed transactional sends.
+**Agent Account send behavior:**
+- Grants with provider `nylas` use per-grant send: `/v3/grants/{grant_id}/messages/send`.
+- The sender address comes from the active grant email when one is not supplied.
+- GPG signing/encryption and `--signature-id` are not supported for Agent Account sends in the CLI.
 
 **AI features:**
 ```bash

@@ -30,7 +30,7 @@ func sendMessageForGrant(
 	grant *domain.Grant,
 	req *domain.SendMessageRequest,
 ) (*domain.Message, error) {
-	if isManagedTransactionalGrant(grant) && len(req.From) == 0 && grant.Email != "" {
+	if isNylasProviderGrant(grant) && len(req.From) == 0 && grant.Email != "" {
 		req.From = []domain.EmailParticipant{{Email: grant.Email}}
 	}
 	return client.SendMessage(ctx, grantID, req)

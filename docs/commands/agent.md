@@ -202,10 +202,11 @@ Agent accounts can also expose the mailbox over IMAP and SMTP submission when an
 ## Sending Email from Agent Accounts
 
 When the active grant is an agent account (`provider=nylas`):
-- `nylas email send` automatically uses the managed transactional send path
-- the sender address is taken from the active grant email
-- GPG signing/encryption is not supported on that managed transactional path
-- stored signatures via `--signature-id` are not supported on that managed transactional path
+- `nylas email send` uses per-grant send: `/v3/grants/{grant_id}/messages/send`
+- the sender address is taken from the active grant email when one is not supplied
+- Agent Account sends do not use the domain transactional relay endpoint
+- GPG signing/encryption is not supported for Agent Account sends in the CLI
+- stored signatures via `--signature-id` are not supported for Agent Account sends in the CLI
 
 ## See Also
 
