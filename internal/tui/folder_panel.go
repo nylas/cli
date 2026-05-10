@@ -107,7 +107,7 @@ func (p *FolderPanel) Load() {
 
 	folders, err := p.app.config.Client.GetFolders(ctx, p.app.config.GrantID)
 	if err != nil {
-		p.app.Flash(FlashError, "Failed to load folders: %v", err)
+		p.app.FlashLoadError("Failed to load folders", err)
 		return
 	}
 

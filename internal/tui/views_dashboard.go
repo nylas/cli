@@ -41,7 +41,7 @@ func (v *DashboardView) Hints() []Hint {
 	return []Hint{
 		{Key: ":", Desc: "command"},
 		{Key: "?", Desc: "help"},
-		{Key: "^C", Desc: "quit"},
+		{Key: "q", Desc: "quit"},
 	}
 }
 

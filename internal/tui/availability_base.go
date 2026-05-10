@@ -145,7 +145,7 @@ func (v *AvailabilityView) loadCalendars() {
 
 	calendars, err := v.app.config.Client.GetCalendars(ctx, v.app.config.GrantID)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load calendars: %v", err)
+		v.app.FlashLoadError("Failed to load calendars", err)
 		return
 	}
 

@@ -108,7 +108,7 @@ func (v *MessagesView) Load() {
 	}
 	threads, err := v.app.config.Client.GetThreads(ctx, v.app.config.GrantID, params)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load threads: %v", err)
+		v.app.FlashLoadError("Failed to load threads", err)
 		return
 	}
 	v.threads = threads

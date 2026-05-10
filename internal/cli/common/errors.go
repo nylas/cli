@@ -3,6 +3,7 @@ package common
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/fatih/color"
@@ -48,6 +49,43 @@ func WrapError(err error) *CLIError {
 	var cliErr *CLIError
 	if errors.As(err, &cliErr) {
 		return cliErr
+	}
+
+	// Only match structured insufficient_scopes; generic 401/403 falls through.
+	var apiErr *domain.APIError
+	if errors.As(err, &apiErr) {
+		if strings.EqualFold(strings.TrimSpace(apiErr.Type), "insufficient_scopes") {
+			msg := strings.TrimSpace(apiErr.Message)
+			if msg == "" {
+				msg = "Grant lacks required scopes for this operation"
+			}
+			return &CLIError{
+				Err:     err,
+				Message: msg,
+				Suggestions: []string{
+					"Run 'nylas auth show' to inspect the grant's current scopes",
+					"Run 'nylas auth login' to re-authorize the grant with the required scopes",
+					"Or 'nylas auth switch <grant-id-or-email>' to use a different grant",
+				},
+				Code: ErrCodePermissionDenied,
+			}
+		}
+		switch {
+		case apiErr.StatusCode == http.StatusTooManyRequests:
+			return &CLIError{
+				Err:        err,
+				Message:    "Rate limit exceeded",
+				Suggestion: "Wait a moment and try again, or reduce the frequency of requests",
+				Code:       ErrCodeRateLimited,
+			}
+		case apiErr.StatusCode >= http.StatusInternalServerError:
+			return &CLIError{
+				Err:        err,
+				Message:    "Nylas API server error",
+				Suggestion: "This is a temporary issue. Please try again in a few minutes",
+				Code:       ErrCodeServerError,
+			}
+		}
 	}
 
 	// Map domain errors to CLI errors

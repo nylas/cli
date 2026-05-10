@@ -39,7 +39,7 @@ Navigation:
   :           Command mode
   /           Filter
   ?           Help
-  Ctrl+C      Quit
+  q, Ctrl+C   Quit
 
 Themes:
   k9s         Default k9s style (blue/orange)

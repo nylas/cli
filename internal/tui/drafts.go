@@ -54,7 +54,7 @@ func (v *DraftsView) Load() {
 
 	drafts, err := v.app.config.Client.GetDrafts(ctx, v.app.config.GrantID, 50)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load drafts: %v", err)
+		v.app.FlashLoadError("Failed to load drafts", err)
 		return
 	}
 	v.drafts = drafts

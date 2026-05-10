@@ -95,10 +95,15 @@ func (e *APIError) Error() string {
 	}
 
 	message := strings.TrimSpace(e.Message)
-	if message != "" {
+	errType := strings.TrimSpace(e.Type)
+	switch {
+	case message != "" && errType != "":
+		return fmt.Sprintf("%s: %s (%s)", ErrAPIError, message, errType)
+	case message != "":
 		return fmt.Sprintf("%s: %s", ErrAPIError, message)
-	}
-	if e.StatusCode > 0 {
+	case errType != "":
+		return fmt.Sprintf("%s: %s", ErrAPIError, errType)
+	case e.StatusCode > 0:
 		return fmt.Sprintf("%s: status %d", ErrAPIError, e.StatusCode)
 	}
 	return ErrAPIError.Error()

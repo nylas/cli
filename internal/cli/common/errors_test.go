@@ -111,6 +111,94 @@ func TestWrapError_DomainErrors_Extended(t *testing.T) {
 	}
 }
 
+func TestWrapError_InsufficientScopes(t *testing.T) {
+	t.Run("with message", func(t *testing.T) {
+		apiErr := &domain.APIError{
+			StatusCode: 403,
+			Type:       "insufficient_scopes",
+			Message:    "Grant lacks required scope: gmail.readonly",
+		}
+		wrapped := fmt.Errorf("failed to fetch threads: %w", apiErr)
+
+		result := WrapError(wrapped)
+
+		require.NotNil(t, result)
+		assert.Equal(t, ErrCodePermissionDenied, result.Code)
+		assert.Equal(t, "Grant lacks required scope: gmail.readonly", result.Message)
+		if assert.NotEmpty(t, result.Suggestions) {
+			joined := strings.Join(result.Suggestions, " | ")
+			assert.Contains(t, joined, "nylas auth show")
+			assert.Contains(t, joined, "nylas auth login")
+		}
+	})
+
+	t.Run("empty message", func(t *testing.T) {
+		apiErr := &domain.APIError{
+			StatusCode: 403,
+			Type:       "insufficient_scopes",
+		}
+		result := WrapError(apiErr)
+
+		require.NotNil(t, result)
+		assert.Equal(t, ErrCodePermissionDenied, result.Code)
+		assert.Equal(t, "Grant lacks required scopes for this operation", result.Message)
+		if assert.NotEmpty(t, result.Suggestions) {
+			joined := strings.Join(result.Suggestions, " | ")
+			assert.Contains(t, joined, "nylas auth show")
+		}
+	})
+}
+
+func TestWrapError_GenericForbiddenFallsThrough(t *testing.T) {
+	// 403 without insufficient_scopes type should fall through to default
+	// wrapper, not get the scope-specific suggestion.
+	apiErr := &domain.APIError{StatusCode: 403, Message: "Access denied"}
+	result := WrapError(apiErr)
+
+	require.NotNil(t, result)
+	assert.NotEqual(t, ErrCodePermissionDenied, result.Code, "generic 403 should not be classified as scope error")
+	for _, s := range result.Suggestions {
+		assert.NotContains(t, s, "auth show", "generic 403 should not get scope-specific suggestion")
+	}
+}
+
+func TestWrapError_APIErrorStatusClassification(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         *domain.APIError
+		wantMessage string
+		wantCode    string
+		wantSuggest string
+	}{
+		{
+			name:        "type only rate limit",
+			err:         &domain.APIError{StatusCode: 429, Type: "api_error"},
+			wantMessage: "Rate limit exceeded",
+			wantCode:    ErrCodeRateLimited,
+			wantSuggest: "reduce the frequency",
+		},
+		{
+			name:        "type only server error",
+			err:         &domain.APIError{StatusCode: 500, Type: "api_error"},
+			wantMessage: "Nylas API server error",
+			wantCode:    ErrCodeServerError,
+			wantSuggest: "temporary issue",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := WrapError(tt.err)
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.wantMessage, result.Message)
+			assert.Equal(t, tt.wantCode, result.Code)
+			assert.Contains(t, result.Suggestion, tt.wantSuggest)
+			assert.True(t, errors.Is(result, domain.ErrAPIError))
+		})
+	}
+}
+
 func TestWrapError_SecretStorePassphraseRequirement(t *testing.T) {
 	err := fmt.Errorf("%w: %s must be set to unlock the encrypted file store", domain.ErrSecretStoreFailed, "NYLAS_FILE_STORE_PASSPHRASE")
 

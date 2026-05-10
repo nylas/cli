@@ -128,6 +128,13 @@ func (a *App) setupKeys() {
 
 		case tcell.KeyRune:
 			switch event.Rune() {
+			case 'q', 'Q':
+				// Quit the application (k9s/less/top convention).
+				// Suppressed in compose/forms via the inDetailView branch above
+				// and in command/filter mode via the early returns above.
+				a.Stop()
+				return nil
+
 			case ':':
 				// Enter command mode with palette (autocomplete)
 				a.showPalette()
