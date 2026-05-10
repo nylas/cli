@@ -45,7 +45,7 @@ func (v *ContactsView) Load() {
 	defer cancel()
 	contacts, err := v.app.config.Client.GetContacts(ctx, v.app.config.GrantID, nil)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load contacts: %v", err)
+		v.app.FlashLoadError("Failed to load contacts", err)
 		return
 	}
 	v.contacts = contacts

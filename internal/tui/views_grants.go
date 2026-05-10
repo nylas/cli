@@ -47,7 +47,7 @@ func (v *GrantsView) Load() {
 	defer cancel()
 	grants, err := v.app.config.Client.ListGrants(ctx)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load grants: %v", err)
+		v.app.FlashLoadError("Failed to load grants", err)
 		return
 	}
 	v.grants = grants

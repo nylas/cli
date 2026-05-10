@@ -47,7 +47,7 @@ func (v *WebhooksView) Load() {
 	defer cancel()
 	webhooks, err := v.app.config.Client.ListWebhooks(ctx)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load webhooks: %v", err)
+		v.app.FlashLoadError("Failed to load webhooks", err)
 		return
 	}
 	v.webhooks = webhooks

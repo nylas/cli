@@ -81,7 +81,7 @@ func (v *EventsView) Load() {
 	// Get calendars first
 	calendars, err := v.app.config.Client.GetCalendars(ctx, v.app.config.GrantID)
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load calendars: %v", err)
+		v.app.FlashLoadError("Failed to load calendars", err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (v *EventsView) loadEventsForCalendar(calendarID string) {
 		Limit:           200,
 	})
 	if err != nil {
-		v.app.Flash(FlashError, "Failed to load events: %v", err)
+		v.app.FlashLoadError("Failed to load events", err)
 		return
 	}
 
