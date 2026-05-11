@@ -41,6 +41,47 @@ func TestParseError_ParsesTopLevelMessage(t *testing.T) {
 	assert.Equal(t, "extra fields not permitted: app_password", apiErr.Message)
 }
 
+func TestParseError_ParsesOAuthErrorFormat(t *testing.T) {
+	client := NewHTTPClient()
+
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Body: io.NopCloser(strings.NewReader(`{
+			"error": "invalid_grant",
+			"error_code": 45004,
+			"error_description": "Code verifier challenge failed",
+			"error_uri": "https://developer.nylas.com/docs/api/errors/"
+		}`)),
+	}
+
+	err := client.parseError(resp)
+	require.Error(t, err)
+
+	var apiErr *domain.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	assert.Equal(t, "invalid_grant", apiErr.Type)
+	assert.Equal(t, "Code verifier challenge failed", apiErr.Message)
+}
+
+func TestParseError_FallsBackToStatusCodeWhenBodyEmpty(t *testing.T) {
+	client := NewHTTPClient()
+
+	resp := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+
+	err := client.parseError(resp)
+	require.Error(t, err)
+
+	var apiErr *domain.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
+	assert.Empty(t, apiErr.Type)
+	assert.Empty(t, apiErr.Message)
+}
+
 func TestListAgentAccounts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)
