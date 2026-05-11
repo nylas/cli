@@ -68,6 +68,7 @@ func TestGatewayClientOperations(t *testing.T) {
 				assert.Equal(t, "org-1", variables["orgPublicId"])
 				options := variables["options"].(map[string]any)
 				assert.Equal(t, "eu", options["region"])
+				assert.Equal(t, "sandbox", options["environment"])
 				branding := options["branding"].(map[string]any)
 				assert.Equal(t, "Created App", branding["name"])
 
@@ -78,7 +79,7 @@ func TestGatewayClientOperations(t *testing.T) {
 							"clientSecret":   "secret",
 							"organizationId": "org-1",
 							"region":         "eu",
-							"environment":    "production",
+							"environment":    "sandbox",
 							"branding": map[string]any{
 								"name": "Created App",
 							},
