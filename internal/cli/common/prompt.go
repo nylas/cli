@@ -4,7 +4,7 @@ package common
 import (
 	"os"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"golang.org/x/term"
 )
 
@@ -36,12 +36,13 @@ func Select[T comparable](title string, options []SelectOption[T]) (T, error) {
 		huhOpts[i] = huh.NewOption(opt.Label, opt.Value)
 	}
 
-	err := huh.NewSelect[T]().
-		Title(title).
-		Options(huhOpts...).
-		Value(&result).
-		WithTheme(theme).
-		Run()
+	err := huh.Run(
+		huh.NewSelect[T]().
+			Title(title).
+			Options(huhOpts...).
+			Value(&result).
+			WithTheme(theme),
+	)
 
 	return result, err
 }
@@ -53,13 +54,14 @@ func ConfirmPrompt(title string, defaultYes bool) (bool, error) {
 	}
 
 	result := defaultYes
-	err := huh.NewConfirm().
-		Title(title).
-		Affirmative("Yes").
-		Negative("No").
-		Value(&result).
-		WithTheme(theme).
-		Run()
+	err := huh.Run(
+		huh.NewConfirm().
+			Title(title).
+			Affirmative("Yes").
+			Negative("No").
+			Value(&result).
+			WithTheme(theme),
+	)
 
 	return result, err
 }
@@ -79,7 +81,7 @@ func InputPrompt(title, placeholder string) (string, error) {
 		field = field.Placeholder(placeholder)
 	}
 
-	err := field.WithTheme(theme).Run()
+	err := huh.Run(field.WithTheme(theme))
 	if err != nil {
 		return "", err
 	}
@@ -96,12 +98,13 @@ func PasswordPrompt(title string) (string, error) {
 	}
 
 	var result string
-	err := huh.NewInput().
-		Title(title).
-		EchoMode(huh.EchoModePassword).
-		Value(&result).
-		WithTheme(theme).
-		Run()
+	err := huh.Run(
+		huh.NewInput().
+			Title(title).
+			EchoMode(huh.EchoModePassword).
+			Value(&result).
+			WithTheme(theme),
+	)
 
 	return result, err
 }

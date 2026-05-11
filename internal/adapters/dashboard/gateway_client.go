@@ -91,7 +91,8 @@ func (c *GatewayClient) CreateApplication(ctx context.Context, orgPublicID, regi
 	variables := map[string]any{
 		"orgPublicId": orgPublicID,
 		"options": map[string]any{
-			"region": region,
+			"region":      region,
+			"environment": "sandbox",
 			"branding": map[string]any{
 				"name": name,
 			},

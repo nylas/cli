@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/nylas/cli/internal/adapters/nylas"
@@ -746,5 +747,6 @@ func TestService_RemoveLocalGrant(t *testing.T) {
 
 func pkceChallenge(verifier string) string {
 	hash := sha256.Sum256([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(hash[:])
+	hexHash := fmt.Sprintf("%x", hash)
+	return base64.RawStdEncoding.EncodeToString([]byte(hexHash))
 }

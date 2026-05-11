@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -101,20 +102,22 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...s
 		return wrapDashboardError(err)
 	}
 
-	// Show the URL and code
+	// Show the URL and code, then wait for user to press Enter before opening browser
 	url := resp.VerificationURIComplete
 	if url == "" {
 		url = resp.VerificationURI
 	}
 
 	fmt.Println()
-	_, _ = common.BoldCyan.Printf("  Open: %s\n", url)
-	if resp.UserCode != "" && resp.VerificationURIComplete == "" {
-		_, _ = common.Bold.Printf("  Code: %s\n", resp.UserCode)
+	if resp.UserCode != "" {
+		_, _ = common.Bold.Printf("  First, copy your one-time code: %s\n", resp.UserCode)
 	}
+	_, _ = common.BoldCyan.Printf("  Open: %s\n", url)
 	fmt.Println()
 
-	// Try to open browser
+	_, _ = common.Dim.Print("  Press Enter to open the browser...")
+	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+
 	b := browser.NewDefaultBrowser()
 	if openErr := b.Open(url); openErr == nil {
 		_, _ = common.Dim.Println("  Browser opened. Complete sign-in there.")
