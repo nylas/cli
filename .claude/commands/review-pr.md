@@ -1,3 +1,9 @@
+---
+name: review-pr
+description: Single-reviewer PR review against hexagonal architecture, CLI standards, security, and test coverage
+allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(go test:*), Bash(go build:*), Bash(golangci-lint:*), Bash(make security:*)
+---
+
 # Review Pull Request
 
 Review code changes following nylas CLI standards and best practices.

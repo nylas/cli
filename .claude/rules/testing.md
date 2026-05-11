@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/*_test.go"
+  - "**/*.go"
+---
+
 # Testing Guidelines
 
 Consolidated testing rules for the Nylas CLI project.
@@ -53,10 +59,9 @@ make test-coverage  # Generates coverage.html and opens in browser
 
 ## Quick Reference
 
-**See:** `.claude/commands/run-tests.md` for full command details.
+**See:** `/run-tests` for full command details.
 
 ```bash
-make ci-full                     # Complete CI pipeline (RECOMMENDED)
 make test-unit                   # Unit tests only
 make test-integration            # CLI integration tests
 make test-cleanup                # Clean up test resources

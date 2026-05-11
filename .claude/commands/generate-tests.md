@@ -1,16 +1,16 @@
 ---
 name: generate-tests
-description: Generate comprehensive unit and integration tests for Go code
+description: Generate unit, integration, or E2E tests for Go code following project patterns and coverage targets
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash(go test:*), Bash(go build:*)
 ---
 
 # Generate Tests
 
-Generate comprehensive unit and integration tests for Go code.
+Generate unit, integration, or E2E tests for Go code.
 
 **Patterns:** See `.claude/shared/patterns/` for templates:
 - `go-test-patterns.md` - Unit test patterns
-- `integration-test-patterns.md` - CLI integration tests
+- `integration-test-patterns.md` - CLI integration tests + rate limiting
 - `playwright-patterns.md` - E2E browser tests
 
 **Agent:** See `.claude/agents/test-writer.md` for autonomous test generation.
@@ -26,6 +26,12 @@ Generate comprehensive unit and integration tests for Go code.
 
 3. Analyze the code and generate tests following project patterns.
 
+### Integration Tests
+
+See `.claude/rules/testing.md` for location, build tags, and naming. Key additions:
+- Always use `skipIfMissingCreds(t)` and `acquireRateLimit(t)`
+- Run: `go test -tags=integration ./internal/cli/integration/... -run "TestCLI_Name"`
+
 ## Test Categories to Cover
 
 | Category | Description | Examples |
@@ -35,14 +41,6 @@ Generate comprehensive unit and integration tests for Go code.
 | Edge cases | Boundary conditions | Empty slices, nil values, unicode |
 | Method guards | Wrong HTTP methods | GET instead of POST |
 | JSON handling | Marshaling/unmarshaling | Invalid JSON, missing fields |
-
-## Test Naming Convention
-
-| Type | Pattern | Example |
-|------|---------|---------|
-| Unit test | `TestFunctionName_Scenario` | `TestParseEmail_ValidInput` |
-| CLI integration | `TestCLI_CommandName` | `TestCLI_EmailSend` |
-| HTTP handler | `TestHandleFeature_Scenario` | `TestHandleAISummarize_EmptyBody` |
 
 ## Verification
 
