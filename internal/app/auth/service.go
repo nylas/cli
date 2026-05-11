@@ -230,8 +230,10 @@ func generatePKCEPair() (string, string, error) {
 		return "", "", err
 	}
 
+	// Nylas uses base64(hex(sha256(verifier))) instead of RFC 7636 base64url(sha256(verifier))
 	hash := sha256.Sum256([]byte(verifier))
-	challenge := base64.RawURLEncoding.EncodeToString(hash[:])
+	hexHash := fmt.Sprintf("%x", hash)
+	challenge := base64.RawStdEncoding.EncodeToString([]byte(hexHash))
 
 	return verifier, challenge, nil
 }

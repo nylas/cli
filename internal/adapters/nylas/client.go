@@ -124,8 +124,12 @@ func (c *HTTPClient) setAuthHeader(req *http.Request) {
 // Uses streaming decoder with size limit to avoid large allocations.
 func (c *HTTPClient) parseError(resp *http.Response) error {
 	// Limit error response body to 10KB to prevent memory issues
-	limitedReader := io.LimitReader(resp.Body, 10*1024)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024))
+	if err != nil || len(body) == 0 {
+		return &domain.APIError{StatusCode: resp.StatusCode}
+	}
 
+	// Try Nylas standard format: {"error": {"message": "...", "type": "..."}}
 	var errResp struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
@@ -134,9 +138,7 @@ func (c *HTTPClient) parseError(resp *http.Response) error {
 			Type    string `json:"type"`
 		} `json:"error"`
 	}
-
-	// Use streaming decoder instead of ReadAll + Unmarshal
-	if err := json.NewDecoder(limitedReader).Decode(&errResp); err == nil {
+	if err := json.Unmarshal(body, &errResp); err == nil {
 		message := strings.TrimSpace(errResp.Error.Message)
 		errType := strings.TrimSpace(errResp.Error.Type)
 		if message == "" {
@@ -151,6 +153,23 @@ func (c *HTTPClient) parseError(resp *http.Response) error {
 				Type:       errType,
 				Message:    message,
 			}
+		}
+	}
+
+	// Try OAuth format: {"error": "...", "error_description": "..."}
+	var oauthErr struct {
+		Error       string `json:"error"`
+		Description string `json:"error_description"`
+	}
+	if err := json.Unmarshal(body, &oauthErr); err == nil && oauthErr.Error != "" {
+		message := oauthErr.Description
+		if message == "" {
+			message = oauthErr.Error
+		}
+		return &domain.APIError{
+			StatusCode: resp.StatusCode,
+			Type:       oauthErr.Error,
+			Message:    message,
 		}
 	}
 
