@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nylas/cli/internal/adapters/browser"
 	"github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/adapters/keyring"
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
+	"github.com/nylas/cli/internal/adapters/oauth"
+	authapp "github.com/nylas/cli/internal/app/auth"
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/dashboard"
@@ -206,4 +210,55 @@ func sanitizeAPIKey(key string) string {
 		}
 	}
 	return strings.TrimSpace(result.String())
+}
+
+// promptAuthLogin asks the user to connect an email account via OAuth.
+// Returns nil grant if the user declines.
+func promptAuthLogin(configStore ports.ConfigStore, grantStore ports.GrantStore) (*domain.Grant, error) {
+	yes, err := common.ConfirmPrompt("Connect a Google or Microsoft email account now?", true)
+	if err != nil || !yes {
+		return nil, nil
+	}
+
+	provider, err := common.Select("Which provider?", []common.SelectOption[domain.Provider]{
+		{Label: "Google (Gmail)", Value: domain.ProviderGoogle},
+		{Label: "Microsoft (Outlook)", Value: domain.ProviderMicrosoft},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, _ := configStore.Load()
+	if cfg == nil {
+		cfg = domain.DefaultConfig()
+	}
+
+	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
+	if err != nil {
+		return nil, fmt.Errorf("could not access keyring: %w", err)
+	}
+
+	client := nylasadapter.NewHTTPClient()
+	if cfg.API != nil && cfg.API.BaseURL != "" {
+		client.SetBaseURL(cfg.API.BaseURL)
+	} else {
+		client.SetRegion(cfg.Region)
+	}
+	apiKey, _ := secretStore.Get(ports.KeyAPIKey)
+	clientID, _ := secretStore.Get(ports.KeyClientID)
+	clientSecret, _ := secretStore.Get(ports.KeyClientSecret)
+	client.SetCredentials(clientID, clientSecret, apiKey)
+
+	oauthServer := oauth.NewCallbackServer(cfg.CallbackPort)
+	b := browser.NewDefaultBrowser()
+	authSvc := authapp.NewService(client, grantStore, configStore, oauthServer, b)
+
+	fmt.Println()
+	fmt.Println("  Opening browser for authentication...")
+	fmt.Println("  Complete the sign-in process in your browser.")
+
+	ctx, cancel := common.CreateLongContext()
+	defer cancel()
+
+	return authSvc.Login(ctx, provider)
 }

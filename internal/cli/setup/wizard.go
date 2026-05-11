@@ -47,6 +47,7 @@ var (
 	getSetupStatusFn           = GetSetupStatus
 	stepGrantSyncFn            = stepGrantSync
 	printCompleteFn            = printComplete
+	promptAuthLoginFn          = promptAuthLogin
 )
 
 func runWizard(opts wizardOpts) error {
@@ -441,8 +442,22 @@ func stepGrantSync(status *SetupStatus) {
 	if len(result.ValidGrants) == 0 {
 		_, _ = common.Dim.Println("  No existing email accounts found")
 		fmt.Println()
-		fmt.Println("  To authenticate with your email provider:")
-		fmt.Println("    nylas auth login")
+
+		grant, err := promptAuthLoginFn(configStore, grantStore)
+		if err != nil {
+			_, _ = common.Yellow.Printf("  Could not authenticate: %v\n", err)
+			fmt.Println()
+			fmt.Println("  To authenticate later:")
+			fmt.Println("    nylas auth login")
+			return
+		}
+		if grant != nil {
+			_, _ = common.Green.Printf("  ✓ Authenticated as %s\n", grant.Email)
+			status.HasGrants = true
+		} else {
+			fmt.Println("  To connect an email account later:")
+			fmt.Println("    nylas auth login")
+		}
 		return
 	}
 
