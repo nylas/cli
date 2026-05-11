@@ -1,3 +1,8 @@
+---
+paths:
+  - "**/*.go"
+---
+
 # Go Quality Rules
 
 Auto-applied to all Go code changes. Combines Go best practices and linting requirements.
@@ -16,7 +21,6 @@ Auto-applied to all Go code changes. Combines Go best practices and linting requ
 go fmt ./...                    # Format
 go vet ./...                    # Static analysis
 golangci-lint run --timeout=5m  # Lint
-make ci                         # Full quality pipeline
 ```
 
 ---
@@ -99,8 +103,6 @@ go fmt ./...                              # Format
 golangci-lint run --timeout=5m            # Lint all
 golangci-lint run --timeout=5m --fix      # Auto-fix
 golangci-lint run --new-from-rev=HEAD~1   # Lint changed only
-make ci                                   # Full pipeline
-make ci-full                              # With integration tests
 ```
 
 ---

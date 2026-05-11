@@ -1,14 +1,31 @@
-# Add New CLI Command
+---
+name: add-command
+description: Add CLI commands, flags, API methods, or domain types following hexagonal architecture (domain → port → adapter → CLI)
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(go build:*), Bash(go test:*), Bash(make ci:*)
+---
 
-Create a new CLI command following the nylas CLI patterns and hexagonal architecture.
+# Add CLI Component
+
+Add commands, flags, API methods, or domain types following nylas CLI patterns.
 
 **API Reference:** https://developer.nylas.com/docs/api/v3/
 
 ---
 
+## Scope
+
+| Task | What to do |
+|------|-----------|
+| **New command** | Full workflow below (domain → port → adapter → CLI → register) |
+| **New flag** | Add var + `cmd.Flags().TypeVar()` + test + doc update |
+| **New API method** | Steps 1-2 only (domain + adapter), skip CLI layer |
+| **New domain type** | Step 1 only, see `references/domain-patterns.md` |
+
+---
+
 ## Quick Start
 
-1. Ask for: command name, parent command, operations needed (list, show, create, update, delete)
+1. Ask for: component type (command/flag/method/type), name, operations needed
 2. Follow patterns in `references/` directory
 3. Run `make ci` to verify
 

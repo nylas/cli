@@ -1,226 +1,116 @@
-# AI Assistant Guide for Nylas CLI
+# Nylas CLI — AI Assistant Rules
 
-Quick reference for AI assistants working on this codebase.
+Every line traces to a real mistake. If Claude does it correctly without the instruction, delete it.
 
 ---
 
-## ⛔ CRITICAL RULES - YOU MUST FOLLOW THESE
+## Working Principles
 
-### NEVER DO (IMPORTANT - violations will break the workflow):
-- **NEVER commit secrets** - No API keys, tokens, passwords, .env files
-- **NEVER skip tests** - All changes require passing tests
-- **NEVER skip security scans** - Run `make security` before commits
-- **NEVER create files >600 lines** - Split by responsibility (see `.claude/rules/file-size-limits.md`)
+1. **Think Before Coding** — State assumptions explicitly. If uncertain, ask. Push back when a simpler approach exists. Stop when confused — name what's unclear.
+2. **Goal-Driven Execution** — Define success criteria before starting. Loop until verified. Don't follow steps blindly — iterate toward success.
+3. **Simplicity First** — Minimum code that solves the problem. No speculative features. No abstractions for single-use code.
+4. **Surgical Changes** — Touch only what you must. Clean up only your own mess. Don't "improve" adjacent code or refactor what isn't broken.
+5. **Read Before You Write** — Before adding code, read exports, callers, shared utilities. "Looks orthogonal" is dangerous — this is the root cause of most LEARNINGS below. If unsure why code is structured that way, ask.
+6. **Match Conventions** — Conformance > taste. If you disagree with a convention, surface it — don't fork silently.
+7. **Surface Conflicts, Don't Blend** — If two patterns contradict, pick one (more recent / more tested). Explain why. Flag the other for cleanup.
+8. **Tests Verify Intent** — Tests encode WHY behavior matters, not just WHAT it does. A test that can't fail when business logic changes is wrong. Never modify existing tests to make implementation pass — fix the implementation instead.
+9. **Checkpoint After Significant Steps** — Summarize what was done, what's verified, what's left. If you lose track, stop and restate.
+10. **Fail Loud** — "Completed" is wrong if anything was skipped. "Tests pass" is wrong if any were skipped. Surface uncertainty, don't hide it.
 
-### ALWAYS DO (every code change):
+---
 
+## Critical Rules
+
+**NEVER:** commit secrets (.env, keys, tokens) · skip tests · skip security scans · skip linting · create files >600 lines
+
+**ALWAYS run before commits:**
 ```bash
-make ci-full   # Complete CI: quality checks → tests → cleanup
-# OR for quick checks without integration tests:
-make ci        # Runs: fmt → vet → lint → test-unit → test-race → security → vuln → build
+make ci-full   # Complete CI: quality + tests + cleanup
+make ci        # Quick: fmt → vet → lint → test-unit → test-race → security → vuln → build
 ```
 
-**⚠️ CRITICAL: Never skip linting. Fix ALL linting errors in code you wrote.**
-
-**⚠️ CRITICAL: Enforce file size limits. Files must be ≤500 lines (ideal) or ≤600 lines (max).**
-
-**Details:** See `.claude/rules/go-quality.md`, `.claude/rules/file-size-limits.md`
-
-### Test & Doc Requirements:
+**Test & doc requirements:**
 | Change | Unit Test | Integration Test | Update Docs |
 |--------|-----------|------------------|-------------|
-| New feature | ✅ REQUIRED | ✅ REQUIRED | ✅ REQUIRED |
-| Bug fix | ✅ REQUIRED | ⚠️ If API-related | ⚠️ If behavior changes |
-| New command | ✅ REQUIRED | ✅ REQUIRED | ✅ REQUIRED |
-| Flag change | ✅ REQUIRED | ❌ Not needed | ✅ REQUIRED |
+| New feature/command | Required | Required | Required |
+| Bug fix | Required | If API-related | If behavior changes |
+| Flag change | Required | — | Required |
 
-### Test Coverage Goals:
+**Do not touch:** `.env*`, `**/secrets/**`, `*.pem`, `*.key`, `go.sum`, `.git/`, `vendor/`
 
-**See:** `.claude/rules/testing.md` for coverage targets by package type.
-
-**Check coverage:** `make test-coverage`
-
-### Documentation:
-**📚 See `docs/INDEX.md` for all documentation.**
-
-**Rules:** `.claude/rules/documentation-maintenance.md`
-
-### Do Not Touch:
-| Path | Reason |
-|------|--------|
-| `.env*`, `**/secrets/**` | Contains secrets |
-| `*.pem`, `*.key` | Certificates/keys |
-| `go.sum` | Auto-generated |
-| `.git/`, `vendor/` | Managed externally |
+**On compaction:** preserve the list of modified files, established test commands, and any architectural decisions made this session.
 
 ---
 
-## Project Overview
+## Project
 
-- **Language**: Go (module minimum 1.24.2, use latest installed version features)
-- **Architecture**: Hexagonal (ports and adapters)
-- **CLI Framework**: Cobra
-- **API**: Nylas v3 ONLY (never use v1/v2)
-- **Timezone Support**: Offline utilities + calendar integration ✅
-- **Email Signing**: GPG/PGP email signing (RFC 3156 PGP/MIME) ✅
-- **AI Chat**: Web-based chat interface using locally installed AI agents ✅
-- **Credential Storage**: System keyring for secrets; file-backed grant cache for non-secret grant metadata (see below)
-- **Web UI**: Air - browser-based interface (localhost:7365)
+Go 1.24+ · Hexagonal architecture (CLI → Port → Adapter) · Cobra CLI · **Nylas v3 API ONLY**
 
-**Details:** See `docs/ARCHITECTURE.md`
+| Resource | Location |
+|----------|----------|
+| Architecture & file inventory | `docs/ARCHITECTURE.md` |
+| Command reference | `docs/COMMANDS.md` |
+| All docs index | `docs/INDEX.md` |
+| Go quality rules | `.claude/rules/go-quality.md` |
+| Testing rules & coverage targets | `.claude/rules/testing.md` |
+| Doc maintenance rules | `.claude/rules/documentation-maintenance.md` |
+| Hook enforcement | `.claude/HOOKS-CONFIG.md` |
+| Agent definitions | `.claude/agents/README.md` |
 
----
+**Env vars:** `NYLAS_DISABLE_KEYRING`, `NYLAS_API_KEY`, `NYLAS_CLIENT_ID`, `NYLAS_GRANT_ID` — see `docs/DEVELOPMENT.md`
 
-## Environment Variables
+**Credentials:** System keyring (service: `"nylas"`, keys: `client_id`, `api_key`, `client_secret`, `org_id`). Grant cache: `os.UserCacheDir()/nylas/grants.json`. Fallback: `~/.config/nylas/` with `NYLAS_DISABLE_KEYRING=true`.
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `NYLAS_DISABLE_KEYRING` | Disable system keyring, use encrypted file | `false` |
-| `NYLAS_API_KEY` | Override API key from keyring (for testing) | - |
-| `NYLAS_CLIENT_ID` | Override client ID from keyring (for testing) | - |
-| `NYLAS_GRANT_ID` | Override grant ID (for testing) | - |
+**New feature?** Run `/add-command` for the step-by-step guide.
 
-**Integration test env vars:** See `.claude/commands/run-tests.md` for full list
+**Skills:** `/add-command` (commands, flags, methods, types), `/run-tests`, `/generate-tests`, `/security-scan`, `/review-pr`
 
----
-
-## Credential Storage
-
-Secrets are stored in the system keyring (service: `"nylas"`) via `nylas auth config`.
-Grant metadata and the local default grant are stored outside the keyring in the grant cache.
-
-**Key files:** `internal/ports/secrets.go` (constants), `internal/adapters/keyring/` (secret storage), `internal/adapters/grantcache/` (grant metadata cache), `internal/app/auth/config.go` (setup)
-
-**Secret keys:** `client_id`, `api_key`, `client_secret`, `org_id`
-
-**Grant cache:** non-secret grant ID, email, provider, and default grant at `filepath.Join(os.UserCacheDir(), "nylas", "grants.json")`
-
-**Disable keyring:** `NYLAS_DISABLE_KEYRING=true` (falls back to encrypted file at `~/.config/nylas/`)
-
----
-
-## File Structure
-
-**Hexagonal layers:** CLI (`internal/cli/`) → Port (`internal/ports/`) → Adapter (`internal/adapters/`)
-
-**Core files:** `cmd/nylas/main.go`, `internal/ports/nylas.go`, `internal/adapters/nylas/client.go`
-
-**Quick lookup:** CLI helpers in `internal/cli/common/`, HTTP in `client.go`, Air at `internal/air/`, Chat at `internal/chat/`
-
-**CLI packages:** admin, ai, audit, auth, calendar, config, contacts, email, mcp, notetaker, otp, scheduler, setup, slack, timezone, webhook
-
-**Additional packages:**
-- `internal/ports/output.go` - OutputWriter interface for pluggable formatting
-- `internal/adapters/output/` - Table, JSON, YAML, Quiet output adapters
-- `internal/httputil/` - HTTP response helpers (WriteJSON, LimitedBody, DecodeJSON)
-- `internal/adapters/grantcache/` - File-backed local grant metadata/default cache
-- `internal/adapters/gpg/` - GPG/PGP email signing service (2026)
-- `internal/adapters/mime/` - RFC 3156 PGP/MIME message builder (2026)
-- `internal/chat/` - AI chat interface with local agent support (2026)
-- `internal/webguard/` - Shared localhost web UI request guards
-- `internal/cli/setup/` - First-time setup wizard (`nylas init`)
-
-**Full inventory:** `docs/ARCHITECTURE.md`
-
----
-
-## Adding a New Feature
-
-**Quick pattern:**
-1. Domain: `internal/domain/<feature>.go` - Define types
-2. Port: `internal/ports/nylas.go` - Add interface methods
-3. Adapter: `internal/adapters/nylas/<feature>.go` - Implement methods
-4. Mock: `internal/adapters/nylas/mock.go` - Add mock methods
-5. CLI: `internal/cli/<feature>/` - Add commands
-6. Register: `cmd/nylas/main.go` - Add command
-7. Tests: `internal/cli/integration/<feature>_test.go`
-8. Docs: `docs/COMMANDS.md` - Add examples
-
-**Detailed guide:** Use `/add-command` skill
-
----
-
-## Testing
-
-**Details:** `.claude/rules/testing.md`
-
----
-
-## Hooks, Skills & Agents
-
-**Hooks:** Auto-enforce quality. See `.claude/HOOKS-CONFIG.md`
-
-**Skills:** `/run-tests`, `/add-command`, `/generate-tests`, `/security-scan`
-
-**Agents:** See `.claude/agents/README.md`
-
----
-
-## Quick Reference
-
+**Quick commands:**
 | Command | Purpose |
 |---------|---------|
-| `make ci-full` | Complete CI (quality + tests) - **run before commits** |
+| `make ci-full` | Complete CI — **run before commits** |
 | `make ci` | Quick quality checks (no integration) |
 | `make build` | Build binary |
+| `make test-coverage` | Coverage report |
+| `make help` | List all available targets |
 | `nylas init` | First-time setup wizard |
 | `nylas air` | Start Air web UI (localhost:7365) |
 | `nylas chat` | Start AI chat interface (localhost:7367) |
 
-**Available targets:** Run `make help` or `make` to see all available commands
-
-**Debugging:** Check `ports/nylas.go` → `adapters/nylas/client.go` → `cli/<feature>/helpers.go`
-
-**API docs:** https://developer.nylas.com/docs/api/v3/
+**Debugging path:** `ports/nylas.go` → `adapters/nylas/client.go` → `cli/<feature>/helpers.go`
 
 ---
 
-## LEARNINGS (Self-Updating)
+## LEARNINGS
 
-> **When Claude makes a mistake, use:** "Reflect on this mistake. Abstract and generalize the learning. Write it to CLAUDE.md."
+> On mistakes: "Reflect → Abstract → Generalize → Write to CLAUDE.md"
 
-This section captures lessons learned from mistakes. Claude updates this section when errors are caught.
+### Reuse Existing Helpers (Root Cause: Not Reading First)
+- Clients: `common.GetNylasClient()`, `common.WithClient()`, `WithClientNoGrant()` — NEVER create package-local wrappers
+- Grant IDs: `common.GetGrantID(args)` — NEVER create package-local `getGrantID()`
+- Output: `common.GetOutputWriter(cmd)` for JSON/YAML/quiet — NEVER create custom --format flags
+- Formatting: `common.FormatSize()`, `common.StatusColor()`/`StatusIcon()`/`ColorSprint()`
+- Messages: `common.PrintSuccess()`/`PrintError()` — delegate from package-local helpers
+- Pagination: `common.SetupPagination()`, `NormalizePageSize()`, `FetchCursorPages()`
+- HTTP: `httputil.WriteJSON()`/`LimitedBody()`, `testutil.WriteJSONResponse()`
+- AI: shared helpers in `adapters/ai/base_client.go`
 
-### Project-Specific Gotchas
-- Playwright selectors: ALWAYS use semantic selectors (getByRole > getByText > getByLabel > getByTestId), NEVER CSS/XPath
-- Go tests: ALWAYS use table-driven tests with t.Run() for multiple scenarios
-- Air handlers: ALWAYS return after error responses (prevents writing to closed response)
-- Integration tests: ALWAYS use acquireRateLimit(t) before API calls in parallel tests
-- Frontend JS: ALWAYS use textContent for user data, NEVER innerHTML (XSS prevention)
-- CLI clients: Use `common.GetNylasClient()` directly, NEVER create package-local `getClient()` wrappers
-- Grant IDs: Use `common.GetGrantID(args)` directly, NEVER create package-local `getGrantID()` wrappers
-- File sizes: Use `common.FormatSize()` for byte formatting, NEVER create duplicate formatBytes/formatFileSize
-- Success/Error messages: Use `common.PrintSuccess()`/`common.PrintError()`, delegate from package-local helpers
-- HTTP handlers: Use `httputil.WriteJSON()`/`httputil.LimitedBody()` for consistent response handling
-- AI clients: Use shared helpers in `adapters/ai/base_client.go` (ConvertMessagesToMaps, ConvertToolsOpenAIFormat, FallbackStreamChat)
-- Output formatting: Use `common.GetOutputWriter(cmd)` for JSON/YAML/quiet support, NEVER create custom --format flags
-- Client helpers: Use `common.WithClient()` and `WithClientNoGrant()` to reduce boilerplate, NEVER duplicate setup code
-- Status colors: Use `common.StatusColor()`/`StatusIcon()`/`ColorSprint()`, NEVER create package-local status color functions
-- Pagination: Use `common.SetupPagination()` for limit/maxItems resolution, NEVER duplicate auto-pagination logic in list commands
-- Pagination helpers: Use `common.NormalizePageSize()` and `FetchCursorPages()` for cursor-based pagination boilerplate
-- Test JSON responses: Use `testutil.WriteJSONResponse()` in httptest handlers, NEVER repeat the Content-Type/WriteHeader/Encode triplet
+### Framework Gotchas
+- Playwright: semantic selectors ONLY (getByRole > getByText > getByLabel > getByTestId)
+- Go integration tests: `acquireRateLimit(t)` before API calls in parallel tests — omitting causes flaky 429s
+- Air handlers: ALWAYS return after error responses
+- Frontend JS: textContent for user data, NEVER innerHTML (XSS)
 
-### Non-Obvious Workflows
-- Progressive disclosure: Keep main skill files under 100 lines, use references/ for details
-- Self-learning: Use "Reflect → Abstract → Generalize → Write" when mistakes occur
-- Session continuity: Read claude-progress.txt at session start, update at session end
-- Hook debugging: Check ~/.claude/logs/ for hook execution errors
-
-### Time-Wasting Bugs Fixed
-- Go build cache corruption: Fix with `sudo rm -rf ~/.cache/go-build ~/go/pkg/mod && go clean -cache`
-- Playwright MCP not connecting: Run `claude mcp add playwright` to install plugin
+### Environment Fixes
+- Go build cache corruption: `sudo rm -rf ~/.cache/go-build ~/go/pkg/mod && go clean -cache`
 - Quality gate timeout: Add `timeout 120` before golangci-lint in hooks
+- Hook debugging: Check `~/.claude/logs/` for hook execution errors
 
-### Curation Rules
-- Maximum 30 items per category
-- Remove obsolete entries when adding new
-- One imperative line per item
-- Monthly review to prune stale advice
+### Curation: max 30 items, one line each, prune monthly, remove obsolete when adding new
 
 ---
 
 ## META
 
-**Quick update:** Press `#` key to add instructions during sessions
-
-**Maintain:** ALWAYS/NEVER for critical rules, max 30 LEARNINGS items, prune monthly
+~100 lines of universal rules. Domain knowledge lives in skills and `.claude/rules/`.
+Critical rules also enforced by hooks — hooks are deterministic, prose is probabilistic.
