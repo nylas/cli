@@ -99,6 +99,7 @@ func snakeToPascal(s string) string {
 		"ai":  "AI",
 		"gpg": "GPG",
 		"id":  "ID",
+		"url": "URL",
 	}
 
 	parts := strings.Split(s, "_")
