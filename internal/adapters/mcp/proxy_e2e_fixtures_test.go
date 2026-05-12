@@ -52,6 +52,18 @@ const mockToolsListResponse = `{
 				}
 			},
 			{
+				"name": "list_events",
+				"description": "List events in a calendar",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"grant_id": {"type": "string"},
+						"get_all_query_parameters": {"type": "object"}
+					},
+					"required": ["get_all_query_parameters"]
+				}
+			},
+			{
 				"name": "create_event",
 				"description": "Create a calendar event",
 				"inputSchema": {
