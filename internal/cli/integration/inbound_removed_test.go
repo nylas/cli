@@ -68,7 +68,7 @@ func TestCLI_AuthLoginRejectsInboxProvider(t *testing.T) {
 	if !strings.Contains(output, "invalid provider: inbox") {
 		t.Fatalf("expected invalid provider error, got stdout=%q stderr=%q", stdout, stderr)
 	}
-	if !strings.Contains(output, "use 'google' or 'microsoft'") {
+	if !strings.Contains(output, "use 'google', 'microsoft', 'ews', 'icloud', 'yahoo', or 'imap'") {
 		t.Fatalf("expected provider guidance, got stdout=%q stderr=%q", stdout, stderr)
 	}
 }

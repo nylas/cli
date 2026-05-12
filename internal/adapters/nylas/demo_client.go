@@ -35,3 +35,13 @@ func (d *DemoClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVe
 		GrantStatus: "valid",
 	}, nil
 }
+
+// CreateCustomGrant returns a mock grant for demo mode.
+func (d *DemoClient) CreateCustomGrant(_ context.Context, provider string, _ map[string]any) (*domain.Grant, error) {
+	return &domain.Grant{
+		ID:          "demo-custom-grant-id",
+		Email:       "demo@example.com",
+		Provider:    domain.Provider(provider),
+		GrantStatus: "valid",
+	}, nil
+}

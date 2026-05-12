@@ -72,6 +72,34 @@ func (c *HTTPClient) ExchangeCode(ctx context.Context, code, redirectURI, codeVe
 	}, nil
 }
 
+// CreateCustomGrant creates a grant via the custom auth endpoint.
+// Used for credential-based providers (IMAP, iCloud, Yahoo).
+func (c *HTTPClient) CreateCustomGrant(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+	queryURL := fmt.Sprintf("%s/v3/connect/custom", c.baseURL)
+
+	payload := map[string]any{
+		"provider": provider,
+		"settings": settings,
+	}
+
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	grant, err := decodeManagedGrantResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.Grant{
+		ID:          grant.ID,
+		Email:       grant.Email,
+		Provider:    grant.Provider,
+		GrantStatus: grant.GrantStatus,
+	}, nil
+}
+
 // ListGrants lists all grants for the application, transparently
 // following next_cursor pagination so callers always see the complete
 // result set. The Nylas v3 default page size (10) would otherwise

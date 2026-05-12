@@ -162,7 +162,12 @@ func TestParseLoginProvider(t *testing.T) {
 	}{
 		{name: "google", input: "google", want: domain.ProviderGoogle},
 		{name: "microsoft", input: "microsoft", want: domain.ProviderMicrosoft},
+		{name: "icloud", input: "icloud", want: domain.ProviderICloud},
+		{name: "yahoo", input: "yahoo", want: domain.ProviderYahoo},
+		{name: "imap", input: "imap", want: domain.ProviderIMAP},
+		{name: "ews", input: "ews", want: domain.ProviderEWS},
 		{name: "mixed case", input: "Google", want: domain.ProviderGoogle},
+		{name: "mixed case icloud", input: "ICloud", want: domain.ProviderICloud},
 		{name: "reject nylas", input: "nylas", wantErr: true},
 		{name: "reject inbox", input: "inbox", wantErr: true},
 	}
@@ -174,9 +179,6 @@ func TestParseLoginProvider(t *testing.T) {
 				if err == nil {
 					t.Fatalf("parseLoginProvider(%q) expected error", tt.input)
 				}
-				if tt.input == "inbox" && !strings.Contains(err.Error(), "use 'google' or 'microsoft'") {
-					t.Fatalf("parseLoginProvider(%q) error = %q, want provider guidance", tt.input, err.Error())
-				}
 				return
 			}
 			if err != nil {
@@ -186,6 +188,47 @@ func TestParseLoginProvider(t *testing.T) {
 				t.Fatalf("parseLoginProvider(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCredentialAPIProvider(t *testing.T) {
+	tests := []struct {
+		provider domain.Provider
+		want     string
+	}{
+		{domain.ProviderYahoo, "imap"},
+		{domain.ProviderICloud, "icloud"},
+		{domain.ProviderIMAP, "imap"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.provider), func(t *testing.T) {
+			got := credentialAPIProvider(tt.provider)
+			if got != tt.want {
+				t.Fatalf("credentialAPIProvider(%q) = %q, want %q", tt.provider, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOAuthProviders(t *testing.T) {
+	if !oauthProviders[domain.ProviderGoogle] {
+		t.Error("Google should be an OAuth provider")
+	}
+	if !oauthProviders[domain.ProviderMicrosoft] {
+		t.Error("Microsoft should be an OAuth provider")
+	}
+	if !oauthProviders[domain.ProviderEWS] {
+		t.Error("EWS should be an OAuth provider")
+	}
+	if oauthProviders[domain.ProviderICloud] {
+		t.Error("iCloud should not be an OAuth provider")
+	}
+	if oauthProviders[domain.ProviderYahoo] {
+		t.Error("Yahoo should not be an OAuth provider")
+	}
+	if oauthProviders[domain.ProviderIMAP] {
+		t.Error("IMAP should not be an OAuth provider")
 	}
 }
 

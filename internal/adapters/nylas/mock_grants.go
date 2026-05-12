@@ -55,4 +55,17 @@ func (m *MockClient) RevokeGrant(ctx context.Context, grantID string) error {
 	return nil
 }
 
+// CreateCustomGrant creates a grant via the custom auth endpoint.
+func (m *MockClient) CreateCustomGrant(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+	if m.CreateCustomGrantFunc != nil {
+		return m.CreateCustomGrantFunc(ctx, provider, settings)
+	}
+	return &domain.Grant{
+		ID:          "mock-custom-grant-id",
+		Email:       "test@example.com",
+		Provider:    domain.Provider(provider),
+		GrantStatus: "valid",
+	}, nil
+}
+
 // GetMessages retrieves recent messages.

@@ -93,6 +93,7 @@ type MockClient struct {
 	// Custom functions
 	BuildAuthURLFunc          func(provider domain.Provider, redirectURI, state, codeChallenge string) string
 	ExchangeCodeFunc          func(ctx context.Context, code, redirectURI, codeVerifier string) (*domain.Grant, error)
+	CreateCustomGrantFunc     func(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error)
 	ListGrantsFunc            func(ctx context.Context) ([]domain.Grant, error)
 	GetGrantFunc              func(ctx context.Context, grantID string) (*domain.Grant, error)
 	RevokeGrantFunc           func(ctx context.Context, grantID string) error

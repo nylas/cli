@@ -110,6 +110,37 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 	return grant, nil
 }
 
+// LoginWithCredentials creates a grant via the custom auth endpoint for
+// credential-based providers (IMAP, iCloud, Yahoo). Unlike Login, this
+// does not open a browser or start an OAuth server.
+func (s *Service) LoginWithCredentials(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+	grant, err := s.client.CreateCustomGrant(ctx, provider, settings)
+	if err != nil {
+		return nil, err
+	}
+
+	grantInfo := domain.GrantInfo{
+		ID:       grant.ID,
+		Email:    grant.Email,
+		Provider: grant.Provider,
+	}
+	if err := s.grantStore.SaveGrant(grantInfo); err != nil {
+		return nil, err
+	}
+
+	defaultGrant, err := s.grantStore.GetDefaultGrant()
+	if err == domain.ErrNoDefaultGrant {
+		defaultGrant = grant.ID
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to read default grant: %w", err)
+	}
+	if err := PersistDefaultGrant(s.config, s.grantStore, defaultGrant); err != nil {
+		return nil, fmt.Errorf("failed to persist default grant: %w", err)
+	}
+
+	return grant, nil
+}
+
 // Logout revokes the current grant.
 func (s *Service) Logout(ctx context.Context) error {
 	grantID, err := s.grantStore.GetDefaultGrant()
