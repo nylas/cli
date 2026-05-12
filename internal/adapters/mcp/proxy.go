@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -178,6 +179,9 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 
 	// Inject default grant into tool calls if not specified
 	request = p.injectDefaultGrant(request, parsed)
+
+	// Normalize tool arguments (type coercion, timestamp rounding)
+	request = p.normalizeToolArguments(request, parsed)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(request))
 	if err != nil {
@@ -414,4 +418,121 @@ func (p *Proxy) injectDefaultGrant(request []byte, parsed *rpcRequest) []byte {
 	}
 
 	return modified
+}
+
+// normalizeToolArguments fixes type mismatches and rounds timestamps before
+// forwarding to the upstream server. LLMs frequently send integers where the
+// schema expects strings, or send unaligned timestamps that the API rejects.
+func (p *Proxy) normalizeToolArguments(request []byte, parsed *rpcRequest) []byte {
+	var req *rpcRequest
+	if parsed != nil {
+		req = parsed
+	} else {
+		var r rpcRequest
+		if err := json.Unmarshal(request, &r); err != nil {
+			return request
+		}
+		req = &r
+	}
+
+	if req.Method != "tools/call" || req.Params.Arguments == nil {
+		return request
+	}
+
+	var modified bool
+
+	switch req.Params.Name {
+	case "list_events":
+		modified = normalizeListEventsArgs(req.Params.Arguments)
+	case "availability":
+		modified = normalizeAvailabilityArgs(req.Params.Arguments)
+	}
+
+	if !modified {
+		return request
+	}
+
+	out, err := json.Marshal(req)
+	if err != nil {
+		return request
+	}
+	return out
+}
+
+// normalizeListEventsArgs coerces numeric start/end fields to strings inside
+// get_all_query_parameters. The upstream schema expects string timestamps but
+// LLMs naturally produce integers.
+func normalizeListEventsArgs(args map[string]any) bool {
+	params, ok := args["get_all_query_parameters"].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	modified := false
+	for _, key := range []string{"start", "end"} {
+		if v, exists := params[key]; exists {
+			if num, ok := toInt64(v); ok {
+				params[key] = fmt.Sprintf("%d", num)
+				modified = true
+			}
+		}
+	}
+	return modified
+}
+
+// normalizeAvailabilityArgs rounds start_time down and end_time up to the
+// nearest 5-minute boundary. The Nylas API requires these to be multiples of
+// 300 seconds.
+func normalizeAvailabilityArgs(args map[string]any) bool {
+	req, ok := args["availability_request"].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	modified := false
+	if v, exists := req["start_time"]; exists {
+		if num, ok := toInt64(v); ok {
+			rounded := roundDown5Min(num)
+			if rounded != num {
+				req["start_time"] = rounded
+				modified = true
+			}
+		}
+	}
+	if v, exists := req["end_time"]; exists {
+		if num, ok := toInt64(v); ok {
+			rounded := roundUp5Min(num)
+			if rounded != num {
+				req["end_time"] = rounded
+				modified = true
+			}
+		}
+	}
+	return modified
+}
+
+func roundDown5Min(epoch int64) int64 {
+	return (epoch / 300) * 300
+}
+
+func roundUp5Min(epoch int64) int64 {
+	return int64(math.Ceil(float64(epoch)/300)) * 300
+}
+
+// toInt64 extracts an integer from a JSON-decoded value. JSON numbers decode
+// as float64 in map[string]any; this also handles explicit int/int64 values.
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	default:
+		return 0, false
+	}
 }
