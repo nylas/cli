@@ -22,4 +22,8 @@ type AuthClient interface {
 
 	// RevokeGrant revokes a specific grant.
 	RevokeGrant(ctx context.Context, grantID string) error
+
+	// CreateCustomGrant creates a grant via POST /v3/connect/custom for
+	// credential-based providers (IMAP, iCloud, Yahoo).
+	CreateCustomGrant(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error)
 }

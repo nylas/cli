@@ -2,6 +2,7 @@ package setup
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/nylas/cli/internal/adapters/browser"
@@ -212,10 +213,10 @@ func sanitizeAPIKey(key string) string {
 	return strings.TrimSpace(result.String())
 }
 
-// promptAuthLogin asks the user to connect an email account via OAuth.
+// promptAuthLogin asks the user to connect an email account.
 // Returns nil grant if the user declines.
 func promptAuthLogin(configStore ports.ConfigStore, grantStore ports.GrantStore) (*domain.Grant, error) {
-	yes, err := common.ConfirmPrompt("Connect a Google or Microsoft email account now?", true)
+	yes, err := common.ConfirmPrompt("Connect an email account now?", true)
 	if err != nil || !yes {
 		return nil, nil
 	}
@@ -223,11 +224,123 @@ func promptAuthLogin(configStore ports.ConfigStore, grantStore ports.GrantStore)
 	provider, err := common.Select("Which provider?", []common.SelectOption[domain.Provider]{
 		{Label: "Google (Gmail)", Value: domain.ProviderGoogle},
 		{Label: "Microsoft (Outlook)", Value: domain.ProviderMicrosoft},
+		{Label: "Exchange on-premises (EWS)", Value: domain.ProviderEWS},
+		{Label: "iCloud", Value: domain.ProviderICloud},
+		{Label: "Yahoo", Value: domain.ProviderYahoo},
+		{Label: "IMAP (other)", Value: domain.ProviderIMAP},
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	authSvc, err := buildAuthService(configStore, grantStore)
+	if err != nil {
+		return nil, err
+	}
+
+	switch provider {
+	case domain.ProviderGoogle, domain.ProviderMicrosoft, domain.ProviderEWS:
+		fmt.Println()
+		fmt.Println("  Opening browser for authentication...")
+		fmt.Println("  Complete the sign-in process in your browser.")
+
+		ctx, cancel := common.CreateLongContext()
+		defer cancel()
+
+		return authSvc.Login(ctx, provider)
+	default:
+		return initCredentialLogin(authSvc, provider)
+	}
+}
+
+func initCredentialLogin(authSvc *authapp.Service, provider domain.Provider) (*domain.Grant, error) {
+	var settings map[string]any
+	var apiProvider string
+	var err error
+
+	switch provider {
+	case domain.ProviderICloud:
+		fmt.Println()
+		_, _ = common.Dim.Println("  iCloud requires an app-specific password.")
+		_, _ = common.Dim.Println("  Generate one at: https://appleid.apple.com/account/manage")
+		fmt.Println()
+
+		username, promptErr := common.InputPrompt("iCloud email", "")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		password, promptErr := common.PasswordPrompt("App-specific password")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		settings = map[string]any{"username": username, "password": password}
+		apiProvider = "icloud"
+
+	case domain.ProviderYahoo:
+		fmt.Println()
+		_, _ = common.Dim.Println("  Yahoo requires an app password.")
+		_, _ = common.Dim.Println("  Generate one at: https://login.yahoo.com/account/security/app-passwords")
+		fmt.Println()
+
+		email, promptErr := common.InputPrompt("Yahoo email", "")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		password, promptErr := common.PasswordPrompt("App password")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		settings = map[string]any{
+			"imap_username": email,
+			"imap_password": password,
+			"imap_host":     "imap.mail.yahoo.com",
+			"imap_port":     993,
+			"type":          "yahoo",
+		}
+		apiProvider = "imap"
+
+	case domain.ProviderIMAP:
+		fmt.Println()
+
+		username, promptErr := common.InputPrompt("IMAP username (email)", "")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		password, promptErr := common.PasswordPrompt("IMAP password")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		host, promptErr := common.InputPrompt("IMAP host", "")
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		settings = map[string]any{
+			"imap_username": username,
+			"imap_password": password,
+			"imap_host":     host,
+			"imap_port":     promptPortDefault("IMAP port", 993),
+		}
+		apiProvider = "imap"
+
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	ctx, cancel := common.CreateLongContext()
+	defer cancel()
+
+	var grant *domain.Grant
+	err = common.RunWithSpinner("Authenticating...", func() error {
+		grant, err = authSvc.LoginWithCredentials(ctx, apiProvider, settings)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return grant, nil
+}
+
+func buildAuthService(configStore ports.ConfigStore, grantStore ports.GrantStore) (*authapp.Service, error) {
 	cfg, _ := configStore.Load()
 	if cfg == nil {
 		cfg = domain.DefaultConfig()
@@ -251,14 +364,17 @@ func promptAuthLogin(configStore ports.ConfigStore, grantStore ports.GrantStore)
 
 	oauthServer := oauth.NewCallbackServer(cfg.CallbackPort)
 	b := browser.NewDefaultBrowser()
-	authSvc := authapp.NewService(client, grantStore, configStore, oauthServer, b)
+	return authapp.NewService(client, grantStore, configStore, oauthServer, b), nil
+}
 
-	fmt.Println()
-	fmt.Println("  Opening browser for authentication...")
-	fmt.Println("  Complete the sign-in process in your browser.")
-
-	ctx, cancel := common.CreateLongContext()
-	defer cancel()
-
-	return authSvc.Login(ctx, provider)
+func promptPortDefault(title string, defaultPort int) int {
+	raw, err := common.InputPrompt(title, strconv.Itoa(defaultPort))
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return defaultPort
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || port <= 0 || port > 65535 {
+		return defaultPort
+	}
+	return port
 }

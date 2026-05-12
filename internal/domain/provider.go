@@ -8,7 +8,10 @@ type Provider string
 const (
 	ProviderGoogle    Provider = "google"
 	ProviderMicrosoft Provider = "microsoft"
+	ProviderEWS       Provider = "ews"
 	ProviderIMAP      Provider = "imap"
+	ProviderICloud    Provider = "icloud"
+	ProviderYahoo     Provider = "yahoo"
 	ProviderVirtual   Provider = "virtual"
 	ProviderNylas     Provider = "nylas"
 )
@@ -23,8 +26,14 @@ func (p Provider) DisplayName() string {
 		return "Google"
 	case ProviderMicrosoft:
 		return "Microsoft"
+	case ProviderEWS:
+		return "Exchange (EWS)"
 	case ProviderIMAP:
 		return "IMAP"
+	case ProviderICloud:
+		return "iCloud"
+	case ProviderYahoo:
+		return "Yahoo"
 	case ProviderVirtual:
 		return "Virtual"
 	case ProviderNylas:
@@ -37,7 +46,7 @@ func (p Provider) DisplayName() string {
 // IsValid checks if the provider is a known type.
 func (p Provider) IsValid() bool {
 	switch p {
-	case ProviderGoogle, ProviderMicrosoft, ProviderIMAP, ProviderVirtual, ProviderNylas:
+	case ProviderGoogle, ProviderMicrosoft, ProviderEWS, ProviderIMAP, ProviderICloud, ProviderYahoo, ProviderVirtual, ProviderNylas:
 		return true
 	default:
 		return false

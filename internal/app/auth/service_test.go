@@ -745,6 +745,96 @@ func TestService_RemoveLocalGrant(t *testing.T) {
 	assert.Empty(t, configStore.config.Grants)
 }
 
+func TestService_LoginWithCredentials(t *testing.T) {
+	t.Run("successful icloud login saves grant and sets default", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.CreateCustomGrantFunc = func(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+			assert.Equal(t, "icloud", provider)
+			assert.Equal(t, "user@icloud.com", settings["username"])
+			return &domain.Grant{
+				ID:          "icloud-grant-001",
+				Email:       "user@icloud.com",
+				Provider:    domain.ProviderICloud,
+				GrantStatus: "valid",
+			}, nil
+		}
+
+		grantStore := newMockGrantStore()
+		configStore := newMockConfigStore()
+
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
+
+		grant, err := svc.LoginWithCredentials(context.Background(), "icloud", map[string]any{
+			"username": "user@icloud.com",
+			"password": "app-specific-password",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "icloud-grant-001", grant.ID)
+		assert.Equal(t, "user@icloud.com", grant.Email)
+
+		savedGrant, err := grantStore.GetGrant("icloud-grant-001")
+		require.NoError(t, err)
+		assert.Equal(t, domain.ProviderICloud, savedGrant.Provider)
+
+		defaultID, err := grantStore.GetDefaultGrant()
+		require.NoError(t, err)
+		assert.Equal(t, "icloud-grant-001", defaultID)
+	})
+
+	t.Run("does not override existing default", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.CreateCustomGrantFunc = func(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+			return &domain.Grant{
+				ID:       "yahoo-grant-001",
+				Email:    "user@yahoo.com",
+				Provider: domain.ProviderIMAP,
+			}, nil
+		}
+
+		grantStore := newMockGrantStore()
+		require.NoError(t, grantStore.SaveGrant(domain.GrantInfo{ID: "existing-grant", Email: "first@example.com"}))
+		require.NoError(t, grantStore.SetDefaultGrant("existing-grant"))
+		configStore := newMockConfigStore()
+
+		svc := NewService(client, grantStore, configStore, &mockOAuthServer{}, &mockBrowser{})
+
+		grant, err := svc.LoginWithCredentials(context.Background(), "imap", map[string]any{
+			"imap_username": "user@yahoo.com",
+			"imap_password": "secret",
+			"imap_host":     "imap.mail.yahoo.com",
+			"imap_port":     993,
+			"type":          "yahoo",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "yahoo-grant-001", grant.ID)
+
+		defaultID, err := grantStore.GetDefaultGrant()
+		require.NoError(t, err)
+		assert.Equal(t, "existing-grant", defaultID)
+	})
+
+	t.Run("api error propagates", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.CreateCustomGrantFunc = func(ctx context.Context, provider string, settings map[string]any) (*domain.Grant, error) {
+			return nil, errors.New("Invalid IMAP credentials")
+		}
+
+		svc := NewService(client, newMockGrantStore(), newMockConfigStore(), &mockOAuthServer{}, &mockBrowser{})
+
+		_, err := svc.LoginWithCredentials(context.Background(), "imap", map[string]any{
+			"imap_username": "bad@example.com",
+			"imap_password": "wrong",
+			"imap_host":     "mail.example.com",
+			"imap_port":     993,
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid IMAP credentials")
+	})
+}
+
 func pkceChallenge(verifier string) string {
 	hash := sha256.Sum256([]byte(verifier))
 	hexHash := fmt.Sprintf("%x", hash)
