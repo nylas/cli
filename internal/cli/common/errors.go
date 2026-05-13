@@ -17,6 +17,7 @@ type CLIError struct {
 	Suggestion  string   // Single suggestion (deprecated, use Suggestions)
 	Suggestions []string // Multiple suggestions
 	Code        string
+	RequestID   string
 }
 
 func (e *CLIError) Error() string {
@@ -67,7 +68,8 @@ func WrapError(err error) *CLIError {
 					"Run 'nylas auth login' to re-authorize the grant with the required scopes",
 					"Or 'nylas auth switch <grant-id-or-email>' to use a different grant",
 				},
-				Code: ErrCodePermissionDenied,
+				Code:      ErrCodePermissionDenied,
+				RequestID: apiErr.RequestID,
 			}
 		}
 		switch {
@@ -77,6 +79,7 @@ func WrapError(err error) *CLIError {
 				Message:    "Rate limit exceeded",
 				Suggestion: "Wait a moment and try again, or reduce the frequency of requests",
 				Code:       ErrCodeRateLimited,
+				RequestID:  apiErr.RequestID,
 			}
 		case apiErr.StatusCode >= http.StatusInternalServerError:
 			return &CLIError{
@@ -84,6 +87,7 @@ func WrapError(err error) *CLIError {
 				Message:    "Nylas API server error",
 				Suggestion: "This is a temporary issue. Please try again in a few minutes",
 				Code:       ErrCodeServerError,
+				RequestID:  apiErr.RequestID,
 			}
 		}
 	}
@@ -230,10 +234,19 @@ func WrapError(err error) *CLIError {
 		}
 	}
 
-	// Default wrapper
+	// Default wrapper — extract request ID from APIError if present,
+	// and strip the inline [request_id: ...] suffix so it only appears
+	// on its own line via FormatError.
+	msg := err.Error()
+	var fallbackReqID string
+	if apiErr != nil && apiErr.RequestID != "" {
+		fallbackReqID = apiErr.RequestID
+		msg = strings.TrimSuffix(msg, fmt.Sprintf(" [request_id: %s]", apiErr.RequestID))
+	}
 	return &CLIError{
-		Err:     err,
-		Message: err.Error(),
+		Err:       err,
+		Message:   msg,
+		RequestID: fallbackReqID,
 	}
 }
 
@@ -252,6 +265,11 @@ func FormatError(err error) string {
 	// Error code (if available)
 	if cliErr.Code != "" {
 		_, _ = Dim.Fprintf(&sb, "  Code: %s\n", cliErr.Code)
+	}
+
+	// Request ID (if available from API response)
+	if cliErr.RequestID != "" {
+		_, _ = Dim.Fprintf(&sb, "  Request ID: %s\n", cliErr.RequestID)
 	}
 
 	// Multiple suggestions (preferred)

@@ -123,17 +123,21 @@ func (c *HTTPClient) setAuthHeader(req *http.Request) {
 // parseError parses an error response from the API.
 // Uses streaming decoder with size limit to avoid large allocations.
 func (c *HTTPClient) parseError(resp *http.Response) error {
+	requestID := getRequestID(resp)
+
 	// Limit error response body to 10KB to prevent memory issues
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024))
 	if err != nil || len(body) == 0 {
-		return &domain.APIError{StatusCode: resp.StatusCode}
+		return &domain.APIError{StatusCode: resp.StatusCode, RequestID: requestID}
 	}
 
 	// Try Nylas standard format: {"error": {"message": "...", "type": "..."}}
+	// with optional top-level "request_id" (present in some 4xx responses).
 	var errResp struct {
-		Message string `json:"message"`
-		Type    string `json:"type"`
-		Error   struct {
+		Message   string `json:"message"`
+		Type      string `json:"type"`
+		RequestID string `json:"request_id"`
+		Error     struct {
 			Message string `json:"message"`
 			Type    string `json:"type"`
 		} `json:"error"`
@@ -147,11 +151,15 @@ func (c *HTTPClient) parseError(resp *http.Response) error {
 		if errType == "" {
 			errType = strings.TrimSpace(errResp.Type)
 		}
+		if bodyReqID := strings.TrimSpace(errResp.RequestID); bodyReqID != "" {
+			requestID = bodyReqID
+		}
 		if message != "" || errType != "" {
 			return &domain.APIError{
 				StatusCode: resp.StatusCode,
 				Type:       errType,
 				Message:    message,
+				RequestID:  requestID,
 			}
 		}
 	}
@@ -160,20 +168,25 @@ func (c *HTTPClient) parseError(resp *http.Response) error {
 	var oauthErr struct {
 		Error       string `json:"error"`
 		Description string `json:"error_description"`
+		RequestID   string `json:"request_id"`
 	}
 	if err := json.Unmarshal(body, &oauthErr); err == nil && oauthErr.Error != "" {
 		message := oauthErr.Description
 		if message == "" {
 			message = oauthErr.Error
 		}
+		if bodyReqID := strings.TrimSpace(oauthErr.RequestID); bodyReqID != "" {
+			requestID = bodyReqID
+		}
 		return &domain.APIError{
 			StatusCode: resp.StatusCode,
 			Type:       oauthErr.Error,
 			Message:    message,
+			RequestID:  requestID,
 		}
 	}
 
-	return &domain.APIError{StatusCode: resp.StatusCode}
+	return &domain.APIError{StatusCode: resp.StatusCode, RequestID: requestID}
 }
 
 // getRequestID extracts the request ID from response headers.

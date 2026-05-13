@@ -44,6 +44,17 @@ func TestAPIError_Error(t *testing.T) {
 			err:  nil,
 			want: []string{ErrAPIError.Error()},
 		},
+		{
+			name: "request id appended when present",
+			err:  &APIError{StatusCode: 401, Type: "token.unauthorized_access", Message: "Bearer token invalid", RequestID: "1120765200-c4c8e151-3414-4448-b884-1498872b0912"},
+			want: []string{"Bearer token invalid", "token.unauthorized_access", "request_id: 1120765200-c4c8e151-3414-4448-b884-1498872b0912"},
+		},
+		{
+			name:    "blank request id is omitted",
+			err:     &APIError{StatusCode: 500, RequestID: "   "},
+			want:    []string{"status 500"},
+			wantNot: []string{"request_id"},
+		},
 	}
 
 	for _, tt := range tests {
