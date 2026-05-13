@@ -82,6 +82,52 @@ func TestParseError_FallsBackToStatusCodeWhenBodyEmpty(t *testing.T) {
 	assert.Empty(t, apiErr.Message)
 }
 
+func TestParseError_CapturesRequestIDFromBody(t *testing.T) {
+	client := NewHTTPClient()
+
+	resp := &http.Response{
+		StatusCode: http.StatusUnauthorized,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(`{
+			"request_id": "1120765200-c4c8e151-3414-4448-b884-1498872b0912",
+			"error": {
+				"code": "token.unauthorized_access",
+				"type": "token.unauthorized_access",
+				"message": "Bearer token invalid"
+			}
+		}`)),
+	}
+
+	err := client.parseError(resp)
+	require.Error(t, err)
+
+	var apiErr *domain.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+	assert.Equal(t, "token.unauthorized_access", apiErr.Type)
+	assert.Equal(t, "Bearer token invalid", apiErr.Message)
+	assert.Equal(t, "1120765200-c4c8e151-3414-4448-b884-1498872b0912", apiErr.RequestID)
+	assert.Contains(t, err.Error(), "request_id: 1120765200-c4c8e151-3414-4448-b884-1498872b0912")
+}
+
+func TestParseError_FallsBackToRequestIDHeader(t *testing.T) {
+	client := NewHTTPClient()
+
+	resp := &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Header:     http.Header{"X-Request-Id": []string{"hdr-req-42"}},
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+
+	err := client.parseError(resp)
+	require.Error(t, err)
+
+	var apiErr *domain.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "hdr-req-42", apiErr.RequestID)
+	assert.Contains(t, err.Error(), "request_id: hdr-req-42")
+}
+
 func TestListAgentAccounts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants", r.URL.Path)

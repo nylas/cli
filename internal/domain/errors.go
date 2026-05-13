@@ -87,6 +87,7 @@ type APIError struct {
 	StatusCode int
 	Type       string
 	Message    string
+	RequestID  string
 }
 
 func (e *APIError) Error() string {
@@ -96,17 +97,23 @@ func (e *APIError) Error() string {
 
 	message := strings.TrimSpace(e.Message)
 	errType := strings.TrimSpace(e.Type)
+	var base string
 	switch {
 	case message != "" && errType != "":
-		return fmt.Sprintf("%s: %s (%s)", ErrAPIError, message, errType)
+		base = fmt.Sprintf("%s: %s (%s)", ErrAPIError, message, errType)
 	case message != "":
-		return fmt.Sprintf("%s: %s", ErrAPIError, message)
+		base = fmt.Sprintf("%s: %s", ErrAPIError, message)
 	case errType != "":
-		return fmt.Sprintf("%s: %s", ErrAPIError, errType)
+		base = fmt.Sprintf("%s: %s", ErrAPIError, errType)
 	case e.StatusCode > 0:
-		return fmt.Sprintf("%s: status %d", ErrAPIError, e.StatusCode)
+		base = fmt.Sprintf("%s: status %d", ErrAPIError, e.StatusCode)
+	default:
+		base = ErrAPIError.Error()
 	}
-	return ErrAPIError.Error()
+	if reqID := strings.TrimSpace(e.RequestID); reqID != "" {
+		return fmt.Sprintf("%s [request_id: %s]", base, reqID)
+	}
+	return base
 }
 
 func (e *APIError) Unwrap() error {

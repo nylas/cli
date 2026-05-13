@@ -199,6 +199,90 @@ func TestWrapError_APIErrorStatusClassification(t *testing.T) {
 	}
 }
 
+func TestWrapError_PropagatesRequestID(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       *domain.APIError
+		wantReqID string
+	}{
+		{
+			name:      "server error with request ID",
+			err:       &domain.APIError{StatusCode: 500, RequestID: "req-abc-123"},
+			wantReqID: "req-abc-123",
+		},
+		{
+			name:      "rate limit with request ID",
+			err:       &domain.APIError{StatusCode: 429, RequestID: "req-def-456"},
+			wantReqID: "req-def-456",
+		},
+		{
+			name:      "insufficient scopes with request ID",
+			err:       &domain.APIError{StatusCode: 403, Type: "insufficient_scopes", RequestID: "req-scope-789"},
+			wantReqID: "req-scope-789",
+		},
+		{
+			name:      "unclassified status with request ID",
+			err:       &domain.APIError{StatusCode: 401, Type: "unauthorized", Message: "bad token", RequestID: "req-fallback-999"},
+			wantReqID: "req-fallback-999",
+		},
+		{
+			name:      "empty request ID stays empty",
+			err:       &domain.APIError{StatusCode: 500},
+			wantReqID: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := WrapError(tt.err)
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.wantReqID, result.RequestID)
+		})
+	}
+}
+
+func TestWrapError_StripsInlineRequestIDFromMessage(t *testing.T) {
+	apiErr := &domain.APIError{
+		StatusCode: 401,
+		Type:       "token.unauthorized_access",
+		Message:    "Bearer token invalid",
+		RequestID:  "req-strip-test",
+	}
+	wrapped := fmt.Errorf("failed to fetch messages: %w", apiErr)
+
+	result := WrapError(wrapped)
+
+	require.NotNil(t, result)
+	assert.Equal(t, "req-strip-test", result.RequestID)
+	assert.NotContains(t, result.Message, "[request_id:")
+	assert.Contains(t, result.Message, "Bearer token invalid")
+}
+
+func TestFormatError_RendersRequestID(t *testing.T) {
+	cliErr := &CLIError{
+		Message:    "Nylas API server error",
+		Code:       ErrCodeServerError,
+		Suggestion: "Try again later",
+		RequestID:  "1120765200-c4c8e151-3414-4448-b884-1498872b0912",
+	}
+
+	result := FormatError(cliErr)
+
+	assert.Contains(t, result, "Request ID: 1120765200-c4c8e151-3414-4448-b884-1498872b0912")
+}
+
+func TestFormatError_OmitsEmptyRequestID(t *testing.T) {
+	cliErr := &CLIError{
+		Message: "Some error",
+		Code:    ErrCodeServerError,
+	}
+
+	result := FormatError(cliErr)
+
+	assert.NotContains(t, result, "Request ID")
+}
+
 func TestWrapError_SecretStorePassphraseRequirement(t *testing.T) {
 	err := fmt.Errorf("%w: %s must be set to unlock the encrypted file store", domain.ErrSecretStoreFailed, "NYLAS_FILE_STORE_PASSPHRASE")
 
