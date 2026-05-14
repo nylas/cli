@@ -31,7 +31,12 @@ type SyncResult struct {
 // so every reader observes the same value.
 func SyncGrants(configStore ports.ConfigStore, grantStore ports.GrantStore, apiKey, clientID, region string) (*SyncResult, error) {
 	client := nylasadapter.NewHTTPClient()
-	client.SetRegion(region)
+	cfg, _ := configStore.Load()
+	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+		client.ApplyConfig(cfg)
+	} else {
+		client.SetRegion(region)
+	}
 	client.SetCredentials(clientID, "", apiKey)
 
 	ctx, cancel := common.CreateContext()

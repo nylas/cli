@@ -73,6 +73,22 @@ type APIConfig struct {
 	BaseURL string `yaml:"base_url,omitempty"` // API base URL
 }
 
+const (
+	BaseURLUS = "https://api.us.nylas.com"
+	BaseURLEU = "https://api.eu.nylas.com"
+)
+
+// ResolveBaseURL returns the effective API base URL, preferring API.BaseURL over region.
+func (c *Config) ResolveBaseURL() string {
+	if c.API != nil && c.API.BaseURL != "" {
+		return c.API.BaseURL
+	}
+	if c.Region == "eu" {
+		return BaseURLEU
+	}
+	return BaseURLUS
+}
+
 // DefaultConfig returns a config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{

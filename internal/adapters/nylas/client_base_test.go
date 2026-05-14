@@ -44,6 +44,49 @@ func TestHTTPClient_SetRegion(t *testing.T) {
 	})
 }
 
+func TestHTTPClient_ApplyConfig(t *testing.T) {
+	t.Run("nil config is a no-op", func(t *testing.T) {
+		client := nylas.NewHTTPClient()
+		client.ApplyConfig(nil)
+		url := client.BuildAuthURL(domain.ProviderGoogle, "http://localhost", "", "")
+		assert.Contains(t, url, "api.us.nylas.com")
+	})
+
+	t.Run("applies US region", func(t *testing.T) {
+		client := nylas.NewHTTPClient()
+		client.ApplyConfig(&domain.Config{Region: "us"})
+		url := client.BuildAuthURL(domain.ProviderGoogle, "http://localhost", "", "")
+		assert.Contains(t, url, "api.us.nylas.com")
+	})
+
+	t.Run("applies EU region", func(t *testing.T) {
+		client := nylas.NewHTTPClient()
+		client.ApplyConfig(&domain.Config{Region: "eu"})
+		url := client.BuildAuthURL(domain.ProviderGoogle, "http://localhost", "", "")
+		assert.Contains(t, url, "api.eu.nylas.com")
+	})
+
+	t.Run("custom base URL takes precedence", func(t *testing.T) {
+		client := nylas.NewHTTPClient()
+		client.ApplyConfig(&domain.Config{
+			Region: "eu",
+			API:    &domain.APIConfig{BaseURL: "https://api-staging.us.nylas.com"},
+		})
+		url := client.BuildAuthURL(domain.ProviderGoogle, "http://localhost", "", "")
+		assert.Contains(t, url, "api-staging.us.nylas.com")
+	})
+
+	t.Run("empty base URL falls back to region", func(t *testing.T) {
+		client := nylas.NewHTTPClient()
+		client.ApplyConfig(&domain.Config{
+			Region: "eu",
+			API:    &domain.APIConfig{BaseURL: ""},
+		})
+		url := client.BuildAuthURL(domain.ProviderGoogle, "http://localhost", "", "")
+		assert.Contains(t, url, "api.eu.nylas.com")
+	})
+}
+
 func TestHTTPClient_SetCredentials(t *testing.T) {
 	client := nylas.NewHTTPClient()
 	client.SetCredentials("my-client-id", "my-secret", "my-api-key")

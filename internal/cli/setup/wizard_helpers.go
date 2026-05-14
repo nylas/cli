@@ -153,7 +153,13 @@ func appDisplayName(app domain.GatewayApplication) string {
 // verifyAPIKey checks that an API key works by listing applications.
 func verifyAPIKey(apiKey, region string) error {
 	client := nylasadapter.NewHTTPClient()
-	client.SetRegion(region)
+	configStore := config.NewDefaultFileStore()
+	cfg, _ := configStore.Load()
+	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+		client.ApplyConfig(cfg)
+	} else {
+		client.SetRegion(region)
+	}
 	client.SetCredentials("", "", apiKey)
 
 	ctx, cancel := common.CreateContext()
@@ -352,11 +358,7 @@ func buildAuthService(configStore ports.ConfigStore, grantStore ports.GrantStore
 	}
 
 	client := nylasadapter.NewHTTPClient()
-	if cfg.API != nil && cfg.API.BaseURL != "" {
-		client.SetBaseURL(cfg.API.BaseURL)
-	} else {
-		client.SetRegion(cfg.Region)
-	}
+	client.ApplyConfig(cfg)
 	apiKey, _ := secretStore.Get(ports.KeyAPIKey)
 	clientID, _ := secretStore.Get(ports.KeyClientID)
 	clientSecret, _ := secretStore.Get(ports.KeyClientSecret)

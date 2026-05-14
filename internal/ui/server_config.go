@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/nylas/cli/internal/adapters/config"
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/cli/common"
@@ -99,7 +100,13 @@ type setupClient interface {
 
 var newSetupClient = func(region, clientID, apiKey string) setupClient {
 	client := nylasadapter.NewHTTPClient()
-	client.SetRegion(region)
+	configStore := config.NewDefaultFileStore()
+	cfg, _ := configStore.Load()
+	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+		client.ApplyConfig(cfg)
+	} else {
+		client.SetRegion(region)
+	}
 	client.SetCredentials(clientID, "", apiKey)
 	return client
 }

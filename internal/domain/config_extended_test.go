@@ -20,6 +20,54 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Nil(t, cfg.API)
 }
 
+func TestResolveBaseURL(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{
+			name: "defaults to US",
+			cfg:  Config{Region: "us"},
+			want: BaseURLUS,
+		},
+		{
+			name: "EU region",
+			cfg:  Config{Region: "eu"},
+			want: BaseURLEU,
+		},
+		{
+			name: "empty region defaults to US",
+			cfg:  Config{},
+			want: BaseURLUS,
+		},
+		{
+			name: "custom base URL takes precedence over region",
+			cfg: Config{
+				Region: "eu",
+				API:    &APIConfig{BaseURL: "https://api-staging.us.nylas.com"},
+			},
+			want: "https://api-staging.us.nylas.com",
+		},
+		{
+			name: "nil API config uses region",
+			cfg:  Config{Region: "eu", API: nil},
+			want: BaseURLEU,
+		},
+		{
+			name: "empty base URL uses region",
+			cfg:  Config{Region: "eu", API: &APIConfig{BaseURL: ""}},
+			want: BaseURLEU,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.ResolveBaseURL())
+		})
+	}
+}
+
 func TestDefaultWorkingHours(t *testing.T) {
 	schedule := DefaultWorkingHours()
 

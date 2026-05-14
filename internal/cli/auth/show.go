@@ -60,7 +60,7 @@ Information includes:
 			}
 
 			client := nylas.NewHTTPClient()
-			client.SetRegion(cfg.Region)
+			client.ApplyConfig(cfg)
 			client.SetCredentials(clientID, clientSecret, apiKey)
 
 			// Get grant ID

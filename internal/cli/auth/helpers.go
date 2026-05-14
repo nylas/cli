@@ -111,11 +111,7 @@ func createConfiguredNylasClient(configStore ports.ConfigStore, secretStore port
 	client := nylasadapter.NewHTTPClient()
 
 	cfg, _ := configStore.Load()
-	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
-		client.SetBaseURL(cfg.API.BaseURL)
-	} else if cfg != nil {
-		client.SetRegion(cfg.Region)
-	}
+	client.ApplyConfig(cfg)
 
 	apiKey, clientID, clientSecret := getCredentialsWithEnvFallback(secretStore)
 	client.SetCredentials(clientID, clientSecret, apiKey)

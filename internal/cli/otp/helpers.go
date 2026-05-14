@@ -30,7 +30,7 @@ func createOTPService() (*otpapp.Service, error) {
 
 	// Set credentials - check env vars first
 	cfg, _ := configStore.Load()
-	client.SetRegion(cfg.Region)
+	client.ApplyConfig(cfg)
 
 	apiKey := os.Getenv("NYLAS_API_KEY")
 	clientID := os.Getenv("NYLAS_CLIENT_ID")

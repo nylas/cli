@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nylas/cli/internal/adapters/config"
 	nylasadapter "github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
@@ -33,7 +34,13 @@ type CallbackURIProvisionResult struct {
 
 func newAPIKeySetupClient(region, clientID, apiKey string) apiKeySetupClient {
 	client := nylasadapter.NewHTTPClient()
-	client.SetRegion(region)
+	configStore := config.NewDefaultFileStore()
+	cfg, _ := configStore.Load()
+	if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+		client.ApplyConfig(cfg)
+	} else {
+		client.SetRegion(region)
+	}
 	client.SetCredentials(clientID, "", apiKey)
 	return client
 }
