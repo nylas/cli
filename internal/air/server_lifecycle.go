@@ -50,7 +50,7 @@ func newServer(addr string, secretStoreFactory func(string) (ports.SecretStore, 
 		hasAPIKey = apiKey != ""
 		if hasAPIKey {
 			client := nylas.NewHTTPClient()
-			client.SetRegion(cfg.Region)
+			client.ApplyConfig(cfg)
 			client.SetCredentials(clientID, clientSecret, apiKey)
 			nylasClient = client
 		}

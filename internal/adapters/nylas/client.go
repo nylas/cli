@@ -38,8 +38,8 @@ func init() {
 }
 
 const (
-	baseURLUS = "https://api.us.nylas.com"
-	baseURLEU = "https://api.eu.nylas.com"
+	baseURLUS = domain.BaseURLUS
+	baseURLEU = domain.BaseURLEU
 
 	// defaultRateLimit is the default rate limit (requests per second)
 	// Set to 10 requests per second to avoid API quota exhaustion
@@ -106,6 +106,14 @@ func (c *HTTPClient) SetCredentials(clientID, clientSecret, apiKey string) {
 // SetBaseURL sets the base URL (for testing purposes).
 func (c *HTTPClient) SetBaseURL(url string) {
 	c.baseURL = url
+}
+
+// ApplyConfig sets the base URL from the config, preferring API.BaseURL over region.
+func (c *HTTPClient) ApplyConfig(cfg *domain.Config) {
+	if cfg == nil {
+		return
+	}
+	c.baseURL = cfg.ResolveBaseURL()
 }
 
 // SetMaxRetries sets the maximum number of retries (for testing purposes).

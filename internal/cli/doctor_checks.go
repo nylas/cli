@@ -183,10 +183,18 @@ func checkAPICredentials() CheckResult {
 }
 
 func checkNetworkConnectivity() CheckResult {
+	configStore := config.NewDefaultFileStore()
+	cfg, _ := configStore.Load()
+	if cfg == nil {
+		cfg = &domain.Config{Region: "us"}
+	}
+
+	healthURL := cfg.ResolveBaseURL() + "/v3/"
+
 	ctx, cancel := common.CreateContextWithTimeout(domain.TimeoutHealthCheck)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.us.nylas.com/v3/", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
 	if err != nil {
 		return CheckResult{
 			Name:    "Network",
@@ -327,7 +335,7 @@ func checkGrants() CheckResult {
 	}
 
 	client := nylas.NewHTTPClient()
-	client.SetRegion(cfg.Region)
+	client.ApplyConfig(cfg)
 	client.SetCredentials(clientID, clientSecret, apiKey)
 
 	ctx, cancel := common.CreateContextWithTimeout(domain.TimeoutHealthCheck)

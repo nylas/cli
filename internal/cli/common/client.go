@@ -86,12 +86,7 @@ func GetNylasClient() (ports.NylasClient, error) {
 	// Create and configure the HTTP client
 	c := nylas.NewHTTPClient()
 
-	// Apply API configuration
-	if cfg.API != nil && cfg.API.BaseURL != "" {
-		c.SetBaseURL(cfg.API.BaseURL)
-	} else {
-		c.SetRegion(cfg.Region)
-	}
+	c.ApplyConfig(cfg)
 
 	c.SetCredentials(clientID, clientSecret, apiKey)
 

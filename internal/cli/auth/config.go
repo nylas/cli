@@ -85,7 +85,12 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				fmt.Println("Detecting applications...")
 
 				client := nylasadapter.NewHTTPClient()
-				client.SetRegion(region)
+				cfg, _ := configStore.Load()
+				if cfg != nil && cfg.API != nil && cfg.API.BaseURL != "" {
+					client.ApplyConfig(cfg)
+				} else {
+					client.SetRegion(region)
+				}
 				client.SetCredentials("", "", apiKey) // Only API key needed for ListApplications
 
 				ctx, cancel := common.CreateContext()
