@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -188,6 +189,8 @@ func TestGatewayClientOperations(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, version.UserAgent(), r.Header.Get("User-Agent"))
+
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 				tt.handler(t, w, r, body)

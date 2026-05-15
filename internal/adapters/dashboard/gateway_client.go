@@ -233,6 +233,7 @@ func (c *GatewayClient) doGraphQL(ctx context.Context, url, query string, variab
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+userToken)
+	setDashboardUserAgent(req)
 	if orgToken != "" {
 		req.Header.Set("X-Nylas-Org", orgToken)
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 )
 
 const (
@@ -24,6 +25,10 @@ func newNonRedirectClient() *http.Client {
 			return http.ErrUseLastResponse
 		},
 	}
+}
+
+func setDashboardUserAgent(req *http.Request) {
+	req.Header.Set("User-Agent", version.UserAgent())
 }
 
 // doPost sends a JSON POST request and decodes the already-unwrapped payload
@@ -74,6 +79,7 @@ func (c *AccountClient) doPostRaw(ctx context.Context, path string, body any, ex
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	setDashboardUserAgent(req)
 
 	if err := c.setDPoPProof(req, http.MethodPost, fullURL, accessToken); err != nil {
 		return nil, err
@@ -142,6 +148,7 @@ func (c *AccountClient) doGetRaw(ctx context.Context, path string, extraHeaders 
 	if err := c.setDPoPProof(req, http.MethodGet, fullURL, accessToken); err != nil {
 		return nil, err
 	}
+	setDashboardUserAgent(req)
 
 	for k, v := range extraHeaders {
 		req.Header.Set(k, v)

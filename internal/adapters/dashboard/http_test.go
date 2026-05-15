@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -226,7 +227,7 @@ func TestDashboardAPIError_Error(t *testing.T) {
 func TestDoPostAndGet_Integration(t *testing.T) {
 	// Set up a test server that returns a valid envelope response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify DPoP header was set
+		assert.Equal(t, version.UserAgent(), r.Header.Get("User-Agent"))
 		if dpop := r.Header.Get("DPoP"); dpop == "" {
 			t.Error("DPoP header not set")
 		}
