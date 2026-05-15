@@ -150,13 +150,12 @@ func TestWrapError_InsufficientScopes(t *testing.T) {
 }
 
 func TestWrapError_GenericForbiddenFallsThrough(t *testing.T) {
-	// 403 without insufficient_scopes type should fall through to default
-	// wrapper, not get the scope-specific suggestion.
 	apiErr := &domain.APIError{StatusCode: 403, Message: "Access denied"}
 	result := WrapError(apiErr)
 
 	require.NotNil(t, result)
-	assert.NotEqual(t, ErrCodePermissionDenied, result.Code, "generic 403 should not be classified as scope error")
+	assert.Equal(t, ErrCodePermissionDenied, result.Code)
+	assert.Equal(t, "Permission denied", result.Message)
 	for _, s := range result.Suggestions {
 		assert.NotContains(t, s, "auth show", "generic 403 should not get scope-specific suggestion")
 	}
@@ -171,18 +170,39 @@ func TestWrapError_APIErrorStatusClassification(t *testing.T) {
 		wantSuggest string
 	}{
 		{
-			name:        "type only rate limit",
+			name:        "rate limit 429",
 			err:         &domain.APIError{StatusCode: 429, Type: "api_error"},
 			wantMessage: "Rate limit exceeded",
 			wantCode:    ErrCodeRateLimited,
 			wantSuggest: "reduce the frequency",
 		},
 		{
-			name:        "type only server error",
+			name:        "server error 500",
 			err:         &domain.APIError{StatusCode: 500, Type: "api_error"},
 			wantMessage: "Nylas API server error",
 			wantCode:    ErrCodeServerError,
 			wantSuggest: "temporary issue",
+		},
+		{
+			name:        "unauthorized 401",
+			err:         &domain.APIError{StatusCode: 401, Type: "unauthorized", Message: "Invalid API Key"},
+			wantMessage: "Authentication failed",
+			wantCode:    ErrCodeAuthFailed,
+			wantSuggest: "nylas auth status",
+		},
+		{
+			name:        "forbidden 403",
+			err:         &domain.APIError{StatusCode: 403, Message: "Access denied"},
+			wantMessage: "Permission denied",
+			wantCode:    ErrCodePermissionDenied,
+			wantSuggest: "required permissions",
+		},
+		{
+			name:        "not found 404",
+			err:         &domain.APIError{StatusCode: 404, Message: "Not found"},
+			wantMessage: "Resource not found",
+			wantCode:    ErrCodeNotFound,
+			wantSuggest: "list",
 		},
 	}
 
@@ -195,6 +215,41 @@ func TestWrapError_APIErrorStatusClassification(t *testing.T) {
 			assert.Equal(t, tt.wantCode, result.Code)
 			assert.Contains(t, result.Suggestion, tt.wantSuggest)
 			assert.True(t, errors.Is(result, domain.ErrAPIError))
+		})
+	}
+}
+
+func TestWrapError_RequestIDDoesNotFalseMatchStatusCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      *domain.APIError
+		wantCode string
+	}{
+		{
+			name:     "request ID containing 502 on a 401 error",
+			err:      &domain.APIError{StatusCode: 401, Message: "bad token", RequestID: "req-5023-abc"},
+			wantCode: ErrCodeAuthFailed,
+		},
+		{
+			name:     "request ID containing 429 on a 404 error",
+			err:      &domain.APIError{StatusCode: 404, Message: "not found", RequestID: "req-4291-def"},
+			wantCode: ErrCodeNotFound,
+		},
+		{
+			name:     "request ID containing 500 on a 403 error",
+			err:      &domain.APIError{StatusCode: 403, Message: "forbidden", RequestID: "req-5001-xyz"},
+			wantCode: ErrCodePermissionDenied,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wrapped := fmt.Errorf("API call failed: %w", tt.err)
+			result := WrapError(wrapped)
+
+			require.NotNil(t, result)
+			assert.Equal(t, tt.wantCode, result.Code)
+			assert.Equal(t, tt.err.RequestID, result.RequestID)
 		})
 	}
 }
@@ -244,19 +299,19 @@ func TestWrapError_PropagatesRequestID(t *testing.T) {
 
 func TestWrapError_StripsInlineRequestIDFromMessage(t *testing.T) {
 	apiErr := &domain.APIError{
-		StatusCode: 401,
-		Type:       "token.unauthorized_access",
-		Message:    "Bearer token invalid",
+		StatusCode: 400,
+		Type:       "invalid_request",
+		Message:    "Missing required field",
 		RequestID:  "req-strip-test",
 	}
-	wrapped := fmt.Errorf("failed to fetch messages: %w", apiErr)
+	wrapped := fmt.Errorf("failed to create event: %w", apiErr)
 
 	result := WrapError(wrapped)
 
 	require.NotNil(t, result)
 	assert.Equal(t, "req-strip-test", result.RequestID)
 	assert.NotContains(t, result.Message, "[request_id:")
-	assert.Contains(t, result.Message, "Bearer token invalid")
+	assert.Contains(t, result.Message, "Missing required field")
 }
 
 func TestFormatError_RendersRequestID(t *testing.T) {

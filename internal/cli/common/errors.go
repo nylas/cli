@@ -89,6 +89,40 @@ func WrapError(err error) *CLIError {
 				Code:       ErrCodeServerError,
 				RequestID:  apiErr.RequestID,
 			}
+		case apiErr.StatusCode == http.StatusUnauthorized:
+			return &CLIError{
+				Err:        err,
+				Message:    "Authentication failed",
+				Suggestion: "Check your API key with 'nylas auth status' or reconfigure with 'nylas auth config'",
+				Code:       ErrCodeAuthFailed,
+				RequestID:  apiErr.RequestID,
+			}
+		case apiErr.StatusCode == http.StatusForbidden:
+			return &CLIError{
+				Err:        err,
+				Message:    "Permission denied",
+				Suggestion: "Check that your API key has the required permissions",
+				Code:       ErrCodePermissionDenied,
+				RequestID:  apiErr.RequestID,
+			}
+		case apiErr.StatusCode == http.StatusNotFound:
+			return &CLIError{
+				Err:        err,
+				Message:    "Resource not found",
+				Suggestion: "Verify the ID exists with the appropriate 'list' command",
+				Code:       ErrCodeNotFound,
+				RequestID:  apiErr.RequestID,
+			}
+		default:
+			msg := apiErr.Error()
+			if apiErr.RequestID != "" {
+				msg = strings.TrimSuffix(msg, fmt.Sprintf(" [request_id: %s]", apiErr.RequestID))
+			}
+			return &CLIError{
+				Err:       err,
+				Message:   msg,
+				RequestID: apiErr.RequestID,
+			}
 		}
 	}
 
@@ -234,19 +268,9 @@ func WrapError(err error) *CLIError {
 		}
 	}
 
-	// Default wrapper — extract request ID from APIError if present,
-	// and strip the inline [request_id: ...] suffix so it only appears
-	// on its own line via FormatError.
-	msg := err.Error()
-	var fallbackReqID string
-	if apiErr != nil && apiErr.RequestID != "" {
-		fallbackReqID = apiErr.RequestID
-		msg = strings.TrimSuffix(msg, fmt.Sprintf(" [request_id: %s]", apiErr.RequestID))
-	}
 	return &CLIError{
-		Err:       err,
-		Message:   msg,
-		RequestID: fallbackReqID,
+		Err:     err,
+		Message: err.Error(),
 	}
 }
 

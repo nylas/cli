@@ -472,8 +472,7 @@ func (c *HTTPClient) doJSONRequestInternalWithRetry(
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("User-Agent", version.UserAgent())
+	// Set request-specific headers
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
