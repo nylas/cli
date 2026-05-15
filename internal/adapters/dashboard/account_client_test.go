@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,6 +29,7 @@ func newAccountClientTestServer(t *testing.T, handler func(t *testing.T, w http.
 			require.NoError(t, json.Unmarshal(rawBody, &body))
 		}
 
+		assert.Equal(t, version.UserAgent(), r.Header.Get("User-Agent"))
 		handler(t, w, r, rawBody, body)
 	}))
 }
