@@ -10,7 +10,7 @@ Build and test the Nylas CLI.
 
 ## Prerequisites
 
-- Go 1.24+ (check with `go version`)
+- Go 1.26+ (check with `go version`)
 - Make
 
 ---
@@ -46,6 +46,15 @@ Build and test the Nylas CLI.
 | `make vuln` | Run vulnerability check (govulncheck) |
 
 **Run `make help` for all available targets.**
+
+### Docker
+
+```bash
+docker build -t nylas-cli:dev .
+docker run --rm nylas-cli:dev --version
+```
+
+See [Docker](development/docker.md) for credential and release-image guidance.
 
 ---
 
@@ -84,6 +93,7 @@ For contributors, comprehensive guides are available:
 - **[Adding Adapters](development/adding-adapter.md)** - Implementing API adapters
 - **[Testing Guide](development/testing-guide.md)** - Unit and integration testing
 - **[Debugging](development/debugging.md)** - Debugging tips and techniques
+- **[Docker](development/docker.md)** - Container build, run, and release-image notes
 
 ---
 
