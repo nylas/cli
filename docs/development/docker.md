@@ -39,6 +39,16 @@ docker run --rm \
   calendar list --json
 ```
 
+To target a different API environment (staging, EU):
+
+```bash
+docker run --rm \
+  -e NYLAS_API_KEY="$NYLAS_API_KEY" \
+  -e NYLAS_API_BASE_URL="https://api.eu.nylas.com" \
+  ghcr.io/nylas/cli:latest \
+  email list --limit 5 --json
+```
+
 Do not bake API keys or credentials into the image.
 
 ---

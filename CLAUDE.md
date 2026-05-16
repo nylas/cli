@@ -57,7 +57,7 @@ Go 1.24+ · Hexagonal architecture (CLI → Port → Adapter) · Cobra CLI · **
 | Hook enforcement | `.claude/HOOKS-CONFIG.md` |
 | Agent definitions | `.claude/agents/README.md` |
 
-**Env vars:** `NYLAS_DISABLE_KEYRING`, `NYLAS_API_KEY`, `NYLAS_CLIENT_ID`, `NYLAS_GRANT_ID` — see `docs/DEVELOPMENT.md`
+**Env vars:** `NYLAS_DISABLE_KEYRING`, `NYLAS_API_KEY`, `NYLAS_CLIENT_ID`, `NYLAS_GRANT_ID`, `NYLAS_API_BASE_URL` — see `docs/DEVELOPMENT.md`
 
 **Credentials:** System keyring (service: `"nylas"`, keys: `client_id`, `api_key`, `client_secret`, `org_id`). Grant cache: `os.UserCacheDir()/nylas/grants.json`. Fallback: `~/.config/nylas/` with `NYLAS_DISABLE_KEYRING=true`.
 
