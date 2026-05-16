@@ -30,6 +30,7 @@ CLAUDE.local.md
 claude-progress.txt
 # Build artifacts
 dist/
+completions/
 
 # Binaries
 bin/

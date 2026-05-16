@@ -5,6 +5,10 @@ project_name: nylas
 before:
   hooks:
     - go mod tidy
+    - mkdir -p completions
+    - sh -c "go run ./cmd/nylas completion bash > completions/nylas.bash"
+    - sh -c "go run ./cmd/nylas completion zsh > completions/nylas.zsh"
+    - sh -c "go run ./cmd/nylas completion fish > completions/nylas.fish"
 
 builds:
   - main: ./cmd/nylas
@@ -44,6 +48,42 @@ archives:
       - README.md
       - LICENSE*
       - docs/*
+
+nfpms:
+  - id: nylas-cli
+    package_name: nylas
+    vendor: Nylas
+    homepage: https://cli.nylas.com/
+    maintainer: Nylas <support@nylas.com>
+    description: CLI for Nylas API - manage email, calendar, and contacts
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+      - archlinux
+    scripts:
+      postinstall: scripts/postinstall.sh
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    contents:
+      - src: completions/nylas.bash
+        dst: /usr/share/bash-completion/completions/nylas
+      - src: completions/nylas.zsh
+        dst: /usr/share/zsh/vendor-completions/_nylas
+        packager: deb
+      - src: completions/nylas.zsh
+        dst: /usr/share/zsh/vendor-completions/_nylas
+        packager: apk
+      - src: completions/nylas.zsh
+        dst: /usr/share/zsh/site-functions/_nylas
+        packager: rpm
+      - src: completions/nylas.zsh
+        dst: /usr/share/zsh/site-functions/_nylas
+        packager: archlinux
+      - src: completions/nylas.fish
+        dst: /usr/share/fish/vendor_completions.d/nylas.fish
 
 checksum:
   name_template: 'checksums.txt'
@@ -112,6 +152,24 @@ release:
     - Intel: Download `Nylas-CLI-{{ .Version }}-intel.dmg`
 
     Open the DMG and copy `nylas` to `/usr/local/bin/` or your preferred location.
+
+    **Linux (deb/rpm/apk):**
+    ```bash
+    # Debian/Ubuntu
+    sudo dpkg -i nylas_{{ .Version }}_linux_amd64.deb
+
+    # RHEL/Fedora
+    sudo rpm -i nylas_{{ .Version }}_linux_amd64.rpm
+
+    # Alpine
+    sudo apk add --allow-untrusted nylas_{{ .Version }}_linux_amd64.apk
+    ```
+
+    **Docker:**
+    ```bash
+    docker pull ghcr.io/nylas/cli:{{ .Version }}
+    docker run --rm ghcr.io/nylas/cli:{{ .Version }} --help
+    ```
 
     **Manual Download:**
     Download the appropriate archive for your platform below, extract it, and move the `nylas` binary to your PATH.
