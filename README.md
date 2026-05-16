@@ -1,6 +1,6 @@
 # Nylas CLI
 
-![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)
+![Go Version](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/nylas/cli)
 [![Website](https://img.shields.io/badge/docs-cli.nylas.com-blue)](https://cli.nylas.com/)
@@ -22,6 +22,13 @@ go install github.com/nylas/cli/cmd/nylas@latest
 ```
 
 **Binary:** Download from [Releases](https://github.com/nylas/cli/releases) and add to PATH.
+
+**Docker:**
+```bash
+docker run --rm ghcr.io/nylas/cli:latest --version
+```
+
+See [Docker development notes](docs/development/docker.md) for credential and volume usage.
 
 ## Get Started
 

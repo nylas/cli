@@ -23,6 +23,7 @@ Quick navigation guide to find the right documentation for your needs.
 ### Development
 
 - **Set up development environment** → [DEVELOPMENT.md](DEVELOPMENT.md)
+- **Build/run with Docker** → [development/docker.md](development/docker.md)
 - **Testing guidelines** → [.claude/rules/testing.md](../.claude/rules/testing.md)
 - **Go quality & linting** → [.claude/rules/go-quality.md](../.claude/rules/go-quality.md)
 - **Contributing guidelines** → [CONTRIBUTING.md](../CONTRIBUTING.md)
@@ -101,6 +102,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **Adding adapters** → [development/adding-adapter.md](development/adding-adapter.md)
 - **Testing guide** → [development/testing-guide.md](development/testing-guide.md)
 - **Debugging** → [development/debugging.md](development/debugging.md)
+- **Docker** → [development/docker.md](development/docker.md)
 
 ### Security & Troubleshooting
 
@@ -147,11 +149,12 @@ docs/
 │   ├── privacy-security.md # Privacy controls
 │   └── ...
 │
-├── development/           # Dev guides (4 files)
+├── development/           # Dev guides (5 files)
 │   ├── adding-command.md  # Add CLI commands
 │   ├── adding-adapter.md  # Add API adapters
 │   ├── testing-guide.md   # Testing patterns
-│   └── debugging.md       # Debug tips
+│   ├── debugging.md       # Debug tips
+│   └── docker.md          # Container usage
 │
 ├── security/              # Security (2 files)
 │   ├── overview.md        # Quick reference
@@ -211,4 +214,4 @@ docs/
 
 ---
 
-**Last Updated:** February 5, 2026
+**Last Updated:** May 16, 2026
