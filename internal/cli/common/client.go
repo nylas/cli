@@ -88,6 +88,10 @@ func GetNylasClient() (ports.NylasClient, error) {
 
 	c.ApplyConfig(cfg)
 
+	if baseURL := os.Getenv("NYLAS_API_BASE_URL"); baseURL != "" {
+		c.SetBaseURL(baseURL)
+	}
+
 	c.SetCredentials(clientID, clientSecret, apiKey)
 
 	return c, nil
