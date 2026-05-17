@@ -244,4 +244,3 @@ func TestCLI_SchedulerBookingsLifecycle(t *testing.T) {
 		"  (7) Test reschedule: nylas scheduler bookings reschedule <booking-id>\n" +
 		"  (8) Test cancel: nylas scheduler bookings cancel <booking-id> --yes --reason 'Testing'\n")
 }
-
