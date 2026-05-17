@@ -56,11 +56,6 @@ func TestMockClient_SchedulerOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "booking-123", booking.BookingID)
 
-	// Test ListBookings
-	bookings, err := mock.ListBookings(ctx, "config-123")
-	require.NoError(t, err)
-	assert.NotEmpty(t, bookings)
-
 	// Test ConfirmBooking
 	confirmReq := &domain.ConfirmBookingRequest{}
 	confirmed, err := mock.ConfirmBooking(ctx, "booking-123", confirmReq)
@@ -80,31 +75,6 @@ func TestMockClient_SchedulerOperations(t *testing.T) {
 	err = mock.CancelBooking(ctx, "booking-789", "User cancelled")
 	require.NoError(t, err)
 
-	// Test GetSchedulerPage
-	page, err := mock.GetSchedulerPage(ctx, "page-123")
-	require.NoError(t, err)
-	assert.Equal(t, "page-123", page.ID)
-
-	// Test ListSchedulerPages
-	pages, err := mock.ListSchedulerPages(ctx)
-	require.NoError(t, err)
-	assert.NotEmpty(t, pages)
-
-	// Test CreateSchedulerPage
-	pageReq := &domain.CreateSchedulerPageRequest{Name: "Test Page"}
-	newPage, err := mock.CreateSchedulerPage(ctx, pageReq)
-	require.NoError(t, err)
-	assert.NotEmpty(t, newPage.ID)
-
-	// Test UpdateSchedulerPage
-	updatePageReq := &domain.UpdateSchedulerPageRequest{Name: strPtr("Updated Page")}
-	updatedPage, err := mock.UpdateSchedulerPage(ctx, "page-456", updatePageReq)
-	require.NoError(t, err)
-	assert.Equal(t, "Updated Page", updatedPage.Name)
-
-	// Test DeleteSchedulerPage
-	err = mock.DeleteSchedulerPage(ctx, "page-789")
-	require.NoError(t, err)
 }
 
 // Demo Client Tests
@@ -148,13 +118,6 @@ func TestDemoClient_SchedulerOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, getSession.SessionID)
 
-	bookings, err := demo.ListBookings(ctx, "demo-config")
-	require.NoError(t, err)
-	assert.NotEmpty(t, bookings)
-
-	pages, err := demo.ListSchedulerPages(ctx)
-	require.NoError(t, err)
-	assert.NotEmpty(t, pages)
 }
 
 // Helper function

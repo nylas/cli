@@ -41,9 +41,6 @@ type SchedulerClient interface {
 	// BOOKING OPERATIONS
 	// ================================
 
-	// ListBookings retrieves all bookings for a configuration.
-	ListBookings(ctx context.Context, configID string) ([]domain.Booking, error)
-
 	// GetBooking retrieves a specific booking.
 	GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error)
 
@@ -55,23 +52,4 @@ type SchedulerClient interface {
 
 	// CancelBooking cancels a booking.
 	CancelBooking(ctx context.Context, bookingID string, reason string) error
-
-	// ================================
-	// SCHEDULER PAGE OPERATIONS
-	// ================================
-
-	// ListSchedulerPages retrieves all scheduler pages.
-	ListSchedulerPages(ctx context.Context) ([]domain.SchedulerPage, error)
-
-	// GetSchedulerPage retrieves a specific scheduler page.
-	GetSchedulerPage(ctx context.Context, pageID string) (*domain.SchedulerPage, error)
-
-	// CreateSchedulerPage creates a new scheduler page.
-	CreateSchedulerPage(ctx context.Context, req *domain.CreateSchedulerPageRequest) (*domain.SchedulerPage, error)
-
-	// UpdateSchedulerPage updates an existing scheduler page.
-	UpdateSchedulerPage(ctx context.Context, pageID string, req *domain.UpdateSchedulerPageRequest) (*domain.SchedulerPage, error)
-
-	// DeleteSchedulerPage deletes a scheduler page.
-	DeleteSchedulerPage(ctx context.Context, pageID string) error
 }

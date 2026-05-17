@@ -11,7 +11,7 @@ func NewSchedulerCmd() *cobra.Command {
 		Use:     "scheduler",
 		Aliases: []string{"sched"},
 		Short:   "Manage Nylas Scheduler",
-		Long: `Manage Nylas Scheduler configurations, sessions, bookings, and pages.
+		Long: `Manage Nylas Scheduler configurations, sessions, and bookings.
 
 The Nylas Scheduler allows you to create meeting booking workflows,
 manage availability, and handle scheduling sessions.`,
@@ -20,7 +20,6 @@ manage availability, and handle scheduling sessions.`,
 	cmd.AddCommand(newConfigurationsCmd())
 	cmd.AddCommand(newSessionsCmd())
 	cmd.AddCommand(newBookingsCmd())
-	cmd.AddCommand(newPagesCmd())
 
 	return cmd
 }

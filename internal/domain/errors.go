@@ -78,7 +78,6 @@ var (
 	ErrBookingNotFound       = errors.New("booking not found")
 	ErrSessionNotFound       = errors.New("session not found")
 	ErrConfigurationNotFound = errors.New("configuration not found")
-	ErrPageNotFound          = errors.New("page not found")
 )
 
 // APIError carries structured details from an HTTP error response while still

@@ -63,16 +63,6 @@ func (d *DemoClient) GetSchedulerSession(ctx context.Context, sessionID string) 
 	}, nil
 }
 
-func (d *DemoClient) ListBookings(ctx context.Context, configID string) ([]domain.Booking, error) {
-	return []domain.Booking{
-		{
-			BookingID: "booking-demo-1",
-			Title:     "Demo Meeting",
-			Status:    "confirmed",
-		},
-	}, nil
-}
-
 func (d *DemoClient) GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
@@ -98,43 +88,6 @@ func (d *DemoClient) RescheduleBooking(ctx context.Context, bookingID string, re
 }
 
 func (d *DemoClient) CancelBooking(ctx context.Context, bookingID string, reason string) error {
-	return nil
-}
-
-func (d *DemoClient) ListSchedulerPages(ctx context.Context) ([]domain.SchedulerPage, error) {
-	return []domain.SchedulerPage{
-		{ID: "page-demo-1", Name: "Demo Booking Page", Slug: "book-demo"},
-	}, nil
-}
-
-func (d *DemoClient) GetSchedulerPage(ctx context.Context, pageID string) (*domain.SchedulerPage, error) {
-	return &domain.SchedulerPage{
-		ID:   pageID,
-		Name: "Demo Booking Page",
-		Slug: "book-demo",
-	}, nil
-}
-
-func (d *DemoClient) CreateSchedulerPage(ctx context.Context, req *domain.CreateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	return &domain.SchedulerPage{
-		ID:   "page-demo-new",
-		Name: req.Name,
-		Slug: req.Slug,
-	}, nil
-}
-
-func (d *DemoClient) UpdateSchedulerPage(ctx context.Context, pageID string, req *domain.UpdateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	name := "Updated Page"
-	if req.Name != nil {
-		name = *req.Name
-	}
-	return &domain.SchedulerPage{
-		ID:   pageID,
-		Name: name,
-	}, nil
-}
-
-func (d *DemoClient) DeleteSchedulerPage(ctx context.Context, pageID string) error {
 	return nil
 }
 

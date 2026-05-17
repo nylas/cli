@@ -123,58 +123,11 @@ func TestCLI_SchedulerBookingsHelp(t *testing.T) {
 	}
 
 	// Should show booking subcommands
-	if !strings.Contains(stdout, "list") || !strings.Contains(stdout, "confirm") {
+	if !strings.Contains(stdout, "show") || !strings.Contains(stdout, "confirm") {
 		t.Errorf("Expected booking subcommands in help, got: %s", stdout)
 	}
 
 	t.Logf("scheduler bookings --help output:\n%s", stdout)
-}
-
-func TestCLI_SchedulerBookingsList(t *testing.T) {
-	skipIfMissingCreds(t)
-
-	stdout, stderr, err := runCLI("scheduler", "bookings", "list")
-	skipIfProviderNotSupported(t, stderr)
-
-	// Skip if bookings endpoint isn't available in this Nylas API version
-	if err != nil && strings.Contains(stderr, "Unrecognized request URL") {
-		t.Skip("Scheduler bookings endpoint not available in this Nylas API version")
-	}
-
-	if err != nil {
-		t.Fatalf("scheduler bookings list failed: %v\nstderr: %s", err, stderr)
-	}
-
-	// Should show bookings list or "No bookings found"
-	if !strings.Contains(stdout, "Found") && !strings.Contains(stdout, "No bookings found") {
-		t.Errorf("Expected bookings list output, got: %s", stdout)
-	}
-
-	t.Logf("scheduler bookings list output:\n%s", stdout)
-}
-
-func TestCLI_SchedulerBookingsListJSON(t *testing.T) {
-	skipIfMissingCreds(t)
-
-	stdout, stderr, err := runCLI("scheduler", "bookings", "list", "--json")
-	skipIfProviderNotSupported(t, stderr)
-
-	// Skip if bookings endpoint isn't available in this Nylas API version
-	if err != nil && strings.Contains(stderr, "Unrecognized request URL") {
-		t.Skip("Scheduler bookings endpoint not available in this Nylas API version")
-	}
-
-	if err != nil {
-		t.Fatalf("scheduler bookings list --json failed: %v\nstderr: %s", err, stderr)
-	}
-
-	// Should output JSON (array)
-	trimmed := strings.TrimSpace(stdout)
-	if len(trimmed) > 0 && !strings.HasPrefix(trimmed, "[") {
-		t.Errorf("Expected JSON array output, got: %s", stdout)
-	}
-
-	t.Logf("scheduler bookings list --json output:\n%s", stdout)
 }
 
 // =============================================================================
@@ -292,23 +245,3 @@ func TestCLI_SchedulerBookingsLifecycle(t *testing.T) {
 		"  (8) Test cancel: nylas scheduler bookings cancel <booking-id> --yes --reason 'Testing'\n")
 }
 
-// Pages Tests
-
-func TestCLI_SchedulerPagesHelp(t *testing.T) {
-	if testBinary == "" {
-		t.Skip("CLI binary not found")
-	}
-
-	stdout, stderr, err := runCLI("scheduler", "pages", "--help")
-
-	if err != nil {
-		t.Fatalf("scheduler pages --help failed: %v\nstderr: %s", err, stderr)
-	}
-
-	// Should show page subcommands
-	if !strings.Contains(stdout, "list") || !strings.Contains(stdout, "create") {
-		t.Errorf("Expected page subcommands in help, got: %s", stdout)
-	}
-
-	t.Logf("scheduler pages --help output:\n%s", stdout)
-}
