@@ -20,57 +20,10 @@ func newBookingsCmd() *cobra.Command {
 		Long:    "Manage scheduler bookings (scheduled meetings).",
 	}
 
-	cmd.AddCommand(newBookingListCmd())
 	cmd.AddCommand(newBookingShowCmd())
 	cmd.AddCommand(newBookingConfirmCmd())
 	cmd.AddCommand(newBookingRescheduleCmd())
 	cmd.AddCommand(newBookingCancelCmd())
-
-	return cmd
-}
-
-func newBookingListCmd() *cobra.Command {
-	var (
-		configID string
-	)
-
-	cmd := &cobra.Command{
-		Use:     "list",
-		Aliases: []string{"ls"},
-		Short:   "List scheduler bookings",
-		Long:    "List all scheduler bookings, optionally filtered by configuration.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				bookings, err := client.ListBookings(ctx, configID)
-				if err != nil {
-					return struct{}{}, common.WrapListError("bookings", err)
-				}
-
-				if common.IsJSON(cmd) {
-					return struct{}{}, json.NewEncoder(cmd.OutOrStdout()).Encode(bookings)
-				}
-
-				if len(bookings) == 0 {
-					common.PrintEmptyState("bookings")
-					return struct{}{}, nil
-				}
-
-				fmt.Printf("Found %d booking(s):\n\n", len(bookings))
-
-				table := common.NewTable("TITLE", "ID", "START TIME", "STATUS")
-				for _, b := range bookings {
-					startTime := b.StartTime.Format("2006-01-02 15:04")
-					table.AddRow(common.Cyan.Sprint(b.Title), b.BookingID, startTime, common.ColorSprint(b.Status))
-				}
-				table.Render()
-
-				return struct{}{}, nil
-			})
-			return err
-		},
-	}
-
-	cmd.Flags().StringVar(&configID, "config-id", "", "Filter by configuration ID")
 
 	return cmd
 }

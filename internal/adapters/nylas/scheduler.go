@@ -129,20 +129,6 @@ func (c *HTTPClient) GetSchedulerSession(ctx context.Context, sessionID string) 
 
 // Bookings
 
-// ListBookings retrieves all bookings for a configuration.
-func (c *HTTPClient) ListBookings(ctx context.Context, configID string) ([]domain.Booking, error) {
-	baseURL := fmt.Sprintf("%s/v3/scheduling/bookings", c.baseURL)
-	queryURL := NewQueryBuilder().Add("configuration_id", configID).BuildURL(baseURL)
-
-	var result struct {
-		Data []domain.Booking `json:"data"`
-	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
-}
-
 // GetBooking retrieves a specific booking.
 func (c *HTTPClient) GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error) {
 	if err := validateRequired("booking ID", bookingID); err != nil {
@@ -220,85 +206,4 @@ func (c *HTTPClient) CancelBooking(ctx context.Context, bookingID string, reason
 	defer func() { _ = resp.Body.Close() }()
 
 	return nil
-}
-
-// Scheduler Pages
-
-// ListSchedulerPages retrieves all scheduler pages.
-func (c *HTTPClient) ListSchedulerPages(ctx context.Context) ([]domain.SchedulerPage, error) {
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages", c.baseURL)
-
-	var result struct {
-		Data []domain.SchedulerPage `json:"data"`
-	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
-}
-
-// GetSchedulerPage retrieves a specific scheduler page.
-func (c *HTTPClient) GetSchedulerPage(ctx context.Context, pageID string) (*domain.SchedulerPage, error) {
-	if err := validateRequired("page ID", pageID); err != nil {
-		return nil, err
-	}
-
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
-
-	var result struct {
-		Data domain.SchedulerPage `json:"data"`
-	}
-	if err := c.doGetWithNotFound(ctx, queryURL, &result, domain.ErrPageNotFound); err != nil {
-		return nil, err
-	}
-	return &result.Data, nil
-}
-
-// CreateSchedulerPage creates a new scheduler page.
-func (c *HTTPClient) CreateSchedulerPage(ctx context.Context, req *domain.CreateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages", c.baseURL)
-
-	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Data domain.SchedulerPage `json:"data"`
-	}
-	if err := c.decodeJSONResponse(resp, &result); err != nil {
-		return nil, err
-	}
-	return &result.Data, nil
-}
-
-// UpdateSchedulerPage updates an existing scheduler page.
-func (c *HTTPClient) UpdateSchedulerPage(ctx context.Context, pageID string, req *domain.UpdateSchedulerPageRequest) (*domain.SchedulerPage, error) {
-	if err := validateRequired("page ID", pageID); err != nil {
-		return nil, err
-	}
-
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
-
-	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Data domain.SchedulerPage `json:"data"`
-	}
-	if err := c.decodeJSONResponse(resp, &result); err != nil {
-		return nil, err
-	}
-	return &result.Data, nil
-}
-
-// DeleteSchedulerPage deletes a scheduler page.
-func (c *HTTPClient) DeleteSchedulerPage(ctx context.Context, pageID string) error {
-	if err := validateRequired("page ID", pageID); err != nil {
-		return err
-	}
-	queryURL := fmt.Sprintf("%s/v3/scheduling/pages/%s", c.baseURL, url.PathEscape(pageID))
-	return c.doDelete(ctx, queryURL)
 }

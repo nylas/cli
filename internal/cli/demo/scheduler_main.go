@@ -23,7 +23,6 @@ func newDemoSchedulerCmd() *cobra.Command {
 	cmd.AddCommand(newDemoSchedulerConfigurationsCmd())
 	cmd.AddCommand(newDemoSchedulerSessionsCmd())
 	cmd.AddCommand(newDemoSchedulerBookingsCmd())
-	cmd.AddCommand(newDemoSchedulerPagesCmd())
 
 	return cmd
 }

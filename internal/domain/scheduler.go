@@ -177,30 +177,3 @@ type RescheduleBookingRequest struct {
 	Timezone  string `json:"timezone,omitempty"` // Timezone for the booking (e.g., "America/New_York")
 	Reason    string `json:"reason,omitempty"`   // Reason for rescheduling
 }
-
-// SchedulerPage represents a hosted scheduling page
-type SchedulerPage struct {
-	ID              string    `json:"id,omitempty"`
-	ConfigurationID string    `json:"configuration_id"`
-	Name            string    `json:"name"`
-	Slug            string    `json:"slug"`
-	URL             string    `json:"url,omitempty"`
-	CustomDomain    string    `json:"custom_domain,omitempty"`
-	CreatedAt       time.Time `json:"created_at,omitempty"`
-	ModifiedAt      time.Time `json:"modified_at,omitempty"`
-}
-
-// CreateSchedulerPageRequest represents a request to create a scheduler page
-type CreateSchedulerPageRequest struct {
-	ConfigurationID string `json:"configuration_id"`
-	Name            string `json:"name"`
-	Slug            string `json:"slug"`
-	CustomDomain    string `json:"custom_domain,omitempty"`
-}
-
-// UpdateSchedulerPageRequest represents a request to update a scheduler page
-type UpdateSchedulerPageRequest struct {
-	Name         *string `json:"name,omitempty"`
-	Slug         *string `json:"slug,omitempty"`
-	CustomDomain *string `json:"custom_domain,omitempty"`
-}
