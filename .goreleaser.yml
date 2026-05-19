@@ -85,6 +85,28 @@ nfpms:
       - src: completions/nylas.fish
         dst: /usr/share/fish/vendor_completions.d/nylas.fish
 
+aurs:
+  - name: nylas
+    homepage: https://cli.nylas.com/
+    description: CLI for Nylas API - manage email, calendar, and contacts
+    maintainers:
+      - "Nylas <support@nylas.com>"
+    license: MIT
+    private_key: "{{ .Env.AUR_SSH_KEY_PATH }}"
+    git_url: "ssh://aur@aur.archlinux.org/nylas.git"
+    disable: "{{ .IsSnapshot }}"
+    depends:
+      - glibc
+    optdepends:
+      - "bash-completion: for bash completions"
+      - "zsh: for zsh completions"
+      - "fish: for fish completions"
+    package: |-
+      install -Dm755 nylas "${pkgdir}/usr/bin/nylas"
+      install -Dm644 completions/nylas.bash "${pkgdir}/usr/share/bash-completion/completions/nylas"
+      install -Dm644 completions/nylas.zsh "${pkgdir}/usr/share/zsh/site-functions/_nylas"
+      install -Dm644 completions/nylas.fish "${pkgdir}/usr/share/fish/vendor_completions.d/nylas.fish"
+
 checksum:
   name_template: 'checksums.txt'
 
@@ -163,6 +185,13 @@ release:
 
     # Alpine
     sudo apk add --allow-untrusted nylas_{{ .Version }}_linux_amd64.apk
+    ```
+
+    **Arch Linux (AUR):**
+    ```bash
+    yay -S nylas
+    # or
+    paru -S nylas
     ```
 
     **Docker:**
