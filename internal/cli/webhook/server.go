@@ -114,10 +114,33 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	webhookSecret = resolvedSecret
 	allowUnsigned = resolvedAllowUnsigned
 
-	// When exposing the server via a tunnel, refuse to start without a
-	// secret unless the user explicitly opted into accepting unsigned
-	// events. Otherwise anyone who can reach the public tunnel URL can
-	// inject forged webhook events.
+	// When exposing the server via a tunnel and no secret was provided,
+	// prompt interactively if possible. For --json mode the prompt is
+	// written to stderr so it doesn't pollute the JSONL stream on stdout.
+	if tunnelType != "" && webhookSecret == "" && !allowUnsigned && interactive {
+		var p preflightPrompter
+		if jsonOutput {
+			p = newStderrPrompter()
+		} else {
+			p = newStdinPrompter()
+		}
+		entered, err := p.Password("Webhook secret for HMAC verification (leave empty to allow unsigned events): ")
+		if err != nil {
+			return nil
+		}
+		if entered == "" {
+			confirmUnsigned, err := p.Confirm("No secret entered. Accept unsigned events on the public tunnel? (insecure)", false)
+			if err != nil || !confirmUnsigned {
+				return nil
+			}
+			allowUnsigned = true
+			fmt.Fprintln(os.Stderr, "  ⚠ Continuing without signature verification (--allow-unsigned).")
+		} else {
+			webhookSecret = entered
+		}
+	}
+
+	// Hard gate: non-interactive callers must pass --secret or --allow-unsigned.
 	if tunnelType != "" && webhookSecret == "" && !allowUnsigned {
 		return common.NewUserError(
 			"--secret is required when --tunnel is set",
@@ -160,14 +183,16 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Print startup message
-	if !quiet {
+	// Suppress human-readable chrome when --json is set so stdout is pure JSONL.
+	showChrome := !quiet && !jsonOutput
+
+	if showChrome {
 		printStartupBanner()
 	}
 
 	// Start spinner while starting tunnel
 	var spinner *common.Spinner
-	if tunnelType != "" && !quiet {
+	if tunnelType != "" && showChrome {
 		spinner = common.NewSpinner("Starting tunnel...")
 		spinner.Start()
 	}
@@ -186,7 +211,9 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 
 	// Print server info
 	stats := server.GetStats()
-	if !quiet {
+	if jsonOutput {
+		printStartupJSON(stats, tunnelType)
+	} else if !quiet {
 		printServerInfo(stats, tunnelType)
 	}
 
@@ -220,7 +247,7 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	// Wait for interrupt
 	<-sigChan
 
-	if !quiet {
+	if showChrome {
 		fmt.Println("\n\nShutting down server...")
 	}
 
@@ -229,7 +256,10 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		return common.WrapError(err)
 	}
 
-	if !quiet {
+	if jsonOutput {
+		finalStats := server.GetStats()
+		printShutdownJSON(finalStats)
+	} else if !quiet {
 		finalStats := server.GetStats()
 		fmt.Printf("Server stopped. Total events received: %d\n", finalStats.EventsReceived)
 	}
@@ -447,6 +477,35 @@ func printServerInfo(stats ports.WebhookServerStats, tunnelType string) {
 	_, _ = common.Cyan.Println("─────────────────────────────────────────────────────────────────")
 	_, _ = common.Bold.Println("Incoming Webhooks:")
 	fmt.Println()
+}
+
+func printStartupJSON(stats ports.WebhookServerStats, tunnelType string) {
+	obj := map[string]any{
+		"type":      "server.started",
+		"local_url": stats.LocalURL,
+	}
+	if stats.PublicURL != "" {
+		obj["public_url"] = stats.PublicURL
+		obj["tunnel_provider"] = tunnelType
+		obj["tunnel_status"] = stats.TunnelStatus
+	}
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return
+	}
+	fmt.Println(string(data))
+}
+
+func printShutdownJSON(stats ports.WebhookServerStats) {
+	obj := map[string]any{
+		"type":            "server.stopped",
+		"events_received": stats.EventsReceived,
+	}
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return
+	}
+	fmt.Println(string(data))
 }
 
 func printEventJSON(event *ports.WebhookEvent) {
