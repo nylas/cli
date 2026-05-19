@@ -164,7 +164,7 @@ The CLI only requires your API Key - Client ID is auto-detected.`,
 				fmt.Printf("  Please add this callback URI manually in the Nylas dashboard:\n")
 				fmt.Printf("    %s\n", callbackResult.RequiredURI)
 				fmt.Println()
-				fmt.Printf("  Dashboard: https://dashboard.nylas.com/applications\n")
+				fmt.Printf("  Dashboard: https://dashboard-v3.nylas.com/applications\n")
 				fmt.Printf("  Navigate to: Your App → Settings → Callback URIs → Add URI\n")
 			} else if callbackResult.Created {
 				_, _ = common.Green.Printf("  ✓ Added callback URI: %s\n", callbackResult.RequiredURI)
