@@ -17,8 +17,14 @@ type SelectOption[T comparable] struct {
 	Value T
 }
 
+// selectFilteringThreshold is the minimum number of options to enable
+// type-ahead filtering on a Select prompt.
+const selectFilteringThreshold = 10
+
 // Select presents an interactive select menu with arrow-key navigation.
-// Falls back to the first option if stdin is not a TTY.
+// When there are more than 10 options, type-ahead filtering is enabled
+// so the user can narrow the list by typing. Falls back to the first
+// option if stdin is not a TTY.
 func Select[T comparable](title string, options []SelectOption[T]) (T, error) {
 	if len(options) == 0 {
 		var zero T
@@ -36,13 +42,16 @@ func Select[T comparable](title string, options []SelectOption[T]) (T, error) {
 		huhOpts[i] = huh.NewOption(opt.Label, opt.Value)
 	}
 
-	err := huh.Run(
-		huh.NewSelect[T]().
-			Title(title).
-			Options(huhOpts...).
-			Value(&result).
-			WithTheme(theme),
-	)
+	sel := huh.NewSelect[T]().
+		Title(title).
+		Options(huhOpts...).
+		Value(&result)
+
+	if len(options) > selectFilteringThreshold {
+		sel = sel.Filtering(true).Height(min(10, len(options)))
+	}
+
+	err := huh.Run(sel.WithTheme(theme))
 
 	return result, err
 }
