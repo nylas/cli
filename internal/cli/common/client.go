@@ -79,7 +79,7 @@ func GetNylasClient() (ports.NylasClient, error) {
 			"API key not configured",
 			"Configure with: nylas auth config",
 			"Or use environment variable: export NYLAS_API_KEY=<your-key>",
-			"Get your API key from: https://dashboard.nylas.com",
+			"Get your API key from: https://dashboard-v3.nylas.com",
 		)
 	}
 
@@ -144,7 +144,7 @@ func GetAPIKey() (string, error) {
 			"API key not configured",
 			"Configure with: nylas auth config",
 			"Or use environment variable: export NYLAS_API_KEY=<your-key>",
-			"Get your API key from: https://dashboard.nylas.com",
+			"Get your API key from: https://dashboard-v3.nylas.com",
 		)
 	}
 

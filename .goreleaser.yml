@@ -93,7 +93,7 @@ aurs:
       - "Nylas <support@nylas.com>"
     license: MIT
     private_key: "{{ .Env.AUR_SSH_KEY_PATH }}"
-    git_url: "ssh://aur@aur.archlinux.org/nylas.git"
+    git_url: "ssh://aur@aur.archlinux.org/nylas-bin.git"
     disable: "{{ .IsSnapshot }}"
     depends:
       - glibc
