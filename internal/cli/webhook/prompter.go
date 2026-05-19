@@ -36,6 +36,10 @@ func newStdinPrompter() *stdinPrompter {
 	return &stdinPrompter{in: bufio.NewReader(os.Stdin), out: os.Stdout}
 }
 
+func newStderrPrompter() *stdinPrompter {
+	return &stdinPrompter{in: bufio.NewReader(os.Stdin), out: os.Stderr}
+}
+
 // Confirm reads a y/n response, distinguishing EOF (returned as io.EOF)
 // from an empty line (interpreted as defaultYes). Any other read error
 // is propagated unchanged.
