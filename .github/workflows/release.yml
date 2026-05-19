@@ -68,6 +68,32 @@ jobs:
       - name: Run tests
         run: go test ./... -short
 
+      - name: Set up AUR SSH key
+        if: github.event_name == 'push'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::error::AUR_SSH_PRIVATE_KEY secret is required to publish the AUR package"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          aur_key_path="$HOME/.ssh/aur_ed25519"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$aur_key_path"
+          chmod 600 "$aur_key_path"
+          aur_known_hosts="$(mktemp)"
+          ssh-keyscan -t ed25519 aur.archlinux.org > "$aur_known_hosts" 2>/dev/null
+          if ! ssh-keygen -lf "$aur_known_hosts" | grep -Fq 'SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4'; then
+            echo "::error::AUR host key fingerprint did not match the expected ed25519 fingerprint"
+            exit 1
+          fi
+          cat "$aur_known_hosts" >> ~/.ssh/known_hosts
+          rm -f "$aur_known_hosts"
+          chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' 'Host aur.archlinux.org' "  IdentityFile $aur_key_path" '  User aur' >> ~/.ssh/config
+          echo "AUR_SSH_KEY_PATH=$aur_key_path" >> "$GITHUB_ENV"
+
       - name: Validate release build
         if: github.event_name == 'workflow_dispatch'
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
