@@ -51,9 +51,6 @@ func (c *HTTPClient) CreateAgentAccount(ctx context.Context, email, appPassword,
 	if appPassword != "" {
 		settings["app_password"] = appPassword
 	}
-	if policyID != "" {
-		settings["policy_id"] = policyID
-	}
 
 	payload := map[string]any{
 		"provider": string(domain.ProviderNylas),
@@ -97,9 +94,6 @@ func (c *HTTPClient) UpdateAgentAccount(ctx context.Context, grantID, email, app
 	queryURL := fmt.Sprintf("%s/v3/grants/%s", c.baseURL, url.PathEscape(grantID))
 	settings := make(map[string]any)
 	settings["email"] = email
-	if grant.Settings.PolicyID != "" {
-		settings["policy_id"] = grant.Settings.PolicyID
-	}
 	if appPassword != "" {
 		settings["app_password"] = appPassword
 	}

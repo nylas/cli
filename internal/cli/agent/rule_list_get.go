@@ -19,13 +19,13 @@ func newRuleListCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List rules for the default agent policy",
-		Long: `List rules for the current default agent policy.
+		Short: "List rules for the default agent workspace",
+		Long: `List rules for the current default agent workspace.
 
 By default, this command resolves the current default grant and lists the rules
-attached to that provider=nylas account's policy. Use --policy-id to inspect a
-specific agent policy, or --all to list every rule reachable from any
-provider=nylas account policy.
+attached to that provider=nylas account's workspace. Use --policy-id to inspect
+agent workspaces using a specific policy, or --all to list every rule reachable
+from any provider=nylas account workspace.
 
 Examples:
   nylas agent rule list
@@ -54,13 +54,13 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 				return struct{}{}, err
 			}
 
-			refsByRuleID := buildRuleRefsByID(scope.AgentPolicies, scope.PolicyRefsByID)
+			refsByRuleID := buildRuleRefsByIDWithRuleIDs(scope.AgentPolicies, scope.PolicyRefsByID, scope.RuleIDsByPolicy)
 			if len(refsByRuleID) == 0 {
 				if jsonOutput {
 					fmt.Println("[]")
 					return struct{}{}, nil
 				}
-				common.PrintEmptyStateWithHint("rules attached to nylas agent policies", "Create a rule and attach it to a provider=nylas policy to see it here")
+				common.PrintEmptyStateWithHint("rules attached to nylas agent workspaces", "Create a rule and attach it to a provider=nylas workspace to see it here")
 				return struct{}{}, nil
 			}
 
@@ -92,8 +92,12 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 			return struct{}{}, err
 		}
 
-		ruleIDs := make([]string, 0, len(policy.Rules))
-		for _, ruleID := range policy.Rules {
+		sourceRuleIDs, ok := scope.RuleIDsByPolicy[policy.ID]
+		if !ok {
+			sourceRuleIDs = policy.Rules
+		}
+		ruleIDs := make([]string, 0, len(sourceRuleIDs))
+		for _, ruleID := range sourceRuleIDs {
 			ruleID = strings.TrimSpace(ruleID)
 			if ruleID == "" {
 				continue
@@ -106,7 +110,7 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 				fmt.Println("[]")
 				return struct{}{}, nil
 			}
-			common.PrintEmptyStateWithHint("rules on the selected agent policy", "Use 'nylas agent rule create --data-file rule.json' to add one")
+			common.PrintEmptyStateWithHint("rules on the selected agent workspaces", "Use 'nylas agent rule create --data-file rule.json' to add one")
 			return struct{}{}, nil
 		}
 
@@ -114,13 +118,13 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 		if err != nil {
 			return struct{}{}, common.WrapListError("rules", err)
 		}
-		rules, ruleRefs := collectPolicyScopedRules(policy, accounts, allRulesList)
+		rules, ruleRefs := collectPolicyScopedWorkspaceRules(policy, accounts, ruleIDs, allRulesList)
 		if len(rules) == 0 {
 			if jsonOutput {
 				fmt.Println("[]")
 				return struct{}{}, nil
 			}
-			common.PrintEmptyStateWithHint("rules on the selected agent policy", "Use 'nylas agent rule create --data-file rule.json' to add one")
+			common.PrintEmptyStateWithHint("rules on the selected agent workspaces", "Use 'nylas agent rule create --data-file rule.json' to add one")
 			return struct{}{}, nil
 		}
 
@@ -140,16 +144,20 @@ func runRuleList(jsonOutput, allRules bool, policyID string) error {
 }
 
 func collectPolicyScopedRules(policy *domain.Policy, accounts []policyAgentAccountRef, allRules []domain.Rule) ([]domain.Rule, map[string][]rulePolicyRef) {
+	return collectPolicyScopedWorkspaceRules(policy, accounts, policy.Rules, allRules)
+}
+
+func collectPolicyScopedWorkspaceRules(policy *domain.Policy, accounts []policyAgentAccountRef, ruleIDs []string, allRules []domain.Rule) ([]domain.Rule, map[string][]rulePolicyRef) {
 	rulesByID := make(map[string]domain.Rule, len(allRules))
 	for _, rule := range allRules {
 		rulesByID[rule.ID] = rule
 	}
 
 	accountRefs := append([]policyAgentAccountRef(nil), accounts...)
-	rules := make([]domain.Rule, 0, len(policy.Rules))
-	ruleRefs := make(map[string][]rulePolicyRef, len(policy.Rules))
+	rules := make([]domain.Rule, 0, len(ruleIDs))
+	ruleRefs := make(map[string][]rulePolicyRef, len(ruleIDs))
 
-	for _, ruleID := range policy.Rules {
+	for _, ruleID := range ruleIDs {
 		ruleID = strings.TrimSpace(ruleID)
 		if ruleID == "" {
 			continue
@@ -186,8 +194,9 @@ func newRuleGetCmd() *cobra.Command {
 		Long: `Show details for a single rule.
 
 By default, this validates that the rule is attached to the current default
-agent policy. Use --policy-id to scope the lookup to another provider=nylas
-policy, or --all to search any provider=nylas policy.
+agent workspace. Use --policy-id to scope the lookup to provider=nylas
+workspaces using another policy, or --all to search any provider=nylas
+workspace policy.
 
 Examples:
   nylas agent rule get <rule-id>

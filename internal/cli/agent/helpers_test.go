@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +10,38 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type workspaceUpdateTestClient struct {
+	workspaceID string
+	req         *domain.UpdateWorkspaceRequest
+}
+
+func (c *workspaceUpdateTestClient) UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error) {
+	c.workspaceID = workspaceID
+	c.req = req
+	return &domain.Workspace{ID: workspaceID}, nil
+}
+
+func TestAttachPolicyToAgentWorkspacePatchesWorkspaceWithoutMutatingGrantSettings(t *testing.T) {
+	client := &workspaceUpdateTestClient{}
+	account := &domain.AgentAccount{
+		ID:          "grant-1",
+		WorkspaceID: "workspace-1",
+		Settings: domain.AgentAccountSettings{
+			PolicyID: "legacy-policy",
+		},
+	}
+
+	updated, err := attachPolicyToAgentWorkspace(context.Background(), client, account, "workspace-policy")
+
+	require.NoError(t, err)
+	require.Same(t, account, updated)
+	assert.Equal(t, "workspace-1", client.workspaceID)
+	require.NotNil(t, client.req)
+	require.NotNil(t, client.req.PolicyID)
+	assert.Equal(t, "workspace-policy", *client.req.PolicyID)
+	assert.Equal(t, "legacy-policy", updated.Settings.PolicyID)
+}
 
 func TestGetAgentIdentifier(t *testing.T) {
 	t.Run("uses explicit argument", func(t *testing.T) {

@@ -12,9 +12,11 @@ import (
 )
 
 type agentPolicyScope struct {
-	AllPolicies    []domain.Policy
-	AgentPolicies  []domain.Policy
-	PolicyRefsByID map[string][]policyAgentAccountRef
+	AllPolicies     []domain.Policy
+	AgentPolicies   []domain.Policy
+	PolicyRefsByID  map[string][]policyAgentAccountRef
+	WorkspacesByID  map[string]*domain.Workspace
+	RuleIDsByPolicy map[string][]string
 }
 
 func loadAgentPolicyScope(ctx context.Context, client ports.NylasClient) (*agentPolicyScope, error) {
@@ -27,19 +29,70 @@ func loadAgentPolicyScope(ctx context.Context, client ports.NylasClient) (*agent
 	if err != nil {
 		return nil, err
 	}
-	policies, err = upsertPoliciesForAgentAccounts(ctx, client, policies, accounts)
+	workspacesByID, err := loadAgentWorkspaces(ctx, client, accounts)
+	if err != nil {
+		return nil, err
+	}
+	policies, err = upsertPoliciesForAgentAccountsWithWorkspaces(ctx, client, policies, accounts, workspacesByID)
 	if err != nil {
 		return nil, err
 	}
 
-	refsByPolicyID := buildPolicyAccountRefs(accounts)
+	refsByPolicyID := buildPolicyAccountRefsWithWorkspaces(accounts, workspacesByID)
 	agentPolicies := filterPoliciesWithAgentAccounts(policies, refsByPolicyID)
 
 	return &agentPolicyScope{
-		AllPolicies:    policies,
-		AgentPolicies:  agentPolicies,
-		PolicyRefsByID: refsByPolicyID,
+		AllPolicies:     policies,
+		AgentPolicies:   agentPolicies,
+		PolicyRefsByID:  refsByPolicyID,
+		WorkspacesByID:  workspacesByID,
+		RuleIDsByPolicy: buildWorkspaceRuleIDsByPolicy(accounts, workspacesByID),
 	}, nil
+}
+
+func loadAgentWorkspaces(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, accounts []domain.AgentAccount) (map[string]*domain.Workspace, error) {
+	workspacesByID := make(map[string]*domain.Workspace)
+	for _, account := range accounts {
+		workspaceID := strings.TrimSpace(account.WorkspaceID)
+		if workspaceID == "" {
+			continue
+		}
+		if _, seen := workspacesByID[workspaceID]; seen {
+			continue
+		}
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, common.WrapGetError("workspace", err)
+		}
+		if workspace == nil {
+			return nil, common.NewUserError("workspace not found", "The API returned an empty workspace response")
+		}
+		workspacesByID[workspaceID] = workspace
+	}
+	return workspacesByID, nil
+}
+
+func buildWorkspaceRuleIDsByPolicy(accounts []domain.AgentAccount, workspacesByID map[string]*domain.Workspace) map[string][]string {
+	ruleIDsByPolicy := make(map[string][]string)
+	for _, account := range accounts {
+		workspace := workspacesByID[strings.TrimSpace(account.WorkspaceID)]
+		if workspace == nil {
+			continue
+		}
+		policyID := strings.TrimSpace(workspace.PolicyID)
+		if policyID == "" {
+			continue
+		}
+		if _, ok := ruleIDsByPolicy[policyID]; !ok {
+			ruleIDsByPolicy[policyID] = []string{}
+		}
+		for _, ruleID := range workspace.RulesIDs {
+			ruleIDsByPolicy[policyID] = appendUniqueString(ruleIDsByPolicy[policyID], ruleID)
+		}
+	}
+	return ruleIDsByPolicy
 }
 
 func listAgentAccountsForPolicyScope(ctx context.Context, client ports.NylasClient) ([]domain.AgentAccount, error) {
@@ -98,6 +151,12 @@ func upsertAgentAccount(accounts []domain.AgentAccount, account domain.AgentAcco
 func upsertPoliciesForAgentAccounts(ctx context.Context, client interface {
 	GetPolicy(context.Context, string) (*domain.Policy, error)
 }, policies []domain.Policy, accounts []domain.AgentAccount) ([]domain.Policy, error) {
+	return upsertPoliciesForAgentAccountsWithWorkspaces(ctx, client, policies, accounts, nil)
+}
+
+func upsertPoliciesForAgentAccountsWithWorkspaces(ctx context.Context, client interface {
+	GetPolicy(context.Context, string) (*domain.Policy, error)
+}, policies []domain.Policy, accounts []domain.AgentAccount, workspacesByID map[string]*domain.Workspace) ([]domain.Policy, error) {
 	merged := append([]domain.Policy(nil), policies...)
 	seenPolicyIDs := make(map[string]struct{}, len(merged))
 	for _, policy := range merged {
@@ -106,6 +165,9 @@ func upsertPoliciesForAgentAccounts(ctx context.Context, client interface {
 
 	for _, account := range accounts {
 		policyID := strings.TrimSpace(account.Settings.PolicyID)
+		if workspace := workspacesByID[strings.TrimSpace(account.WorkspaceID)]; workspace != nil {
+			policyID = strings.TrimSpace(workspace.PolicyID)
+		}
 		if policyID == "" {
 			continue
 		}
@@ -147,23 +209,27 @@ func resolveAgentPolicyFromScope(ctx context.Context, client ports.NylasClient, 
 	}
 
 	defaultPolicyID := strings.TrimSpace(account.Settings.PolicyID)
+	if workspace := scope.WorkspacesByID[strings.TrimSpace(account.WorkspaceID)]; workspace != nil {
+		defaultPolicyID = strings.TrimSpace(workspace.PolicyID)
+	}
 	if defaultPolicyID == "" {
 		return nil, nil, common.NewUserError(
 			"default agent account does not have a policy",
-			"Pass --policy-id or attach a policy to the active provider=nylas account first",
+			"Pass --policy-id or attach a policy to the active provider=nylas workspace first",
 		)
 	}
 
 	policy := findPolicyByID(scope.AgentPolicies, defaultPolicyID)
 	if policy == nil {
 		return nil, nil, common.NewUserError(
-			"default agent account policy is not attached to a nylas agent account",
+			"default agent workspace policy is not attached to a nylas agent workspace",
 			"Use 'nylas agent policy list --all' to inspect provider=nylas policies",
 		)
 	}
 
 	return policy, []policyAgentAccountRef{{
-		GrantID: account.ID,
-		Email:   account.Email,
+		GrantID:     account.ID,
+		Email:       account.Email,
+		WorkspaceID: strings.TrimSpace(account.WorkspaceID),
 	}}, nil
 }

@@ -37,7 +37,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&appPassword, "app-password", "", "Optional IMAP/SMTP app password for mail-client access")
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Optional policy ID to attach to the created agent account")
+	cmd.Flags().StringVar(&policyID, "policy-id", "", "Optional policy ID to attach to the account workspace")
 
 	return cmd
 }
@@ -67,6 +67,12 @@ func runCreate(email, appPassword, policyID string, jsonOutput bool) error {
 		account, err := createAgentAccountWithFallback(ctx, client, email, appPassword, policyID)
 		if err != nil {
 			return struct{}{}, common.WrapCreateError("agent account", err)
+		}
+		if policyID != "" {
+			account, err = attachPolicyToAgentWorkspace(ctx, client, account, policyID)
+			if err != nil {
+				return struct{}{}, err
+			}
 		}
 
 		saveGrantLocally(account.ID, account.Email)
@@ -103,10 +109,6 @@ func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClien
 
 	existingAccount, lookupErr := findExistingAgentAccountByEmail(ctx, client, email)
 	if lookupErr == nil && existingAccount != nil {
-		if err := validateExistingAgentAccountPolicy(existingAccount, policyID); err != nil {
-			return nil, err
-		}
-
 		updated, updateErr := client.UpdateAgentAccount(ctx, existingAccount.ID, email, appPassword)
 		if updateErr == nil {
 			return updated, nil
@@ -159,33 +161,6 @@ func findExistingAgentAccountByEmail(ctx context.Context, client ports.AgentClie
 	}
 
 	return nil, nil
-}
-
-func validateExistingAgentAccountPolicy(account *domain.AgentAccount, requestedPolicyID string) error {
-	if account == nil {
-		return nil
-	}
-
-	requestedPolicyID = strings.TrimSpace(requestedPolicyID)
-	if requestedPolicyID == "" {
-		return nil
-	}
-
-	currentPolicyID := strings.TrimSpace(account.Settings.PolicyID)
-	if currentPolicyID == requestedPolicyID {
-		return nil
-	}
-	if currentPolicyID == "" {
-		return common.NewUserError(
-			"existing agent account is not attached to the requested policy",
-			fmt.Sprintf("Agent account %s already exists without a policy; create fallback cannot attach it to policy %s. Attach the policy separately, then run 'nylas agent account update %s --app-password <password>'.", account.Email, requestedPolicyID, account.ID),
-		)
-	}
-
-	return common.NewUserError(
-		"existing agent account is attached to a different policy",
-		fmt.Sprintf("Agent account %s already exists on policy %s; create fallback cannot change it to policy %s. Update the policy assignment separately, then run 'nylas agent account update %s --app-password <password>'.", account.Email, currentPolicyID, requestedPolicyID, account.ID),
-	)
 }
 
 func shouldRetryAgentCreateWithoutPassword(err error) bool {

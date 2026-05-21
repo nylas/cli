@@ -12,8 +12,9 @@ import (
 )
 
 type policyAgentAccountRef struct {
-	GrantID string `json:"grant_id"`
-	Email   string `json:"email"`
+	GrantID     string `json:"grant_id"`
+	Email       string `json:"email"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
 }
 
 type resolvedPolicyScope struct {
@@ -28,8 +29,8 @@ func newPolicyCmd() *cobra.Command {
 		Short: "Manage agent policies",
 		Long: `Manage policies used by agent accounts.
 
-Policies are backed by the /v3/policies API and can be attached to agent
-accounts via policy_id in grant settings.
+Policies are backed by the /v3/policies API. Agent accounts inherit policy
+settings from their workspace policy_id attachment.
 
 Examples:
   nylas agent policy list
@@ -51,15 +52,24 @@ Examples:
 }
 
 func buildPolicyAccountRefs(accounts []domain.AgentAccount) map[string][]policyAgentAccountRef {
+	return buildPolicyAccountRefsWithWorkspaces(accounts, nil)
+}
+
+func buildPolicyAccountRefsWithWorkspaces(accounts []domain.AgentAccount, workspacesByID map[string]*domain.Workspace) map[string][]policyAgentAccountRef {
 	refsByPolicyID := make(map[string][]policyAgentAccountRef, len(accounts))
 	for _, account := range accounts {
 		policyID := strings.TrimSpace(account.Settings.PolicyID)
+		workspaceID := strings.TrimSpace(account.WorkspaceID)
+		if workspace := workspacesByID[workspaceID]; workspace != nil {
+			policyID = strings.TrimSpace(workspace.PolicyID)
+		}
 		if policyID == "" {
 			continue
 		}
 		refsByPolicyID[policyID] = append(refsByPolicyID[policyID], policyAgentAccountRef{
-			GrantID: account.ID,
-			Email:   account.Email,
+			GrantID:     account.ID,
+			Email:       account.Email,
+			WorkspaceID: workspaceID,
 		})
 	}
 

@@ -61,7 +61,7 @@ Behavior:
 - automatically creates the `nylas` connector first if it does not exist
 - stores the created grant locally like other authenticated accounts
 - optionally sets `settings.app_password` on the grant for IMAP/SMTP mail client access
-- optionally sets `settings.policy_id` on the grant so the new account starts with an attached policy
+- optionally patches the account workspace with `policy_id` so the new account starts with an attached policy
 
 **Example output:**
 ```bash
@@ -162,8 +162,8 @@ nylas agent policy delete 12345678-1234-1234-1234-123456789012 --yes
 ```
 
 Summary:
-- `list` resolves the default `provider=nylas` grant and shows its attached policy
-- `list --all` shows only policies that are actually referenced by `provider=nylas` agent accounts
+- `list` resolves the default `provider=nylas` grant and shows the policy attached to its workspace
+- `list --all` shows only policies that are actually referenced by `provider=nylas` agent workspaces
 - `get` and `read` are aliases
 - `delete` refuses to remove a policy that is still attached to any `provider=nylas` agent account
 
@@ -187,9 +187,9 @@ nylas agent rule delete <rule-id> --yes
 ```
 
 Summary:
-- `list` uses the policy attached to the current default `provider=nylas` grant unless `--policy-id` is passed
-- `list --all` shows only rules reachable from policies attached to `provider=nylas` accounts
-- `list` skips stale policy rule references and returns only rules that still exist
+- `list` uses the policy and rules attached to the current default `provider=nylas` grant workspace unless `--policy-id` is passed
+- `list --all` shows only rules reachable from `provider=nylas` account workspaces
+- `list` skips stale workspace rule references and returns only rules that still exist
 - `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`
 - both inbound and outbound rule triggers are supported on the agent rule surface
 - `get` and `read` are aliases

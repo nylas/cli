@@ -34,6 +34,9 @@ func printAgentDetails(account domain.AgentAccount) {
 	if account.CredentialID != "" {
 		fmt.Printf("Credential:   %s\n", account.CredentialID)
 	}
+	if account.WorkspaceID != "" {
+		fmt.Printf("Workspace ID: %s\n", account.WorkspaceID)
+	}
 	if account.Settings.PolicyID != "" {
 		fmt.Printf("Policy ID:    %s\n", account.Settings.PolicyID)
 	}
@@ -86,6 +89,27 @@ func ensureNylasConnector(ctx context.Context, client ports.NylasClient) (*domai
 	}
 
 	return nil, err
+}
+
+func attachPolicyToAgentWorkspace(ctx context.Context, client interface {
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+}, account *domain.AgentAccount, policyID string) (*domain.AgentAccount, error) {
+	if account == nil {
+		return nil, common.NewUserError("agent account missing", "The API did not return an agent account")
+	}
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID == "" {
+		return nil, common.NewUserError(
+			"agent account has no workspace",
+			"Create completed, but the API did not return a workspace_id to attach the policy to",
+		)
+	}
+
+	if _, err := client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{PolicyID: &policyID}); err != nil {
+		return nil, common.WrapUpdateError("agent workspace", err)
+	}
+
+	return account, nil
 }
 
 func resolveAgentID(ctx context.Context, client ports.NylasClient, identifier string) (string, error) {

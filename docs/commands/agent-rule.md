@@ -2,7 +2,7 @@
 
 Detailed reference for `nylas agent rule`.
 
-Agent rules are filtered through policies that are attached to `provider=nylas` agent accounts. The CLI hides rules that are outside that agent scope.
+Agent rules are filtered through `provider=nylas` agent account workspaces. The CLI hides rules that are outside that agent scope.
 
 ## Commands
 
@@ -21,11 +21,11 @@ nylas agent rule delete <rule-id> --yes
 
 ## Scope Model
 
-The CLI resolves rules through agent policy attachment:
+The CLI resolves rules through agent workspace attachments:
 
-- `nylas agent rule list` uses the policy attached to the current default `provider=nylas` grant
-- `nylas agent rule list --policy-id <policy-id>` uses that specific policy within the agent scope
-- `nylas agent rule list --all` shows rules reachable from any policy attached to any `provider=nylas` agent account
+- `nylas agent rule list` uses the policy and rules attached to the current default `provider=nylas` grant workspace
+- `nylas agent rule list --policy-id <policy-id>` uses that specific policy within the agent workspace scope
+- `nylas agent rule list --all` shows rules reachable from any `provider=nylas` agent workspace
 - `get`, `read`, `update`, and `delete` validate that the rule is reachable from the selected agent scope before operating on it
 
 This prevents the agent command surface from mutating rules that are only in non-agent policy usage.
@@ -42,9 +42,9 @@ nylas agent rule list --json
 Behavior:
 
 - resolves the default local `provider=nylas` grant
-- finds the policy attached to that grant
-- returns the rules attached to that policy
-- skips stale policy rule references that no longer exist in `/v3/rules`
+- finds the policy attached to that grant's workspace
+- returns the rules attached to that workspace
+- skips stale workspace rule references that no longer exist in `/v3/rules`
 
 ### Rules for a Specific Agent Policy
 
@@ -63,7 +63,7 @@ nylas agent rule list --all --json
 
 Behavior:
 
-- shows only rules referenced by policies attached to `provider=nylas` accounts
+- shows only rules referenced by `provider=nylas` account workspaces
 - text output includes policy and agent account references
 
 ## Reading Rules
@@ -271,45 +271,45 @@ nylas agent rule delete <rule-id> --yes
 Safety rules:
 
 - delete is rejected if the rule is referenced outside the current `provider=nylas` agent scope
-- delete is rejected if removing the rule would leave an attached agent policy with zero rules
+- delete is rejected if removing the rule would leave an attached agent workspace with zero live rules
 
 These checks are there to prevent accidental breakage of active agent policy configuration.
 
 ## Relationship to Policies
 
-Rules are attached to policies, and policies are attached to agent accounts.
+Policies and rules are attached to agent account workspaces.
 
 Practical flow:
 
 1. create or choose a policy
-2. create a rule and attach it to that policy in the same command
+2. create a rule and attach it to the selected agent workspace in the same command
 3. create an agent account with that policy using `--policy-id`
 
 The CLI scope always follows that chain:
 
 - agent account
-- policy
-- rules reachable from that policy
+- workspace
+- policy and rules reachable from that workspace
 
 ## Troubleshooting
 
 If `nylas agent rule list` returns nothing:
 
 - make sure your default grant is `provider=nylas`
-- confirm that default agent account has a policy attached
-- confirm the policy actually has rules attached
-- if the policy only references deleted rules, `list` now returns an empty result instead of failing
+- confirm that default agent account has a workspace with a policy attached
+- confirm the workspace actually has rules attached
+- if the workspace only references deleted rules, `list` now returns an empty result instead of failing
 
 If `nylas agent rule read` or `update` says the rule is not found:
 
 - the rule may exist in the application but outside the current agent scope
-- or the policy may still reference a deleted rule ID
+- or the workspace may still reference a deleted rule ID
 - try `nylas agent rule list --all` to see what is reachable from agent accounts
 
 If `nylas agent rule delete` is rejected:
 
 - the rule is shared outside the current agent scope, or
-- deleting it would leave an attached policy with no remaining rules
+- deleting it would leave an attached workspace with no remaining rules
 
 ## See Also
 

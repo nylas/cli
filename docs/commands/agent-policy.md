@@ -2,7 +2,7 @@
 
 Detailed reference for `nylas agent policy`.
 
-Agent policies are filtered through `provider=nylas` agent accounts in the CLI, even though the underlying policy objects are application-level resources.
+Agent policies are filtered through `provider=nylas` agent account workspaces in the CLI, even though the underlying policy objects are application-level resources.
 
 ## Commands
 
@@ -22,14 +22,14 @@ nylas agent policy delete <policy-id> --yes
 
 The CLI intentionally treats policies as an agent-scoped surface:
 
-- `nylas agent policy list` shows only the policy attached to the current default `provider=nylas` grant
-- `nylas agent policy list --all` shows only policies referenced by at least one `provider=nylas` agent account
-- text output includes the attached agent email and grant ID so you can see which agent account uses which policy
+- `nylas agent policy list` shows only the policy attached to the current default `provider=nylas` grant workspace
+- `nylas agent policy list --all` shows only policies referenced by at least one `provider=nylas` agent workspace
+- text output includes the attached agent email, grant ID, and workspace context so you can see which agent account uses which policy
 
 This means:
 
 - a policy can exist in the application but still not appear under `nylas agent policy`
-- a policy with no attached `provider=nylas` account is hidden from the agent policy list
+- a policy with no attached `provider=nylas` workspace is hidden from the agent policy list
 
 ## Listing Policies
 
@@ -44,7 +44,7 @@ Behavior:
 
 - resolves the current default local grant
 - requires that default grant to be `provider=nylas`
-- returns the single attached policy for that grant
+- returns the single attached policy for that grant's workspace
 
 ### All Agent Policies
 
@@ -55,7 +55,7 @@ nylas agent policy list --all --json
 
 Behavior:
 
-- lists all policies referenced by at least one `provider=nylas` agent account
+- lists all policies referenced by at least one `provider=nylas` agent workspace
 - text output includes one `Agent:` line per attached agent account
 
 ## Reading Policies
@@ -156,7 +156,7 @@ nylas agent policy delete <policy-id> --yes
 
 Safety rule:
 
-- delete is rejected if any `provider=nylas` agent account still references the policy
+- delete is rejected if any `provider=nylas` agent workspace still references the policy
 
 To remove a policy from active use:
 
@@ -167,20 +167,20 @@ To remove a policy from active use:
 
 ## Relationship to Agent Accounts
 
-Policies are primarily attached at agent account creation time:
+Policies are attached through the agent account workspace. Account creation can patch that workspace immediately:
 
 ```bash
 nylas agent account create me@yourapp.nylas.email --policy-id <policy-id>
 ```
 
-The CLI now has `nylas agent account update`, but it currently manages mutable account settings such as `--app-password`, not `settings.policy_id`. In practice, policy attachment remains a create-time workflow on the agent account surface.
+The CLI now has `nylas agent account update`, but it currently manages mutable grant settings such as `--app-password`, not workspace policy assignment. In practice, policy attachment remains a create-time workflow on the agent account surface.
 
 ## Troubleshooting
 
 If `nylas agent policy list` returns nothing:
 
 - make sure your default local grant is a `provider=nylas` account
-- verify the agent account actually has a `settings.policy_id`
+- verify the agent account has a workspace with `policy_id`
 - try `nylas auth list` to confirm which grant is marked default
 
 If `nylas agent policy delete` fails:

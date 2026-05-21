@@ -32,11 +32,11 @@ func newRuleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rule",
 		Short: "Manage agent rules",
-		Long: `Manage rules used by policies attached to agent accounts.
+		Long: `Manage rules attached to agent account workspaces.
 
 Rules are backed by the /v3/rules API. The agent namespace scopes them through
-policies that are attached to provider=nylas accounts. This surface manages
-both inbound and outbound rules attached to those policies.
+provider=nylas account workspaces. This surface manages both inbound and
+outbound rules attached to those workspaces.
 
 Examples:
   nylas agent rule list
@@ -103,10 +103,21 @@ func resolveAgentPolicy(ctx context.Context, client ports.NylasClient, policyID 
 	}
 
 	defaultPolicyID := strings.TrimSpace(account.Settings.PolicyID)
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID != "" {
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, nil, common.WrapGetError("workspace", err)
+		}
+		if workspace == nil {
+			return nil, nil, common.NewUserError("workspace not found", "The API returned an empty workspace response")
+		}
+		defaultPolicyID = strings.TrimSpace(workspace.PolicyID)
+	}
 	if defaultPolicyID == "" {
 		return nil, nil, common.NewUserError(
 			"default agent account does not have a policy",
-			"Pass --policy-id or attach a policy to the active provider=nylas account first",
+			"Pass --policy-id or attach a policy to the active provider=nylas workspace first",
 		)
 	}
 
@@ -116,8 +127,9 @@ func resolveAgentPolicy(ctx context.Context, client ports.NylasClient, policyID 
 	}
 
 	return policy, []policyAgentAccountRef{{
-		GrantID: account.ID,
-		Email:   account.Email,
+		GrantID:     account.ID,
+		Email:       account.Email,
+		WorkspaceID: workspaceID,
 	}}, nil
 }
 
@@ -131,6 +143,10 @@ func findPolicyByID(policies []domain.Policy, policyID string) *domain.Policy {
 }
 
 func buildRuleRefsByID(policies []domain.Policy, refsByPolicyID map[string][]policyAgentAccountRef) map[string][]rulePolicyRef {
+	return buildRuleRefsByIDWithRuleIDs(policies, refsByPolicyID, nil)
+}
+
+func buildRuleRefsByIDWithRuleIDs(policies []domain.Policy, refsByPolicyID map[string][]policyAgentAccountRef, ruleIDsByPolicy map[string][]string) map[string][]rulePolicyRef {
 	refsByRuleID := make(map[string][]rulePolicyRef)
 	for _, policy := range policies {
 		accounts := refsByPolicyID[policy.ID]
@@ -138,8 +154,12 @@ func buildRuleRefsByID(policies []domain.Policy, refsByPolicyID map[string][]pol
 			continue
 		}
 
-		seen := make(map[string]struct{}, len(policy.Rules))
-		for _, ruleID := range policy.Rules {
+		ruleIDs := policy.Rules
+		if workspaceRuleIDs, ok := ruleIDsByPolicy[policy.ID]; ok {
+			ruleIDs = workspaceRuleIDs
+		}
+		seen := make(map[string]struct{}, len(ruleIDs))
+		for _, ruleID := range ruleIDs {
 			ruleID = strings.TrimSpace(ruleID)
 			if ruleID == "" {
 				continue
@@ -190,7 +210,7 @@ func resolveScopedRule(ctx context.Context, client ports.NylasClient, ruleID, po
 		return nil, err
 	}
 
-	refsByRuleID := buildRuleRefsByID(scope.AgentPolicies, scope.PolicyRefsByID)
+	refsByRuleID := buildRuleRefsByIDWithRuleIDs(scope.AgentPolicies, scope.PolicyRefsByID, scope.RuleIDsByPolicy)
 	allRefs := refsByRuleID[ruleID]
 	if len(allRefs) == 0 {
 		return nil, common.NewUserError(
@@ -339,7 +359,9 @@ func policiesLeftEmptyByRuleRemoval(ctx context.Context, client interface {
 	return blocking, nil
 }
 
-func attachRuleToPolicy(ctx context.Context, client ports.NylasClient, policy domain.Policy, ruleID string) error {
+func attachRuleToPolicy(ctx context.Context, client interface {
+	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
+}, policy domain.Policy, ruleID string) error {
 	updatedRules := appendUniqueString(policy.Rules, ruleID)
 	if slices.Equal(updatedRules, policy.Rules) {
 		return nil
@@ -349,7 +371,196 @@ func attachRuleToPolicy(ctx context.Context, client ports.NylasClient, policy do
 	return err
 }
 
-func detachRuleFromPolicies(ctx context.Context, client ports.NylasClient, policies []domain.Policy, ruleID string) (func(context.Context) error, error) {
+func attachRuleToAgentWorkspaces(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
+}, policy domain.Policy, accounts []policyAgentAccountRef, ruleID string) error {
+	seenWorkspaceIDs := make(map[string]struct{}, len(accounts))
+	for _, account := range accounts {
+		workspaceID := strings.TrimSpace(account.WorkspaceID)
+		if workspaceID == "" {
+			continue
+		}
+		if _, seen := seenWorkspaceIDs[workspaceID]; seen {
+			continue
+		}
+		seenWorkspaceIDs[workspaceID] = struct{}{}
+
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		if err != nil {
+			return err
+		}
+		if workspace == nil {
+			return common.NewUserError("workspace not found", "The API returned an empty workspace response")
+		}
+		updatedRules := appendUniqueString(workspace.RulesIDs, ruleID)
+		if slices.Equal(updatedRules, workspace.RulesIDs) {
+			continue
+		}
+		if _, err := client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{RulesIDs: &updatedRules}); err != nil {
+			return err
+		}
+	}
+	if len(seenWorkspaceIDs) == 0 {
+		return attachRuleToPolicy(ctx, client, policy, ruleID)
+	}
+	return nil
+}
+
+func hasWorkspaceRefs(refs []rulePolicyRef) bool {
+	for _, ref := range refs {
+		for _, account := range ref.Accounts {
+			if strings.TrimSpace(account.WorkspaceID) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func workspacesLeftEmptyByRuleRemoval(ctx context.Context, client interface {
+	GetRule(context.Context, string) (*domain.Rule, error)
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, refs []rulePolicyRef, ruleID string) ([]string, error) {
+	workspaces, err := loadReferencedWorkspaces(ctx, client, refs)
+	if err != nil {
+		return nil, err
+	}
+
+	blocking := make([]string, 0)
+	for _, workspace := range workspaces {
+		if !stringSliceContains(workspace.RulesIDs, ruleID) {
+			continue
+		}
+
+		liveRemaining := false
+		for _, candidate := range removeString(workspace.RulesIDs, ruleID) {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == "" {
+				continue
+			}
+
+			_, err := client.GetRule(ctx, candidate)
+			switch {
+			case err == nil:
+				liveRemaining = true
+			case errors.Is(err, domain.ErrRuleNotFound):
+				continue
+			default:
+				return nil, err
+			}
+			if liveRemaining {
+				break
+			}
+		}
+		if !liveRemaining {
+			blocking = append(blocking, formatWorkspaceRef(workspace))
+		}
+	}
+	return blocking, nil
+}
+
+func detachRuleFromAgentWorkspaces(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+}, refs []rulePolicyRef, ruleID string) (func(context.Context) error, error) {
+	workspaces, err := loadReferencedWorkspaces(ctx, client, refs)
+	if err != nil {
+		return nil, err
+	}
+
+	originalRulesByWorkspaceID := make(map[string][]string)
+	updatedWorkspaceIDs := make([]string, 0)
+
+	for _, workspace := range workspaces {
+		if !stringSliceContains(workspace.RulesIDs, ruleID) {
+			continue
+		}
+
+		originalRulesByWorkspaceID[workspace.ID] = append([]string(nil), workspace.RulesIDs...)
+		updatedRules := removeString(workspace.RulesIDs, ruleID)
+		if _, err := client.UpdateWorkspace(ctx, workspace.ID, &domain.UpdateWorkspaceRequest{RulesIDs: &updatedRules}); err != nil {
+			if rollbackErr := rollbackWorkspaceRuleUpdates(ctx, client, originalRulesByWorkspaceID, updatedWorkspaceIDs); rollbackErr != nil {
+				return nil, fmt.Errorf("failed to detach rule from workspace %s: %w (rollback failed: %v)", workspace.ID, err, rollbackErr)
+			}
+			return nil, err
+		}
+		updatedWorkspaceIDs = append(updatedWorkspaceIDs, workspace.ID)
+	}
+
+	return func(ctx context.Context) error {
+		return rollbackWorkspaceRuleUpdates(ctx, client, originalRulesByWorkspaceID, updatedWorkspaceIDs)
+	}, nil
+}
+
+func loadReferencedWorkspaces(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, refs []rulePolicyRef) ([]domain.Workspace, error) {
+	seenWorkspaceIDs := make(map[string]struct{})
+	workspaces := make([]domain.Workspace, 0)
+	for _, ref := range refs {
+		for _, account := range ref.Accounts {
+			workspaceID := strings.TrimSpace(account.WorkspaceID)
+			if workspaceID == "" {
+				continue
+			}
+			if _, seen := seenWorkspaceIDs[workspaceID]; seen {
+				continue
+			}
+			seenWorkspaceIDs[workspaceID] = struct{}{}
+
+			workspace, err := client.GetWorkspace(ctx, workspaceID)
+			if err != nil {
+				return nil, err
+			}
+			if workspace == nil {
+				return nil, common.NewUserError("workspace not found", "The API returned an empty workspace response")
+			}
+			workspaces = append(workspaces, *workspace)
+		}
+	}
+	return workspaces, nil
+}
+
+func rollbackWorkspaceRuleUpdates(ctx context.Context, client interface {
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+}, originalRulesByWorkspaceID map[string][]string, updatedWorkspaceIDs []string) error {
+	var failures []string
+	for _, workspaceID := range updatedWorkspaceIDs {
+		rules := append([]string(nil), originalRulesByWorkspaceID[workspaceID]...)
+		if _, err := client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{RulesIDs: &rules}); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", workspaceID, err))
+		}
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf("failed to rollback workspace updates: %s", strings.Join(failures, "; "))
+	}
+	return nil
+}
+
+func stringSliceContains(items []string, value string) bool {
+	value = strings.TrimSpace(value)
+	for _, item := range items {
+		if strings.TrimSpace(item) == value {
+			return true
+		}
+	}
+	return false
+}
+
+func formatWorkspaceRef(workspace domain.Workspace) string {
+	name := strings.TrimSpace(workspace.Name)
+	if name == "" {
+		return workspace.ID
+	}
+	return fmt.Sprintf("%s (%s)", name, workspace.ID)
+}
+
+func detachRuleFromPolicies(ctx context.Context, client interface {
+	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
+}, policies []domain.Policy, ruleID string) (func(context.Context) error, error) {
 	originalRulesByPolicyID := make(map[string][]string)
 	updatedPolicyIDs := make([]string, 0)
 
@@ -374,7 +585,9 @@ func detachRuleFromPolicies(ctx context.Context, client ports.NylasClient, polic
 	}, nil
 }
 
-func rollbackPolicyRuleUpdates(ctx context.Context, client ports.NylasClient, originalRulesByPolicyID map[string][]string, updatedPolicyIDs []string) error {
+func rollbackPolicyRuleUpdates(ctx context.Context, client interface {
+	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
+}, originalRulesByPolicyID map[string][]string, updatedPolicyIDs []string) error {
 	var failures []string
 	for _, policyID := range updatedPolicyIDs {
 		if _, err := client.UpdatePolicy(ctx, policyID, map[string]any{"rules": originalRulesByPolicyID[policyID]}); err != nil {

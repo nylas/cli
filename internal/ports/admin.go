@@ -61,6 +61,12 @@ type AdminClient interface {
 	// DeleteConnector deletes a connector.
 	DeleteConnector(ctx context.Context, connectorID string) error
 
+	// GetWorkspace retrieves a grant workspace.
+	GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error)
+
+	// UpdateWorkspace updates workspace policy/rule attachments.
+	UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+
 	// ================================
 	// CREDENTIAL OPERATIONS
 	// ================================

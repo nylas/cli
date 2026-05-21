@@ -13,9 +13,7 @@ func (d *DemoClient) ListAgentAccounts(ctx context.Context) ([]domain.AgentAccou
 			Provider:    domain.ProviderNylas,
 			Email:       "demo-agent@example.com",
 			GrantStatus: "valid",
-			Settings: domain.AgentAccountSettings{
-				PolicyID: "policy-demo-1",
-			},
+			WorkspaceID: "workspace-demo-1",
 		},
 	}, nil
 }
@@ -26,9 +24,7 @@ func (d *DemoClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 		Provider:    domain.ProviderNylas,
 		Email:       "demo-agent@example.com",
 		GrantStatus: "valid",
-		Settings: domain.AgentAccountSettings{
-			PolicyID: "policy-demo-1",
-		},
+		WorkspaceID: "workspace-demo-1",
 	}, nil
 }
 
@@ -38,9 +34,7 @@ func (d *DemoClient) CreateAgentAccount(ctx context.Context, email, appPassword,
 		Provider:    domain.ProviderNylas,
 		Email:       email,
 		GrantStatus: "valid",
-		Settings: domain.AgentAccountSettings{
-			PolicyID: policyID,
-		},
+		WorkspaceID: "workspace-demo-new",
 	}, nil
 }
 
@@ -50,7 +44,7 @@ func (d *DemoClient) UpdateAgentAccount(ctx context.Context, grantID, email, app
 		Provider:    domain.ProviderNylas,
 		Email:       email,
 		GrantStatus: "valid",
-		Settings:    domain.AgentAccountSettings{PolicyID: "policy-demo-1"},
+		WorkspaceID: "workspace-demo-1",
 	}, nil
 }
 

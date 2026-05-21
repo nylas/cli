@@ -17,12 +17,12 @@ func newPolicyListCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List policies for the default agent account",
-		Long: `List policies for the current default agent account.
+		Short: "List policies for the default agent workspace",
+		Long: `List policies for the current default agent workspace.
 
 By default, this command resolves the current default grant and shows the
-single policy attached to that provider=nylas account. Use --all to list every
-policy referenced by a provider=nylas account.
+policy attached to that provider=nylas account's workspace. Use --all to list
+every policy referenced by a provider=nylas workspace.
 
 Examples:
   nylas agent policy list
@@ -33,7 +33,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVar(&allPolicies, "all", false, "List all policies referenced by provider=nylas accounts")
+	cmd.Flags().BoolVar(&allPolicies, "all", false, "List all policies referenced by provider=nylas workspaces")
 
 	return cmd
 }
@@ -52,7 +52,7 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 			}
 
 			if len(policies) == 0 {
-				common.PrintEmptyStateWithHint("policies attached to nylas agent accounts", "Create or update a provider=nylas account with a policy_id to see it here")
+				common.PrintEmptyStateWithHint("policies attached to nylas agent workspaces", "Create a provider=nylas account with --policy-id to see it here")
 				return struct{}{}, nil
 			}
 
@@ -80,23 +80,22 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 			return struct{}{}, common.WrapGetError("default agent account", err)
 		}
 
-		policyID := strings.TrimSpace(account.Settings.PolicyID)
-		if policyID == "" {
+		policy, accountRef, err := resolveAgentAccountWorkspacePolicy(ctx, client, *account)
+		if err != nil {
+			return struct{}{}, err
+		}
+		if policy == nil {
 			if jsonOutput {
 				fmt.Println("[]")
 				return struct{}{}, nil
 			}
 			common.PrintEmptyStateWithHint(
-				"policy on the default agent account",
-				"Use 'nylas agent policy list --all' to inspect all agent-attached policies",
+				"policy on the default agent workspace",
+				"Use 'nylas agent policy list --all' to inspect all workspace-attached policies",
 			)
 			return struct{}{}, nil
 		}
 
-		policy, err := client.GetPolicy(ctx, policyID)
-		if err != nil {
-			return struct{}{}, common.WrapGetError("policy", err)
-		}
 		policies := []domain.Policy{*policy}
 
 		if jsonOutput {
@@ -104,15 +103,44 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 		}
 
 		_, _ = common.BoldWhite.Printf("Policies (%d)\n\n", len(policies))
-		printPolicySummary(*policy, 0, []policyAgentAccountRef{{
-			GrantID: account.ID,
-			Email:   account.Email,
-		}})
+		printPolicySummary(*policy, 0, []policyAgentAccountRef{accountRef})
 		fmt.Println()
 		return struct{}{}, nil
 	})
 
 	return err
+}
+
+func resolveAgentAccountWorkspacePolicy(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	GetPolicy(context.Context, string) (*domain.Policy, error)
+}, account domain.AgentAccount) (*domain.Policy, policyAgentAccountRef, error) {
+	accountRef := policyAgentAccountRef{
+		GrantID:     account.ID,
+		Email:       account.Email,
+		WorkspaceID: strings.TrimSpace(account.WorkspaceID),
+	}
+
+	policyID := strings.TrimSpace(account.Settings.PolicyID)
+	if accountRef.WorkspaceID != "" {
+		workspace, err := client.GetWorkspace(ctx, accountRef.WorkspaceID)
+		if err != nil {
+			return nil, accountRef, common.WrapGetError("workspace", err)
+		}
+		if workspace == nil {
+			return nil, accountRef, common.NewUserError("workspace not found", "The API returned an empty workspace response")
+		}
+		policyID = strings.TrimSpace(workspace.PolicyID)
+	}
+	if policyID == "" {
+		return nil, accountRef, nil
+	}
+
+	policy, err := client.GetPolicy(ctx, policyID)
+	if err != nil {
+		return nil, accountRef, common.WrapGetError("policy", err)
+	}
+	return policy, accountRef, nil
 }
 
 func newPolicyGetCmd() *cobra.Command {

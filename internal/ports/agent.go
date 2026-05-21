@@ -16,7 +16,7 @@ type AgentClient interface {
 
 	// CreateAgentAccount creates a new agent account with the given email address.
 	// appPassword is optional and enables IMAP/SMTP client access when set.
-	// policyID is optional and attaches the created account to an existing policy.
+	// policyID is deprecated; policy attachment happens through workspaces.
 	CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error)
 
 	// UpdateAgentAccount updates mutable settings on an existing agent account.

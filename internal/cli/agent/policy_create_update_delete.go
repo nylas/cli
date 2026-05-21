@@ -172,7 +172,7 @@ func runPolicyDelete(policyID string) error {
 		if len(attachedAccounts) > 0 {
 			accountSummary := formatPolicyAgentAccounts(attachedAccounts)
 			return struct{}{}, common.NewUserError(
-				fmt.Sprintf("policy is attached to agent accounts: %s", accountSummary),
+				fmt.Sprintf("policy is attached to agent workspaces: %s", accountSummary),
 				fmt.Sprintf("Detach or move the listed accounts to another policy before deleting %q", policyID),
 			)
 		}

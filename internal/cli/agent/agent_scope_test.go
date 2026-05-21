@@ -20,6 +20,41 @@ func (c policyLookupClient) GetPolicy(ctx context.Context, policyID string) (*do
 	return &policy, nil
 }
 
+type workspaceLookupClient struct {
+	workspaces map[string]*domain.Workspace
+	err        error
+}
+
+func (c workspaceLookupClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
+	return c.workspaces[workspaceID], nil
+}
+
+type workspacePolicyClient struct {
+	workspaces  map[string]*domain.Workspace
+	policies    map[string]domain.Policy
+	gotPolicyID string
+}
+
+func (c *workspacePolicyClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	workspace := c.workspaces[workspaceID]
+	if workspace == nil {
+		return nil, domain.ErrWorkspaceNotFound
+	}
+	return workspace, nil
+}
+
+func (c *workspacePolicyClient) GetPolicy(ctx context.Context, policyID string) (*domain.Policy, error) {
+	c.gotPolicyID = policyID
+	policy, ok := c.policies[policyID]
+	if !ok {
+		return nil, domain.ErrPolicyNotFound
+	}
+	return &policy, nil
+}
+
 func TestUpsertAgentAccount(t *testing.T) {
 	accounts := []domain.AgentAccount{
 		{
@@ -98,4 +133,93 @@ func TestUpsertPoliciesForAgentAccounts(t *testing.T) {
 		assert.Equal(t, "policy-fresh", updated[1].ID)
 	}
 	assert.Len(t, policies, 1)
+}
+
+func TestLoadAgentWorkspacesFailsClosedOnLookupError(t *testing.T) {
+	accounts := []domain.AgentAccount{{
+		ID:          "grant-1",
+		Provider:    domain.ProviderNylas,
+		WorkspaceID: "workspace-1",
+	}}
+
+	workspaces, err := loadAgentWorkspaces(context.Background(), workspaceLookupClient{err: domain.ErrWorkspaceNotFound}, accounts)
+
+	assert.Error(t, err)
+	assert.Nil(t, workspaces)
+}
+
+func TestBuildWorkspaceRuleIDsByPolicyKeepsEmptyWorkspaceRules(t *testing.T) {
+	accounts := []domain.AgentAccount{{
+		ID:          "grant-1",
+		Provider:    domain.ProviderNylas,
+		WorkspaceID: "workspace-1",
+	}}
+	workspacesByID := map[string]*domain.Workspace{
+		"workspace-1": {ID: "workspace-1", PolicyID: "policy-1", RulesIDs: nil},
+	}
+
+	ruleIDsByPolicy := buildWorkspaceRuleIDsByPolicy(accounts, workspacesByID)
+
+	ruleIDs, ok := ruleIDsByPolicy["policy-1"]
+	assert.True(t, ok)
+	assert.Empty(t, ruleIDs)
+}
+
+func TestUpsertPoliciesForAgentAccountsUsesWorkspacePolicy(t *testing.T) {
+	policies := []domain.Policy{{ID: "policy-existing", Name: "Existing"}}
+	accounts := []domain.AgentAccount{{
+		ID:          "grant-fresh",
+		Provider:    domain.ProviderNylas,
+		WorkspaceID: "workspace-1",
+		Settings: domain.AgentAccountSettings{
+			PolicyID: "legacy-policy",
+		},
+	}}
+	workspacesByID := map[string]*domain.Workspace{
+		"workspace-1": {ID: "workspace-1", PolicyID: "policy-fresh"},
+	}
+	client := policyLookupClient{
+		policies: map[string]domain.Policy{
+			"policy-fresh": {ID: "policy-fresh", Name: "Fresh"},
+		},
+	}
+
+	updated, err := upsertPoliciesForAgentAccountsWithWorkspaces(context.Background(), client, policies, accounts, workspacesByID)
+
+	assert.NoError(t, err)
+	if assert.Len(t, updated, 2) {
+		assert.Equal(t, "policy-existing", updated[0].ID)
+		assert.Equal(t, "policy-fresh", updated[1].ID)
+	}
+}
+
+func TestResolveAgentAccountWorkspacePolicyUsesWorkspacePolicy(t *testing.T) {
+	client := &workspacePolicyClient{
+		workspaces: map[string]*domain.Workspace{
+			"workspace-1": {ID: "workspace-1", PolicyID: "workspace-policy"},
+		},
+		policies: map[string]domain.Policy{
+			"workspace-policy": {ID: "workspace-policy", Name: "Workspace Policy"},
+			"legacy-policy":    {ID: "legacy-policy", Name: "Legacy Policy"},
+		},
+	}
+	account := domain.AgentAccount{
+		ID:          "grant-1",
+		Email:       "agent@example.com",
+		WorkspaceID: "workspace-1",
+		Settings: domain.AgentAccountSettings{
+			PolicyID: "legacy-policy",
+		},
+	}
+
+	policy, ref, err := resolveAgentAccountWorkspacePolicy(context.Background(), client, account)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "workspace-policy", policy.ID)
+	assert.Equal(t, "workspace-policy", client.gotPolicyID)
+	assert.Equal(t, policyAgentAccountRef{
+		GrantID:     "grant-1",
+		Email:       "agent@example.com",
+		WorkspaceID: "workspace-1",
+	}, ref)
 }

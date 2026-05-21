@@ -305,6 +305,48 @@ func (c *HTTPClient) DeleteConnector(ctx context.Context, connectorID string) er
 	return c.doDelete(ctx, queryURL)
 }
 
+// GetWorkspace retrieves a grant workspace.
+func (c *HTTPClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	if err := validateRequired("workspace ID", workspaceID); err != nil {
+		return nil, err
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/workspaces/%s", c.baseURL, url.PathEscape(workspaceID))
+
+	var result struct {
+		Data domain.Workspace `json:"data"`
+	}
+	if err := c.doGetWithNotFound(ctx, queryURL, &result, domain.ErrWorkspaceNotFound); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
+// UpdateWorkspace updates workspace policy/rule attachments.
+func (c *HTTPClient) UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error) {
+	if err := validateRequired("workspace ID", workspaceID); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, fmt.Errorf("update workspace request is required")
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/workspaces/%s", c.baseURL, url.PathEscape(workspaceID))
+
+	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data domain.Workspace `json:"data"`
+	}
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
+}
+
 // Admin Credentials
 
 // ListCredentials retrieves all credentials for a connector.

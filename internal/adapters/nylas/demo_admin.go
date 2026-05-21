@@ -207,6 +207,26 @@ func (d *DemoClient) DeleteConnector(ctx context.Context, connectorID string) er
 	return nil
 }
 
+func (d *DemoClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	return &domain.Workspace{
+		ID:       workspaceID,
+		Name:     "Demo Agent Workspace",
+		PolicyID: "policy-demo-1",
+		RulesIDs: []string{"rule-demo-1"},
+	}, nil
+}
+
+func (d *DemoClient) UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error) {
+	workspace := &domain.Workspace{ID: workspaceID, Name: "Demo Agent Workspace"}
+	if req.PolicyID != nil {
+		workspace.PolicyID = *req.PolicyID
+	}
+	if req.RulesIDs != nil {
+		workspace.RulesIDs = append([]string(nil), (*req.RulesIDs)...)
+	}
+	return workspace, nil
+}
+
 func (d *DemoClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
 	return []domain.ConnectorCredential{
 		{ID: "cred-demo-1", Name: "OAuth Demo Credential", CredentialType: "oauth"},

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -196,7 +195,7 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutRetryCreate(t
 	assert.Equal(t, 1, updateCalls)
 }
 
-func TestCreateAgentAccountWithFallback_RejectsExistingGrantWithoutRequestedPolicy(t *testing.T) {
+func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutCheckingPolicy(t *testing.T) {
 	initialErr := &domain.APIError{
 		StatusCode: http.StatusBadRequest,
 		Message:    "settings.app_password is an unknown field",
@@ -230,17 +229,13 @@ func TestCreateAgentAccountWithFallback_RejectsExistingGrantWithoutRequestedPoli
 		"policy-123",
 	)
 
-	require.Error(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, account)
-	assert.ErrorContains(t, err, "existing agent account is not attached to the requested policy")
-	var cliErr *common.CLIError
-	require.ErrorAs(t, err, &cliErr)
-	assert.Contains(t, cliErr.Suggestion, "create fallback cannot attach it to policy policy-123")
 	assert.Equal(t, 1, createCalls)
-	assert.Equal(t, 0, updateCalls)
+	assert.Equal(t, 1, updateCalls)
 }
 
-func TestCreateAgentAccountWithFallback_RejectsExistingGrantOnDifferentPolicy(t *testing.T) {
+func TestCreateAgentAccountWithFallback_UpdatesExistingGrantOnDifferentPolicy(t *testing.T) {
 	initialErr := &domain.APIError{
 		StatusCode: http.StatusBadRequest,
 		Message:    "settings.app_password is an unknown field",
@@ -275,15 +270,10 @@ func TestCreateAgentAccountWithFallback_RejectsExistingGrantOnDifferentPolicy(t 
 		"policy-123",
 	)
 
-	require.Error(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, account)
-	assert.ErrorContains(t, err, "existing agent account is attached to a different policy")
-	var cliErr *common.CLIError
-	require.ErrorAs(t, err, &cliErr)
-	assert.Contains(t, cliErr.Suggestion, "policy-other")
-	assert.Contains(t, cliErr.Suggestion, "policy-123")
 	assert.Equal(t, 1, createCalls)
-	assert.Equal(t, 0, updateCalls)
+	assert.Equal(t, 1, updateCalls)
 }
 
 func TestCreateAgentAccountWithFallback_PreservesNewGrantOnUpdateFailure(t *testing.T) {

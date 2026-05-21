@@ -62,13 +62,14 @@ type UpdateApplicationRequest struct {
 
 // Connector represents a provider connector (Google, Microsoft, iCloud, Yahoo, IMAP)
 type Connector struct {
-	ID        string             `json:"id,omitempty"`
-	Name      string             `json:"name"`
-	Provider  string             `json:"provider"` // "google", "microsoft", "icloud", "yahoo", "imap"
-	Settings  *ConnectorSettings `json:"settings,omitempty"`
-	Scopes    []string           `json:"scopes,omitempty"`
-	CreatedAt *UnixTime          `json:"created_at,omitempty"`
-	UpdatedAt *UnixTime          `json:"updated_at,omitempty"`
+	ID                 string             `json:"id,omitempty"`
+	Name               string             `json:"name"`
+	Provider           string             `json:"provider"` // "google", "microsoft", "icloud", "yahoo", "imap"
+	DefaultWorkspaceID string             `json:"default_workspace_id,omitempty"`
+	Settings           *ConnectorSettings `json:"settings,omitempty"`
+	Scopes             []string           `json:"scopes,omitempty"`
+	CreatedAt          *UnixTime          `json:"created_at,omitempty"`
+	UpdatedAt          *UnixTime          `json:"updated_at,omitempty"`
 }
 
 // ConnectorSettings holds provider-specific configuration

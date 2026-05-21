@@ -254,7 +254,7 @@ func TestCreateAgentAccount(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "agent@example.com", settings["email"])
 		assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
-		assert.Equal(t, "policy-123", settings["policy_id"])
+		assert.NotContains(t, settings, "policy_id")
 
 		response := map[string]any{
 			"data": map[string]any{
@@ -262,10 +262,8 @@ func TestCreateAgentAccount(t *testing.T) {
 				"email":        "agent@example.com",
 				"provider":     "nylas",
 				"grant_status": "valid",
+				"workspace_id": "workspace-123",
 				"created_at":   time.Now().Unix(),
-				"settings": map[string]any{
-					"policy_id": "policy-123",
-				},
 			},
 		}
 
@@ -282,7 +280,8 @@ func TestCreateAgentAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "agent-new", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
-	assert.Equal(t, "policy-123", account.Settings.PolicyID)
+	assert.Equal(t, "workspace-123", account.WorkspaceID)
+	assert.Empty(t, account.Settings.PolicyID)
 }
 
 func TestUpdateAgentAccount(t *testing.T) {
@@ -320,7 +319,7 @@ func TestUpdateAgentAccount(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, "agent@example.com", settings["email"])
 			assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
-			assert.Equal(t, "policy-123", settings["policy_id"])
+			assert.NotContains(t, settings, "policy_id")
 
 			response := map[string]any{
 				"data": map[string]any{

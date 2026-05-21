@@ -13,9 +13,7 @@ func (m *MockClient) ListAgentAccounts(ctx context.Context) ([]domain.AgentAccou
 			Provider:    domain.ProviderNylas,
 			Email:       "agent@example.com",
 			GrantStatus: "valid",
-			Settings: domain.AgentAccountSettings{
-				PolicyID: "policy-1",
-			},
+			WorkspaceID: "workspace-1",
 		},
 	}, nil
 }
@@ -26,9 +24,7 @@ func (m *MockClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 		Provider:    domain.ProviderNylas,
 		Email:       "agent@example.com",
 		GrantStatus: "valid",
-		Settings: domain.AgentAccountSettings{
-			PolicyID: "policy-1",
-		},
+		WorkspaceID: "workspace-1",
 	}, nil
 }
 
@@ -38,9 +34,7 @@ func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword,
 		Provider:    domain.ProviderNylas,
 		Email:       email,
 		GrantStatus: "valid",
-		Settings: domain.AgentAccountSettings{
-			PolicyID: policyID,
-		},
+		WorkspaceID: "workspace-new",
 	}, nil
 }
 
@@ -50,7 +44,7 @@ func (m *MockClient) UpdateAgentAccount(ctx context.Context, grantID, email, app
 		Provider:    domain.ProviderNylas,
 		Email:       email,
 		GrantStatus: "valid",
-		Settings:    domain.AgentAccountSettings{PolicyID: "policy-1"},
+		WorkspaceID: "workspace-1",
 	}, nil
 }
 

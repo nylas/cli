@@ -24,11 +24,11 @@ func newRuleCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a rule",
-		Long: `Create a new rule and attach it to an agent policy.
+		Long: `Create a new rule and attach it to agent workspaces.
 
-Rules are created through /v3/rules, then attached to the selected policy. If
---policy-id is omitted, the CLI uses the policy attached to the current
-default provider=nylas grant.
+Rules are created through /v3/rules, then attached to the workspaces using the
+selected policy. If --policy-id is omitted, the CLI uses the policy attached to
+the current default provider=nylas grant workspace.
 
 Examples:
   nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action block
@@ -60,7 +60,7 @@ Examples:
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Rule action as type or type=value (repeatable)")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach the created rule to")
+	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID whose agent workspaces receive the created rule")
 
 	return cmd
 }
@@ -77,12 +77,12 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 			return struct{}{}, common.WrapCreateError("rule", err)
 		}
 
-		if err := attachRuleToPolicy(ctx, client, *policy, rule.ID); err != nil {
+		if err := attachRuleToAgentWorkspaces(ctx, client, *policy, accounts, rule.ID); err != nil {
 			cleanupErr := client.DeleteRule(ctx, rule.ID)
 			if cleanupErr != nil {
-				return struct{}{}, fmt.Errorf("failed to attach rule to policy: %w (cleanup failed: %v)", err, cleanupErr)
+				return struct{}{}, fmt.Errorf("failed to attach rule to workspace: %w (cleanup failed: %v)", err, cleanupErr)
 			}
-			return struct{}{}, fmt.Errorf("failed to attach rule to policy: %w", err)
+			return struct{}{}, fmt.Errorf("failed to attach rule to workspace: %w", err)
 		}
 
 		if jsonOutput {
@@ -119,8 +119,8 @@ func newRuleUpdateCmd() *cobra.Command {
 		Long: `Update an existing rule.
 
 By default, this validates that the rule belongs to the current default
-provider=nylas policy. Use --policy-id to scope the validation to another
-agent policy, or --all to search any agent policy.
+provider=nylas workspace. Use --policy-id to scope the validation to another
+agent workspace policy, or --all to search any agent workspace policy.
 
 Examples:
   nylas agent rule update <rule-id> --name "Updated Rule"
@@ -225,7 +225,7 @@ func newRuleDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <rule-id>",
 		Short: "Delete a rule",
-		Long: `Delete a rule and detach it from agent policies.
+		Long: `Delete a rule and detach it from agent workspaces.
 
 Examples:
   nylas agent rule delete <rule-id> --yes
@@ -262,29 +262,48 @@ func runRuleDelete(ruleID, policyID string, allRules bool) error {
 			)
 		}
 
-		latestPolicies, err := refreshPolicies(ctx, client, scope.AllAgentPolicies)
-		if err != nil {
-			return struct{}{}, common.WrapGetError("policy", err)
-		}
-
-		blockingPolicies, err := policiesLeftEmptyByRuleRemoval(ctx, client, latestPolicies, ruleID)
-		if err != nil {
-			return struct{}{}, common.WrapGetError("rule", err)
-		}
-		if len(blockingPolicies) > 0 {
-			policyNames := make([]string, 0, len(blockingPolicies))
-			for _, policy := range blockingPolicies {
-				policyNames = append(policyNames, policy.Name)
+		var rollback func(context.Context) error
+		if hasWorkspaceRefs(scope.AllAgentRefs) {
+			blockingWorkspaces, err := workspacesLeftEmptyByRuleRemoval(ctx, client, scope.AllAgentRefs, ruleID)
+			if err != nil {
+				return struct{}{}, common.WrapGetError("rule", err)
 			}
-			return struct{}{}, common.NewUserError(
-				"cannot delete the last rule from an agent policy",
-				fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
-			)
-		}
+			if len(blockingWorkspaces) > 0 {
+				return struct{}{}, common.NewUserError(
+					"cannot delete the last rule from an agent workspace",
+					fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(blockingWorkspaces, ", "), scope.Rule.Name),
+				)
+			}
 
-		rollback, err := detachRuleFromPolicies(ctx, client, latestPolicies, ruleID)
-		if err != nil {
-			return struct{}{}, fmt.Errorf("failed to detach rule from agent policies: %w", err)
+			rollback, err = detachRuleFromAgentWorkspaces(ctx, client, scope.AllAgentRefs, ruleID)
+			if err != nil {
+				return struct{}{}, fmt.Errorf("failed to detach rule from agent workspaces: %w", err)
+			}
+		} else {
+			latestPolicies, err := refreshPolicies(ctx, client, scope.AllAgentPolicies)
+			if err != nil {
+				return struct{}{}, common.WrapGetError("policy", err)
+			}
+
+			blockingPolicies, err := policiesLeftEmptyByRuleRemoval(ctx, client, latestPolicies, ruleID)
+			if err != nil {
+				return struct{}{}, common.WrapGetError("rule", err)
+			}
+			if len(blockingPolicies) > 0 {
+				policyNames := make([]string, 0, len(blockingPolicies))
+				for _, policy := range blockingPolicies {
+					policyNames = append(policyNames, policy.Name)
+				}
+				return struct{}{}, common.NewUserError(
+					"cannot delete the last rule from an agent policy",
+					fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
+				)
+			}
+
+			rollback, err = detachRuleFromPolicies(ctx, client, latestPolicies, ruleID)
+			if err != nil {
+				return struct{}{}, fmt.Errorf("failed to detach rule from agent policies: %w", err)
+			}
 		}
 
 		if err := client.DeleteRule(ctx, ruleID); err != nil {
