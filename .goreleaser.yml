@@ -48,6 +48,7 @@ archives:
       - README.md
       - LICENSE*
       - docs/*
+      - completions/*
 
 nfpms:
   - id: nylas-cli
