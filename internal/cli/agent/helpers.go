@@ -21,6 +21,9 @@ func printAgentSummary(account domain.AgentAccount, index int) {
 		common.FormatGrantStatus(account.GrantStatus),
 	)
 	_, _ = common.Dim.Printf("   ID: %s\n", account.ID)
+	if account.WorkspaceID != "" {
+		_, _ = common.Dim.Printf("   Workspace ID: %s\n", account.WorkspaceID)
+	}
 }
 
 func printAgentDetails(account domain.AgentAccount) {

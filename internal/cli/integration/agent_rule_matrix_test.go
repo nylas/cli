@@ -23,9 +23,10 @@ type ruleMatrixScope struct {
 		DeleteAgentAccount(context.Context, string) error
 		DeleteRule(context.Context, string) error
 	}
-	policyID   string
-	accountID  string
-	createdIDs []string
+	policyID    string
+	accountID   string
+	workspaceID string
+	createdIDs  []string
 }
 
 type ruleConditionMatrixCase struct {
@@ -52,7 +53,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 	scope := setupRuleMatrixScope(t, "rule-matrix-create")
 	placeholder := createRuleForTest(t, getTestClient(), "it-rule-matrix-create-placeholder")
 	scope.trackRule(placeholder.ID)
-	attachRuleToPolicyForTest(t, getTestClient(), scope.policyID, placeholder.ID)
+	attachRuleToWorkspaceForTest(t, getTestClient(), scope.workspaceID, placeholder.ID)
 
 	for _, tc := range buildRuleConditionMatrixCases() {
 		t.Run("create-"+tc.name, func(t *testing.T) {
@@ -128,15 +129,15 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 
 	placeholder := createRuleForTest(t, client, "it-rule-matrix-update-placeholder")
 	scope.trackRule(placeholder.ID)
-	attachRuleToPolicyForTest(t, client, scope.policyID, placeholder.ID)
+	attachRuleToWorkspaceForTest(t, client, scope.workspaceID, placeholder.ID)
 
 	inboundBase := createMatrixRuleForTest(t, client, "inbound", "it-rule-matrix-update-inbound")
 	scope.trackRule(inboundBase.ID)
-	attachRuleToPolicyForTest(t, client, scope.policyID, inboundBase.ID)
+	attachRuleToWorkspaceForTest(t, client, scope.workspaceID, inboundBase.ID)
 
 	outboundBase := createMatrixRuleForTest(t, client, "outbound", "it-rule-matrix-update-outbound")
 	scope.trackRule(outboundBase.ID)
-	attachRuleToPolicyForTest(t, client, scope.policyID, outboundBase.ID)
+	attachRuleToWorkspaceForTest(t, client, scope.workspaceID, outboundBase.ID)
 
 	for _, tc := range buildRuleConditionMatrixCases() {
 		t.Run("update-condition-"+tc.name, func(t *testing.T) {
@@ -245,10 +246,11 @@ func setupRuleMatrixScope(t *testing.T, prefix string) *ruleMatrixScope {
 	env["NYLAS_GRANT_ID"] = account.ID
 
 	scope := &ruleMatrixScope{
-		env:       env,
-		client:    client,
-		policyID:  policy.ID,
-		accountID: account.ID,
+		env:         env,
+		client:      client,
+		policyID:    policy.ID,
+		accountID:   account.ID,
+		workspaceID: account.WorkspaceID,
 	}
 
 	t.Cleanup(func() {
@@ -259,7 +261,7 @@ func setupRuleMatrixScope(t *testing.T, prefix string) *ruleMatrixScope {
 			}
 			seen[ruleID] = struct{}{}
 
-			removeRuleFromPolicyForTest(t, client, scope.policyID, ruleID)
+			removeRuleFromWorkspaceForTest(t, client, scope.workspaceID, ruleID)
 			acquireRateLimit(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := client.DeleteRule(ctx, ruleID); err != nil {

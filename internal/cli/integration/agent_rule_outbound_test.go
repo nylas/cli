@@ -32,7 +32,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadUpdateDeleteOutbound(t *testing.T) {
 
 	t.Cleanup(func() {
 		if createdPolicy != nil && createdRule != nil && createdRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, createdPolicy.ID, createdRule.ID)
+			removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 		}
 		if createdRule != nil && createdRule.ID != "" {
 			acquireRateLimit(t)
@@ -41,7 +41,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadUpdateDeleteOutbound(t *testing.T) {
 			_ = client.DeleteRule(ctx, createdRule.ID)
 		}
 		if createdPolicy != nil && placeholderRule != nil && placeholderRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, createdPolicy.ID, placeholderRule.ID)
+			removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
 		}
 		if placeholderRule != nil && placeholderRule.ID != "" {
 			acquireRateLimit(t)
@@ -76,8 +76,8 @@ func TestCLI_AgentRuleLifecycle_CreateReadUpdateDeleteOutbound(t *testing.T) {
 	env["NYLAS_GRANT_ID"] = createdAccount.ID
 
 	placeholderRule = createRuleForTest(t, client, "it-rule-outbound-placeholder")
-	attachRuleToPolicyForTest(t, client, createdPolicy.ID, placeholderRule.ID)
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, placeholderRule.ID)
+	attachRuleToWorkspaceForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
 
 	createStdout, createStderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -114,7 +114,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadUpdateDeleteOutbound(t *testing.T) {
 	}
 	createdRule = &rule
 
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 
 	readStdout, readStderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -181,6 +181,6 @@ func TestCLI_AgentRuleLifecycle_CreateReadUpdateDeleteOutbound(t *testing.T) {
 		t.Fatalf("expected delete confirmation in stdout, got: %s", deleteStdout)
 	}
 
-	assertPolicyMissingRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceMissingRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 	createdRule = nil
 }

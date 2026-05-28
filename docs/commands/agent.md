@@ -42,9 +42,11 @@ Agent Accounts (2)
 
 1. support@yourapp.nylas.email            active
    ID: 11111111-1111-1111-1111-111111111111
+   Workspace ID: aaaaaaaa-1111-1111-1111-111111111111
 
 2. me@yourapp.nylas.email                 active
    ID: 22222222-2222-2222-2222-222222222222
+   Workspace ID: bbbbbbbb-2222-2222-2222-222222222222
 ```
 
 ## Create Agent Account

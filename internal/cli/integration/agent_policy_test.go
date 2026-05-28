@@ -286,7 +286,7 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected policy delete to fail while attached\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
-	if !strings.Contains(strings.ToLower(stderr), "policy is attached to agent accounts") {
+	if !strings.Contains(strings.ToLower(stderr), "policy is attached to agent workspaces") {
 		t.Fatalf("expected attached policy error, got stderr: %s", stderr)
 	}
 	if !strings.Contains(stderr, createdAccount.Email) {
@@ -308,16 +308,78 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 func createAgentWithPolicyForTest(t *testing.T, email, policyID string) *domain.AgentAccount {
 	t.Helper()
 
+	client := getTestClient()
+
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), domain.TimeoutAPI)
-	defer cancel()
-
-	client := getTestClient()
-	account, err := client.CreateAgentAccount(ctx, email, "", policyID)
+	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	cancel()
 	if err != nil {
-		t.Fatalf("failed to create agent with policy: %v", err)
+		t.Fatalf("failed to create agent for policy attach: %v", err)
 	}
+
+	// In the workspace model the adapter no longer attaches policies on create;
+	// policy attachment is a workspace PATCH (mirrors the CLI create path).
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID == "" {
+		deleteAgentAccountQuietly(t, client, account.ID)
+		t.Fatalf("created agent account %q has no workspace_id to attach policy %q", email, policyID)
+	}
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), domain.TimeoutAPI)
+	_, err = client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{PolicyID: &policyID})
+	cancel()
+	if err != nil {
+		deleteAgentAccountQuietly(t, client, account.ID)
+		t.Fatalf("failed to attach policy %q to workspace %q: %v", policyID, workspaceID, err)
+	}
+
 	return account
+}
+
+// deleteAgentAccountQuietly best-effort deletes an agent account so a helper
+// that fails mid-setup does not orphan the created grant (the caller cannot
+// register cleanup until the helper returns).
+func deleteAgentAccountQuietly(t *testing.T, client interface {
+	DeleteAgentAccount(context.Context, string) error
+}, grantID string) {
+	t.Helper()
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := client.DeleteAgentAccount(ctx, grantID); err != nil {
+		t.Logf("cleanup: delete agent account %s: %v", grantID, err)
+	}
+}
+
+func assertWorkspacePolicyForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, workspaceID, wantPolicyID string) {
+	t.Helper()
+
+	if strings.TrimSpace(workspaceID) == "" {
+		t.Fatalf("agent account has no workspace_id; cannot verify policy %q", wantPolicyID)
+	}
+
+	deadline := time.Now().Add(60 * time.Second)
+	var lastSeen string
+	for time.Now().Before(deadline) {
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		cancel()
+		if err == nil && workspace != nil {
+			lastSeen = strings.TrimSpace(workspace.PolicyID)
+			if lastSeen == wantPolicyID {
+				return
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	t.Fatalf("workspace %q policy_id = %q, want %q", workspaceID, lastSeen, wantPolicyID)
 }
 
 func newPolicyTestName(prefix string) string {

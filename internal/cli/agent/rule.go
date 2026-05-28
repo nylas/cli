@@ -24,7 +24,6 @@ type resolvedRuleScope struct {
 	Rule               *domain.Rule
 	SelectedRefs       []rulePolicyRef
 	AllAgentRefs       []rulePolicyRef
-	AllAgentPolicies   []domain.Policy
 	SharedOutsideAgent bool
 }
 
@@ -142,10 +141,6 @@ func findPolicyByID(policies []domain.Policy, policyID string) *domain.Policy {
 	return nil
 }
 
-func buildRuleRefsByID(policies []domain.Policy, refsByPolicyID map[string][]policyAgentAccountRef) map[string][]rulePolicyRef {
-	return buildRuleRefsByIDWithRuleIDs(policies, refsByPolicyID, nil)
-}
-
 func buildRuleRefsByIDWithRuleIDs(policies []domain.Policy, refsByPolicyID map[string][]policyAgentAccountRef, ruleIDsByPolicy map[string][]string) map[string][]rulePolicyRef {
 	refsByRuleID := make(map[string][]rulePolicyRef)
 	for _, policy := range policies {
@@ -244,7 +239,6 @@ func resolveScopedRule(ctx context.Context, client ports.NylasClient, ruleID, po
 		Rule:               rule,
 		SelectedRefs:       selectedRefs,
 		AllAgentRefs:       allRefs,
-		AllAgentPolicies:   scope.AgentPolicies,
 		SharedOutsideAgent: ruleReferencedOutsideAgentScope(scope.AllPolicies, scope.AgentPolicies, ruleID),
 	}, nil
 }
@@ -311,71 +305,10 @@ func removeString(items []string, value string) []string {
 	return filtered
 }
 
-func refreshPolicies(ctx context.Context, client ports.NylasClient, policies []domain.Policy) ([]domain.Policy, error) {
-	refreshed := make([]domain.Policy, 0, len(policies))
-	for _, policy := range policies {
-		latest, err := client.GetPolicy(ctx, policy.ID)
-		if err != nil {
-			return nil, err
-		}
-		refreshed = append(refreshed, *latest)
-	}
-	return refreshed, nil
-}
-
-func policiesLeftEmptyByRuleRemoval(ctx context.Context, client interface {
-	GetRule(context.Context, string) (*domain.Rule, error)
-}, policies []domain.Policy, ruleID string) ([]domain.Policy, error) {
-	blocking := make([]domain.Policy, 0)
-	for _, policy := range policies {
-		if !policyContainsRule(policy, ruleID) {
-			continue
-		}
-
-		liveRemaining := false
-		for _, candidate := range removeString(policy.Rules, ruleID) {
-			candidate = strings.TrimSpace(candidate)
-			if candidate == "" {
-				continue
-			}
-
-			_, err := client.GetRule(ctx, candidate)
-			switch {
-			case err == nil:
-				liveRemaining = true
-			case errors.Is(err, domain.ErrRuleNotFound):
-				continue
-			default:
-				return nil, err
-			}
-			if liveRemaining {
-				break
-			}
-		}
-		if !liveRemaining {
-			blocking = append(blocking, policy)
-		}
-	}
-	return blocking, nil
-}
-
-func attachRuleToPolicy(ctx context.Context, client interface {
-	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
-}, policy domain.Policy, ruleID string) error {
-	updatedRules := appendUniqueString(policy.Rules, ruleID)
-	if slices.Equal(updatedRules, policy.Rules) {
-		return nil
-	}
-
-	_, err := client.UpdatePolicy(ctx, policy.ID, map[string]any{"rules": updatedRules})
-	return err
-}
-
 func attachRuleToAgentWorkspaces(ctx context.Context, client interface {
 	GetWorkspace(context.Context, string) (*domain.Workspace, error)
 	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
-	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
-}, policy domain.Policy, accounts []policyAgentAccountRef, ruleID string) error {
+}, accounts []policyAgentAccountRef, ruleID string) error {
 	seenWorkspaceIDs := make(map[string]struct{}, len(accounts))
 	for _, account := range accounts {
 		workspaceID := strings.TrimSpace(account.WorkspaceID)
@@ -403,7 +336,10 @@ func attachRuleToAgentWorkspaces(ctx context.Context, client interface {
 		}
 	}
 	if len(seenWorkspaceIDs) == 0 {
-		return attachRuleToPolicy(ctx, client, policy, ruleID)
+		return common.NewUserError(
+			"agent account has no workspace",
+			"The selected provider=nylas account is missing a workspace to attach the rule to; reconnect the account and try again",
+		)
 	}
 	return nil
 }
@@ -556,47 +492,4 @@ func formatWorkspaceRef(workspace domain.Workspace) string {
 		return workspace.ID
 	}
 	return fmt.Sprintf("%s (%s)", name, workspace.ID)
-}
-
-func detachRuleFromPolicies(ctx context.Context, client interface {
-	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
-}, policies []domain.Policy, ruleID string) (func(context.Context) error, error) {
-	originalRulesByPolicyID := make(map[string][]string)
-	updatedPolicyIDs := make([]string, 0)
-
-	for _, policy := range policies {
-		if !policyContainsRule(policy, ruleID) {
-			continue
-		}
-
-		originalRulesByPolicyID[policy.ID] = append([]string(nil), policy.Rules...)
-		updatedRules := removeString(policy.Rules, ruleID)
-		if _, err := client.UpdatePolicy(ctx, policy.ID, map[string]any{"rules": updatedRules}); err != nil {
-			if rollbackErr := rollbackPolicyRuleUpdates(ctx, client, originalRulesByPolicyID, updatedPolicyIDs); rollbackErr != nil {
-				return nil, fmt.Errorf("failed to detach rule from policy %s: %w (rollback failed: %v)", policy.ID, err, rollbackErr)
-			}
-			return nil, err
-		}
-		updatedPolicyIDs = append(updatedPolicyIDs, policy.ID)
-	}
-
-	return func(ctx context.Context) error {
-		return rollbackPolicyRuleUpdates(ctx, client, originalRulesByPolicyID, updatedPolicyIDs)
-	}, nil
-}
-
-func rollbackPolicyRuleUpdates(ctx context.Context, client interface {
-	UpdatePolicy(context.Context, string, map[string]any) (*domain.Policy, error)
-}, originalRulesByPolicyID map[string][]string, updatedPolicyIDs []string) error {
-	var failures []string
-	for _, policyID := range updatedPolicyIDs {
-		if _, err := client.UpdatePolicy(ctx, policyID, map[string]any{"rules": originalRulesByPolicyID[policyID]}); err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", policyID, err))
-		}
-	}
-
-	if len(failures) > 0 {
-		return fmt.Errorf("failed to rollback policy updates: %s", strings.Join(failures, "; "))
-	}
-	return nil
 }

@@ -77,7 +77,7 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 			return struct{}{}, common.WrapCreateError("rule", err)
 		}
 
-		if err := attachRuleToAgentWorkspaces(ctx, client, *policy, accounts, rule.ID); err != nil {
+		if err := attachRuleToAgentWorkspaces(ctx, client, accounts, rule.ID); err != nil {
 			cleanupErr := client.DeleteRule(ctx, rule.ID)
 			if cleanupErr != nil {
 				return struct{}{}, fmt.Errorf("failed to attach rule to workspace: %w (cleanup failed: %v)", err, cleanupErr)
@@ -261,49 +261,27 @@ func runRuleDelete(ruleID, policyID string, allRules bool) error {
 				"Use the generic policy/rule surface to delete shared rules safely",
 			)
 		}
+		if !hasWorkspaceRefs(scope.AllAgentRefs) {
+			return struct{}{}, common.NewUserError(
+				"agent account has no workspace",
+				"The rule's provider=nylas account is missing a workspace; reconnect the account and try again",
+			)
+		}
 
-		var rollback func(context.Context) error
-		if hasWorkspaceRefs(scope.AllAgentRefs) {
-			blockingWorkspaces, err := workspacesLeftEmptyByRuleRemoval(ctx, client, scope.AllAgentRefs, ruleID)
-			if err != nil {
-				return struct{}{}, common.WrapGetError("rule", err)
-			}
-			if len(blockingWorkspaces) > 0 {
-				return struct{}{}, common.NewUserError(
-					"cannot delete the last rule from an agent workspace",
-					fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(blockingWorkspaces, ", "), scope.Rule.Name),
-				)
-			}
+		blockingWorkspaces, err := workspacesLeftEmptyByRuleRemoval(ctx, client, scope.AllAgentRefs, ruleID)
+		if err != nil {
+			return struct{}{}, common.WrapGetError("rule", err)
+		}
+		if len(blockingWorkspaces) > 0 {
+			return struct{}{}, common.NewUserError(
+				"cannot delete the last rule from an agent workspace",
+				fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(blockingWorkspaces, ", "), scope.Rule.Name),
+			)
+		}
 
-			rollback, err = detachRuleFromAgentWorkspaces(ctx, client, scope.AllAgentRefs, ruleID)
-			if err != nil {
-				return struct{}{}, fmt.Errorf("failed to detach rule from agent workspaces: %w", err)
-			}
-		} else {
-			latestPolicies, err := refreshPolicies(ctx, client, scope.AllAgentPolicies)
-			if err != nil {
-				return struct{}{}, common.WrapGetError("policy", err)
-			}
-
-			blockingPolicies, err := policiesLeftEmptyByRuleRemoval(ctx, client, latestPolicies, ruleID)
-			if err != nil {
-				return struct{}{}, common.WrapGetError("rule", err)
-			}
-			if len(blockingPolicies) > 0 {
-				policyNames := make([]string, 0, len(blockingPolicies))
-				for _, policy := range blockingPolicies {
-					policyNames = append(policyNames, policy.Name)
-				}
-				return struct{}{}, common.NewUserError(
-					"cannot delete the last rule from an agent policy",
-					fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
-				)
-			}
-
-			rollback, err = detachRuleFromPolicies(ctx, client, latestPolicies, ruleID)
-			if err != nil {
-				return struct{}{}, fmt.Errorf("failed to detach rule from agent policies: %w", err)
-			}
+		rollback, err := detachRuleFromAgentWorkspaces(ctx, client, scope.AllAgentRefs, ruleID)
+		if err != nil {
+			return struct{}{}, fmt.Errorf("failed to detach rule from agent workspaces: %w", err)
 		}
 
 		if err := client.DeleteRule(ctx, ruleID); err != nil {

@@ -32,7 +32,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 
 	t.Cleanup(func() {
 		if createdPolicy != nil && createdRule != nil && createdRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, createdPolicy.ID, createdRule.ID)
+			removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 		}
 		if createdRule != nil && createdRule.ID != "" {
 			acquireRateLimit(t)
@@ -41,7 +41,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 			_ = client.DeleteRule(ctx, createdRule.ID)
 		}
 		if createdPolicy != nil && placeholderRule != nil && placeholderRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, createdPolicy.ID, placeholderRule.ID)
+			removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
 		}
 		if placeholderRule != nil && placeholderRule.ID != "" {
 			acquireRateLimit(t)
@@ -81,8 +81,8 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	env["NYLAS_GRANT_ID"] = createdAccount.ID
 
 	placeholderRule = createRuleForTest(t, client, "it-rule-placeholder")
-	attachRuleToPolicyForTest(t, client, createdPolicy.ID, placeholderRule.ID)
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, placeholderRule.ID)
+	attachRuleToWorkspaceForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, placeholderRule.ID)
 
 	createStdout, createStderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -132,7 +132,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	}
 	createdRule = &rule
 
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 
 	readStdout, readStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "rule", "read", createdRule.ID, "--json")
 	if err != nil {
@@ -239,7 +239,7 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 		t.Fatalf("expected delete confirmation in stdout, got: %s", deleteStdout)
 	}
 
-	assertPolicyMissingRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceMissingRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 	createdRule = nil
 }
 
@@ -259,7 +259,7 @@ func TestCLI_AgentRuleDelete_RejectsLastRuleOnPolicy(t *testing.T) {
 
 	t.Cleanup(func() {
 		if createdPolicy != nil && createdRule != nil && createdRule.ID != "" {
-			removeRuleFromPolicyForTest(t, client, createdPolicy.ID, createdRule.ID)
+			removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 		}
 		if createdRule != nil && createdRule.ID != "" {
 			acquireRateLimit(t)
@@ -314,7 +314,7 @@ func TestCLI_AgentRuleDelete_RejectsLastRuleOnPolicy(t *testing.T) {
 		t.Fatalf("failed to parse rule create JSON: %v\noutput: %s", err, createStdout)
 	}
 	createdRule = &rule
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 
 	deleteStdout, deleteStderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -333,7 +333,7 @@ func TestCLI_AgentRuleDelete_RejectsLastRuleOnPolicy(t *testing.T) {
 		t.Fatalf("expected last-rule delete error, got stderr: %s", deleteStderr)
 	}
 
-	assertPolicyContainsRuleForTest(t, client, createdPolicy.ID, createdRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 }
 
 func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
@@ -371,16 +371,16 @@ func TestCLI_AgentRuleCommands_RejectMixedScopeRule(t *testing.T) {
 
 	createdAccount = createAgentWithPolicyForTest(t, email, agentPolicy.ID)
 	createdRule = createRuleForTest(t, client, fmt.Sprintf("it-rule-mixed-%d", time.Now().UnixNano()))
-	attachRuleToPolicyForTest(t, client, agentPolicy.ID, createdRule.ID)
+	attachRuleToWorkspaceForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 	attachRuleToPolicyForTest(t, client, detachedPolicy.ID, createdRule.ID)
-	assertPolicyContainsRuleForTest(t, client, agentPolicy.ID, createdRule.ID)
+	assertWorkspaceContainsRuleForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 	assertPolicyContainsRuleForTest(t, client, detachedPolicy.ID, createdRule.ID)
 	env["NYLAS_GRANT_ID"] = createdAccount.ID
 
 	t.Cleanup(func() {
 		if createdRule != nil && createdRule.ID != "" {
 			if agentPolicy != nil && agentPolicy.ID != "" {
-				removeRuleFromPolicyForTest(t, client, agentPolicy.ID, createdRule.ID)
+				removeRuleFromWorkspaceForTest(t, client, createdAccount.WorkspaceID, createdRule.ID)
 			}
 			if detachedPolicy != nil && detachedPolicy.ID != "" {
 				removeRuleFromPolicyForTest(t, client, detachedPolicy.ID, createdRule.ID)
@@ -470,25 +470,110 @@ func assertPolicyContainsRuleForTest(t *testing.T, client interface {
 	t.Fatalf("policy %q does not include rule %q", policyID, ruleID)
 }
 
-func assertPolicyMissingRuleForTest(t *testing.T, client interface {
-	GetPolicy(context.Context, string) (*domain.Policy, error)
-}, policyID, ruleID string) {
+// Workspace-scoped rule helpers mirror the policy-scoped ones above, but operate
+// on workspace.rules_ids — the attachment point the CLI now reads for agent
+// accounts. The policy-scoped helpers remain for non-agent policies (e.g. the
+// mixed-scope test's detached policy).
+
+func assertWorkspaceContainsRuleForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, workspaceID, ruleID string) {
 	t.Helper()
 
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		acquireRateLimit(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		policy, err := client.GetPolicy(ctx, policyID)
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
 		cancel()
-		if err == nil && !containsString(policy.Rules, ruleID) {
+		if err == nil && workspace != nil && containsString(workspace.RulesIDs, ruleID) {
 			return
 		}
 
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	t.Fatalf("policy %q still includes deleted rule %q", policyID, ruleID)
+	t.Fatalf("workspace %q does not include rule %q", workspaceID, ruleID)
+}
+
+func assertWorkspaceMissingRuleForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, workspaceID, ruleID string) {
+	t.Helper()
+
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		cancel()
+		if err == nil && workspace != nil && !containsString(workspace.RulesIDs, ruleID) {
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	t.Fatalf("workspace %q still includes deleted rule %q", workspaceID, ruleID)
+}
+
+func removeRuleFromWorkspaceForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+}, workspaceID, ruleID string) {
+	t.Helper()
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	workspace, err := client.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		t.Logf("cleanup: get workspace %q: %v", workspaceID, err)
+		return
+	}
+	if workspace == nil || !containsString(workspace.RulesIDs, ruleID) {
+		return
+	}
+
+	updatedRules := make([]string, 0, len(workspace.RulesIDs))
+	for _, existingRuleID := range workspace.RulesIDs {
+		if existingRuleID == ruleID {
+			continue
+		}
+		updatedRules = append(updatedRules, existingRuleID)
+	}
+
+	if _, err := client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{RulesIDs: &updatedRules}); err != nil {
+		t.Logf("cleanup: remove rule %q from workspace %q: %v", ruleID, workspaceID, err)
+	}
+}
+
+func attachRuleToWorkspaceForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	UpdateWorkspace(context.Context, string, *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+}, workspaceID, ruleID string) {
+	t.Helper()
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	workspace, err := client.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		t.Fatalf("failed to get workspace %q: %v", workspaceID, err)
+	}
+	if workspace == nil {
+		t.Fatalf("workspace %q not found", workspaceID)
+	}
+	if containsString(workspace.RulesIDs, ruleID) {
+		return
+	}
+
+	updatedRules := append(append([]string(nil), workspace.RulesIDs...), ruleID)
+	if _, err := client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{RulesIDs: &updatedRules}); err != nil {
+		t.Fatalf("failed to attach rule %q to workspace %q: %v", ruleID, workspaceID, err)
+	}
 }
 
 func removeRuleFromPolicyForTest(t *testing.T, client interface {

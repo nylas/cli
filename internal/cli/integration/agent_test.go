@@ -79,6 +79,11 @@ func TestCLI_AgentLifecycle_CreateListDeleteByEmail(t *testing.T) {
 		}
 		if listed.Email == email {
 			found = true
+			// The list endpoint must surface workspace_id so the CLI can
+			// display it (and so policy/rule resolution can use it).
+			if strings.TrimSpace(listed.WorkspaceID) == "" {
+				t.Fatalf("agent list did not return workspace_id for %q\noutput: %s", email, listStdout)
+			}
 		}
 	}
 	if !found {
@@ -275,11 +280,12 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	}
 	created = &account
 
-	if exists, fetched := waitForAgentByID(t, client, account.ID, true); !exists {
+	exists, fetched := waitForAgentByID(t, client, account.ID, true)
+	if !exists {
 		t.Fatalf("created agent account %q did not appear via GET-by-id", email)
-	} else if fetched.Settings.PolicyID != policy.ID {
-		t.Fatalf("fetched policy_id = %q, want %q", fetched.Settings.PolicyID, policy.ID)
 	}
+	// Policy now lives on the account's workspace, not grant settings.
+	assertWorkspacePolicyForTest(t, client, fetched.WorkspaceID, policy.ID)
 }
 
 func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
@@ -382,20 +388,13 @@ func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
 	}
 	createdPolicy = policy
 
-	acquireRateLimit(t)
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	account, err := client.CreateAgentAccount(ctx, email, "", policy.ID)
-	cancel()
-	if err != nil {
-		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
-	}
+	account := createAgentWithPolicyForTest(t, email, policy.ID)
 	created = account
 	env["NYLAS_GRANT_ID"] = account.ID
-	if exists, fetched := waitForAgentByID(t, client, account.ID, true); !exists {
+	if exists, _ := waitForAgentByID(t, client, account.ID, true); !exists {
 		t.Fatalf("created agent account %q not retrievable by id", email)
-	} else if fetched.Settings.PolicyID != policy.ID {
-		t.Fatalf("fetched policy_id before update = %q, want %q", fetched.Settings.PolicyID, policy.ID)
 	}
+	assertWorkspacePolicyForTest(t, client, account.WorkspaceID, policy.ID)
 
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(
 		t,
@@ -427,9 +426,8 @@ func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to refetch agent account after update: %v", err)
 	}
-	if refetched.Settings.PolicyID != policy.ID {
-		t.Fatalf("refetched policy_id after update = %q, want %q", refetched.Settings.PolicyID, policy.ID)
-	}
+	// app-password update must not disturb the workspace policy attachment.
+	assertWorkspacePolicyForTest(t, client, refetched.WorkspaceID, policy.ID)
 }
 
 func TestCLI_AgentDelete_ByID(t *testing.T) {
