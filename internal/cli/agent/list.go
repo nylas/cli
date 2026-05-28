@@ -50,7 +50,7 @@ func runList(jsonOutput bool) error {
 
 		_, _ = common.BoldWhite.Printf("Agent Accounts (%d)\n\n", len(accounts))
 		for i, account := range accounts {
-			printAgentSummary(account, i)
+			printAgentSummary(account, i, resolveWorkspacePolicyID(ctx, client, account))
 		}
 
 		fmt.Println()

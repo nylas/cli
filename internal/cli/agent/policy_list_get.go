@@ -2,108 +2,55 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
 func newPolicyListCmd() *cobra.Command {
-	var allPolicies bool
-
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List policies for the default agent workspace",
-		Long: `List policies for the current default agent workspace.
+		Short: "List policies",
+		Long: `List all policies from /v3/policies.
 
-By default, this command resolves the current default grant and shows the
-policy attached to that provider=nylas account's workspace. Use --all to list
-every policy referenced by a provider=nylas workspace.
+Shows which agent workspace has each policy attached.
 
 Examples:
   nylas agent policy list
-  nylas agent policy list --all
   nylas agent policy list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPolicyList(common.IsJSON(cmd), allPolicies)
+			return runPolicyList(common.IsJSON(cmd))
 		},
 	}
-
-	cmd.Flags().BoolVar(&allPolicies, "all", false, "List all policies referenced by provider=nylas workspaces")
 
 	return cmd
 }
 
-func runPolicyList(jsonOutput, allPolicies bool) error {
+func runPolicyList(jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		if allPolicies {
-			scope, err := loadAgentPolicyScope(ctx, client)
-			if err != nil {
-				return struct{}{}, err
-			}
-			policies := scope.AgentPolicies
-
-			if jsonOutput {
-				return struct{}{}, common.PrintJSON(policies)
-			}
-
-			if len(policies) == 0 {
-				common.PrintEmptyStateWithHint("policies attached to nylas agent workspaces", "Create a provider=nylas account with --policy-id to see it here")
-				return struct{}{}, nil
-			}
-
-			_, _ = common.BoldWhite.Printf("Policies (%d)\n\n", len(policies))
-			for i, policy := range policies {
-				printPolicySummary(policy, i, scope.PolicyRefsByID[policy.ID])
-			}
-			fmt.Println()
-			return struct{}{}, nil
-		}
-
-		grantID, err := common.GetGrantID(nil)
+		policies, err := client.ListPolicies(ctx)
 		if err != nil {
-			return struct{}{}, common.WrapGetError("default grant", err)
+			return struct{}{}, common.WrapListError("policies", err)
 		}
-
-		account, err := client.GetAgentAccount(ctx, grantID)
-		if err != nil {
-			if errors.Is(err, domain.ErrInvalidGrant) {
-				return struct{}{}, common.NewUserError(
-					"default grant is not a nylas agent account",
-					"Use 'nylas auth switch <grant-id>' to select a provider=nylas account, or run 'nylas agent policy list --all'",
-				)
-			}
-			return struct{}{}, common.WrapGetError("default agent account", err)
-		}
-
-		policy, accountRef, err := resolveAgentAccountWorkspacePolicy(ctx, client, *account)
-		if err != nil {
-			return struct{}{}, err
-		}
-		if policy == nil {
-			if jsonOutput {
-				fmt.Println("[]")
-				return struct{}{}, nil
-			}
-			common.PrintEmptyStateWithHint(
-				"policy on the default agent workspace",
-				"Use 'nylas agent policy list --all' to inspect all workspace-attached policies",
-			)
-			return struct{}{}, nil
-		}
-
-		policies := []domain.Policy{*policy}
 
 		if jsonOutput {
 			return struct{}{}, common.PrintJSON(policies)
 		}
 
+		if len(policies) == 0 {
+			common.PrintEmptyStateWithHint("policies", "Create one with: nylas agent policy create --name \"Policy Name\"")
+			return struct{}{}, nil
+		}
+
+		workspaceRefs := buildWorkspacePolicyRefs(ctx, client)
+
 		_, _ = common.BoldWhite.Printf("Policies (%d)\n\n", len(policies))
-		printPolicySummary(*policy, 0, []policyAgentAccountRef{accountRef})
+		for i, policy := range policies {
+			printPolicySummary(policy, i, workspaceRefs[policy.ID])
+		}
 		fmt.Println()
 		return struct{}{}, nil
 	})
@@ -111,36 +58,33 @@ func runPolicyList(jsonOutput, allPolicies bool) error {
 	return err
 }
 
-func resolveAgentAccountWorkspacePolicy(ctx context.Context, client interface {
-	GetWorkspace(context.Context, string) (*domain.Workspace, error)
-	GetPolicy(context.Context, string) (*domain.Policy, error)
-}, account domain.AgentAccount) (*domain.Policy, policyAgentAccountRef, error) {
-	accountRef := policyAgentAccountRef{
-		GrantID:     account.ID,
-		Email:       account.Email,
-		WorkspaceID: strings.TrimSpace(account.WorkspaceID),
-	}
-
-	policyID := strings.TrimSpace(account.Settings.PolicyID)
-	if accountRef.WorkspaceID != "" {
-		workspace, err := client.GetWorkspace(ctx, accountRef.WorkspaceID)
-		if err != nil {
-			return nil, accountRef, common.WrapGetError("workspace", err)
-		}
-		if workspace == nil {
-			return nil, accountRef, common.NewUserError("workspace not found", "The API returned an empty workspace response")
-		}
-		policyID = strings.TrimSpace(workspace.PolicyID)
-	}
-	if policyID == "" {
-		return nil, accountRef, nil
-	}
-
-	policy, err := client.GetPolicy(ctx, policyID)
+func buildWorkspacePolicyRefs(ctx context.Context, client ports.NylasClient) map[string][]policyAgentAccountRef {
+	accounts, err := client.ListAgentAccounts(ctx)
 	if err != nil {
-		return nil, accountRef, common.WrapGetError("policy", err)
+		return nil
 	}
-	return policy, accountRef, nil
+
+	refs := make(map[string][]policyAgentAccountRef)
+	for _, account := range accounts {
+		workspaceID := strings.TrimSpace(account.WorkspaceID)
+		if workspaceID == "" {
+			continue
+		}
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		if err != nil || workspace == nil {
+			continue
+		}
+		policyID := strings.TrimSpace(workspace.PolicyID)
+		if policyID == "" {
+			continue
+		}
+		refs[policyID] = append(refs[policyID], policyAgentAccountRef{
+			GrantID:     account.ID,
+			Email:       account.Email,
+			WorkspaceID: workspaceID,
+		})
+	}
+	return refs
 }
 
 func newPolicyGetCmd() *cobra.Command {

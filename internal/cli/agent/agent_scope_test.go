@@ -32,28 +32,6 @@ func (c workspaceLookupClient) GetWorkspace(ctx context.Context, workspaceID str
 	return c.workspaces[workspaceID], nil
 }
 
-type workspacePolicyClient struct {
-	workspaces  map[string]*domain.Workspace
-	policies    map[string]domain.Policy
-	gotPolicyID string
-}
-
-func (c *workspacePolicyClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
-	workspace := c.workspaces[workspaceID]
-	if workspace == nil {
-		return nil, domain.ErrWorkspaceNotFound
-	}
-	return workspace, nil
-}
-
-func (c *workspacePolicyClient) GetPolicy(ctx context.Context, policyID string) (*domain.Policy, error) {
-	c.gotPolicyID = policyID
-	policy, ok := c.policies[policyID]
-	if !ok {
-		return nil, domain.ErrPolicyNotFound
-	}
-	return &policy, nil
-}
 
 func TestUpsertAgentAccount(t *testing.T) {
 	accounts := []domain.AgentAccount{
@@ -193,33 +171,3 @@ func TestUpsertPoliciesForAgentAccountsUsesWorkspacePolicy(t *testing.T) {
 	}
 }
 
-func TestResolveAgentAccountWorkspacePolicyUsesWorkspacePolicy(t *testing.T) {
-	client := &workspacePolicyClient{
-		workspaces: map[string]*domain.Workspace{
-			"workspace-1": {ID: "workspace-1", PolicyID: "workspace-policy"},
-		},
-		policies: map[string]domain.Policy{
-			"workspace-policy": {ID: "workspace-policy", Name: "Workspace Policy"},
-			"legacy-policy":    {ID: "legacy-policy", Name: "Legacy Policy"},
-		},
-	}
-	account := domain.AgentAccount{
-		ID:          "grant-1",
-		Email:       "agent@example.com",
-		WorkspaceID: "workspace-1",
-		Settings: domain.AgentAccountSettings{
-			PolicyID: "legacy-policy",
-		},
-	}
-
-	policy, ref, err := resolveAgentAccountWorkspacePolicy(context.Background(), client, account)
-
-	assert.NoError(t, err)
-	assert.Equal(t, "workspace-policy", policy.ID)
-	assert.Equal(t, "workspace-policy", client.gotPolicyID)
-	assert.Equal(t, policyAgentAccountRef{
-		GrantID:     "grant-1",
-		Email:       "agent@example.com",
-		WorkspaceID: "workspace-1",
-	}, ref)
-}

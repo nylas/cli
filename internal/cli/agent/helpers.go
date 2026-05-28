@@ -12,7 +12,7 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
-func printAgentSummary(account domain.AgentAccount, index int) {
+func printAgentSummary(account domain.AgentAccount, index int, policyID string) {
 	createdStr := common.FormatTimeAgo(account.CreatedAt.Time)
 	fmt.Printf("%d. %-40s %s  %s\n",
 		index+1,
@@ -24,6 +24,23 @@ func printAgentSummary(account domain.AgentAccount, index int) {
 	if account.WorkspaceID != "" {
 		_, _ = common.Dim.Printf("   Workspace ID: %s\n", account.WorkspaceID)
 	}
+	if policyID != "" {
+		_, _ = common.Dim.Printf("   Policy ID: %s\n", policyID)
+	}
+}
+
+func resolveWorkspacePolicyID(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, account domain.AgentAccount) string {
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID == "" {
+		return ""
+	}
+	workspace, err := client.GetWorkspace(ctx, workspaceID)
+	if err != nil || workspace == nil {
+		return ""
+	}
+	return strings.TrimSpace(workspace.PolicyID)
 }
 
 func printAgentDetails(account domain.AgentAccount) {

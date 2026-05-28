@@ -125,9 +125,7 @@ func TestPolicyListCmd(t *testing.T) {
 	cmd := newPolicyListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.Contains(t, cmd.Long, "provider=nylas account")
-	assert.Contains(t, cmd.Flags().Lookup("all").Usage, "provider=nylas workspaces")
+	assert.Contains(t, cmd.Long, "/v3/policies")
 }
 
 func TestPolicyReadCmd(t *testing.T) {
