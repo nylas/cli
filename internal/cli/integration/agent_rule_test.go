@@ -235,8 +235,6 @@ func TestCLI_AgentRuleLifecycle_CreateReadListUpdateDelete(t *testing.T) {
 	createdRule = nil
 }
 
-
-
 func assertWorkspaceContainsRuleForTest(t *testing.T, client interface {
 	GetWorkspace(context.Context, string) (*domain.Workspace, error)
 }, workspaceID, ruleID string) {
@@ -337,7 +335,6 @@ func attachRuleToWorkspaceForTest(t *testing.T, client interface {
 		t.Fatalf("failed to attach rule %q to workspace %q: %v", ruleID, workspaceID, err)
 	}
 }
-
 
 func createRuleForTest(t *testing.T, client interface {
 	CreateRule(context.Context, map[string]any) (*domain.Rule, error)
