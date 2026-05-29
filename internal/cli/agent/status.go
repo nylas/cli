@@ -76,7 +76,8 @@ func runStatus(jsonOutput bool) error {
 		if len(accounts) > 0 {
 			fmt.Println()
 			for i, account := range accounts {
-				printAgentSummary(account, i, resolveWorkspacePolicyID(ctx, client, account))
+				info := resolveWorkspacePolicy(ctx, client, account)
+				printAgentSummary(account, i, info.ID, info.Label)
 			}
 		}
 

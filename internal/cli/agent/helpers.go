@@ -12,7 +12,7 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
-func printAgentSummary(account domain.AgentAccount, index int, policyID string) {
+func printAgentSummary(account domain.AgentAccount, index int, policyID, policyLabel string) {
 	createdStr := common.FormatTimeAgo(account.CreatedAt.Time)
 	fmt.Printf("%d. %-40s %s  %s\n",
 		index+1,
@@ -25,22 +25,35 @@ func printAgentSummary(account domain.AgentAccount, index int, policyID string) 
 		_, _ = common.Dim.Printf("   Workspace ID: %s\n", account.WorkspaceID)
 	}
 	if policyID != "" {
-		_, _ = common.Dim.Printf("   Policy ID: %s\n", policyID)
+		_, _ = common.Dim.Printf("   Policy ID: %s %s\n", policyID, policyLabel)
 	}
 }
 
-func resolveWorkspacePolicyID(ctx context.Context, client interface {
+type workspacePolicyInfo struct {
+	ID    string
+	Label string
+}
+
+func resolveWorkspacePolicy(ctx context.Context, client interface {
 	GetWorkspace(context.Context, string) (*domain.Workspace, error)
-}, account domain.AgentAccount) string {
+	GetPolicy(context.Context, string) (*domain.Policy, error)
+}, account domain.AgentAccount) workspacePolicyInfo {
 	workspaceID := strings.TrimSpace(account.WorkspaceID)
 	if workspaceID == "" {
-		return ""
+		return workspacePolicyInfo{}
 	}
 	workspace, err := client.GetWorkspace(ctx, workspaceID)
 	if err != nil || workspace == nil {
-		return ""
+		return workspacePolicyInfo{}
 	}
-	return strings.TrimSpace(workspace.PolicyID)
+	policyID := strings.TrimSpace(workspace.PolicyID)
+	if policyID == "" {
+		return workspacePolicyInfo{}
+	}
+	if _, err := client.GetPolicy(ctx, policyID); err != nil {
+		return workspacePolicyInfo{ID: policyID, Label: "(Default Account Policy)"}
+	}
+	return workspacePolicyInfo{ID: policyID}
 }
 
 func printAgentDetails(account domain.AgentAccount) {
