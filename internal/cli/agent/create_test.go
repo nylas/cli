@@ -13,7 +13,7 @@ import (
 
 type stubAgentClient struct {
 	listFn   func(ctx context.Context) ([]domain.AgentAccount, error)
-	createFn func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error)
+	createFn func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error)
 	updateFn func(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error)
 	deleteFn func(ctx context.Context, grantID string) error
 }
@@ -29,11 +29,11 @@ func (s stubAgentClient) GetAgentAccount(ctx context.Context, grantID string) (*
 	return nil, nil
 }
 
-func (s stubAgentClient) CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+func (s stubAgentClient) CreateAgentAccount(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 	if s.createFn == nil {
 		return nil, nil
 	}
-	return s.createFn(ctx, email, appPassword, policyID)
+	return s.createFn(ctx, email, appPassword, workspaceID)
 }
 
 func (s stubAgentClient) UpdateAgentAccount(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
@@ -61,7 +61,7 @@ func TestCreateAgentAccountWithFallback_ReturnsRetryError(t *testing.T) {
 	createCalls := 0
 
 	client := stubAgentClient{
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			switch createCalls {
 			case 1:
@@ -82,7 +82,6 @@ func TestCreateAgentAccountWithFallback_ReturnsRetryError(t *testing.T) {
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.Error(t, err)
@@ -111,7 +110,7 @@ func TestCreateAgentAccountWithFallback_SkipsCleanupForExistingGrant(t *testing.
 				Settings: domain.AgentAccountSettings{PolicyID: "policy-123"},
 			}}, nil
 		},
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			if appPassword != "" {
 				return nil, initialErr
@@ -134,7 +133,6 @@ func TestCreateAgentAccountWithFallback_SkipsCleanupForExistingGrant(t *testing.
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.Error(t, err)
@@ -162,7 +160,7 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutRetryCreate(t
 				Settings: domain.AgentAccountSettings{PolicyID: "policy-123"},
 			}}, nil
 		},
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			assert.Equal(t, "ValidAgentPass123ABC!", appPassword)
 			return nil, initialErr
@@ -185,7 +183,6 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutRetryCreate(t
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.NoError(t, err)
@@ -211,7 +208,7 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutCheckingPolic
 				Provider: domain.ProviderNylas,
 			}}, nil
 		},
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			return nil, initialErr
 		},
@@ -226,7 +223,6 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutCheckingPolic
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.NoError(t, err)
@@ -252,7 +248,7 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantOnDifferentPolicy(t 
 				Settings: domain.AgentAccountSettings{PolicyID: "policy-other"},
 			}}, nil
 		},
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			return nil, initialErr
 		},
@@ -267,7 +263,6 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantOnDifferentPolicy(t 
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.NoError(t, err)
@@ -288,7 +283,7 @@ func TestCreateAgentAccountWithFallback_PreservesNewGrantOnUpdateFailure(t *test
 		listFn: func(ctx context.Context) ([]domain.AgentAccount, error) {
 			return nil, nil
 		},
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			if appPassword != "" {
 				return nil, initialErr
 			}
@@ -312,7 +307,6 @@ func TestCreateAgentAccountWithFallback_PreservesNewGrantOnUpdateFailure(t *test
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.Error(t, err)
@@ -323,14 +317,14 @@ func TestCreateAgentAccountWithFallback_PreservesNewGrantOnUpdateFailure(t *test
 	assert.Equal(t, 0, deleteCalls)
 }
 
-func TestCreateAgentAccountWithFallback_DoesNotInventPolicyID(t *testing.T) {
+func TestCreateAgentAccountWithFallback_DoesNotInventWorkspaceID(t *testing.T) {
 	initialErr := &domain.APIError{
 		StatusCode: http.StatusBadRequest,
 		Message:    "extra fields not permitted: app_password",
 	}
 
 	client := stubAgentClient{
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			if appPassword != "" {
 				return nil, initialErr
 			}
@@ -354,7 +348,6 @@ func TestCreateAgentAccountWithFallback_DoesNotInventPolicyID(t *testing.T) {
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.NoError(t, err)
@@ -370,7 +363,7 @@ func TestCreateAgentAccountWithFallback_DoesNotRetryInvalidPasswordValue(t *test
 	}
 
 	client := stubAgentClient{
-		createFn: func(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+		createFn: func(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 			createCalls++
 			return nil, initialErr
 		},
@@ -381,7 +374,6 @@ func TestCreateAgentAccountWithFallback_DoesNotRetryInvalidPasswordValue(t *test
 		client,
 		"agent@example.com",
 		"ValidAgentPass123ABC!",
-		"policy-123",
 	)
 
 	require.Error(t, err)

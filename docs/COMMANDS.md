@@ -458,20 +458,17 @@ Create and manage Nylas-managed agent accounts backed by provider `nylas`.
 nylas agent account list                       # List agent accounts
 nylas agent account create <email>             # Create agent account
 nylas agent account create <email> --app-password PW  # Create account with IMAP/SMTP app password
-nylas agent account create <email> --policy-id <policy-id>  # Create account and attach policy to its workspace
 nylas agent account update [agent-id|email] --app-password PW  # Add or rotate IMAP/SMTP app password
 nylas agent account get <agent-id|email>       # Show one agent account
 nylas agent account delete <agent-id|email>    # Delete/revoke agent account
 nylas agent account delete <agent-id|email> --yes  # Skip confirmation
-nylas agent policy list                        # List policy for default agent workspace
-nylas agent policy list --all                  # List all policies attached to agent workspaces
+nylas agent policy list                        # List all policies
 nylas agent policy create --name NAME          # Create a policy
 nylas agent policy get <policy-id>             # Show one policy
 nylas agent policy read <policy-id>            # Read one policy
 nylas agent policy update <policy-id> --name NAME  # Update a policy
 nylas agent policy delete <policy-id> --yes    # Delete an unattached policy
-nylas agent rule list                          # List rules for default agent workspace policy
-nylas agent rule list --all                    # List all rules attached to agent workspaces
+nylas agent rule list                          # List all rules
 nylas agent rule read <rule-id>                # Read one rule
 nylas agent rule get <rule-id>                 # Show one rule
 nylas agent rule create --name NAME --condition from.domain,is,example.com --action mark_as_spam  # Create a rule from common flags

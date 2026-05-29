@@ -47,103 +47,6 @@ func (c *workspaceRuleTestClient) GetRule(ctx context.Context, ruleID string) (*
 	return rule, nil
 }
 
-func TestCollectPolicyScopedRules_SkipsDanglingReferences(t *testing.T) {
-	enabled := true
-	accounts := []policyAgentAccountRef{{
-		GrantID: "grant-1",
-		Email:   "agent@example.com",
-	}}
-	policy := &domain.Policy{
-		ID:    "policy-1",
-		Name:  "Primary Policy",
-		Rules: []string{"missing-rule", " rule-2 ", "", "rule-1"},
-	}
-	allRules := []domain.Rule{
-		{ID: "rule-1", Name: "First Rule", Enabled: &enabled},
-		{ID: "rule-2", Name: "Second Rule", Enabled: &enabled},
-	}
-
-	rules, refs := collectPolicyScopedRules(policy, accounts, allRules)
-
-	require.Len(t, rules, 2)
-	assert.Equal(t, "rule-2", rules[0].ID)
-	assert.Equal(t, "rule-1", rules[1].ID)
-	assert.NotContains(t, refs, "missing-rule")
-	assert.Equal(t, []rulePolicyRef{{
-		PolicyID:   "policy-1",
-		PolicyName: "Primary Policy",
-		Accounts:   accounts,
-	}}, refs["rule-1"])
-}
-
-func TestCollectPolicyScopedRules_ReturnsEmptyWhenPolicyOnlyHasDanglingReferences(t *testing.T) {
-	policy := &domain.Policy{
-		ID:    "policy-1",
-		Name:  "Primary Policy",
-		Rules: []string{"missing-rule"},
-	}
-
-	rules, refs := collectPolicyScopedRules(policy, nil, []domain.Rule{{ID: "rule-1"}})
-
-	assert.Empty(t, rules)
-	assert.Empty(t, refs)
-}
-
-func TestBuildRuleRefsByIDWithRuleIDsFallsBackToPolicyRulesWhenWorkspaceRulesAbsent(t *testing.T) {
-	accounts := []policyAgentAccountRef{{
-		GrantID: "grant-1",
-		Email:   "agent@example.com",
-	}}
-	policies := []domain.Policy{{
-		ID:    "policy-1",
-		Name:  "Primary Policy",
-		Rules: []string{"legacy-rule"},
-	}}
-
-	refs := buildRuleRefsByIDWithRuleIDs(policies, map[string][]policyAgentAccountRef{"policy-1": accounts}, map[string][]string{})
-
-	require.Contains(t, refs, "legacy-rule")
-	assert.Equal(t, accounts, refs["legacy-rule"][0].Accounts)
-}
-
-func TestBuildRuleRefsByIDWithRuleIDsUsesEmptyWorkspaceRulesWhenPresent(t *testing.T) {
-	policies := []domain.Policy{{
-		ID:    "policy-1",
-		Name:  "Primary Policy",
-		Rules: []string{"legacy-rule"},
-	}}
-	refsByPolicyID := map[string][]policyAgentAccountRef{
-		"policy-1": {{GrantID: "grant-1", WorkspaceID: "workspace-1"}},
-	}
-
-	refs := buildRuleRefsByIDWithRuleIDs(policies, refsByPolicyID, map[string][]string{"policy-1": {}})
-
-	assert.Empty(t, refs)
-}
-
-func TestWorkspacesLeftEmptyByRuleRemovalBlocksLastLiveRule(t *testing.T) {
-	client := &workspaceRuleTestClient{
-		workspaces: map[string]*domain.Workspace{
-			"workspace-1": {ID: "workspace-1", Name: "Agent Workspace", RulesIDs: []string{"rule-1", "missing-rule"}},
-		},
-		rules: map[string]*domain.Rule{
-			"rule-1": {ID: "rule-1"},
-		},
-	}
-	refs := []rulePolicyRef{{
-		PolicyID: "policy-1",
-		Accounts: []policyAgentAccountRef{{
-			GrantID:     "grant-1",
-			WorkspaceID: "workspace-1",
-		}},
-	}}
-
-	blocking, err := workspacesLeftEmptyByRuleRemoval(context.Background(), client, refs, "rule-1")
-
-	require.NoError(t, err)
-	assert.Equal(t, []string{"Agent Workspace (workspace-1)"}, blocking)
-}
-
 func TestDetachRuleFromAgentWorkspacesRemovesAndRollsBackWorkspaceRule(t *testing.T) {
 	client := &workspaceRuleTestClient{
 		workspaces: map[string]*domain.Workspace{
@@ -151,15 +54,12 @@ func TestDetachRuleFromAgentWorkspacesRemovesAndRollsBackWorkspaceRule(t *testin
 		},
 		updates: make(map[string][]string),
 	}
-	refs := []rulePolicyRef{{
-		PolicyID: "policy-1",
-		Accounts: []policyAgentAccountRef{{
-			GrantID:     "grant-1",
-			WorkspaceID: "workspace-1",
-		}},
+	accounts := []policyAgentAccountRef{{
+		GrantID:     "grant-1",
+		WorkspaceID: "workspace-1",
 	}}
 
-	rollback, err := detachRuleFromAgentWorkspaces(context.Background(), client, refs, "rule-1")
+	rollback, err := detachRuleFromAgentWorkspaces(context.Background(), client, accounts, "rule-1")
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"rule-2"}, client.workspaces["workspace-1"].RulesIDs)

@@ -54,16 +54,20 @@ Agent Accounts (2)
 ```bash
 nylas agent account create me@yourapp.nylas.email
 nylas agent account create me@yourapp.nylas.email --app-password 'ValidAgentPass123ABC!'
-nylas agent account create me@yourapp.nylas.email --policy-id 12345678-1234-1234-1234-123456789012
 nylas agent account create support@yourapp.nylas.email --json
 ```
 
 Behavior:
 - always creates a grant with `provider=nylas`
 - automatically creates the `nylas` connector first if it does not exist
+- the API auto-creates a default workspace and policy for the account
 - stores the created grant locally like other authenticated accounts
 - optionally sets `settings.app_password` on the grant for IMAP/SMTP mail client access
-- optionally patches the account workspace with `policy_id` so the new account starts with an attached policy
+
+To attach a custom policy after creation:
+```bash
+nylas workspace update <workspace-id> --policy-id <policy-id>
+```
 
 **Example output:**
 ```bash
@@ -92,14 +96,6 @@ Requirements:
 - at least one digit
 
 When set, the agent account email becomes the mail-client username and the app password is used for IMAP/SMTP authentication.
-
-### `--policy-id`
-
-Use `--policy-id` when you want the new agent account to start with a specific policy already attached.
-
-```bash
-nylas agent account create me@yourapp.nylas.email --policy-id 12345678-1234-1234-1234-123456789012
-```
 
 ## Show Agent Account
 
@@ -152,7 +148,6 @@ This reports:
 
 ```bash
 nylas agent policy list
-nylas agent policy list --all
 nylas agent policy create --name "Strict Policy"
 nylas agent policy create --data '{"name":"Strict Policy","rules":["rule-123"]}'
 nylas agent policy create --data-file policy.json
@@ -164,8 +159,7 @@ nylas agent policy delete 12345678-1234-1234-1234-123456789012 --yes
 ```
 
 Summary:
-- `list` resolves the default `provider=nylas` grant and shows the policy attached to its workspace
-- `list --all` shows only policies that are actually referenced by `provider=nylas` agent workspaces
+- `list` shows all policies from `/v3/policies` with workspace annotations
 - `get` and `read` are aliases
 - `delete` refuses to remove a policy that is still attached to any `provider=nylas` agent account
 
@@ -175,8 +169,6 @@ Summary:
 
 ```bash
 nylas agent rule list
-nylas agent rule list --policy-id <policy-id>
-nylas agent rule list --all
 nylas agent rule read <rule-id>
 nylas agent rule get <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
@@ -189,13 +181,11 @@ nylas agent rule delete <rule-id> --yes
 ```
 
 Summary:
-- `list` uses the policy and rules attached to the current default `provider=nylas` grant workspace unless `--policy-id` is passed
-- `list --all` shows only rules reachable from `provider=nylas` account workspaces
-- `list` skips stale workspace rule references and returns only rules that still exist
-- `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`
-- both inbound and outbound rule triggers are supported on the agent rule surface
+- `list` shows all rules from `/v3/rules` with workspace annotations
+- `create` supports common-case flags like `--name`, repeatable `--condition`, and repeatable `--action`; attaches the rule to the default grant's workspace
+- both inbound and outbound rule triggers are supported
 - `get` and `read` are aliases
-- `update` and `delete` refuse to operate on rules that are outside the current `provider=nylas` agent scope
+- `delete` detaches the rule from workspaces before deleting
 
 **Details:** [Agent rule reference](agent-rule.md)
 

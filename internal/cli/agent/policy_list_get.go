@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -65,13 +66,18 @@ func buildWorkspacePolicyRefs(ctx context.Context, client ports.NylasClient) map
 	}
 
 	refs := make(map[string][]policyAgentAccountRef)
+	seenWorkspaces := make(map[string]*domain.Workspace)
 	for _, account := range accounts {
 		workspaceID := strings.TrimSpace(account.WorkspaceID)
 		if workspaceID == "" {
 			continue
 		}
-		workspace, err := client.GetWorkspace(ctx, workspaceID)
-		if err != nil || workspace == nil {
+		workspace, ok := seenWorkspaces[workspaceID]
+		if !ok {
+			workspace, _ = client.GetWorkspace(ctx, workspaceID)
+			seenWorkspaces[workspaceID] = workspace
+		}
+		if workspace == nil {
 			continue
 		}
 		policyID := strings.TrimSpace(workspace.PolicyID)

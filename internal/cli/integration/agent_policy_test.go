@@ -90,7 +90,7 @@ func TestCLI_AgentPolicyLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		t.Fatalf("policy read text output should include spam detection section\noutput: %s", readTextStdout)
 	}
 
-	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--all", "--json")
+	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--json")
 	if err != nil {
 		t.Fatalf("policy list failed: %v\nstdout: %s\nstderr: %s", err, listStdout, listStderr)
 	}
@@ -100,10 +100,15 @@ func TestCLI_AgentPolicyLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		t.Fatalf("failed to parse policy list JSON: %v\noutput: %s", err, listStdout)
 	}
 
+	found := false
 	for _, listed := range policies {
 		if listed.ID == policy.ID {
-			t.Fatalf("unattached policy %q should not appear in agent policy list --all\noutput: %s", policy.ID, listStdout)
+			found = true
+			break
 		}
+	}
+	if !found {
+		t.Fatalf("policy %q should appear in policy list\noutput: %s", policy.ID, listStdout)
 	}
 
 	updateStdout, updateStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "update", policy.ID, "--name", updatedName, "--json")
@@ -222,24 +227,8 @@ func TestCLI_AgentPolicyList_ShowsAttachedAgentAccount(t *testing.T) {
 		t.Fatalf("policy list output missing agent grant ID %q\noutput: %s", createdAccount.ID, stdout)
 	}
 
-	allStdout, allStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--all")
-	if err != nil {
-		t.Fatalf("policy list --all failed: %v\nstdout: %s\nstderr: %s", err, allStdout, allStderr)
-	}
-	if !strings.Contains(allStdout, createdPolicy.Name) {
-		t.Fatalf("policy list --all output missing policy name %q\noutput: %s", createdPolicy.Name, allStdout)
-	}
-	if !strings.Contains(allStdout, createdAccount.Email) {
-		t.Fatalf("policy list --all output missing agent email %q\noutput: %s", createdAccount.Email, allStdout)
-	}
-	if !strings.Contains(allStdout, "Agent:") {
-		t.Fatalf("policy list --all should include agent annotations\noutput: %s", allStdout)
-	}
-	if !strings.Contains(allStdout, fmt.Sprintf("(%s)", createdAccount.ID)) {
-		t.Fatalf("policy list --all output missing agent grant ID %q\noutput: %s", createdAccount.ID, allStdout)
-	}
-	if strings.Contains(allStdout, "Agent: none") {
-		t.Fatalf("policy list --all should not show policies without a provider=nylas account\noutput: %s", allStdout)
+	if !strings.Contains(stdout, "Agent:") {
+		t.Fatalf("policy list should include agent annotations when workspace references exist\noutput: %s", stdout)
 	}
 }
 

@@ -41,7 +41,13 @@ func (s *Server) handleListPolicies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyID := s.resolveAccountPolicyID(ctx, account)
+	policyID, err := s.resolveAccountPolicyID(ctx, account)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to resolve workspace policy: " + err.Error(),
+		})
+		return
+	}
 	if policyID == "" {
 		writeJSON(w, http.StatusOK, PoliciesResponse{Policies: []domain.Policy{}})
 		return
@@ -89,7 +95,13 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleIDs := s.resolveAccountRuleIDs(ctx, account)
+	ruleIDs, err := s.resolveAccountRuleIDs(ctx, account)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to resolve workspace rules: " + err.Error(),
+		})
+		return
+	}
 	if len(ruleIDs) == 0 {
 		writeJSON(w, http.StatusOK, RulesResponse{Rules: []domain.Rule{}})
 		return
@@ -119,30 +131,36 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, RulesResponse{Rules: rules})
 }
 
-func (s *Server) resolveAccountPolicyID(ctx context.Context, account *domain.AgentAccount) string {
+func (s *Server) resolveAccountPolicyID(ctx context.Context, account *domain.AgentAccount) (string, error) {
 	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
-		if ws, err := s.nylasClient.GetWorkspace(ctx, wsID); err == nil && ws != nil {
-			if pid := strings.TrimSpace(ws.PolicyID); pid != "" {
-				return pid
-			}
+		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
+		if err != nil {
+			return "", err
+		}
+		if ws != nil {
+			return strings.TrimSpace(ws.PolicyID), nil
 		}
 	}
-	return strings.TrimSpace(account.Settings.PolicyID)
+	return strings.TrimSpace(account.Settings.PolicyID), nil
 }
 
-func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.AgentAccount) []string {
+func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.AgentAccount) ([]string, error) {
 	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
-		if ws, err := s.nylasClient.GetWorkspace(ctx, wsID); err == nil && ws != nil {
+		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
+		if err != nil {
+			return nil, err
+		}
+		if ws != nil {
 			var ids []string
 			for _, id := range ws.RulesIDs {
 				if id = strings.TrimSpace(id); id != "" {
 					ids = append(ids, id)
 				}
 			}
-			return ids
+			return ids, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func demoPolicies() []domain.Policy {

@@ -28,7 +28,7 @@ func (m *MockClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 	}, nil
 }
 
-func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 	return &domain.AgentAccount{
 		ID:          "agent-new",
 		Provider:    domain.ProviderNylas,

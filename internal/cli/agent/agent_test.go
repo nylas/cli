@@ -34,7 +34,6 @@ func TestCreateCmd(t *testing.T) {
 
 	assert.Equal(t, "create <email>", cmd.Use)
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "provider=nylas")
 }
 
@@ -139,17 +138,13 @@ func TestRuleListCmd(t *testing.T) {
 	cmd := newRuleListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
-	assert.Contains(t, cmd.Long, "default grant")
+	assert.Contains(t, cmd.Long, "/v3/rules")
 }
 
 func TestRuleReadCmd(t *testing.T) {
 	cmd := newRuleReadCmd()
 
 	assert.Equal(t, "read <rule-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "Read details for a single rule")
 }
 
@@ -397,47 +392,6 @@ func TestResolvePolicyForAgentOps(t *testing.T) {
 		assert.Equal(t, "policy-unattached", resolved.Policy.ID)
 		assert.False(t, resolved.AttachedToAgent)
 	}
-}
-
-func TestBuildRuleRefsByID(t *testing.T) {
-	refsByRuleID := buildRuleRefsByIDWithRuleIDs(
-		[]domain.Policy{
-			{ID: "policy-b", Name: "Beta", Rules: []string{"rule-1"}},
-			{ID: "policy-a", Name: "Alpha", Rules: []string{"rule-1", "rule-2", "rule-1"}},
-		},
-		map[string][]policyAgentAccountRef{
-			"policy-a": {{
-				GrantID: "grant-a",
-				Email:   "alpha@example.com",
-			}},
-			"policy-b": {{
-				GrantID: "grant-b",
-				Email:   "beta@example.com",
-			}},
-		},
-		nil,
-	)
-
-	if assert.Len(t, refsByRuleID["rule-1"], 2) {
-		assert.Equal(t, "Alpha", refsByRuleID["rule-1"][0].PolicyName)
-		assert.Equal(t, "Beta", refsByRuleID["rule-1"][1].PolicyName)
-	}
-	if assert.Len(t, refsByRuleID["rule-2"], 1) {
-		assert.Equal(t, "policy-a", refsByRuleID["rule-2"][0].PolicyID)
-	}
-}
-
-func TestRuleReferencedOutsideAgentScope(t *testing.T) {
-	allPolicies := []domain.Policy{
-		{ID: "policy-agent", Rules: []string{"rule-1"}},
-		{ID: "policy-other", Rules: []string{"rule-1"}},
-	}
-	agentPolicies := []domain.Policy{
-		{ID: "policy-agent", Rules: []string{"rule-1"}},
-	}
-
-	assert.True(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-1"))
-	assert.False(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-2"))
 }
 
 func captureStdout(t *testing.T, fn func()) string {

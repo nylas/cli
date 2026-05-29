@@ -28,7 +28,7 @@ func (d *DemoClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 	}, nil
 }
 
-func (d *DemoClient) CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error) {
+func (d *DemoClient) CreateAgentAccount(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 	return &domain.AgentAccount{
 		ID:          "agent-demo-new",
 		Provider:    domain.ProviderNylas,

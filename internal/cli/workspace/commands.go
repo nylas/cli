@@ -150,6 +150,13 @@ Examples:
   nylas workspace update <workspace-id> --rules-ids rule1,rule2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("policy-id") && !cmd.Flags().Changed("rules-ids") {
+				return common.NewUserError(
+					"workspace update requires at least one field",
+					"Use --policy-id or --rules-ids to specify what to update",
+				)
+			}
+
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.UpdateWorkspaceRequest{}
 

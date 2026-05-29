@@ -2,14 +2,12 @@
 
 Detailed reference for `nylas agent rule`.
 
-Agent rules are filtered through `provider=nylas` agent account workspaces. The CLI hides rules that are outside that agent scope.
+Rules are backed by `/v3/rules` and attach to workspaces via `rules_ids[]`.
 
 ## Commands
 
 ```bash
 nylas agent rule list
-nylas agent rule list --policy-id <policy-id>
-nylas agent rule list --all
 nylas agent rule get <rule-id>
 nylas agent rule read <rule-id>
 nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action mark_as_spam
@@ -19,52 +17,14 @@ nylas agent rule update <rule-id> --name "Updated Rule"
 nylas agent rule delete <rule-id> --yes
 ```
 
-## Scope Model
-
-The CLI resolves rules through agent workspace attachments:
-
-- `nylas agent rule list` uses the policy and rules attached to the current default `provider=nylas` grant workspace
-- `nylas agent rule list --policy-id <policy-id>` uses that specific policy within the agent workspace scope
-- `nylas agent rule list --all` shows rules reachable from any `provider=nylas` agent workspace
-- `get`, `read`, `update`, and `delete` validate that the rule is reachable from the selected agent scope before operating on it
-
-This prevents the agent command surface from mutating rules that are only in non-agent policy usage.
-
 ## Listing Rules
-
-### Rules for the Default Agent Policy
 
 ```bash
 nylas agent rule list
 nylas agent rule list --json
 ```
 
-Behavior:
-
-- resolves the default local `provider=nylas` grant
-- finds the policy attached to that grant's workspace
-- returns the rules attached to that workspace
-- skips stale workspace rule references that no longer exist in `/v3/rules`
-
-### Rules for a Specific Agent Policy
-
-```bash
-nylas agent rule list --policy-id <policy-id>
-```
-
-Use this when you want to inspect one policy without changing your default grant.
-
-### All Agent Rules
-
-```bash
-nylas agent rule list --all
-nylas agent rule list --all --json
-```
-
-Behavior:
-
-- shows only rules referenced by `provider=nylas` account workspaces
-- text output includes policy and agent account references
+Lists all rules from `/v3/rules`. Text output shows which workspace has each rule attached.
 
 ## Reading Rules
 
@@ -77,12 +37,7 @@ nylas agent rule read <rule-id> --json
 Notes:
 
 - `get` and `read` are aliases
-- text output expands the rule into readable sections for:
-  - trigger
-  - match logic
-  - actions
-  - policy references
-  - agent account references
+- text output expands the rule into readable sections for trigger, match logic, actions, and workspace references
 - `--json` returns the raw rule payload
 
 ## Creating Rules
@@ -123,144 +78,28 @@ Available common flags:
 - `--enabled`
 - `--disabled`
 - `--trigger`
-- `--policy-id`
 - `--match-operator all|any`
 - repeatable `--condition`
 - repeatable `--action`
 
-Defaults when creating from flags:
-
-- `trigger=inbound`
-- `enabled=true`
-- `match.operator=all`
-
-Supported triggers:
-
-- `inbound`
-- `outbound`
-
-Supported fields:
-
-- inbound: `from.address`, `from.domain`, `from.tld`
-- outbound: `from.address`, `from.domain`, `from.tld`, `recipient.address`, `recipient.domain`, `recipient.tld`, `outbound.type`
-
-Supported operators:
-
-- all string fields: `is`, `is_not`, `contains`, `in_list`
-- `outbound.type`: `is`, `is_not`
-
-Supported actions:
-
-- `block`
-- `mark_as_spam`
-- `assign_to_folder=<folder>`
-- `mark_as_read`
-- `mark_as_starred`
-- `archive`
-- `trash`
-
-### `--condition`
-
-Format:
-
-```bash
---condition <field>,<operator>,<value>
-```
-
-Examples:
-
-```bash
---condition from.domain,is,example.com
---condition from.address,is,ceo@example.com
---condition recipient.domain,is,example.com
---condition outbound.type,is,reply
---condition from.domain,in_list,example.com,example.org
-```
-
-Important:
-
-- condition values are treated as strings by default
-- values like `true` and `123` stay strings
-- there is no implicit JSON coercion for condition values
-- `in_list` expects additional comma-separated values, for example `field,in_list,list-a,list-b`
-- `outbound.type` only supports `compose` and `reply`
-
-### `--action`
-
-Formats:
-
-```bash
---action <type>
---action <type>=<value>
-```
-
-Examples:
-
-```bash
---action mark_as_spam
---action mark_as_read
---action assign_to_folder=vip
---action archive
-```
-
-Action values are also treated as strings by default.
-
-### Full JSON Create
+### Raw JSON
 
 ```bash
 nylas agent rule create --data-file rule.json
-nylas agent rule create --data '{"name":"Block Example","enabled":true,"trigger":"inbound","match":{"operator":"all","conditions":[{"field":"from.domain","operator":"is","value":"example.com"}]},"actions":[{"type":"mark_as_spam"}]}'
+nylas agent rule create --data '{"name":"Block Example","trigger":"inbound","match":{"operator":"any","conditions":[{"field":"from.domain","operator":"is","value":"example.com"}]},"actions":[{"type":"mark_as_spam"}]}'
 ```
 
-Use JSON when the rule structure is more complex than the common flags make comfortable.
+The rule is created via `/v3/rules` then attached to the default grant's workspace `rules_ids[]`.
 
 ## Updating Rules
 
-### Simple Top-Level Updates
-
 ```bash
 nylas agent rule update <rule-id> --name "Updated Rule"
-nylas agent rule update <rule-id> --description "Block example.org"
-nylas agent rule update <rule-id> --priority 20 --enabled
+nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_starred
+nylas agent rule update <rule-id> --data-file update.json --json
 ```
 
-### Replacing Conditions and Actions with Flags
-
-```bash
-nylas agent rule update <rule-id> \
-  --match-operator any \
-  --condition from.domain,is,example.org \
-  --condition from.tld,is,org \
-  --action mark_as_spam
-```
-
-```bash
-nylas agent rule update <rule-id> \
-  --trigger outbound \
-  --match-operator any \
-  --condition recipient.domain,is,example.org \
-  --condition outbound.type,is,reply \
-  --action archive
-```
-
-Behavior:
-
-- `--condition` replaces the rule's condition set
-- `--action` replaces the rule's action set
-- existing `match.operator` is preserved unless you explicitly pass `--match-operator`
-
-### Partial JSON Update
-
-```bash
-nylas agent rule update <rule-id> --data-file update.json
-nylas agent rule update <rule-id> --data '{"description":"Updated via JSON"}'
-```
-
-Recommended workflow:
-
-1. `nylas agent rule read <rule-id> --json`
-2. edit the payload you need
-3. `nylas agent rule update <rule-id> --data-file update.json`
+Updates the rule directly via `/v3/rules/{id}`.
 
 ## Deleting Rules
 
@@ -268,48 +107,34 @@ Recommended workflow:
 nylas agent rule delete <rule-id> --yes
 ```
 
-Safety rules:
+The `--yes` flag is required to confirm deletion.
 
-- delete is rejected if the rule is referenced outside the current `provider=nylas` agent scope
-- delete is rejected if removing the rule would leave an attached agent workspace with zero live rules
+Behavior:
+- detaches the rule from all agent workspaces that reference it
+- deletes the rule via `/v3/rules/{id}`
+- rolls back workspace changes if the delete fails
 
-These checks are there to prevent accidental breakage of active agent policy configuration.
+## Relationship to Workspaces
 
-## Relationship to Policies
+Rules attach to workspaces via `rules_ids[]`. The practical flow:
 
-Policies and rules are attached to agent account workspaces.
-
-Practical flow:
-
-1. create or choose a policy
-2. create a rule and attach it to the selected agent workspace in the same command
-3. create an agent account with that policy using `--policy-id`
-
-The CLI scope always follows that chain:
-
-- agent account
-- workspace
-- policy and rules reachable from that workspace
+1. create a workspace: `nylas workspace create --name "My Workspace"`
+2. create a policy: `nylas agent policy create --name "Strict Policy"`
+3. attach policy to workspace: `nylas workspace update <ws-id> --policy-id <policy-id>`
+4. create agent account (auto-assigns to default workspace)
+5. create rules: `nylas agent rule create --name "Block" --condition ... --action ...`
 
 ## Troubleshooting
 
 If `nylas agent rule list` returns nothing:
 
-- make sure your default grant is `provider=nylas`
-- confirm that default agent account has a workspace with a policy attached
-- confirm the workspace actually has rules attached
-- if the workspace only references deleted rules, `list` now returns an empty result instead of failing
+- confirm rules have been created via `/v3/rules`
+- check if your default grant is `provider=nylas`
 
-If `nylas agent rule read` or `update` says the rule is not found:
+If `nylas agent rule delete` fails:
 
-- the rule may exist in the application but outside the current agent scope
-- or the workspace may still reference a deleted rule ID
-- try `nylas agent rule list --all` to see what is reachable from agent accounts
-
-If `nylas agent rule delete` is rejected:
-
-- the rule is shared outside the current agent scope, or
-- deleting it would leave an attached workspace with no remaining rules
+- verify the rule ID exists
+- check if the rule is attached to workspaces
 
 ## See Also
 

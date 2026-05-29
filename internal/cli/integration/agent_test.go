@@ -228,12 +228,12 @@ func agentAccountIDs(accounts []domain.AgentAccount) []string {
 	return ids
 }
 
-func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
+func TestCLI_AgentCreate_WithWorkspacePolicy(t *testing.T) {
 	skipIfMissingCreds(t)
 	skipIfMissingAgentDomain(t)
 
-	env := newAgentSandboxEnv(t)
-	email := newAgentTestEmail(t, "policy-create")
+	_ = newAgentSandboxEnv(t)
+	email := newAgentTestEmail(t, "ws-policy")
 	policyName := newPolicyTestName("account-create")
 	client := getTestClient()
 
@@ -259,32 +259,17 @@ func TestCLI_AgentCreate_WithPolicyID(t *testing.T) {
 	policy, err := client.CreatePolicy(ctx, map[string]any{"name": policyName})
 	cancel()
 	if err != nil {
-		t.Fatalf("failed to create policy for agent account test: %v", err)
+		t.Fatalf("failed to create policy: %v", err)
 	}
 	createdPolicy = policy
 
-	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "account", "create", email, "--policy-id", policy.ID, "--json")
-	if err != nil {
-		t.Fatalf("agent create with policy failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
-	}
-
-	var account domain.AgentAccount
-	if err := json.Unmarshal([]byte(stdout), &account); err != nil {
-		t.Fatalf("failed to parse agent create with policy JSON: %v\noutput: %s", err, stdout)
-	}
-	if account.Email != email {
-		t.Fatalf("created email = %q, want %q", account.Email, email)
-	}
-	if account.Settings.PolicyID != "" && account.Settings.PolicyID != policy.ID {
-		t.Fatalf("created policy_id = %q, want %q or empty response field", account.Settings.PolicyID, policy.ID)
-	}
-	created = &account
+	account := createAgentWithPolicyForTest(t, email, policy.ID)
+	created = account
 
 	exists, fetched := waitForAgentByID(t, client, account.ID, true)
 	if !exists {
 		t.Fatalf("created agent account %q did not appear via GET-by-id", email)
 	}
-	// Policy now lives on the account's workspace, not grant settings.
 	assertWorkspacePolicyForTest(t, client, fetched.WorkspaceID, policy.ID)
 }
 
@@ -352,7 +337,7 @@ func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
 	}
 }
 
-func TestCLI_AgentUpdate_PreservesPolicyID(t *testing.T) {
+func TestCLI_AgentUpdate_PreservesWorkspacePolicy(t *testing.T) {
 	skipIfMissingCreds(t)
 	skipIfMissingAgentDomain(t)
 

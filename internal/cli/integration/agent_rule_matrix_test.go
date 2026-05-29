@@ -57,7 +57,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 
 	for _, tc := range buildRuleConditionMatrixCases() {
 		t.Run("create-"+tc.name, func(t *testing.T) {
-			rule := runAgentRuleCreateJSON(t, scope.env, scope.policyID,
+			rule := runAgentRuleCreateJSON(t, scope.env,
 				"--name", fmt.Sprintf("it-%s-%d", tc.name, time.Now().UnixNano()),
 				"--trigger", tc.trigger,
 				"--match-operator", "all",
@@ -74,7 +74,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 
 	for _, tc := range buildRuleActionMatrixCases() {
 		t.Run("create-action-"+tc.name, func(t *testing.T) {
-			rule := runAgentRuleCreateJSON(t, scope.env, scope.policyID,
+			rule := runAgentRuleCreateJSON(t, scope.env,
 				"--name", fmt.Sprintf("it-action-%s-%d", tc.name, time.Now().UnixNano()),
 				"--trigger", tc.trigger,
 				"--condition", representativeCondition(tc.trigger),
@@ -86,7 +86,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 		})
 	}
 
-	inboundStateRule := runAgentRuleCreateJSON(t, scope.env, scope.policyID,
+	inboundStateRule := runAgentRuleCreateJSON(t, scope.env,
 		"--name", fmt.Sprintf("it-state-inbound-%d", time.Now().UnixNano()),
 		"--priority", "3",
 		"--disabled",
@@ -102,7 +102,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 	assertRuleMatchOperator(t, inboundStateRule, "any")
 	assertRuleConditionCount(t, inboundStateRule, 2)
 
-	outboundStateRule := runAgentRuleCreateJSON(t, scope.env, scope.policyID,
+	outboundStateRule := runAgentRuleCreateJSON(t, scope.env,
 		"--name", fmt.Sprintf("it-state-outbound-%d", time.Now().UnixNano()),
 		"--trigger", "outbound",
 		"--priority", "4",
@@ -146,7 +146,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 				ruleID = outboundBase.ID
 			}
 
-			rule := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, ruleID,
+			rule := runAgentRuleUpdateJSON(t, scope.env, ruleID,
 				"--trigger", tc.trigger,
 				"--match-operator", "all",
 				"--condition", buildConditionArg(tc.field, tc.operator, tc.rawValue),
@@ -166,7 +166,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 				ruleID = outboundBase.ID
 			}
 
-			rule := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, ruleID,
+			rule := runAgentRuleUpdateJSON(t, scope.env, ruleID,
 				"--trigger", tc.trigger,
 				"--match-operator", "all",
 				"--condition", representativeCondition(tc.trigger),
@@ -177,7 +177,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 		})
 	}
 
-	inboundAny := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, inboundBase.ID,
+	inboundAny := runAgentRuleUpdateJSON(t, scope.env, inboundBase.ID,
 		"--trigger", "inbound",
 		"--priority", "7",
 		"--disabled",
@@ -193,7 +193,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 	assertRuleConditionCount(t, inboundAny, 2)
 	assertRuleAction(t, inboundAny, "mark_as_read", nil)
 
-	outboundAny := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, outboundBase.ID,
+	outboundAny := runAgentRuleUpdateJSON(t, scope.env, outboundBase.ID,
 		"--trigger", "outbound",
 		"--priority", "8",
 		"--disabled",
@@ -209,7 +209,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 	assertRuleConditionCount(t, outboundAny, 2)
 	assertRuleAction(t, outboundAny, "mark_as_starred", nil)
 
-	flippedOutbound := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, inboundBase.ID,
+	flippedOutbound := runAgentRuleUpdateJSON(t, scope.env, inboundBase.ID,
 		"--trigger", "outbound",
 		"--condition", "recipient.domain,is,example.org",
 		"--condition", "outbound.type,is,reply",
@@ -218,7 +218,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 	assertRuleTrigger(t, flippedOutbound, "outbound")
 	assertRuleCondition(t, flippedOutbound, "recipient.domain", "is", "example.org")
 
-	flippedInbound := runAgentRuleUpdateJSON(t, scope.env, scope.policyID, outboundBase.ID,
+	flippedInbound := runAgentRuleUpdateJSON(t, scope.env, outboundBase.ID,
 		"--trigger", "inbound",
 		"--condition", "from.domain,is,example.org",
 		"--action", "archive",
@@ -292,11 +292,11 @@ func (s *ruleMatrixScope) trackRule(ruleID string) {
 	s.createdIDs = append(s.createdIDs, ruleID)
 }
 
-func runAgentRuleCreateJSON(t *testing.T, env map[string]string, policyID string, args ...string) domain.Rule {
+func runAgentRuleCreateJSON(t *testing.T, env map[string]string, args ...string) domain.Rule {
 	t.Helper()
 
 	cmdArgs := append([]string{"agent", "rule", "create"}, args...)
-	cmdArgs = append(cmdArgs, "--policy-id", policyID, "--json")
+	cmdArgs = append(cmdArgs, "--json")
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, cmdArgs...)
 	if err != nil {
 		t.Fatalf("agent rule create failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
@@ -313,11 +313,11 @@ func runAgentRuleCreateJSON(t *testing.T, env map[string]string, policyID string
 	return rule
 }
 
-func runAgentRuleUpdateJSON(t *testing.T, env map[string]string, policyID, ruleID string, args ...string) domain.Rule {
+func runAgentRuleUpdateJSON(t *testing.T, env map[string]string, ruleID string, args ...string) domain.Rule {
 	t.Helper()
 
 	cmdArgs := append([]string{"agent", "rule", "update", ruleID}, args...)
-	cmdArgs = append(cmdArgs, "--policy-id", policyID, "--json")
+	cmdArgs = append(cmdArgs, "--json")
 	stdout, stderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, cmdArgs...)
 	if err != nil {
 		t.Fatalf("agent rule update failed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
