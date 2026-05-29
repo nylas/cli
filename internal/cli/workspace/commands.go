@@ -102,10 +102,12 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.CreateWorkspaceRequest{
-					Name:      name,
-					Domain:    wsDomain,
-					AutoGroup: autoGroup,
-					PolicyID:  policyID,
+					Name:     name,
+					Domain:   wsDomain,
+					PolicyID: policyID,
+				}
+				if cmd.Flags().Changed("auto-group") {
+					req.AutoGroup = &autoGroup
 				}
 
 				workspace, err := client.CreateWorkspace(ctx, req)

@@ -18,7 +18,7 @@ type Workspace struct {
 type CreateWorkspaceRequest struct {
 	Name      string   `json:"name"`
 	Domain    string   `json:"domain,omitempty"`
-	AutoGroup bool     `json:"auto_group,omitempty"`
+	AutoGroup *bool    `json:"auto_group,omitempty"`
 	PolicyID  string   `json:"policy_id,omitempty"`
 	RulesIDs  []string `json:"rules_ids,omitempty"`
 }
