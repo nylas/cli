@@ -14,6 +14,15 @@ type Workspace struct {
 	UpdatedAt     UnixTime `json:"updated_at,omitempty"`
 }
 
+// CreateWorkspaceRequest creates a new workspace.
+type CreateWorkspaceRequest struct {
+	Name      string   `json:"name"`
+	Domain    string   `json:"domain,omitempty"`
+	AutoGroup bool     `json:"auto_group,omitempty"`
+	PolicyID  string   `json:"policy_id,omitempty"`
+	RulesIDs  []string `json:"rules_ids,omitempty"`
+}
+
 // UpdateWorkspaceRequest updates workspace policy/rule attachments.
 type UpdateWorkspaceRequest struct {
 	PolicyID *string   `json:"policy_id,omitempty"`

@@ -61,11 +61,20 @@ type AdminClient interface {
 	// DeleteConnector deletes a connector.
 	DeleteConnector(ctx context.Context, connectorID string) error
 
+	// ListWorkspaces retrieves all workspaces.
+	ListWorkspaces(ctx context.Context) ([]domain.Workspace, error)
+
 	// GetWorkspace retrieves a grant workspace.
 	GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error)
 
+	// CreateWorkspace creates a new workspace.
+	CreateWorkspace(ctx context.Context, req *domain.CreateWorkspaceRequest) (*domain.Workspace, error)
+
 	// UpdateWorkspace updates workspace policy/rule attachments.
 	UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error)
+
+	// DeleteWorkspace deletes a workspace.
+	DeleteWorkspace(ctx context.Context, workspaceID string) error
 
 	// ================================
 	// CREDENTIAL OPERATIONS

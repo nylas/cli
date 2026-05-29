@@ -32,7 +32,6 @@ func (c workspaceLookupClient) GetWorkspace(ctx context.Context, workspaceID str
 	return c.workspaces[workspaceID], nil
 }
 
-
 func TestUpsertAgentAccount(t *testing.T) {
 	accounts := []domain.AgentAccount{
 		{
@@ -170,4 +169,3 @@ func TestUpsertPoliciesForAgentAccountsUsesWorkspacePolicy(t *testing.T) {
 		assert.Equal(t, "policy-fresh", updated[1].ID)
 	}
 }
-

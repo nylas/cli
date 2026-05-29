@@ -31,6 +31,7 @@ import (
 	"github.com/nylas/cli/internal/cli/update"
 	"github.com/nylas/cli/internal/cli/webhook"
 	"github.com/nylas/cli/internal/cli/workflow"
+	"github.com/nylas/cli/internal/cli/workspace"
 	"github.com/nylas/cli/internal/ui"
 )
 
@@ -66,6 +67,7 @@ func main() {
 	rootCmd.AddCommand(chat.NewChatCmd())
 	rootCmd.AddCommand(update.NewUpdateCmd())
 	rootCmd.AddCommand(workflow.NewWorkflowCmd())
+	rootCmd.AddCommand(workspace.NewWorkspaceCmd())
 
 	if err := cli.Execute(); err != nil {
 		cli.LogAuditError(err)
