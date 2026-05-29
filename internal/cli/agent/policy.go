@@ -103,7 +103,7 @@ func resolvePolicyForAgentOps(scope *agentPolicyScope, policyID string) (*resolv
 	if policy == nil {
 		return nil, common.NewUserError(
 			"policy not found",
-			"Use 'nylas agent policy list --all' to inspect provider=nylas policies",
+			"Use 'nylas agent policy list' to inspect policies",
 		)
 	}
 
