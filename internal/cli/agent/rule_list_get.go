@@ -65,27 +65,26 @@ func buildWorkspaceRuleRefs(ctx context.Context, client ports.NylasClient) map[s
 }
 
 func buildWorkspaceRuleRefsStrict(ctx context.Context, client ports.NylasClient) (map[string][]ruleWorkspaceRef, error) {
+	workspaces, err := client.ListWorkspaces(ctx)
+	if err != nil {
+		return nil, common.WrapListError("workspaces", err)
+	}
+
 	accounts, err := client.ListAgentAccounts(ctx)
 	if err != nil {
 		return nil, common.WrapListError("agent accounts", err)
 	}
+	grantByWorkspace := make(map[string]domain.AgentAccount)
+	for _, account := range accounts {
+		if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
+			grantByWorkspace[wsID] = account
+		}
+	}
 
 	refs := make(map[string][]ruleWorkspaceRef)
-	seenWorkspaces := make(map[string]*domain.Workspace)
-	for _, account := range accounts {
-		workspaceID := strings.TrimSpace(account.WorkspaceID)
-		if workspaceID == "" {
-			continue
-		}
-		workspace, ok := seenWorkspaces[workspaceID]
-		if !ok {
-			workspace, err = client.GetWorkspace(ctx, workspaceID)
-			if err != nil {
-				return nil, common.WrapGetError("workspace", err)
-			}
-			seenWorkspaces[workspaceID] = workspace
-		}
-		if workspace == nil {
+	for _, workspace := range workspaces {
+		wsID := strings.TrimSpace(workspace.ID)
+		if wsID == "" {
 			continue
 		}
 		for _, ruleID := range workspace.RulesIDs {
@@ -93,12 +92,15 @@ func buildWorkspaceRuleRefsStrict(ctx context.Context, client ports.NylasClient)
 			if ruleID == "" {
 				continue
 			}
-			refs[ruleID] = append(refs[ruleID], ruleWorkspaceRef{
-				WorkspaceID:   workspaceID,
+			ref := ruleWorkspaceRef{
+				WorkspaceID:   wsID,
 				WorkspaceName: workspace.Name,
-				GrantID:       account.ID,
-				Email:         account.Email,
-			})
+			}
+			if account, ok := grantByWorkspace[wsID]; ok {
+				ref.GrantID = account.ID
+				ref.Email = account.Email
+			}
+			refs[ruleID] = append(refs[ruleID], ref)
 		}
 	}
 	return refs, nil

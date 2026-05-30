@@ -104,6 +104,9 @@ func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClien
 	if lookupErr == nil && existingAccount != nil {
 		updated, updateErr := client.UpdateAgentAccount(ctx, existingAccount.ID, email, appPassword)
 		if updateErr == nil {
+			if updated == nil {
+				return existingAccount, nil
+			}
 			return updated, nil
 		}
 

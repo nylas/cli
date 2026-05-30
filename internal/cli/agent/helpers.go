@@ -34,23 +34,57 @@ type workspacePolicyInfo struct {
 	Label string
 }
 
-func resolveWorkspacePolicy(ctx context.Context, client interface {
+type workspacePolicyCache struct {
+	ctx    context.Context
+	client interface {
+		GetWorkspace(context.Context, string) (*domain.Workspace, error)
+		GetPolicy(context.Context, string) (*domain.Policy, error)
+	}
+	workspaces map[string]*domain.Workspace
+	policies   map[string]bool
+}
+
+func newWorkspacePolicyCache(ctx context.Context, client interface {
 	GetWorkspace(context.Context, string) (*domain.Workspace, error)
 	GetPolicy(context.Context, string) (*domain.Policy, error)
-}, account domain.AgentAccount) workspacePolicyInfo {
+}) *workspacePolicyCache {
+	return &workspacePolicyCache{
+		ctx:        ctx,
+		client:     client,
+		workspaces: make(map[string]*domain.Workspace),
+		policies:   make(map[string]bool),
+	}
+}
+
+func (c *workspacePolicyCache) resolve(account domain.AgentAccount) workspacePolicyInfo {
 	workspaceID := strings.TrimSpace(account.WorkspaceID)
 	if workspaceID == "" {
 		return workspacePolicyInfo{}
 	}
-	workspace, err := client.GetWorkspace(ctx, workspaceID)
-	if err != nil || workspace == nil {
+	workspace, ok := c.workspaces[workspaceID]
+	if !ok {
+		ws, err := c.client.GetWorkspace(c.ctx, workspaceID)
+		if err != nil || ws == nil {
+			c.workspaces[workspaceID] = nil
+			return workspacePolicyInfo{}
+		}
+		c.workspaces[workspaceID] = ws
+		workspace = ws
+	}
+	if workspace == nil {
 		return workspacePolicyInfo{}
 	}
 	policyID := strings.TrimSpace(workspace.PolicyID)
 	if policyID == "" {
 		return workspacePolicyInfo{}
 	}
-	if _, err := client.GetPolicy(ctx, policyID); err != nil {
+	existsInList, checked := c.policies[policyID]
+	if !checked {
+		_, err := c.client.GetPolicy(c.ctx, policyID)
+		existsInList = err == nil
+		c.policies[policyID] = existsInList
+	}
+	if !existsInList {
 		return workspacePolicyInfo{ID: policyID, Label: "(Default Account Policy)"}
 	}
 	return workspacePolicyInfo{ID: policyID}

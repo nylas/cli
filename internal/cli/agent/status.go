@@ -75,8 +75,9 @@ func runStatus(jsonOutput bool) error {
 
 		if len(accounts) > 0 {
 			fmt.Println()
+			policyCache := newWorkspacePolicyCache(ctx, client)
 			for i, account := range accounts {
-				info := resolveWorkspacePolicy(ctx, client, account)
+				info := policyCache.resolve(account)
 				printAgentSummary(account, i, info.ID, info.Label)
 			}
 		}

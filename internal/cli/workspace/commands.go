@@ -96,8 +96,8 @@ func newCreateCmd() *cobra.Command {
 		Long: `Create a new workspace.
 
 Examples:
-  nylas workspace create --name "My Workspace"
-  nylas workspace create --name "My Workspace" --policy-id <policy-id>
+  nylas workspace create --name "My Workspace" --domain example.com
+  nylas workspace create --name "My Workspace" --domain example.com --policy-id <policy-id>
   nylas workspace create --name "My Workspace" --domain example.com --auto-group`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
@@ -127,11 +127,12 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Workspace name (required)")
-	cmd.Flags().StringVar(&wsDomain, "domain", "", "Workspace domain")
+	cmd.Flags().StringVar(&wsDomain, "domain", "", "Workspace domain (required)")
 	cmd.Flags().BoolVar(&autoGroup, "auto-group", false, "Enable auto-grouping")
 	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach")
 
 	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("domain")
 
 	return cmd
 }
@@ -205,13 +206,7 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to delete workspace %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
-					fmt.Println("Cancelled.")
-					return nil
-				}
+				return common.NewUserError("deletion requires confirmation", "Re-run with --yes to delete the workspace")
 			}
 
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {

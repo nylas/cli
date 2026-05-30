@@ -3,8 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -177,6 +179,21 @@ func runPolicyDelete(policyID string) error {
 			)
 		}
 
+		attachedWorkspaces, wsErr := findWorkspacesWithPolicy(ctx, client, policyID)
+		if wsErr != nil {
+			return struct{}{}, common.WrapListError("workspaces", wsErr)
+		}
+		if len(attachedWorkspaces) > 0 {
+			names := make([]string, 0, len(attachedWorkspaces))
+			for _, ws := range attachedWorkspaces {
+				names = append(names, fmt.Sprintf("%s (%s)", ws.Name, ws.ID))
+			}
+			return struct{}{}, common.NewUserError(
+				fmt.Sprintf("policy is attached to workspaces: %s", strings.Join(names, ", ")),
+				fmt.Sprintf("Detach or move workspaces to another policy before deleting %q", policyID),
+			)
+		}
+
 		if err := client.DeletePolicy(ctx, policyID); err != nil {
 			return struct{}{}, common.WrapDeleteError("policy", err)
 		}
@@ -185,4 +202,18 @@ func runPolicyDelete(policyID string) error {
 	})
 
 	return err
+}
+
+func findWorkspacesWithPolicy(ctx context.Context, client ports.NylasClient, policyID string) ([]domain.Workspace, error) {
+	workspaces, err := client.ListWorkspaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var attached []domain.Workspace
+	for _, ws := range workspaces {
+		if strings.TrimSpace(ws.PolicyID) == policyID {
+			attached = append(attached, ws)
+		}
+	}
+	return attached, nil
 }

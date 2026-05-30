@@ -160,6 +160,13 @@ func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.Agen
 			return ids, nil
 		}
 	}
+	if policyID := strings.TrimSpace(account.Settings.PolicyID); policyID != "" {
+		policy, err := s.nylasClient.GetPolicy(ctx, policyID)
+		if err != nil {
+			return nil, err
+		}
+		return policy.Rules, nil
+	}
 	return nil, nil
 }
 

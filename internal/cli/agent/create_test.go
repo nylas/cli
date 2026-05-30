@@ -214,7 +214,11 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutCheckingPolic
 		},
 		updateFn: func(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
 			updateCalls++
-			return nil, nil
+			return &domain.AgentAccount{
+				ID:       grantID,
+				Email:    email,
+				Provider: domain.ProviderNylas,
+			}, nil
 		},
 	}
 
@@ -226,7 +230,8 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantWithoutCheckingPolic
 	)
 
 	require.NoError(t, err)
-	assert.Nil(t, account)
+	require.NotNil(t, account)
+	assert.Equal(t, "agent-existing", account.ID)
 	assert.Equal(t, 1, createCalls)
 	assert.Equal(t, 1, updateCalls)
 }
@@ -254,7 +259,12 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantOnDifferentPolicy(t 
 		},
 		updateFn: func(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
 			updateCalls++
-			return nil, nil
+			return &domain.AgentAccount{
+				ID:       grantID,
+				Email:    email,
+				Provider: domain.ProviderNylas,
+				Settings: domain.AgentAccountSettings{PolicyID: "policy-other"},
+			}, nil
 		},
 	}
 
@@ -266,7 +276,8 @@ func TestCreateAgentAccountWithFallback_UpdatesExistingGrantOnDifferentPolicy(t 
 	)
 
 	require.NoError(t, err)
-	assert.Nil(t, account)
+	require.NotNil(t, account)
+	assert.Equal(t, "agent-existing", account.ID)
 	assert.Equal(t, 1, createCalls)
 	assert.Equal(t, 1, updateCalls)
 }
