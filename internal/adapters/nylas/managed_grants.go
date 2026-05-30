@@ -13,6 +13,7 @@ type managedGrantResponse struct {
 	Email        string               `json:"email"`
 	Provider     domain.Provider      `json:"provider"`
 	GrantStatus  string               `json:"grant_status"`
+	WorkspaceID  string               `json:"workspace_id,omitempty"`
 	CreatedAt    domain.UnixTime      `json:"created_at"`
 	UpdatedAt    domain.UnixTime      `json:"updated_at"`
 	CredentialID string               `json:"credential_id,omitempty"`
@@ -98,6 +99,7 @@ func convertManagedGrantToAgentAccount(grant managedGrantResponse) domain.AgentA
 		Provider:     grant.Provider,
 		Email:        grant.Email,
 		GrantStatus:  grant.GrantStatus,
+		WorkspaceID:  grant.WorkspaceID,
 		CreatedAt:    grant.CreatedAt,
 		UpdatedAt:    grant.UpdatedAt,
 		CredentialID: grant.CredentialID,

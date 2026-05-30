@@ -15,7 +15,6 @@ func newRuleCreateCmd() *cobra.Command {
 	var (
 		data        string
 		dataFile    string
-		policyID    string
 		opts        rulePayloadOptions
 		enableRule  bool
 		disableRule bool
@@ -24,17 +23,15 @@ func newRuleCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a rule",
-		Long: `Create a new rule and attach it to an agent policy.
+		Long: `Create a new rule and attach it to the default agent workspace.
 
-Rules are created through /v3/rules, then attached to the selected policy. If
---policy-id is omitted, the CLI uses the policy attached to the current
-default provider=nylas grant.
+Rules are created through /v3/rules, then attached to the workspace via
+rules_ids. The workspace is resolved from the current default grant.
 
 Examples:
   nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action block
   nylas agent rule create --name "Archive example.com" --condition from.domain,is,example.com --action archive --action mark_as_read
-  nylas agent rule create --data-file rule.json
-  nylas agent rule create --data-file rule.json --policy-id <policy-id>`,
+  nylas agent rule create --data-file rule.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.PrioritySet = cmd.Flags().Changed("priority")
 			if err := assignRuleStateFlags(cmd, enableRule, disableRule, &opts); err != nil {
@@ -45,7 +42,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return runRuleCreate(loaded.Payload, policyID, common.IsJSON(cmd))
+			return runRuleCreate(loaded.Payload, common.IsJSON(cmd))
 		},
 	}
 
@@ -60,14 +57,13 @@ Examples:
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Rule action as type or type=value (repeatable)")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach the created rule to")
 
 	return cmd
 }
 
-func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) error {
+func runRuleCreate(payload map[string]any, jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		policy, accounts, err := resolveAgentPolicy(ctx, client, policyID)
+		account, err := resolveDefaultAgentAccount(ctx, client)
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -77,12 +73,17 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 			return struct{}{}, common.WrapCreateError("rule", err)
 		}
 
-		if err := attachRuleToPolicy(ctx, client, *policy, rule.ID); err != nil {
+		ref := policyAgentAccountRef{
+			GrantID:     account.ID,
+			Email:       account.Email,
+			WorkspaceID: strings.TrimSpace(account.WorkspaceID),
+		}
+		if err := attachRuleToAgentWorkspaces(ctx, client, []policyAgentAccountRef{ref}, rule.ID); err != nil {
 			cleanupErr := client.DeleteRule(ctx, rule.ID)
 			if cleanupErr != nil {
-				return struct{}{}, fmt.Errorf("failed to attach rule to policy: %w (cleanup failed: %v)", err, cleanupErr)
+				return struct{}{}, fmt.Errorf("failed to attach rule to workspace: %w (cleanup failed: %v)", err, cleanupErr)
 			}
-			return struct{}{}, fmt.Errorf("failed to attach rule to policy: %w", err)
+			return struct{}{}, fmt.Errorf("failed to attach rule to workspace: %w", err)
 		}
 
 		if jsonOutput {
@@ -91,11 +92,8 @@ func runRuleCreate(payload map[string]any, policyID string, jsonOutput bool) err
 
 		common.PrintSuccess("Rule created successfully!")
 		fmt.Println()
-		printRuleDetails(*rule, []rulePolicyRef{{
-			PolicyID:   policy.ID,
-			PolicyName: policy.Name,
-			Accounts:   accounts,
-		}})
+		workspaceRefs := buildWorkspaceRuleRefs(ctx, client)
+		printRuleDetails(*rule, workspaceRefs[rule.ID])
 		return struct{}{}, nil
 	})
 
@@ -106,8 +104,6 @@ func newRuleUpdateCmd() *cobra.Command {
 	var (
 		data        string
 		dataFile    string
-		policyID    string
-		allRules    bool
 		opts        rulePayloadOptions
 		enableRule  bool
 		disableRule bool
@@ -118,22 +114,14 @@ func newRuleUpdateCmd() *cobra.Command {
 		Short: "Update a rule",
 		Long: `Update an existing rule.
 
-By default, this validates that the rule belongs to the current default
-provider=nylas policy. Use --policy-id to scope the validation to another
-agent policy, or --all to search any agent policy.
-
 Examples:
   nylas agent rule update <rule-id> --name "Updated Rule"
   nylas agent rule update <rule-id> --description "Archive vendor mail" --priority 20
   nylas agent rule update <rule-id> --condition from.domain,is,example.org --action mark_as_starred
   nylas agent rule update <rule-id> --data-file update.json
-  nylas agent rule update <rule-id> --all --json`,
+  nylas agent rule update <rule-id> --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if allRules && policyID != "" {
-				return common.NewUserError("cannot combine --all with --policy-id", "Use either --all or --policy-id")
-			}
-
 			opts.PrioritySet = cmd.Flags().Changed("priority")
 			if err := assignRuleStateFlags(cmd, enableRule, disableRule, &opts); err != nil {
 				return err
@@ -150,7 +138,7 @@ Examples:
 					"Use flags like --name/--condition/--action, or provide JSON with --data/--data-file",
 				)
 			}
-			return runRuleUpdate(args[0], payload, loaded.PureJSON, policyID, allRules, common.IsJSON(cmd))
+			return runRuleUpdate(args[0], payload, loaded.PureJSON, common.IsJSON(cmd))
 		},
 	}
 
@@ -165,26 +153,18 @@ Examples:
 	cmd.Flags().StringArrayVar(&opts.Actions, "action", nil, "Replace actions with type or type=value entries (repeatable)")
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON request body")
 	cmd.Flags().StringVar(&dataFile, "data-file", "", "Path to a JSON request body file")
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the update to")
-	cmd.Flags().BoolVar(&allRules, "all", false, "Search across all provider=nylas policies")
 
 	return cmd
 }
 
-func runRuleUpdate(ruleID string, payload map[string]any, pureJSON bool, policyID string, allRules, jsonOutput bool) error {
+func runRuleUpdate(ruleID string, payload map[string]any, pureJSON, jsonOutput bool) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		scope, err := resolveScopedRule(ctx, client, ruleID, policyID, allRules)
+		existingRule, err := client.GetRule(ctx, ruleID)
 		if err != nil {
-			return struct{}{}, err
-		}
-		if scope.SharedOutsideAgent {
-			return struct{}{}, common.NewUserError(
-				"rule is shared with a non-agent policy",
-				"Use the generic policy/rule surface to modify shared rules safely",
-			)
+			return struct{}{}, common.WrapGetError("rule", err)
 		}
 
-		if err := finalizeRuleUpdatePayload(payload, scope.Rule, pureJSON); err != nil {
+		if err := finalizeRuleUpdatePayload(payload, existingRule, pureJSON); err != nil {
 			return struct{}{}, err
 		}
 
@@ -199,7 +179,8 @@ func runRuleUpdate(ruleID string, payload map[string]any, pureJSON bool, policyI
 
 		common.PrintUpdateSuccess("rule", rule.Name)
 		fmt.Println()
-		printRuleDetails(*rule, scope.SelectedRefs)
+		workspaceRefs := buildWorkspaceRuleRefs(ctx, client)
+		printRuleDetails(*rule, workspaceRefs[rule.ID])
 		return struct{}{}, nil
 	})
 
@@ -216,80 +197,58 @@ func finalizeRuleUpdatePayload(payload map[string]any, existingRule *domain.Rule
 }
 
 func newRuleDeleteCmd() *cobra.Command {
-	var (
-		yes      bool
-		policyID string
-		allRules bool
-	)
+	var yes bool
 
 	cmd := &cobra.Command{
 		Use:   "delete <rule-id>",
 		Short: "Delete a rule",
-		Long: `Delete a rule and detach it from agent policies.
+		Long: `Delete a rule and detach it from agent workspaces.
 
 Examples:
-  nylas agent rule delete <rule-id> --yes
-  nylas agent rule delete <rule-id> --all --yes`,
+  nylas agent rule delete <rule-id> --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
 				return common.NewUserError("deletion requires confirmation", "Re-run with --yes to delete the rule")
 			}
-			if allRules && policyID != "" {
-				return common.NewUserError("cannot combine --all with --policy-id", "Use either --all or --policy-id")
-			}
-			return runRuleDelete(args[0], policyID, allRules)
+			return runRuleDelete(args[0])
 		},
 	}
 
 	common.AddYesFlag(cmd, &yes)
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to scope the delete to")
-	cmd.Flags().BoolVar(&allRules, "all", false, "Search across all provider=nylas policies")
 
 	return cmd
 }
 
-func runRuleDelete(ruleID, policyID string, allRules bool) error {
+func runRuleDelete(ruleID string) error {
 	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		scope, err := resolveScopedRule(ctx, client, ruleID, policyID, allRules)
+		workspaceRefs, err := buildWorkspaceRuleRefsStrict(ctx, client)
 		if err != nil {
 			return struct{}{}, err
 		}
-		if scope.SharedOutsideAgent {
-			return struct{}{}, common.NewUserError(
-				"rule is shared with a non-agent policy",
-				"Use the generic policy/rule surface to delete shared rules safely",
-			)
-		}
+		refs := workspaceRefs[ruleID]
 
-		latestPolicies, err := refreshPolicies(ctx, client, scope.AllAgentPolicies)
-		if err != nil {
-			return struct{}{}, common.WrapGetError("policy", err)
-		}
-
-		blockingPolicies, err := policiesLeftEmptyByRuleRemoval(ctx, client, latestPolicies, ruleID)
-		if err != nil {
-			return struct{}{}, common.WrapGetError("rule", err)
-		}
-		if len(blockingPolicies) > 0 {
-			policyNames := make([]string, 0, len(blockingPolicies))
-			for _, policy := range blockingPolicies {
-				policyNames = append(policyNames, policy.Name)
+		var rollback func(context.Context) error
+		if len(refs) > 0 {
+			accountRefs := make([]policyAgentAccountRef, 0, len(refs))
+			for _, ref := range refs {
+				accountRefs = append(accountRefs, policyAgentAccountRef{
+					GrantID:     ref.GrantID,
+					Email:       ref.Email,
+					WorkspaceID: ref.WorkspaceID,
+				})
 			}
-			return struct{}{}, common.NewUserError(
-				"cannot delete the last rule from an agent policy",
-				fmt.Sprintf("Attach another rule to %s before deleting %q", strings.Join(policyNames, ", "), scope.Rule.Name),
-			)
-		}
-
-		rollback, err := detachRuleFromPolicies(ctx, client, latestPolicies, ruleID)
-		if err != nil {
-			return struct{}{}, fmt.Errorf("failed to detach rule from agent policies: %w", err)
+			rollback, err = detachRuleFromAgentWorkspaces(ctx, client, accountRefs, ruleID)
+			if err != nil {
+				return struct{}{}, fmt.Errorf("failed to detach rule from workspaces: %w", err)
+			}
 		}
 
 		if err := client.DeleteRule(ctx, ruleID); err != nil {
-			if rollbackErr := rollback(ctx); rollbackErr != nil {
-				return struct{}{}, fmt.Errorf("failed to delete rule: %w (rollback failed: %v)", err, rollbackErr)
+			if rollback != nil {
+				if rollbackErr := rollback(ctx); rollbackErr != nil {
+					return struct{}{}, fmt.Errorf("failed to delete rule: %w (rollback failed: %v)", err, rollbackErr)
+				}
 			}
 			return struct{}{}, common.WrapDeleteError("rule", err)
 		}

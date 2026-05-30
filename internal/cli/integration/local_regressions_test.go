@@ -270,7 +270,7 @@ func TestCLI_AuthList_DoesNotRequireFileStorePassphrase(t *testing.T) {
 	if strings.Contains(stderr, "NYLAS_FILE_STORE_PASSPHRASE") {
 		t.Fatalf("auth list should not require file-store passphrase, stderr: %q", stderr)
 	}
-	if !strings.Contains(stderr, "access credential") && !strings.Contains(stderr, "API key") {
+	if !strings.Contains(stderr, "access credential") && !strings.Contains(stderr, "API key") && !strings.Contains(stderr, "Authentication failed") {
 		t.Fatalf("stderr %q does not mention API credential failure", stderr)
 	}
 }

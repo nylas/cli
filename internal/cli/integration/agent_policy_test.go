@@ -90,7 +90,7 @@ func TestCLI_AgentPolicyLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		t.Fatalf("policy read text output should include spam detection section\noutput: %s", readTextStdout)
 	}
 
-	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--all", "--json")
+	listStdout, listStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--json")
 	if err != nil {
 		t.Fatalf("policy list failed: %v\nstdout: %s\nstderr: %s", err, listStdout, listStderr)
 	}
@@ -100,10 +100,15 @@ func TestCLI_AgentPolicyLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 		t.Fatalf("failed to parse policy list JSON: %v\noutput: %s", err, listStdout)
 	}
 
+	found := false
 	for _, listed := range policies {
 		if listed.ID == policy.ID {
-			t.Fatalf("unattached policy %q should not appear in agent policy list --all\noutput: %s", policy.ID, listStdout)
+			found = true
+			break
 		}
+	}
+	if !found {
+		t.Fatalf("policy %q should appear in policy list\noutput: %s", policy.ID, listStdout)
 	}
 
 	updateStdout, updateStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "update", policy.ID, "--name", updatedName, "--json")
@@ -222,24 +227,8 @@ func TestCLI_AgentPolicyList_ShowsAttachedAgentAccount(t *testing.T) {
 		t.Fatalf("policy list output missing agent grant ID %q\noutput: %s", createdAccount.ID, stdout)
 	}
 
-	allStdout, allStderr, err := runCLIWithOverridesAndRateLimit(t, 2*time.Minute, env, "agent", "policy", "list", "--all")
-	if err != nil {
-		t.Fatalf("policy list --all failed: %v\nstdout: %s\nstderr: %s", err, allStdout, allStderr)
-	}
-	if !strings.Contains(allStdout, createdPolicy.Name) {
-		t.Fatalf("policy list --all output missing policy name %q\noutput: %s", createdPolicy.Name, allStdout)
-	}
-	if !strings.Contains(allStdout, createdAccount.Email) {
-		t.Fatalf("policy list --all output missing agent email %q\noutput: %s", createdAccount.Email, allStdout)
-	}
-	if !strings.Contains(allStdout, "Agent:") {
-		t.Fatalf("policy list --all should include agent annotations\noutput: %s", allStdout)
-	}
-	if !strings.Contains(allStdout, fmt.Sprintf("(%s)", createdAccount.ID)) {
-		t.Fatalf("policy list --all output missing agent grant ID %q\noutput: %s", createdAccount.ID, allStdout)
-	}
-	if strings.Contains(allStdout, "Agent: none") {
-		t.Fatalf("policy list --all should not show policies without a provider=nylas account\noutput: %s", allStdout)
+	if !strings.Contains(stdout, "Agent:") {
+		t.Fatalf("policy list should include agent annotations when workspace references exist\noutput: %s", stdout)
 	}
 }
 
@@ -286,7 +275,7 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected policy delete to fail while attached\nstdout: %s\nstderr: %s", stdout, stderr)
 	}
-	if !strings.Contains(strings.ToLower(stderr), "policy is attached to agent accounts") {
+	if !strings.Contains(strings.ToLower(stderr), "policy is attached to agent workspaces") {
 		t.Fatalf("expected attached policy error, got stderr: %s", stderr)
 	}
 	if !strings.Contains(stderr, createdAccount.Email) {
@@ -308,16 +297,78 @@ func TestCLI_AgentPolicyDelete_RejectsAttachedPolicy(t *testing.T) {
 func createAgentWithPolicyForTest(t *testing.T, email, policyID string) *domain.AgentAccount {
 	t.Helper()
 
+	client := getTestClient()
+
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), domain.TimeoutAPI)
-	defer cancel()
-
-	client := getTestClient()
-	account, err := client.CreateAgentAccount(ctx, email, "", policyID)
+	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	cancel()
 	if err != nil {
-		t.Fatalf("failed to create agent with policy: %v", err)
+		t.Fatalf("failed to create agent for policy attach: %v", err)
 	}
+
+	// In the workspace model the adapter no longer attaches policies on create;
+	// policy attachment is a workspace PATCH (mirrors the CLI create path).
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID == "" {
+		deleteAgentAccountQuietly(t, client, account.ID)
+		t.Fatalf("created agent account %q has no workspace_id to attach policy %q", email, policyID)
+	}
+
+	acquireRateLimit(t)
+	ctx, cancel = context.WithTimeout(context.Background(), domain.TimeoutAPI)
+	_, err = client.UpdateWorkspace(ctx, workspaceID, &domain.UpdateWorkspaceRequest{PolicyID: &policyID})
+	cancel()
+	if err != nil {
+		deleteAgentAccountQuietly(t, client, account.ID)
+		t.Fatalf("failed to attach policy %q to workspace %q: %v", policyID, workspaceID, err)
+	}
+
 	return account
+}
+
+// deleteAgentAccountQuietly best-effort deletes an agent account so a helper
+// that fails mid-setup does not orphan the created grant (the caller cannot
+// register cleanup until the helper returns).
+func deleteAgentAccountQuietly(t *testing.T, client interface {
+	DeleteAgentAccount(context.Context, string) error
+}, grantID string) {
+	t.Helper()
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := client.DeleteAgentAccount(ctx, grantID); err != nil {
+		t.Logf("cleanup: delete agent account %s: %v", grantID, err)
+	}
+}
+
+func assertWorkspacePolicyForTest(t *testing.T, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+}, workspaceID, wantPolicyID string) {
+	t.Helper()
+
+	if strings.TrimSpace(workspaceID) == "" {
+		t.Fatalf("agent account has no workspace_id; cannot verify policy %q", wantPolicyID)
+	}
+
+	deadline := time.Now().Add(60 * time.Second)
+	var lastSeen string
+	for time.Now().Before(deadline) {
+		acquireRateLimit(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		workspace, err := client.GetWorkspace(ctx, workspaceID)
+		cancel()
+		if err == nil && workspace != nil {
+			lastSeen = strings.TrimSpace(workspace.PolicyID)
+			if lastSeen == wantPolicyID {
+				return
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	t.Fatalf("workspace %q policy_id = %q, want %q", workspaceID, lastSeen, wantPolicyID)
 }
 
 func newPolicyTestName(prefix string) string {

@@ -12,7 +12,7 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
-func printAgentSummary(account domain.AgentAccount, index int) {
+func printAgentSummary(account domain.AgentAccount, index int, policyID, policyLabel string) {
 	createdStr := common.FormatTimeAgo(account.CreatedAt.Time)
 	fmt.Printf("%d. %-40s %s  %s\n",
 		index+1,
@@ -21,6 +21,73 @@ func printAgentSummary(account domain.AgentAccount, index int) {
 		common.FormatGrantStatus(account.GrantStatus),
 	)
 	_, _ = common.Dim.Printf("   ID: %s\n", account.ID)
+	if account.WorkspaceID != "" {
+		_, _ = common.Dim.Printf("   Workspace ID: %s\n", account.WorkspaceID)
+	}
+	if policyID != "" {
+		_, _ = common.Dim.Printf("   Policy ID: %s %s\n", policyID, policyLabel)
+	}
+}
+
+type workspacePolicyInfo struct {
+	ID    string
+	Label string
+}
+
+type workspacePolicyCache struct {
+	ctx    context.Context
+	client interface {
+		GetWorkspace(context.Context, string) (*domain.Workspace, error)
+		GetPolicy(context.Context, string) (*domain.Policy, error)
+	}
+	workspaces map[string]*domain.Workspace
+	policies   map[string]bool
+}
+
+func newWorkspacePolicyCache(ctx context.Context, client interface {
+	GetWorkspace(context.Context, string) (*domain.Workspace, error)
+	GetPolicy(context.Context, string) (*domain.Policy, error)
+}) *workspacePolicyCache {
+	return &workspacePolicyCache{
+		ctx:        ctx,
+		client:     client,
+		workspaces: make(map[string]*domain.Workspace),
+		policies:   make(map[string]bool),
+	}
+}
+
+func (c *workspacePolicyCache) resolve(account domain.AgentAccount) workspacePolicyInfo {
+	workspaceID := strings.TrimSpace(account.WorkspaceID)
+	if workspaceID == "" {
+		return workspacePolicyInfo{}
+	}
+	workspace, ok := c.workspaces[workspaceID]
+	if !ok {
+		ws, err := c.client.GetWorkspace(c.ctx, workspaceID)
+		if err != nil || ws == nil {
+			c.workspaces[workspaceID] = nil
+			return workspacePolicyInfo{}
+		}
+		c.workspaces[workspaceID] = ws
+		workspace = ws
+	}
+	if workspace == nil {
+		return workspacePolicyInfo{}
+	}
+	policyID := strings.TrimSpace(workspace.PolicyID)
+	if policyID == "" {
+		return workspacePolicyInfo{}
+	}
+	existsInList, checked := c.policies[policyID]
+	if !checked {
+		_, err := c.client.GetPolicy(c.ctx, policyID)
+		existsInList = err == nil
+		c.policies[policyID] = existsInList
+	}
+	if !existsInList {
+		return workspacePolicyInfo{ID: policyID, Label: "(Default Account Policy)"}
+	}
+	return workspacePolicyInfo{ID: policyID}
 }
 
 func printAgentDetails(account domain.AgentAccount) {
@@ -33,6 +100,9 @@ func printAgentDetails(account domain.AgentAccount) {
 	fmt.Printf("Status:       %s\n", common.FormatGrantStatus(account.GrantStatus))
 	if account.CredentialID != "" {
 		fmt.Printf("Credential:   %s\n", account.CredentialID)
+	}
+	if account.WorkspaceID != "" {
+		fmt.Printf("Workspace ID: %s\n", account.WorkspaceID)
 	}
 	if account.Settings.PolicyID != "" {
 		fmt.Printf("Policy ID:    %s\n", account.Settings.PolicyID)

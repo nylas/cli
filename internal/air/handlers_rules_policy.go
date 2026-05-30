@@ -1,6 +1,7 @@
 package air
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -40,7 +41,13 @@ func (s *Server) handleListPolicies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyID := strings.TrimSpace(account.Settings.PolicyID)
+	policyID, err := s.resolveAccountPolicyID(ctx, account)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to resolve workspace policy: " + err.Error(),
+		})
+		return
+	}
 	if policyID == "" {
 		writeJSON(w, http.StatusOK, PoliciesResponse{Policies: []domain.Policy{}})
 		return
@@ -88,27 +95,12 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyID := strings.TrimSpace(account.Settings.PolicyID)
-	if policyID == "" {
-		writeJSON(w, http.StatusOK, RulesResponse{Rules: []domain.Rule{}})
-		return
-	}
-
-	policy, err := s.nylasClient.GetPolicy(ctx, policyID)
+	ruleIDs, err := s.resolveAccountRuleIDs(ctx, account)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch policy for rules: " + err.Error(),
+			"error": "Failed to resolve workspace rules: " + err.Error(),
 		})
 		return
-	}
-
-	ruleIDs := make(map[string]struct{}, len(policy.Rules))
-	for _, ruleID := range policy.Rules {
-		ruleID = strings.TrimSpace(ruleID)
-		if ruleID == "" {
-			continue
-		}
-		ruleIDs[ruleID] = struct{}{}
 	}
 	if len(ruleIDs) == 0 {
 		writeJSON(w, http.StatusOK, RulesResponse{Rules: []domain.Rule{}})
@@ -123,15 +115,59 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ruleSet := make(map[string]struct{}, len(ruleIDs))
+	for _, id := range ruleIDs {
+		ruleSet[id] = struct{}{}
+	}
+
 	rules := make([]domain.Rule, 0, len(ruleIDs))
 	for _, rule := range allRules {
-		if _, ok := ruleIDs[rule.ID]; !ok {
+		if _, ok := ruleSet[rule.ID]; !ok {
 			continue
 		}
 		rules = append(rules, rule)
 	}
 
 	writeJSON(w, http.StatusOK, RulesResponse{Rules: rules})
+}
+
+func (s *Server) resolveAccountPolicyID(ctx context.Context, account *domain.AgentAccount) (string, error) {
+	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
+		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
+		if err != nil {
+			return "", err
+		}
+		if ws != nil {
+			return strings.TrimSpace(ws.PolicyID), nil
+		}
+	}
+	return strings.TrimSpace(account.Settings.PolicyID), nil
+}
+
+func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.AgentAccount) ([]string, error) {
+	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
+		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
+		if err != nil {
+			return nil, err
+		}
+		if ws != nil {
+			var ids []string
+			for _, id := range ws.RulesIDs {
+				if id = strings.TrimSpace(id); id != "" {
+					ids = append(ids, id)
+				}
+			}
+			return ids, nil
+		}
+	}
+	if policyID := strings.TrimSpace(account.Settings.PolicyID); policyID != "" {
+		policy, err := s.nylasClient.GetPolicy(ctx, policyID)
+		if err != nil {
+			return nil, err
+		}
+		return policy.Rules, nil
+	}
+	return nil, nil
 }
 
 func demoPolicies() []domain.Policy {

@@ -120,6 +120,45 @@ func (m *MockClient) DeleteConnector(ctx context.Context, connectorID string) er
 	return nil
 }
 
+func (m *MockClient) ListWorkspaces(ctx context.Context) ([]domain.Workspace, error) {
+	return []domain.Workspace{
+		{ID: "workspace-1", Name: "Agent Workspace", PolicyID: "policy-1"},
+	}, nil
+}
+
+func (m *MockClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	return &domain.Workspace{
+		ID:       workspaceID,
+		Name:     "Agent Workspace",
+		PolicyID: "policy-1",
+		RulesIDs: []string{"rule-1"},
+	}, nil
+}
+
+func (m *MockClient) CreateWorkspace(ctx context.Context, req *domain.CreateWorkspaceRequest) (*domain.Workspace, error) {
+	return &domain.Workspace{
+		ID:       "workspace-new",
+		Name:     req.Name,
+		PolicyID: req.PolicyID,
+		RulesIDs: req.RulesIDs,
+	}, nil
+}
+
+func (m *MockClient) UpdateWorkspace(ctx context.Context, workspaceID string, req *domain.UpdateWorkspaceRequest) (*domain.Workspace, error) {
+	workspace := &domain.Workspace{ID: workspaceID, Name: "Agent Workspace"}
+	if req.PolicyID != nil {
+		workspace.PolicyID = *req.PolicyID
+	}
+	if req.RulesIDs != nil {
+		workspace.RulesIDs = append([]string(nil), (*req.RulesIDs)...)
+	}
+	return workspace, nil
+}
+
+func (m *MockClient) DeleteWorkspace(ctx context.Context, workspaceID string) error {
+	return nil
+}
+
 func (m *MockClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
 	return []domain.ConnectorCredential{
 		{ID: "cred-1", Name: "OAuth Credential", CredentialType: "oauth"},

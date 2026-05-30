@@ -2,7 +2,6 @@ package agent
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"os"
 	"testing"
@@ -11,14 +10,6 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
-
-type ruleExistenceClient struct {
-	getRule func(context.Context, string) (*domain.Rule, error)
-}
-
-func (c ruleExistenceClient) GetRule(ctx context.Context, ruleID string) (*domain.Rule, error) {
-	return c.getRule(ctx, ruleID)
-}
 
 func TestNewAgentCmd(t *testing.T) {
 	cmd := NewAgentCmd()
@@ -43,7 +34,6 @@ func TestCreateCmd(t *testing.T) {
 
 	assert.Equal(t, "create <email>", cmd.Use)
 	assert.NotNil(t, cmd.Flags().Lookup("app-password"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "provider=nylas")
 }
 
@@ -134,9 +124,7 @@ func TestPolicyListCmd(t *testing.T) {
 	cmd := newPolicyListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.Contains(t, cmd.Long, "provider=nylas account")
-	assert.Contains(t, cmd.Flags().Lookup("all").Usage, "provider=nylas accounts")
+	assert.Contains(t, cmd.Long, "/v3/policies")
 }
 
 func TestPolicyReadCmd(t *testing.T) {
@@ -150,17 +138,13 @@ func TestRuleListCmd(t *testing.T) {
 	cmd := newRuleListCmd()
 
 	assert.Equal(t, "list", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
-	assert.Contains(t, cmd.Long, "default grant")
+	assert.Contains(t, cmd.Long, "/v3/rules")
 }
 
 func TestRuleReadCmd(t *testing.T) {
 	cmd := newRuleReadCmd()
 
 	assert.Equal(t, "read <rule-id>", cmd.Use)
-	assert.NotNil(t, cmd.Flags().Lookup("all"))
-	assert.NotNil(t, cmd.Flags().Lookup("policy-id"))
 	assert.Contains(t, cmd.Long, "Read details for a single rule")
 }
 
@@ -408,106 +392,6 @@ func TestResolvePolicyForAgentOps(t *testing.T) {
 		assert.Equal(t, "policy-unattached", resolved.Policy.ID)
 		assert.False(t, resolved.AttachedToAgent)
 	}
-}
-
-func TestBuildRuleRefsByID(t *testing.T) {
-	refsByRuleID := buildRuleRefsByID(
-		[]domain.Policy{
-			{ID: "policy-b", Name: "Beta", Rules: []string{"rule-1"}},
-			{ID: "policy-a", Name: "Alpha", Rules: []string{"rule-1", "rule-2", "rule-1"}},
-		},
-		map[string][]policyAgentAccountRef{
-			"policy-a": {{
-				GrantID: "grant-a",
-				Email:   "alpha@example.com",
-			}},
-			"policy-b": {{
-				GrantID: "grant-b",
-				Email:   "beta@example.com",
-			}},
-		},
-	)
-
-	if assert.Len(t, refsByRuleID["rule-1"], 2) {
-		assert.Equal(t, "Alpha", refsByRuleID["rule-1"][0].PolicyName)
-		assert.Equal(t, "Beta", refsByRuleID["rule-1"][1].PolicyName)
-	}
-	if assert.Len(t, refsByRuleID["rule-2"], 1) {
-		assert.Equal(t, "policy-a", refsByRuleID["rule-2"][0].PolicyID)
-	}
-}
-
-func TestRuleReferencedOutsideAgentScope(t *testing.T) {
-	allPolicies := []domain.Policy{
-		{ID: "policy-agent", Rules: []string{"rule-1"}},
-		{ID: "policy-other", Rules: []string{"rule-1"}},
-	}
-	agentPolicies := []domain.Policy{
-		{ID: "policy-agent", Rules: []string{"rule-1"}},
-	}
-
-	assert.True(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-1"))
-	assert.False(t, ruleReferencedOutsideAgentScope(allPolicies, agentPolicies, "rule-2"))
-}
-
-func TestPoliciesLeftEmptyByRuleRemoval(t *testing.T) {
-	client := ruleExistenceClient{
-		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
-			switch ruleID {
-			case "rule-1", "rule-2", "rule-3":
-				return &domain.Rule{ID: ruleID}, nil
-			default:
-				return nil, domain.ErrRuleNotFound
-			}
-		},
-	}
-
-	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
-		{ID: "policy-last", Name: "Last Rule", Rules: []string{"rule-1"}},
-		{ID: "policy-shared", Name: "Has Spare", Rules: []string{"rule-1", "rule-2"}},
-		{ID: "policy-other", Name: "Other Rule", Rules: []string{"rule-3"}},
-	}, "rule-1")
-	assert.NoError(t, err)
-
-	if assert.Len(t, blocking, 1) {
-		assert.Equal(t, "policy-last", blocking[0].ID)
-		assert.Equal(t, "Last Rule", blocking[0].Name)
-	}
-}
-
-func TestPoliciesLeftEmptyByRuleRemoval_IgnoresDanglingReferences(t *testing.T) {
-	client := ruleExistenceClient{
-		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
-			if ruleID == "rule-1" {
-				return &domain.Rule{ID: ruleID}, nil
-			}
-			return nil, domain.ErrRuleNotFound
-		},
-	}
-
-	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
-		{ID: "policy-last", Name: "Last Live Rule", Rules: []string{"rule-1", "missing-rule"}},
-	}, "rule-1")
-	assert.NoError(t, err)
-
-	if assert.Len(t, blocking, 1) {
-		assert.Equal(t, "policy-last", blocking[0].ID)
-	}
-}
-
-func TestPoliciesLeftEmptyByRuleRemoval_PropagatesLookupErrors(t *testing.T) {
-	client := ruleExistenceClient{
-		getRule: func(ctx context.Context, ruleID string) (*domain.Rule, error) {
-			return nil, context.DeadlineExceeded
-		},
-	}
-
-	blocking, err := policiesLeftEmptyByRuleRemoval(context.Background(), client, []domain.Policy{
-		{ID: "policy-last", Name: "Last Rule", Rules: []string{"rule-1", "rule-2"}},
-	}, "rule-1")
-
-	assert.Nil(t, blocking)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func captureStdout(t *testing.T, fn func()) string {

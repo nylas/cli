@@ -254,7 +254,7 @@ func TestCreateAgentAccount(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "agent@example.com", settings["email"])
 		assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
-		assert.Equal(t, "policy-123", settings["policy_id"])
+		assert.Equal(t, "workspace-123", payload["workspace_id"])
 
 		response := map[string]any{
 			"data": map[string]any{
@@ -262,10 +262,8 @@ func TestCreateAgentAccount(t *testing.T) {
 				"email":        "agent@example.com",
 				"provider":     "nylas",
 				"grant_status": "valid",
+				"workspace_id": "workspace-123",
 				"created_at":   time.Now().Unix(),
-				"settings": map[string]any{
-					"policy_id": "policy-123",
-				},
 			},
 		}
 
@@ -278,11 +276,12 @@ func TestCreateAgentAccount(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "ValidAgentPass123ABC!", "policy-123")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "ValidAgentPass123ABC!", "workspace-123")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-new", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
-	assert.Equal(t, "policy-123", account.Settings.PolicyID)
+	assert.Equal(t, "workspace-123", account.WorkspaceID)
+	assert.Empty(t, account.Settings.PolicyID)
 }
 
 func TestUpdateAgentAccount(t *testing.T) {
@@ -320,7 +319,7 @@ func TestUpdateAgentAccount(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, "agent@example.com", settings["email"])
 			assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
-			assert.Equal(t, "policy-123", settings["policy_id"])
+			assert.NotContains(t, settings, "policy_id")
 
 			response := map[string]any{
 				"data": map[string]any{
@@ -492,8 +491,12 @@ func TestCreateAgentAccount_DirectResponseFallback(t *testing.T) {
 	assert.Equal(t, "agent@example.com", account.Email)
 }
 
-func TestCreateAgentAccount_DoesNotInventPolicyID(t *testing.T) {
+func TestCreateAgentAccount_OmitsWorkspaceIDWhenEmpty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.NotContains(t, payload, "workspace_id")
+
 		response := map[string]any{
 			"data": map[string]any{
 				"id":           "agent-new",
@@ -513,9 +516,9 @@ func TestCreateAgentAccount_DoesNotInventPolicyID(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "policy-123")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "")
 	require.NoError(t, err)
-	assert.Equal(t, "", account.Settings.PolicyID)
+	assert.Equal(t, "agent-new", account.ID)
 }
 
 func TestUpdateAgentAccount_RejectsNonNylasGrantBeforePatch(t *testing.T) {

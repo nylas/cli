@@ -36,19 +36,16 @@ func TestPrintRuleDetails(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printRuleDetails(rule, []rulePolicyRef{{
-			PolicyID:   "policy-123",
-			PolicyName: "Default Policy",
-			Accounts: []policyAgentAccountRef{{
-				GrantID: "grant-123",
-				Email:   "agent@example.com",
-			}},
+		printRuleDetails(rule, []ruleWorkspaceRef{{
+			WorkspaceID: "workspace-123",
+			GrantID:     "grant-123",
+			Email:       "agent@example.com",
 		}})
 	})
 
 	assert.Contains(t, output, "Rule:         Block Example")
-	assert.Contains(t, output, "Policies:")
-	assert.Contains(t, output, "Default Policy")
+	assert.Contains(t, output, "Workspaces:")
+	assert.Contains(t, output, "workspace-123")
 	assert.Contains(t, output, "agent@example.com")
 	assert.Contains(t, output, "Match:")
 	assert.Contains(t, output, "from.domain is example.com")

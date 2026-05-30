@@ -16,8 +16,8 @@ type AgentClient interface {
 
 	// CreateAgentAccount creates a new agent account with the given email address.
 	// appPassword is optional and enables IMAP/SMTP client access when set.
-	// policyID is optional and attaches the created account to an existing policy.
-	CreateAgentAccount(ctx context.Context, email, appPassword, policyID string) (*domain.AgentAccount, error)
+	// workspaceID assigns the account to an existing workspace when set.
+	CreateAgentAccount(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error)
 
 	// UpdateAgentAccount updates mutable settings on an existing agent account.
 	// email is required by the current grant update API for provider=nylas grants.

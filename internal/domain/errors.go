@@ -65,6 +65,7 @@ var (
 	ErrCallbackURINotFound   = errors.New("callback URI not found")
 	ErrConnectorNotFound     = errors.New("connector not found")
 	ErrCredentialNotFound    = errors.New("credential not found")
+	ErrWorkspaceNotFound     = errors.New("workspace not found")
 
 	// Dashboard auth errors
 	ErrDashboardNotLoggedIn    = errors.New("not logged in to Nylas Dashboard")
