@@ -198,6 +198,9 @@ nylas email send --list-gpg-keys                               # List available 
 nylas email send --to EMAIL --template-id TPL --template-data '{}'  # Send using a hosted template
 nylas email send --template-id TPL --template-data-file data.json --render-only
 nylas email send --to EMAIL --subject SUBJECT --body BODY --signature-id SIG  # Send with stored signature
+nylas email reply <message-id> --body BODY                     # Reply to sender (threads automatically)
+nylas email reply <message-id> --all --body BODY              # Reply to everyone on the thread
+nylas email reply <message-id> --interactive                  # Compose the reply body interactively
 nylas email search --query "QUERY"                             # Search emails
 nylas email delete <message-id>                                # Delete email
 nylas email mark read <message-id>                             # Mark as read
