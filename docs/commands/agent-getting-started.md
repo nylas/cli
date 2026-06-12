@@ -112,7 +112,11 @@ Notes:
 ## Step 4 — Policies
 
 Policies are settings bundles (limits, options, spam detection) that
-workspaces attach via `policy_id`. Your account already has a default one.
+workspaces attach via `policy_id`. A starter "Default Policy" mirroring your
+plan's maximums may already exist. Policies are optional: a workspace with no
+policy runs at your billing plan's maximum limits, and policy limits can
+never exceed the plan (blank limits default to the plan maximum; higher
+values are rejected by the API).
 
 ```bash
 nylas agent policy list
@@ -135,13 +139,12 @@ nylas workspace update <workspace-id> --policy-id <policy-id>
 ```
 Policies (2)
 
-1. Default Policy
-   ID: pppppppp-1111-1111-1111-111111111111
-   Attached: support@yourapp.nylas.email (workspace aaaaaaaa-...)
+1. Default Policy                  pppppppp-1111-1111-1111-111111111111
+   Updated: 2 days ago
+   Agent: support@yourapp.nylas.email (gggggggg-1111-1111-1111-111111111111)
 
-2. Strict Policy
-   ID: pppppppp-2222-2222-2222-222222222222
-   Attached: (none)
+2. Strict Policy                   pppppppp-2222-2222-2222-222222222222
+   Updated: 5 hours ago
 ```
 
 ## Step 5 — Lists

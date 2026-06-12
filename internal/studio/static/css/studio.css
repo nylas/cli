@@ -44,7 +44,6 @@ body {
 }
 .chip .chip-tag { margin-left: auto; font-size: 12px; background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 99px; color: var(--muted); }
 .chip-policy { background: linear-gradient(135deg, rgba(124,92,255,.22), rgba(177,75,244,.12)); border-color: rgba(124,92,255,.4); color: #cfc4ff; }
-.chip-policy.locked { background: rgba(139,139,158,.12); border-color: rgba(139,139,158,.35); color: var(--soft); }
 .chip-rule { background: rgba(57,217,138,.1); border-color: rgba(57,217,138,.32); color: #a8f0cd; }
 .chip-list { background: rgba(255,181,71,.1); border-color: rgba(255,181,71,.32); color: #ffd9a0; }
 
@@ -65,7 +64,6 @@ body {
   border: 1px solid; cursor: pointer;
 }
 .slot-policy { background: rgba(124,92,255,.13); border-color: rgba(124,92,255,.35); color: #cfc4ff; }
-.slot-policy.locked { background: rgba(139,139,158,.1); border-color: rgba(139,139,158,.3); color: var(--soft); }
 .slot-rule { background: rgba(57,217,138,.07); border-color: rgba(57,217,138,.22); color: #a8f0cd; }
 .slot-rule.disabled { opacity: .55; }
 .slot-empty { border: 1.5px dashed rgba(255,255,255,.15); color: var(--muted); text-align: center; cursor: default; }

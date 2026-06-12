@@ -182,6 +182,9 @@ support@yourapp.nylas.email  valid
         └── Archive newsletters (inbound) [disabled]
 ```
 
+Workspaces with no policy (or a dangling `policy_id`) note that plan
+maximums apply — accounts without a policy run at the billing plan's limits.
+
 The overview also flags problems the API does not prevent:
 - ⚠ dangling references — workspace `policy_id`/`rule_ids` or rule `in_list`
   conditions pointing at deleted resources

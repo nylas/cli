@@ -122,9 +122,9 @@ func printOverviewWorkspace(acct agentgraph.Account) {
 	fmt.Printf("└── Workspace: %s%s\n", name, suffix)
 
 	if acct.Policy == nil {
-		fmt.Println("    ├── (no policy attached)")
+		fmt.Println("    ├── (no policy attached — plan maximums apply)")
 	} else if acct.Policy.Missing {
-		fmt.Printf("    ├── ⚠ Policy %s no longer exists\n", acct.Policy.ID)
+		fmt.Printf("    ├── ⚠ Policy %s no longer exists — plan maximums apply\n", acct.Policy.ID)
 	} else {
 		fmt.Printf("    ├── Policy: %s\n", acct.Policy.Name)
 	}

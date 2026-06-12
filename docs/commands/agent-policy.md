@@ -64,6 +64,9 @@ nylas agent policy create --data-file policy.json
 nylas agent policy create --data '{"name":"Strict Policy","rules":["rule-123"]}'
 ```
 
+Every limit is optional: omitted limits default to your billing plan's
+maximum, and values above the plan maximum are rejected by the API.
+
 Example payload:
 
 ```json
@@ -130,19 +133,26 @@ Policies attach to workspaces via `policy_id`. To assign a policy to an agent ac
 nylas workspace update <workspace-id> --policy-id <policy-id>
 ```
 
-The API auto-creates a default workspace and policy when an agent account is created.
+The API auto-creates a default workspace when an agent account is created
+(and may create a starter "Default Policy" mirroring your plan's maximums).
+A workspace with no `policy_id` attached runs at your billing plan's maximum
+limits — having zero policies is a valid state.
 
 ## Troubleshooting
 
 If `nylas agent policy list` returns nothing:
 
-- no policies have been explicitly created via `/v3/policies`
-- the API auto-creates a default policy on the workspace, but it does not appear in `/v3/policies`
+- no policies currently exist for the application — accounts run at your
+  billing plan's maximum limits
+- create one with `nylas agent policy create`; blank limits default to the
+  plan maximums
 
 If `nylas agent policy delete` fails:
 
-- the policy is still attached to one or more agent workspaces
-- run `nylas agent policy list` to see the attached workspace mappings
+- the policy is still attached to one or more agent workspaces (the CLI
+  blocks the delete to avoid leaving dangling `policy_id` references)
+- run `nylas agent policy list` to see the attached workspace mappings, then
+  detach with `nylas workspace update <workspace-id> --policy-id <other-id>`
 
 ## See Also
 

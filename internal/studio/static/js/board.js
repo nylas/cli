@@ -38,16 +38,6 @@ window.StudioBoard = {
         return name.replace(/\s*Connector\s+'[0-9a-fA-F-]{36}'/, '').trim();
     },
 
-    // ceilingPolicyID is the plan ceiling: the default workspace's policy.
-    ceilingPolicyID(board) {
-        for (const ws of board.workspaces || []) {
-            if (ws.default && ws.policy) {
-                return ws.policy.id;
-            }
-        }
-        return '';
-    },
-
     renderTotals(totals) {
         const D = StudioDOM;
         const el = D.clear(document.getElementById('totals'));
@@ -105,19 +95,14 @@ window.StudioBoard = {
         const D = StudioDOM;
         const palette = D.clear(document.getElementById('palette'));
         const { policies, rules, lists, ruleAttached } = this.collectResources(board);
-        const ceilingID = this.ceilingPolicyID(board);
 
         D.add(palette, D.el('div', 'palette-label', 'Policies · ' + policies.size));
         for (const policy of policies.values()) {
-            const locked = policy.id === ceilingID;
-            const chip = D.el('div', locked ? 'chip chip-policy locked' : 'chip chip-policy',
-                (locked ? '🔒 ' : '🛡 ') + (policy.name || policy.id));
-            if (locked) {
-                D.add(chip, D.el('span', 'chip-tag', 'plan ceiling'));
-            } else if (policy.missing) {
+            const chip = D.el('div', 'chip chip-policy', '🛡 ' + (policy.name || policy.id));
+            if (policy.missing) {
                 D.add(chip, D.el('span', 'chip-tag', 'missing'));
             }
-            chip.addEventListener('click', () => StudioDrawer.showPolicy(policy, locked));
+            chip.addEventListener('click', () => StudioDrawer.showPolicy(policy));
             if (!policy.missing) {
                 StudioDragDrop.makeChipDraggable(chip, 'policy', policy);
             }
@@ -216,17 +201,15 @@ window.StudioBoard = {
     policySlot(ws) {
         const D = StudioDOM;
         if (!ws.policy) {
-            return D.el('div', 'slot slot-empty', 'No policy attached');
+            return D.el('div', 'slot slot-empty', 'No policy — plan maximums apply');
         }
         if (ws.policy.missing) {
-            const slot = D.el('div', 'slot slot-warn', '⚠ Policy ' + ws.policy.id + ' no longer exists');
-            slot.addEventListener('click', () => StudioDrawer.showPolicy(ws.policy, false));
+            const slot = D.el('div', 'slot slot-warn', '⚠ Policy ' + ws.policy.id + ' no longer exists — plan maximums apply');
+            slot.addEventListener('click', () => StudioDrawer.showPolicy(ws.policy));
             return slot;
         }
-        const locked = ws.policy.id === this.ceilingPolicyID(this.state);
-        const slot = D.el('div', locked ? 'slot slot-policy locked' : 'slot slot-policy',
-            (locked ? '🔒 ' : '🛡 ') + (ws.policy.name || ws.policy.id));
-        slot.addEventListener('click', () => StudioDrawer.showPolicy(ws.policy, locked));
+        const slot = D.el('div', 'slot slot-policy', '🛡 ' + (ws.policy.name || ws.policy.id));
+        slot.addEventListener('click', () => StudioDrawer.showPolicy(ws.policy));
         return slot;
     },
 

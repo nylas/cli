@@ -97,16 +97,23 @@ func TestHandleWorkspacePatch_SetPolicy(t *testing.T) {
 	}
 }
 
-func TestHandleWorkspacePatch_DefaultWorkspacePolicyLocked(t *testing.T) {
+func TestHandleWorkspacePatch_DefaultWorkspacePolicyAllowed(t *testing.T) {
 	t.Parallel()
-	server := newTestServer()
+	rec := &workspaceUpdateRecorder{MockClient: nylasmock.NewMockClient()}
+	server := NewServer("127.0.0.1:0", rec)
 
-	// workspace-1 is the default workspace: its policy defines the plan
-	// ceiling, so swapping it would bypass the ceiling-policy protection.
+	// workspace-1 is the default workspace. Its policy is not a plan ceiling
+	// (the ceiling is the billing plan, enforced by the API), so swapping it
+	// must work — otherwise a stale policy reference on the default workspace
+	// becomes unrepairable from Studio.
 	w := doJSON(t, server.routeWorkspaces, http.MethodPatch, "/api/workspaces/workspace-1", `{"policy_id":"policy-9"}`)
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("default workspace policy swap must be rejected: expected 403, got %d (body: %s)", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("default workspace policy swap must be allowed: expected 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	decodeMutation(t, w)
+	if rec.gotPolicyID == nil || *rec.gotPolicyID != "policy-9" {
+		t.Fatalf("expected policy_id forwarded to UpdateWorkspace, got %v", rec.gotPolicyID)
 	}
 }
 
@@ -114,8 +121,6 @@ func TestHandleWorkspacePatch_DefaultWorkspaceRuleAttachAllowed(t *testing.T) {
 	t.Parallel()
 	server := newTestServer()
 
-	// Only the policy slot is locked on the default workspace; rule
-	// attachments remain legitimate.
 	w := doJSON(t, server.routeWorkspaces, http.MethodPatch, "/api/workspaces/workspace-1", `{"add_rule_ids":["rule-2"]}`)
 
 	if w.Code != http.StatusOK {
