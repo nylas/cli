@@ -132,10 +132,7 @@ func newAuthRemoveCmd() *cobra.Command {
 		Short: "Remove stored Slack token",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !force {
-				fmt.Print("Remove Slack authentication? [y/N]: ")
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" && confirm != "yes" {
+				if !common.Confirm("Remove Slack authentication?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

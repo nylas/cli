@@ -41,11 +41,8 @@ Examples:
 				fmt.Println("   - Usage statistics")
 				fmt.Println("   - Cached responses")
 				fmt.Println()
-				fmt.Print("Are you sure? (yes/no): ")
 
-				var response string
-				_, err := fmt.Scanln(&response)
-				if err != nil || (response != "yes" && response != "y") {
+				if !common.Confirm("Are you sure?", false) {
 					fmt.Println("\n❌ Cancelled")
 					return nil
 				}

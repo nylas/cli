@@ -50,12 +50,15 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 	skipIfMissingCreds(t)
 	skipIfMissingAgentDomain(t)
 
+	// Provision lists before the scope so their LIFO cleanups run last,
+	// after the scope has deleted the rules that reference them.
+	listIDs := provisionRuleMatrixLists(t)
 	scope := setupRuleMatrixScope(t, "rule-matrix-create")
 	placeholder := createRuleForTest(t, getTestClient(), "it-rule-matrix-create-placeholder")
 	scope.trackRule(placeholder.ID)
 	attachRuleToWorkspaceForTest(t, getTestClient(), scope.workspaceID, placeholder.ID)
 
-	for _, tc := range buildRuleConditionMatrixCases() {
+	for _, tc := range buildRuleConditionMatrixCases(listIDs) {
 		t.Run("create-"+tc.name, func(t *testing.T) {
 			rule := runAgentRuleCreateJSON(t, scope.env,
 				"--name", fmt.Sprintf("it-%s-%d", tc.name, time.Now().UnixNano()),
@@ -64,7 +67,9 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 				"--condition", buildConditionArg(tc.field, tc.operator, tc.rawValue),
 				"--action", "archive",
 			)
-			scope.trackRule(rule.ID)
+			// Delete this rule as soon as the subtest ends so the application
+			// stays under its per-plan rule cap across the whole matrix.
+			t.Cleanup(func() { scope.deleteRuleNow(t, rule.ID) })
 			assertRuleTrigger(t, rule, tc.trigger)
 			assertRuleMatchOperator(t, rule, "all")
 			assertRuleCondition(t, rule, tc.field, tc.operator, tc.expectedValue)
@@ -80,7 +85,7 @@ func TestCLI_AgentRuleMatrix_CreateAllSupportedConditionsAndActions(t *testing.T
 				"--condition", representativeCondition(tc.trigger),
 				"--action", tc.actionArg,
 			)
-			scope.trackRule(rule.ID)
+			t.Cleanup(func() { scope.deleteRuleNow(t, rule.ID) })
 			assertRuleTrigger(t, rule, tc.trigger)
 			assertRuleAction(t, rule, tc.expectedType, tc.expectedValue)
 		})
@@ -124,6 +129,9 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 	skipIfMissingCreds(t)
 	skipIfMissingAgentDomain(t)
 
+	// Provision lists before the scope so their LIFO cleanups run last,
+	// after the scope has deleted the rules that reference them.
+	listIDs := provisionRuleMatrixLists(t)
 	scope := setupRuleMatrixScope(t, "rule-matrix-update")
 	client := getTestClient()
 
@@ -139,7 +147,7 @@ func TestCLI_AgentRuleMatrix_UpdateAllSupportedConditionsAndActions(t *testing.T
 	scope.trackRule(outboundBase.ID)
 	attachRuleToWorkspaceForTest(t, client, scope.workspaceID, outboundBase.ID)
 
-	for _, tc := range buildRuleConditionMatrixCases() {
+	for _, tc := range buildRuleConditionMatrixCases(listIDs) {
 		t.Run("update-condition-"+tc.name, func(t *testing.T) {
 			ruleID := inboundBase.ID
 			if tc.trigger == "outbound" {
@@ -292,6 +300,27 @@ func (s *ruleMatrixScope) trackRule(ruleID string) {
 	s.createdIDs = append(s.createdIDs, ruleID)
 }
 
+// deleteRuleNow detaches a rule from the workspace and deletes it immediately.
+// The create matrix exercises dozens of rules, but the application has a
+// per-plan rule cap (free plan = 5), so each rule must be removed as soon as it
+// has been asserted instead of accumulating until the final cleanup.
+func (s *ruleMatrixScope) deleteRuleNow(t *testing.T, ruleID string) {
+	t.Helper()
+	if strings.TrimSpace(ruleID) == "" {
+		return
+	}
+
+	client := getTestClient()
+	removeRuleFromWorkspaceForTest(t, client, s.workspaceID, ruleID)
+
+	acquireRateLimit(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := client.DeleteRule(ctx, ruleID); err != nil {
+		t.Errorf("delete rule %s: %v", ruleID, err)
+	}
+}
+
 func runAgentRuleCreateJSON(t *testing.T, env map[string]string, args ...string) domain.Rule {
 	t.Helper()
 
@@ -390,10 +419,52 @@ func buildConditionArg(field, operator, rawValue string) string {
 	return fmt.Sprintf("%s,%s,%s", field, operator, rawValue)
 }
 
-func buildRuleConditionMatrixCases() []ruleConditionMatrixCase {
+// provisionRuleMatrixLists creates two real lists per type via /v3/lists and
+// returns type → list IDs. The API validates in_list condition values against
+// existing lists (and type-matches them to the rule field), so the matrix
+// cannot use fabricated IDs. Two lists per type exercise multi-list in_list
+// conditions while staying under the per-plan cap of 10 lists (the rule cap
+// of 5 is handled separately by deleteRuleNow).
+func provisionRuleMatrixLists(t *testing.T) map[string][]string {
+	t.Helper()
+
+	client := getTestClient()
+	listIDs := make(map[string][]string, len(domain.AgentListTypes))
+
+	for _, listType := range domain.AgentListTypes {
+		for n := 1; n <= 2; n++ {
+			acquireRateLimit(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			list, err := client.CreateList(ctx, map[string]any{
+				"name": fmt.Sprintf("it-rule-matrix-%s-%d-%d", listType, n, time.Now().UnixNano()),
+				"type": listType,
+			})
+			cancel()
+			if err != nil {
+				t.Fatalf("failed to create %s list for rule matrix: %v", listType, err)
+			}
+			listIDs[listType] = append(listIDs[listType], list.ID)
+
+			listID := list.ID
+			t.Cleanup(func() {
+				acquireRateLimit(t)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if err := client.DeleteList(ctx, listID); err != nil {
+					t.Logf("cleanup delete list %s: %v", listID, err)
+				}
+				cancel()
+			})
+		}
+	}
+
+	return listIDs
+}
+
+func buildRuleConditionMatrixCases(listIDs map[string][]string) []ruleConditionMatrixCase {
 	cases := make([]ruleConditionMatrixCase, 0, 38)
 
-	appendStringFieldCases := func(trigger, field, exactValue, containsValue, listPrefix string) {
+	appendStringFieldCases := func(trigger, field, exactValue, containsValue, listType string) {
+		lists := listIDs[listType]
 		cases = append(cases,
 			ruleConditionMatrixCase{
 				name:          fmt.Sprintf("%s-%s-is", trigger, strings.ReplaceAll(field, ".", "-")),
@@ -424,22 +495,22 @@ func buildRuleConditionMatrixCases() []ruleConditionMatrixCase {
 				trigger:       trigger,
 				field:         field,
 				operator:      "in_list",
-				rawValue:      fmt.Sprintf("%s-1,%s-2", listPrefix, listPrefix),
-				expectedValue: []string{fmt.Sprintf("%s-1", listPrefix), fmt.Sprintf("%s-2", listPrefix)},
+				rawValue:      strings.Join(lists, ","),
+				expectedValue: lists,
 			},
 		)
 	}
 
-	appendStringFieldCases("inbound", "from.address", "sender@example.com", "sender@", "inbound-address-list")
-	appendStringFieldCases("inbound", "from.domain", "example.com", "ample", "inbound-domain-list")
-	appendStringFieldCases("inbound", "from.tld", "com", "o", "inbound-tld-list")
+	appendStringFieldCases("inbound", "from.address", "sender@example.com", "sender@", "address")
+	appendStringFieldCases("inbound", "from.domain", "example.com", "ample", "domain")
+	appendStringFieldCases("inbound", "from.tld", "com", "o", "tld")
 
-	appendStringFieldCases("outbound", "from.address", "sender@example.com", "sender@", "outbound-from-address-list")
-	appendStringFieldCases("outbound", "from.domain", "example.com", "ample", "outbound-from-domain-list")
-	appendStringFieldCases("outbound", "from.tld", "com", "o", "outbound-from-tld-list")
-	appendStringFieldCases("outbound", "recipient.address", "recipient@example.net", "recipient@", "outbound-recipient-address-list")
-	appendStringFieldCases("outbound", "recipient.domain", "example.net", "ample", "outbound-recipient-domain-list")
-	appendStringFieldCases("outbound", "recipient.tld", "net", "e", "outbound-recipient-tld-list")
+	appendStringFieldCases("outbound", "from.address", "sender@example.com", "sender@", "address")
+	appendStringFieldCases("outbound", "from.domain", "example.com", "ample", "domain")
+	appendStringFieldCases("outbound", "from.tld", "com", "o", "tld")
+	appendStringFieldCases("outbound", "recipient.address", "recipient@example.net", "recipient@", "address")
+	appendStringFieldCases("outbound", "recipient.domain", "example.net", "ample", "domain")
+	appendStringFieldCases("outbound", "recipient.tld", "net", "e", "tld")
 
 	cases = append(cases,
 		ruleConditionMatrixCase{

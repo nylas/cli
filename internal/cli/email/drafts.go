@@ -20,7 +20,9 @@ func newDraftsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "drafts",
 		Short: "Manage email drafts",
-		Long:  "List, create, edit, and send draft emails.",
+		Long: `List, create, edit, and send draft emails.
+
+API reference: https://developer.nylas.com/docs/reference/api/drafts/`,
 	}
 
 	cmd.AddCommand(newDraftsListCmd())
@@ -349,17 +351,13 @@ func newDraftsSendCmd() *cobra.Command {
 
 				// Confirmation
 				if !force {
-					fmt.Println("Send this draft?")
 					fmt.Printf("  To:      %s\n", common.FormatParticipants(draft.To))
 					fmt.Printf("  Subject: %s\n", draft.Subject)
 					if signatureID != "" {
 						fmt.Printf("  Signature: %s\n", signatureID)
 					}
-					fmt.Print("\n[y/N]: ")
 
-					var confirm string
-					_, _ = fmt.Scanln(&confirm) // Ignore error - empty string treated as "no"
-					if confirm != "y" && confirm != "Y" && confirm != "yes" {
+					if !common.Confirm("\nSend this draft?", false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

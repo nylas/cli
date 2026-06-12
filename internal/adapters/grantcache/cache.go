@@ -230,6 +230,12 @@ func (s *Store) write(shape *fileShape) error {
 		_ = tmp.Close()
 		return err
 	}
+	// Flush to disk before the rename so a crash can't leave an empty or
+	// truncated grant cache behind the new name.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}

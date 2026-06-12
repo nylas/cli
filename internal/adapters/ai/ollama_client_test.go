@@ -2,6 +2,10 @@ package ai
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -99,4 +103,48 @@ func TestOllamaClient_IsAvailable(t *testing.T) {
 	// In unit tests, this will likely fail unless Ollama is running
 	// We're just testing that the method doesn't panic
 	_ = client.IsAvailable(ctx)
+}
+
+func TestOllamaClient_StreamChat_HTTPError(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+	}{
+		{"unauthorized", http.StatusUnauthorized},
+		{"rate limited", http.StatusTooManyRequests},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(`{"error":"request failed"}`))
+			}))
+			defer server.Close()
+
+			client := NewOllamaClient(&domain.OllamaConfig{
+				Host:  server.URL,
+				Model: "mistral:latest",
+			})
+
+			var chunks []string
+			err := client.StreamChat(context.Background(), &domain.ChatRequest{
+				Messages: []domain.ChatMessage{{Role: "user", Content: "Hello"}},
+			}, func(chunk string) error {
+				chunks = append(chunks, chunk)
+				return nil
+			})
+
+			if err == nil {
+				t.Fatalf("StreamChat() error = nil, want error for HTTP %d", tt.status)
+			}
+			if !strings.Contains(err.Error(), strconv.Itoa(tt.status)) {
+				t.Errorf("error %q does not mention status %d", err.Error(), tt.status)
+			}
+			if len(chunks) != 0 {
+				t.Errorf("expected no chunks on HTTP error, got %v", chunks)
+			}
+		})
+	}
 }

@@ -26,11 +26,12 @@ func (v *MessagesView) toggleStar() {
 		return
 	}
 
+	grantID := v.app.config.GrantID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		newStarred := !thread.Starred
-		_, err := v.app.config.Client.UpdateThread(ctx, v.app.config.GrantID, thread.ID, &domain.UpdateMessageRequest{
+		_, err := v.app.config.Client.UpdateThread(ctx, grantID, thread.ID, &domain.UpdateMessageRequest{
 			Starred: &newStarred,
 		})
 		if err != nil {
@@ -55,11 +56,12 @@ func (v *MessagesView) markUnread() {
 		return
 	}
 
+	grantID := v.app.config.GrantID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		unread := true
-		_, err := v.app.config.Client.UpdateThread(ctx, v.app.config.GrantID, thread.ID, &domain.UpdateMessageRequest{
+		_, err := v.app.config.Client.UpdateThread(ctx, grantID, thread.ID, &domain.UpdateMessageRequest{
 			Unread: &unread,
 		})
 		if err != nil {
@@ -78,11 +80,8 @@ func (v *MessagesView) showCompose(mode ComposeMode, replyTo *domain.Message) {
 
 	compose.SetOnSent(func() {
 		v.app.PopDetail()
-		// Refresh messages to show the sent message
-		go func() {
-			v.Load()
-			v.app.QueueUpdateDraw(func() {})
-		}()
+		// Refresh messages to show the sent message (non-blocking)
+		v.Load()
 	})
 
 	compose.SetOnCancel(func() {
@@ -157,15 +156,14 @@ func (v *MessagesView) showDownloadDialog() {
 func (v *MessagesView) downloadAttachment(messageID, attachmentID, filename string, displayNum int) {
 	v.app.Flash(FlashInfo, "Downloading %s...", filename)
 
+	grantID := v.app.config.GrantID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		reader, err := v.app.config.Client.DownloadAttachment(ctx, v.app.config.GrantID, messageID, attachmentID)
+		reader, err := v.app.config.Client.DownloadAttachment(ctx, grantID, messageID, attachmentID)
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Download failed: %v", err)
-			})
+			v.app.Flash(FlashError, "Download failed: %v", err)
 			return
 		}
 		defer func() { _ = reader.Close() }()
@@ -173,35 +171,27 @@ func (v *MessagesView) downloadAttachment(messageID, attachmentID, filename stri
 		// Get Downloads directory
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Cannot find home directory: %v", err)
-			})
+			v.app.Flash(FlashError, "Cannot find home directory: %v", err)
 			return
 		}
 		downloadDir := filepath.Join(homeDir, "Downloads")
 
 		// Ensure download directory exists
 		if err := os.MkdirAll(downloadDir, 0750); err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Cannot create Downloads directory: %v", err)
-			})
+			v.app.Flash(FlashError, "Cannot create Downloads directory: %v", err)
 			return
 		}
 
 		// Create file with unique name if exists
 		destPath, err := safeAttachmentDownloadPath(downloadDir, filename)
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Cannot create file: %v", err)
-			})
+			v.app.Flash(FlashError, "Cannot create file: %v", err)
 			return
 		}
 		// #nosec G304 -- destPath is sanitized and constrained to downloadDir by safeAttachmentDownloadPath.
 		file, destPath, err := v.createUniqueAttachmentFile(destPath)
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Cannot create file: %v", err)
-			})
+			v.app.Flash(FlashError, "Cannot create file: %v", err)
 			return
 		}
 		defer func() { _ = file.Close() }()
@@ -209,9 +199,7 @@ func (v *MessagesView) downloadAttachment(messageID, attachmentID, filename stri
 		// Copy content
 		written, err := io.Copy(file, reader)
 		if err != nil {
-			v.app.QueueUpdateDraw(func() {
-				v.app.Flash(FlashError, "Download failed: %v", err)
-			})
+			v.app.Flash(FlashError, "Download failed: %v", err)
 			return
 		}
 

@@ -30,9 +30,9 @@ const Markdown = {
 
         // Links — scheme-validate the URL so attacker-controlled markdown
         // coming from agent output cannot inject `javascript:` URLs. The URL
-        // is already HTML-escaped by escape() above (the regex runs against
-        // the escaped html), so it is already safe to drop into a
-        // double-quoted attribute.
+        // and label are already HTML-escaped by escape() above (the regex
+        // runs against the escaped html); escape() also encodes quotes, so
+        // the URL cannot break out of the double-quoted href attribute.
         html = html.replace(
             /\[([^\]]+)\]\(([^)]+)\)/g,
             (_, label, url) => {
@@ -53,10 +53,17 @@ const Markdown = {
         return html;
     },
 
+    // escape HTML-escapes text so it is safe in both element content and
+    // double/single-quoted attribute context. The textContent/innerHTML DOM
+    // trick is intentionally NOT used here: it leaves " and ' unescaped,
+    // which allows breaking out of attribute values (e.g. href="...").
     escape(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     // safeUrl returns the URL if it uses an http(s) or mailto: scheme; otherwise
@@ -79,3 +86,7 @@ const Markdown = {
     },
 
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = Markdown;
+}

@@ -100,19 +100,30 @@ func (p *FolderPanel) handleInput(event *tcell.EventKey) *tcell.EventKey {
 	return event
 }
 
-// Load fetches folders from the API.
+// Load fetches folders from the API in a background goroutine and applies
+// the results on the event loop via QueueUpdateDraw. Must be called from
+// the event loop; it is non-blocking.
 func (p *FolderPanel) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	grantID := p.app.config.GrantID
 
-	folders, err := p.app.config.Client.GetFolders(ctx, p.app.config.GrantID)
-	if err != nil {
-		p.app.FlashLoadError("Failed to load folders", err)
-		return
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	p.folders = folders
-	p.render()
+		folders, err := p.app.config.Client.GetFolders(ctx, grantID)
+		if err != nil {
+			p.app.FlashLoadError("Failed to load folders", err)
+			return
+		}
+
+		p.app.QueueUpdateDraw(func() {
+			if !p.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			p.folders = folders
+			p.render()
+		})
+	}()
 }
 
 func (p *FolderPanel) render() {

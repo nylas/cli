@@ -51,6 +51,7 @@ func (c *HTTPClient) GetThreads(ctx context.Context, grantID string, params *dom
 		AddBoolPtr("unread", params.Unread).
 		AddBoolPtr("starred", params.Starred).
 		Add("q", params.SearchQuery).
+		AddSlice("in", params.In).
 		BuildURL(baseURL)
 
 	var result struct {

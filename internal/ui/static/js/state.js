@@ -72,14 +72,14 @@ function renderAccounts(grants, defaultId) {
 
     list.innerHTML = grants.map(g => `
         <div class="account-item">
-            <div class="account-avatar">${g.email[0].toUpperCase()}</div>
+            <div class="account-avatar">${esc(g.email[0].toUpperCase())}</div>
             <div class="account-info">
                 <div class="account-email">${esc(g.email)}</div>
                 <div class="account-provider">${formatProvider(g.provider)}</div>
             </div>
             ${g.id === defaultId
                 ? '<span class="account-badge">DEFAULT</span>'
-                : `<button class="account-action" onclick="setDefault('${esc(g.id)}')">Set Default</button>`
+                : `<button class="account-action" data-action="set-default-grant" data-grant-id="${esc(g.id)}">Set Default</button>`
             }
         </div>
     `).join('');
@@ -132,4 +132,10 @@ function runCommand(cmd) {
             runAuthCmd();
         }, 100);
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        renderAccounts,
+    };
 }

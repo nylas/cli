@@ -62,6 +62,7 @@ var (
 	ErrApplicationNotFound   = errors.New("application not found")
 	ErrPolicyNotFound        = errors.New("policy not found")
 	ErrRuleNotFound          = errors.New("rule not found")
+	ErrListNotFound          = errors.New("list not found")
 	ErrCallbackURINotFound   = errors.New("callback URI not found")
 	ErrConnectorNotFound     = errors.New("connector not found")
 	ErrCredentialNotFound    = errors.New("credential not found")

@@ -2,8 +2,11 @@ package ui
 
 import (
 	"encoding/json"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // =============================================================================
@@ -228,6 +231,70 @@ func TestSafeJSJSON_HandlesError(t *testing.T) {
 
 	if result != "null" {
 		t.Errorf("Expected 'null' for unmarshalable value, got: %s", result)
+	}
+}
+
+// =============================================================================
+// Security Headers (server wiring) Tests
+// =============================================================================
+
+// freeLoopbackAddr reserves a loopback port and returns it as host:port.
+func freeLoopbackAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatalf("release port: %v", err)
+	}
+	return addr
+}
+
+// TestServerStart_SecurityHeaders verifies the running UI server actually
+// serves the webguard security headers (strict CSP). The middleware is unit
+// tested in webguard; this guards the wiring in Start(), which a refactor
+// could silently drop without any other test failing.
+func TestServerStart_SecurityHeaders(t *testing.T) {
+	server := NewDemoServer(freeLoopbackAddr(t))
+
+	// Start blocks on ListenAndServe and the server has no shutdown seam, so
+	// it runs until the test binary exits.
+	go func() { _ = server.Start() }()
+
+	url := "http://" + server.addr + "/"
+	var resp *http.Response
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var err error
+		resp, err = http.Get(url) // #nosec G107 -- loopback test URL
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("server at %s did not come up: %v", url, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET / status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	csp := resp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("UI server response is missing the CSP header — SecurityHeadersMiddleware not wired in Start()")
+	}
+	if !strings.Contains(csp, "script-src 'self';") {
+		t.Errorf("CSP must keep strict script-src 'self', got %q", csp)
+	}
+	if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want %q", got, "nosniff")
+	}
+	if got := resp.Header.Get("X-Frame-Options"); got != "SAMEORIGIN" {
+		t.Errorf("X-Frame-Options = %q, want %q", got, "SAMEORIGIN")
 	}
 }
 

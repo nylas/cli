@@ -26,7 +26,7 @@ func newRuleCreateCmd() *cobra.Command {
 		Long: `Create a new rule and attach it to the default agent workspace.
 
 Rules are created through /v3/rules, then attached to the workspace via
-rules_ids. The workspace is resolved from the current default grant.
+rule_ids. The workspace is resolved from the current default grant.
 
 Examples:
   nylas agent rule create --name "Block Example" --condition from.domain,is,example.com --action block

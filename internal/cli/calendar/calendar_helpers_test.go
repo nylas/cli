@@ -84,14 +84,14 @@ func TestParseDuration(t *testing.T) {
 
 func TestParseEventTime(t *testing.T) {
 	t.Run("parses_all_day_event", func(t *testing.T) {
-		when, err := parseEventTime("2024-01-15", "", true)
+		when, err := parseEventTime("2024-01-15", "", true, "")
 		assert.NoError(t, err)
 		assert.Equal(t, "date", when.Object)
 		assert.Equal(t, "2024-01-15", when.Date)
 	})
 
 	t.Run("parses_timed_event", func(t *testing.T) {
-		when, err := parseEventTime("2024-01-15 14:00", "2024-01-15 15:00", false)
+		when, err := parseEventTime("2024-01-15 14:00", "2024-01-15 15:00", false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, "timespan", when.Object)
 		assert.NotZero(t, when.StartTime)
@@ -99,7 +99,7 @@ func TestParseEventTime(t *testing.T) {
 	})
 
 	t.Run("defaults_end_to_one_hour", func(t *testing.T) {
-		when, err := parseEventTime("2024-01-15 14:00", "", false)
+		when, err := parseEventTime("2024-01-15 14:00", "", false, "")
 		assert.NoError(t, err)
 		assert.Equal(t, "timespan", when.Object)
 		// End should be 1 hour after start
@@ -107,7 +107,7 @@ func TestParseEventTime(t *testing.T) {
 	})
 
 	t.Run("parses_date_range", func(t *testing.T) {
-		when, err := parseEventTime("2024-01-15", "2024-01-17", true)
+		when, err := parseEventTime("2024-01-15", "2024-01-17", true, "")
 		assert.NoError(t, err)
 		assert.Equal(t, "datespan", when.Object)
 		assert.Equal(t, "2024-01-15", when.StartDate)
@@ -115,8 +115,122 @@ func TestParseEventTime(t *testing.T) {
 	})
 
 	t.Run("returns_error_for_invalid_start", func(t *testing.T) {
-		_, err := parseEventTime("invalid", "", false)
+		_, err := parseEventTime("invalid", "", false, "")
 		assert.Error(t, err)
+	})
+
+	t.Run("records_explicit_timezone_on_timed_event", func(t *testing.T) {
+		when, err := parseEventTime("2024-01-15 14:00", "2024-01-15 15:00", false, "America/New_York")
+		assert.NoError(t, err)
+		assert.Equal(t, "timespan", when.Object)
+		assert.Equal(t, "America/New_York", when.StartTimezone)
+		assert.Equal(t, "America/New_York", when.EndTimezone)
+
+		// Timestamps must agree with the recorded zone: 14:00 wall clock in NY
+		loc, lerr := time.LoadLocation("America/New_York")
+		assert.NoError(t, lerr)
+		assert.Equal(t, time.Date(2024, 1, 15, 14, 0, 0, 0, loc).Unix(), when.StartTime)
+		assert.Equal(t, time.Date(2024, 1, 15, 15, 0, 0, 0, loc).Unix(), when.EndTime)
+	})
+
+	t.Run("defaults_timezone_to_system_zone", func(t *testing.T) {
+		when, err := parseEventTime("2024-01-15 14:00", "", false, "")
+		assert.NoError(t, err)
+		assert.Equal(t, getLocalTimeZone(), when.StartTimezone)
+		assert.Equal(t, getLocalTimeZone(), when.EndTimezone)
+	})
+
+	t.Run("returns_error_for_invalid_timezone", func(t *testing.T) {
+		_, err := parseEventTime("2024-01-15 14:00", "", false, "Not/AZone")
+		assert.Error(t, err)
+	})
+
+	t.Run("all_day_does_not_set_timezone", func(t *testing.T) {
+		when, err := parseEventTime("2024-01-15", "", true, "America/New_York")
+		assert.NoError(t, err)
+		assert.Empty(t, when.StartTimezone)
+		assert.Empty(t, when.EndTimezone)
+	})
+
+	t.Run("rfc3339_offset_matching_timezone_accepted", func(t *testing.T) {
+		// June 15: America/New_York is EDT (-04:00), so the offset agrees
+		// with the recorded zone and the wall time is preserved.
+		when, err := parseEventTime("2026-06-15T14:00:00-04:00", "", false, "America/New_York")
+		assert.NoError(t, err)
+		assert.Equal(t, "timespan", when.Object)
+		assert.Equal(t, "America/New_York", when.StartTimezone)
+
+		loc, lerr := time.LoadLocation("America/New_York")
+		assert.NoError(t, lerr)
+		assert.Equal(t, time.Date(2026, 6, 15, 14, 0, 0, 0, loc).Unix(), when.StartTime)
+	})
+
+	t.Run("rfc3339_offset_conflicting_timezone_errors", func(t *testing.T) {
+		// +09:00 disagrees with America/New_York (-04:00 on June 15). The
+		// epoch would follow the offset while start_timezone records New
+		// York, so the event would display at a different wall time than
+		// the user typed — reject instead of storing the mismatch.
+		_, err := parseEventTime("2026-06-15T14:00:00+09:00", "", false, "America/New_York")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "offset")
+	})
+
+	t.Run("rfc3339_end_offset_conflicting_timezone_errors", func(t *testing.T) {
+		_, err := parseEventTime("2026-06-15 14:00", "2026-06-15T16:00:00+09:00", false, "America/New_York")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "offset")
+	})
+
+	t.Run("rfc3339_dst_gap_offset_errors", func(t *testing.T) {
+		// 02:30 EST on 2026-03-08 doesn't exist: clocks jump 02:00 EST →
+		// 03:00 EDT, so at that UTC instant New York is already -04:00.
+		_, err := parseEventTime("2026-03-08T02:30:00-05:00", "", false, "America/New_York")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "offset")
+	})
+
+	t.Run("rfc3339_dst_fold_offsets_accepted", func(t *testing.T) {
+		// Both fall-back representations name real instants: 01:30-04:00 is
+		// before the 06:00 UTC fallback (still EDT), 01:30-05:00 after (EST).
+		_, err := parseEventTime("2026-11-01T01:30:00-04:00", "", false, "America/New_York")
+		assert.NoError(t, err)
+		_, err = parseEventTime("2026-11-01T01:30:00-05:00", "", false, "America/New_York")
+		assert.NoError(t, err)
+	})
+
+	t.Run("rfc3339_z_with_utc_equivalent_zone_accepted", func(t *testing.T) {
+		// Africa/Abidjan is permanently UTC+00:00, so a Z input agrees.
+		when, err := parseEventTime("2026-06-15T14:00:00Z", "", false, "Africa/Abidjan")
+		assert.NoError(t, err)
+		assert.Equal(t, "Africa/Abidjan", when.StartTimezone)
+	})
+
+	t.Run("rfc3339_z_with_utc_timezone_accepted", func(t *testing.T) {
+		when, err := parseEventTime("2026-06-15T14:00:00Z", "", false, "UTC")
+		assert.NoError(t, err)
+		assert.Equal(t, "UTC", when.StartTimezone)
+		assert.Equal(t, time.Date(2026, 6, 15, 14, 0, 0, 0, time.UTC).Unix(), when.StartTime)
+	})
+
+	t.Run("all_day_with_time_component_errors", func(t *testing.T) {
+		// --all-day must never silently create a timed event
+		when, err := parseEventTime("2024-01-15 10:00", "", true, "")
+		assert.Error(t, err)
+		assert.Nil(t, when)
+		assert.Contains(t, err.Error(), "all-day")
+	})
+
+	t.Run("locked_timezone_round_trip", func(t *testing.T) {
+		// --lock-timezone relies on When.StartTimezone being populated:
+		// GetLockedTimezone() must return the zone the event was created in.
+		when, err := parseEventTime("2024-01-15 14:00", "", false, "Asia/Tokyo")
+		assert.NoError(t, err)
+
+		event := domain.Event{
+			Metadata: map[string]string{"timezone_locked": "true"},
+			When:     *when,
+		}
+		assert.Equal(t, "Asia/Tokyo", event.GetLockedTimezone())
 	})
 }
 

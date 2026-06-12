@@ -117,52 +117,82 @@ func (v *AvailabilityView) Hints() []Hint {
 	}
 }
 
+// Load resolves the current user, calendars, and availability. Network
+// fetches run in background goroutines and results are applied on the event
+// loop via QueueUpdateDraw. Must be called from the event loop; it is
+// non-blocking.
 func (v *AvailabilityView) Load() {
-	// Add current user as first participant if empty
-	if len(v.participants) == 0 {
-		// Try to get current user's email from config
-		if v.app.config.GrantID != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			grant, err := v.app.config.Client.GetGrant(ctx, v.app.config.GrantID)
-			if err == nil && grant.Email != "" {
-				v.participants = append(v.participants, grant.Email)
-			}
-		}
-	}
-
 	// Load calendars for event creation
 	v.loadCalendars()
 
+	// Render the current (possibly empty) state synchronously so the view is
+	// never blank while background fetches are in flight.
 	v.renderParticipants()
 	v.updateInfoPanel()
-	v.fetchAvailability()
-}
 
-func (v *AvailabilityView) loadCalendars() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	calendars, err := v.app.config.Client.GetCalendars(ctx, v.app.config.GrantID)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load calendars", err)
+	// Add current user as first participant if empty. fetchAvailability is
+	// skipped here: with no participants it makes no network call and would
+	// only show the "add participants" hint while the user is being resolved.
+	if len(v.participants) == 0 && v.app.config.GrantID != "" {
+		grantID := v.app.config.GrantID
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			grant, err := v.app.config.Client.GetGrant(ctx, grantID)
+			v.app.QueueUpdateDraw(func() {
+				if !v.app.grantStillCurrent(grantID) {
+					return // grant switched while fetch was in flight; drop stale data
+				}
+				if err == nil && grant.Email != "" {
+					v.participants = append(v.participants, grant.Email)
+				}
+				v.renderParticipants()
+				v.updateInfoPanel()
+				v.fetchAvailability()
+			})
+		}()
 		return
 	}
 
-	v.calendars = calendars
+	v.fetchAvailability()
+}
 
-	// Select primary calendar by default
-	for _, cal := range calendars {
-		if cal.IsPrimary {
-			v.selectedCalendarID = cal.ID
+// loadCalendars fetches calendars in a background goroutine and applies the
+// results on the event loop via QueueUpdateDraw. Must be called from the
+// event loop; it is non-blocking.
+func (v *AvailabilityView) loadCalendars() {
+	grantID := v.app.config.GrantID
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		calendars, err := v.app.config.Client.GetCalendars(ctx, grantID)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load calendars", err)
 			return
 		}
-	}
 
-	// Fall back to first calendar
-	if len(calendars) > 0 {
-		v.selectedCalendarID = calendars[0].ID
-	}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			v.calendars = calendars
+
+			// Select primary calendar by default
+			for _, cal := range calendars {
+				if cal.IsPrimary {
+					v.selectedCalendarID = cal.ID
+					return
+				}
+			}
+
+			// Fall back to first calendar
+			if len(calendars) > 0 {
+				v.selectedCalendarID = calendars[0].ID
+			}
+		})
+	}()
 }
 
 func (v *AvailabilityView) Refresh() {

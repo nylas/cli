@@ -206,6 +206,19 @@ func TestHTTPClient_GetThreads_QueryParams(t *testing.T) {
 				"q": "meeting notes",
 			},
 		},
+		{
+			name: "includes in folder filter",
+			// The TUI folder panel and `nylas email threads --folder` rely on
+			// server-side folder filtering; dropping `in` silently lists
+			// threads from every folder.
+			params: &domain.ThreadQueryParams{
+				Limit: 10,
+				In:    []string{"folder-123"},
+			},
+			wantQuery: map[string]string{
+				"in": "folder-123",
+			},
+		},
 	}
 
 	for _, tt := range tests {

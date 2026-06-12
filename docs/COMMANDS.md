@@ -370,7 +370,12 @@ nylas calendar focus-time list                                   # List focus ti
 **Timezone features:**
 ```bash
 nylas calendar events list --timezone America/Los_Angeles --show-tz
+nylas calendar events create --title T --start "2026-06-15 14:00" \
+  --timezone America/New_York --lock-timezone   # Create in a specific zone and lock it
+nylas calendar events update <event-id> --unlock-timezone
 ```
+
+Event times are parsed in your system timezone unless `--timezone` is set; the zone is recorded on the event. `--lock-timezone` pins the event to that zone in list/show views. All-day events (`--all-day`) take a date only (`YYYY-MM-DD`) — a time component is an error.
 
 **AI scheduling:**
 ```bash
@@ -479,10 +484,23 @@ nylas agent rule create --name NAME --trigger outbound --condition recipient.dom
 nylas agent rule create --data-file rule.json  # Create a rule from full JSON
 nylas agent rule update <rule-id> --name NAME --description TEXT  # Update a rule
 nylas agent rule delete <rule-id> --yes        # Delete a rule
+nylas agent list list                          # List all lists
+nylas agent list get <list-id>                 # Show one list and its items
+nylas agent list create --name NAME --type domain  # Create a list (type: domain, tld, or address)
+nylas agent list create --name NAME --type address --item ceo@example.com  # Create and seed items
+nylas agent list update <list-id> --name NAME  # Update a list's metadata
+nylas agent list items <list-id>               # Show list items
+nylas agent list add <list-id> <item>...       # Add items to a list
+nylas agent list remove <list-id> <item>...    # Remove items from a list
+nylas agent list delete <list-id> --yes        # Delete a list
 nylas agent status                             # Check connector + account status
 ```
 
-**Details:** `docs/commands/agent.md`, `docs/commands/agent-policy.md`, `docs/commands/agent-rule.md`
+Lists hold normalized values referenced by rule `in_list` conditions, e.g.
+`--condition from.domain,in_list,<list-id>`. A list's type is immutable and
+determines which rule fields it can match.
+
+**Details:** `docs/commands/agent-getting-started.md` (start here), `docs/commands/agent.md`, `docs/commands/agent-policy.md`, `docs/commands/agent-rule.md`, `docs/commands/agent-list.md`
 
 ---
 

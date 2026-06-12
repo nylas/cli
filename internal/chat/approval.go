@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,13 +37,18 @@ type PendingApproval struct {
 	ch      chan ApprovalDecision
 }
 
-// Wait blocks until the user approves/rejects or the timeout expires.
-func (pa *PendingApproval) Wait() (ApprovalDecision, bool) {
+// Wait blocks until the user approves/rejects, the timeout expires, or ctx is
+// cancelled. The bool result is true only when a real decision was received;
+// when it is false the caller must Discard the approval so it does not leak
+// in the store and cannot be resolved late.
+func (pa *PendingApproval) Wait(ctx context.Context) (ApprovalDecision, bool) {
 	select {
 	case decision := <-pa.ch:
 		return decision, true
 	case <-time.After(approvalTimeout):
 		return ApprovalDecision{Approved: false, Reason: "timed out"}, false
+	case <-ctx.Done():
+		return ApprovalDecision{Approved: false, Reason: "request cancelled"}, false
 	}
 }
 
@@ -80,6 +86,14 @@ func (s *ApprovalStore) Resolve(id string, decision ApprovalDecision) bool {
 	pa := val.(*PendingApproval)
 	pa.ch <- decision
 	return true
+}
+
+// Discard removes a pending approval that was never resolved (timeout or
+// context cancellation). After Discard, a late Resolve returns false so the
+// approve/reject endpoints report the approval as gone instead of silently
+// succeeding.
+func (s *ApprovalStore) Discard(id string) {
+	s.pending.Delete(id)
 }
 
 // nextID generates a sequential approval ID.

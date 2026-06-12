@@ -17,7 +17,9 @@ Notetaker bots can join video meetings (Zoom, Google Meet, Teams) to:
 - Generate transcripts
 - Provide meeting summaries
 
-Use subcommands to create, list, show, delete notetakers and retrieve media.`,
+Use subcommands to create, list, show, delete notetakers and retrieve media.
+
+API reference: https://developer.nylas.com/docs/v3/notetaker/`,
 		Example: `  # List all notetakers
   nylas notetaker list
 

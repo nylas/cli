@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -369,9 +370,54 @@ func TestConfirm(t *testing.T) {
 	ResetLogger()
 	InitLogger(false, true) // quiet mode
 
-	// In quiet mode, should return default
+	// In quiet mode, should return default WITHOUT prompting.
+	// Destructive commands rely on this: default-no confirms cancel in quiet
+	// mode, so --force/--yes stays the only way to skip confirmation.
 	assert.True(t, Confirm("Continue?", true))
 	assert.False(t, Confirm("Continue?", false))
+}
+
+func TestConfirm_Interactive(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		defaultYes bool
+		want       bool
+	}{
+		{"y accepts", "y\n", false, true},
+		{"yes accepts", "yes\n", false, true},
+		{"uppercase Y accepts", "Y\n", false, true},
+		{"uppercase YES accepts", "YES\n", false, true},
+		{"n rejects", "n\n", false, false},
+		{"no rejects", "no\n", false, false},
+		{"garbage rejects even with default yes", "maybe\n", true, false},
+		{"empty input returns default no", "\n", false, false},
+		{"empty input returns default yes", "\n", true, true},
+		{"no input (EOF) returns default no", "", false, false},
+		{"no input (EOF) returns default yes", "", true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ResetLogger()
+			InitLogger(false, false) // NOT quiet: exercise the stdin-reading path
+
+			r, w, err := os.Pipe()
+			require.NoError(t, err)
+			_, err = w.WriteString(tt.input)
+			require.NoError(t, err)
+			require.NoError(t, w.Close())
+
+			oldStdin := os.Stdin
+			os.Stdin = r
+			t.Cleanup(func() {
+				os.Stdin = oldStdin
+				_ = r.Close()
+			})
+
+			assert.Equal(t, tt.want, Confirm("Proceed?", tt.defaultYes))
+		})
+	}
 }
 
 // =============================================================================

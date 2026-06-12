@@ -40,16 +40,28 @@ func NewContactsView(app *App) *ContactsView {
 	return v
 }
 
+// Load fetches contacts in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
 func (v *ContactsView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	contacts, err := v.app.config.Client.GetContacts(ctx, v.app.config.GrantID, nil)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load contacts", err)
-		return
-	}
-	v.contacts = contacts
-	v.render()
+	grantID := v.app.config.GrantID
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		contacts, err := v.app.config.Client.GetContacts(ctx, grantID, nil)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load contacts", err)
+			return
+		}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			v.contacts = contacts
+			v.render()
+		})
+	}()
 }
 
 func (v *ContactsView) Refresh() { v.Load() }

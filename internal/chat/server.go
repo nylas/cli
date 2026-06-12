@@ -34,6 +34,10 @@ type Server struct {
 	session   *ActiveSession
 	approvals *ApprovalStore
 	tmpl      *template.Template
+
+	// runTimeout bounds one agent-run segment in handleChat (zero means
+	// defaultRunTimeout); overridable in tests.
+	runTimeout time.Duration
 }
 
 // ActiveAgent returns the current agent (thread-safe).
@@ -41,6 +45,14 @@ func (s *Server) ActiveAgent() *Agent {
 	s.agentMu.RLock()
 	defer s.agentMu.RUnlock()
 	return s.agent
+}
+
+// ActiveContext returns the current context builder (thread-safe). SetAgent
+// replaces s.context under agentMu, so readers must go through this accessor.
+func (s *Server) ActiveContext() *ContextBuilder {
+	s.agentMu.RLock()
+	defer s.agentMu.RUnlock()
+	return s.context
 }
 
 // SetAgent switches the active agent by type. Returns false if not found.
@@ -65,19 +77,20 @@ func NewServer(addr string, agent *Agent, agents []Agent, nylas ports.NylasClien
 	tmpl, _ := template.New("").ParseFS(templateFiles, "templates/*.gohtml")
 
 	return &Server{
-		addr:      addr,
-		agent:     agent,
-		agents:    agents,
-		nylas:     nylas,
-		slack:     slack,
-		hasSlack:  hasSlack,
-		grantID:   grantID,
-		memory:    memory,
-		executor:  executor,
-		context:   ctx,
-		session:   NewActiveSession(),
-		approvals: NewApprovalStore(),
-		tmpl:      tmpl,
+		addr:       addr,
+		agent:      agent,
+		agents:     agents,
+		nylas:      nylas,
+		slack:      slack,
+		hasSlack:   hasSlack,
+		grantID:    grantID,
+		memory:     memory,
+		executor:   executor,
+		context:    ctx,
+		session:    NewActiveSession(),
+		approvals:  NewApprovalStore(),
+		tmpl:       tmpl,
+		runTimeout: defaultRunTimeout,
 	}
 }
 
@@ -110,16 +123,18 @@ func (s *Server) Start() error {
 	// Index page
 	mux.HandleFunc("/", s.handleIndex)
 
-	// Wrap with loopback-only host validation and same-origin protection so
-	// that DNS-rebinding and cross-origin pages cannot drive the chat API.
+	// Wrap with loopback-only host validation, same-origin protection and
+	// security headers (strict CSP) so that DNS-rebinding and cross-origin
+	// pages cannot drive the chat API and injected markup cannot execute.
 	handler := webguard.HostValidationMiddleware(
-		webguard.OriginProtectionMiddleware(mux))
+		webguard.OriginProtectionMiddleware(
+			webguard.SecurityHeadersMiddleware(mux)))
 
 	server := &http.Server{
 		Addr:              s.addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      360 * time.Second, // long for SSE streaming + approval gating
+		WriteTimeout:      360 * time.Second, // baseline for SSE streaming; handleChat extends the per-connection write deadline during approval waits
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}

@@ -74,67 +74,91 @@ func (v *EventsView) Hints() []Hint {
 	}
 }
 
+// Load fetches calendars in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
 func (v *EventsView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	grantID := v.app.config.GrantID
 
-	// Get calendars first
-	calendars, err := v.app.config.Client.GetCalendars(ctx, v.app.config.GrantID)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load calendars", err)
-		return
-	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	v.calendars = calendars
-	v.calendar.SetCalendars(calendars)
+		// Get calendars first
+		calendars, err := v.app.config.Client.GetCalendars(ctx, grantID)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load calendars", err)
+			return
+		}
 
-	if len(calendars) == 0 {
-		v.app.Flash(FlashWarn, "No calendars found")
-		return
-	}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			v.calendars = calendars
+			v.calendar.SetCalendars(calendars)
 
-	// Load events for the current calendar
-	v.loadEventsForCalendar(v.calendar.GetCurrentCalendarID())
+			if len(calendars) == 0 {
+				v.app.Flash(FlashWarn, "No calendars found")
+				return
+			}
+
+			// Load events for the current calendar
+			v.loadEventsForCalendar(v.calendar.GetCurrentCalendarID())
+		})
+	}()
 }
 
+// loadEventsForCalendar fetches events in a background goroutine and applies
+// the results on the event loop via QueueUpdateDraw. Must be called from the
+// event loop; it is non-blocking.
 func (v *EventsView) loadEventsForCalendar(calendarID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	grantID := v.app.config.GrantID
 
-	// Get events from selected calendar (fetch 2 months range)
-	now := time.Now()
-	startTime := now.AddDate(0, -1, 0).Unix()
-	endTime := now.AddDate(0, 2, 0).Unix()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	events, err := v.app.config.Client.GetEvents(ctx, v.app.config.GrantID, calendarID, &domain.EventQueryParams{
-		Start:           startTime,
-		End:             endTime,
-		ExpandRecurring: true,
-		Limit:           200,
-	})
-	if err != nil {
-		v.app.FlashLoadError("Failed to load events", err)
-		return
-	}
+		// Get events from selected calendar (fetch 2 months range)
+		now := time.Now()
+		startTime := now.AddDate(0, -1, 0).Unix()
+		endTime := now.AddDate(0, 2, 0).Unix()
 
-	v.events = events
-	v.calendar.SetEvents(events)
-	v.updateEventsList(v.calendar.GetSelectedDate())
+		events, err := v.app.config.Client.GetEvents(ctx, grantID, calendarID, &domain.EventQueryParams{
+			Start:           startTime,
+			End:             endTime,
+			ExpandRecurring: true,
+			Limit:           200,
+		})
+		if err != nil {
+			v.app.FlashLoadError("Failed to load events", err)
+			return
+		}
 
-	// Show calendar name in flash
-	if cal := v.calendar.GetCurrentCalendar(); cal != nil {
-		v.app.Flash(FlashInfo, "Calendar: %s (%d events)", cal.Name, len(events))
-	}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			if v.calendar.GetCurrentCalendarID() != calendarID {
+				return // calendar switched while fetch was in flight; drop stale data
+			}
+			v.events = events
+			v.calendar.SetEvents(events)
+			v.updateEventsList(v.calendar.GetSelectedDate())
+
+			// Show calendar name in flash
+			if cal := v.calendar.GetCurrentCalendar(); cal != nil {
+				v.app.Flash(FlashInfo, "Calendar: %s (%d events)", cal.Name, len(events))
+			}
+		})
+	}()
 }
 
 func (v *EventsView) Refresh() { v.Load() }
 
 func (v *EventsView) onCalendarChange(calendarID string) {
-	// Reload events for the new calendar
-	go func() {
-		v.loadEventsForCalendar(calendarID)
-		v.app.QueueUpdateDraw(func() {})
-	}()
+	// Reload events for the new calendar (non-blocking)
+	v.loadEventsForCalendar(calendarID)
 }
 
 func (v *EventsView) onDateSelect(date time.Time) {
@@ -332,10 +356,7 @@ func (v *EventsView) createNewEvent() {
 	}
 
 	v.app.ShowEventForm(calendarID, nil, func(event *domain.Event) {
-		// Refresh events after creation
-		go func() {
-			v.loadEventsForCalendar(calendarID)
-			v.app.QueueUpdateDraw(func() {})
-		}()
+		// Refresh events after creation (non-blocking)
+		v.loadEventsForCalendar(calendarID)
 	})
 }

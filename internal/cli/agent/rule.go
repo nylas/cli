@@ -20,7 +20,9 @@ func newRuleCmd() *cobra.Command {
 		Long: `Manage rules attached to agent account workspaces.
 
 Rules are backed by the /v3/rules API. They attach to workspaces via
-rules_ids[].
+rule_ids[].
+
+API reference: https://developer.nylas.com/docs/v3/agent-accounts/policies-rules-lists/
 
 Examples:
   nylas agent rule list

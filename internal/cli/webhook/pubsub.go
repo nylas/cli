@@ -13,7 +13,9 @@ func newPubSubCmd() *cobra.Command {
 		Long: `Manage Nylas Pub/Sub notification channels for queue-based event delivery.
 
 Pub/Sub channels deliver notifications to Google Cloud Pub/Sub topics and are
-useful for higher-volume or latency-sensitive event processing.`,
+useful for higher-volume or latency-sensitive event processing.
+
+API reference: https://developer.nylas.com/docs/v3/notifications/pubsub-channel/`,
 	}
 
 	common.AddOutputFlags(cmd)

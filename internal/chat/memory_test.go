@@ -511,6 +511,32 @@ func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 	})
 }
 
+func TestMemoryStore_WriteFileAtomic(t *testing.T) {
+	store := setupMemoryStore(t)
+
+	conv, err := store.Create("claude")
+	require.NoError(t, err)
+	require.NoError(t, store.AddMessage(conv.ID, Message{Role: "user", Content: "hello"}))
+
+	// The write must go through a temp-file + rename: after a successful
+	// write no temp file may remain, only the final conversation file. A
+	// direct os.WriteFile would not leave temp files either, but a crash
+	// mid-write would corrupt the file; the rename pattern is what we verify
+	// indirectly here by checking the directory contains exactly the final
+	// files and the content is complete, valid JSON.
+	entries, err := os.ReadDir(store.basePath)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.NotContains(t, e.Name(), ".tmp.", "temp file leaked after write: %s", e.Name())
+		assert.True(t, filepath.Ext(e.Name()) == ".json", "unexpected file: %s", e.Name())
+	}
+
+	got, err := store.Get(conv.ID)
+	require.NoError(t, err)
+	require.Len(t, got.Messages, 1)
+	assert.Equal(t, "hello", got.Messages[0].Content)
+}
+
 // Helper function to set up a memory store for testing
 func setupMemoryStore(t *testing.T) *MemoryStore {
 	t.Helper()

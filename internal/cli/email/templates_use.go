@@ -1,10 +1,8 @@
 package email
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/nylas/cli/internal/adapters/templates"
@@ -104,11 +102,7 @@ Use --preview to see the expanded template without sending.`,
 			fmt.Printf("  Body:     %s\n", common.Truncate(expandedBody, 50))
 
 			if !noConfirm {
-				fmt.Print("\nSend this email? [y/N]: ")
-				reader := bufio.NewReader(os.Stdin)
-				confirm, _ := reader.ReadString('\n')
-				confirm = strings.ToLower(strings.TrimSpace(confirm))
-				if confirm != "y" && confirm != "yes" {
+				if !common.Confirm("\nSend this email?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

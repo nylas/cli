@@ -134,12 +134,23 @@ func formatParticipantStatus(status string) string {
 	}
 }
 
-func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, error) {
+// parseEventTime parses start/end input into an EventWhen.
+// Timed events are parsed in tz (an IANA timezone ID, defaulting to the system
+// timezone when empty) and record it in StartTimezone/EndTimezone so the
+// timestamps and zone always agree. All-day events take a date only.
+func parseEventTime(startStr, endStr string, allDay bool, tz string) (*domain.EventWhen, error) {
 	when := &domain.EventWhen{}
 
 	// Try parsing as date first (YYYY-MM-DD)
 	if allDay || len(startStr) <= 10 {
 		startDate, err := time.Parse("2006-01-02", startStr)
+		if err != nil && allDay {
+			// Never fall through to a timed event when --all-day was requested
+			return nil, common.NewUserError(
+				fmt.Sprintf("invalid all-day start date: %s", startStr),
+				"All-day events take a date only (YYYY-MM-DD). Remove --all-day to create a timed event.",
+			)
+		}
 		if err == nil {
 			when.Object = "date"
 			when.Date = startDate.Format("2006-01-02")
@@ -159,6 +170,18 @@ func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, er
 		}
 	}
 
+	// Resolve the timezone for timed events: explicit value, else system zone
+	if tz == "" {
+		tz = getLocalTimeZone()
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, common.NewUserError(
+			fmt.Sprintf("invalid timezone: %s", tz),
+			"Use IANA timezone IDs like 'America/Los_Angeles'.\nRun 'nylas timezone list' to see available timezones.",
+		)
+	}
+
 	// Try parsing as datetime
 	formats := []string{
 		"2006-01-02 15:04",
@@ -171,7 +194,7 @@ func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, er
 	var startTime time.Time
 	var parsed bool
 	for _, format := range formats {
-		t, err := time.ParseInLocation(format, startStr, time.Local)
+		t, err := time.ParseInLocation(format, startStr, loc)
 		if err == nil {
 			startTime = t
 			parsed = true
@@ -181,14 +204,19 @@ func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, er
 	if !parsed {
 		return nil, common.NewUserError(fmt.Sprintf("invalid start time format: %s", startStr), "use 'YYYY-MM-DD HH:MM' or 'YYYY-MM-DD'")
 	}
+	if err := checkOffsetMatchesZone(startTime, loc, tz, "start"); err != nil {
+		return nil, err
+	}
 
 	when.Object = "timespan"
 	when.StartTime = startTime.Unix()
+	when.StartTimezone = tz
+	when.EndTimezone = tz
 
 	if endStr != "" {
 		var endTime time.Time
 		for _, format := range formats {
-			t, err := time.ParseInLocation(format, endStr, time.Local)
+			t, err := time.ParseInLocation(format, endStr, loc)
 			if err == nil {
 				endTime = t
 				break
@@ -197,6 +225,9 @@ func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, er
 		if endTime.IsZero() {
 			return nil, common.NewInputError(fmt.Sprintf("invalid end time format: %s", endStr))
 		}
+		if err := checkOffsetMatchesZone(endTime, loc, tz, "end"); err != nil {
+			return nil, err
+		}
 		when.EndTime = endTime.Unix()
 	} else {
 		// Default to 1 hour duration
@@ -204,4 +235,23 @@ func parseEventTime(startStr, endStr string, allDay bool) (*domain.EventWhen, er
 	}
 
 	return when, nil
+}
+
+// checkOffsetMatchesZone rejects inputs whose explicit UTC offset (RFC3339)
+// disagrees with the event timezone. ParseInLocation honors the input's
+// offset over loc, so without this check the epoch would follow the offset
+// while start_timezone/end_timezone record a different zone — the event
+// would display at a different wall time than the user typed. Inputs without
+// an offset parse in loc and always agree.
+func checkOffsetMatchesZone(t time.Time, loc *time.Location, tz, field string) error {
+	_, inputOffset := t.Zone()
+	_, zoneOffset := t.In(loc).Zone()
+	if inputOffset == zoneOffset {
+		return nil
+	}
+	return common.NewUserError(
+		fmt.Sprintf("%s time UTC offset %s does not match timezone %s (%s)",
+			field, t.Format("-07:00"), tz, t.In(loc).Format("-07:00")),
+		"Remove the offset from the input (e.g. 'YYYY-MM-DD HH:MM'), or pass a --timezone that matches it.",
+	)
 }

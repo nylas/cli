@@ -19,7 +19,7 @@ func TestNewAgentCmd(t *testing.T) {
 	assert.Contains(t, cmd.Short, "agent")
 	assert.Contains(t, cmd.Long, "account subcommand")
 
-	expected := []string{"account", "policy", "rule", "status"}
+	expected := []string{"account", "policy", "rule", "list", "status"}
 	cmdMap := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
 		cmdMap[sub.Name()] = true
@@ -252,8 +252,6 @@ func TestPrintPolicyDetails(t *testing.T) {
 	dailyMessages := int64(500)
 	inboxRetention := 30
 	spamRetention := 7
-	additionalFolders := []string{"archive", "support"}
-	useCidrAliasing := false
 	useDNSBL := false
 	useHeaderAnomaly := true
 	spamSensitivity := 1.0
@@ -272,10 +270,6 @@ func TestPrintPolicyDetails(t *testing.T) {
 			LimitCountDailyMessagePerGrant:  &dailyMessages,
 			LimitInboxRetentionPeriodInDays: &inboxRetention,
 			LimitSpamRetentionPeriodInDays:  &spamRetention,
-		},
-		Options: &domain.PolicyOptions{
-			AdditionalFolders: &additionalFolders,
-			UseCidrAliasing:   &useCidrAliasing,
 		},
 		SpamDetection: &domain.PolicySpamDetection{
 			UseListDNSBL:              &useDNSBL,
@@ -298,10 +292,6 @@ func TestPrintPolicyDetails(t *testing.T) {
 	assert.Contains(t, output, "50480000 bytes")
 	assert.Contains(t, output, "Allowed types:")
 	assert.Contains(t, output, "application/pdf")
-	assert.Contains(t, output, "Options:")
-	assert.Contains(t, output, "Additional folders:")
-	assert.Contains(t, output, "archive")
-	assert.Contains(t, output, "CIDR aliasing:")
 	assert.Contains(t, output, "Spam detection:")
 	assert.Contains(t, output, "Use DNSBL:")
 	assert.Contains(t, output, "Header anomaly detection:")

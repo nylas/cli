@@ -2,6 +2,9 @@ package calendar
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/utilities/timezone"
@@ -37,19 +40,26 @@ func getLocalTimeZone() string {
 }
 
 // getSystemTimeZone attempts to detect the system's IANA timezone.
-// Returns empty string if detection fails.
+// Detection order: TZ environment variable, /etc/localtime symlink (Unix),
+// then a UTC-offset heuristic as a last resort.
 func getSystemTimeZone() string {
-	// On Unix systems, check common environment variables
-	// TZ environment variable often contains IANA timezone
-	// This is a simplified implementation
+	// 1. TZ environment variable (POSIX allows a leading ':')
+	if tz := strings.TrimPrefix(os.Getenv("TZ"), ":"); tz != "" {
+		if _, err := time.LoadLocation(tz); err == nil {
+			return tz
+		}
+	}
 
-	// For now, we'll use a heuristic based on UTC offset
-	// In production, you might use a library or system call
+	// 2. /etc/localtime symlink (macOS/Linux)
+	if tz := zoneFromLocaltimeSymlink("/etc/localtime"); tz != "" {
+		return tz
+	}
+
+	// 3. Last resort: guess from the current UTC offset. This cannot
+	// distinguish zones sharing an offset (e.g. Arizona vs Denver) and is
+	// wrong across DST transitions; it only runs if the above fail.
 	now := time.Now()
 	_, offset := now.Zone()
-
-	// Map common offsets to likely timezones
-	// This is a simplified approach - in production, use proper detection
 	offsetHours := offset / 3600
 
 	switch offsetHours {
@@ -73,6 +83,33 @@ func getSystemTimeZone() string {
 		// Return UTC as safe fallback
 		return "UTC"
 	}
+}
+
+// zoneFromLocaltimeSymlink resolves a localtime symlink (e.g. /etc/localtime)
+// and extracts the IANA zone name from its target path.
+// Returns empty string if the path cannot be resolved.
+func zoneFromLocaltimeSymlink(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return ""
+	}
+	return zoneFromZoneinfoPath(resolved)
+}
+
+// zoneFromZoneinfoPath extracts a valid IANA zone name from a zoneinfo path
+// like "/usr/share/zoneinfo/America/New_York".
+// Returns empty string if the path has no "/zoneinfo/" segment or the zone is invalid.
+func zoneFromZoneinfoPath(path string) string {
+	const marker = "/zoneinfo/"
+	idx := strings.LastIndex(path, marker)
+	if idx < 0 {
+		return ""
+	}
+	zone := path[idx+len(marker):]
+	if _, err := time.LoadLocation(zone); err != nil {
+		return ""
+	}
+	return zone
 }
 
 // validateTimeZone checks if a timezone string is a valid IANA ID.

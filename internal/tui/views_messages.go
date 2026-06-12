@@ -85,34 +85,53 @@ func NewMessagesView(app *App) *MessagesView {
 	return v
 }
 
-func (v *MessagesView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+// effectiveFolderID returns the folder used for thread queries; an empty
+// selection means INBOX.
+func (v *MessagesView) effectiveFolderID() string {
+	if v.currentFolderID == "" {
+		return "INBOX"
+	}
+	return v.currentFolderID
+}
 
+// Load fetches threads in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
+func (v *MessagesView) Load() {
 	// Load folders if not already loaded
 	if len(v.folderPanel.folders) == 0 {
 		v.folderPanel.Load()
 	}
 
-	// Build folder filter - use folder ID if set, otherwise default to INBOX
-	var folderFilter []string
-	if v.currentFolderID != "" {
-		folderFilter = []string{v.currentFolderID}
-	} else {
-		folderFilter = []string{"INBOX"}
-	}
+	// Snapshot the folder the request is for; an empty selection means INBOX
+	requestedFolderID := v.effectiveFolderID()
+	folderFilter := []string{requestedFolderID}
+	grantID := v.app.config.GrantID
 
-	params := &domain.ThreadQueryParams{
-		Limit: 50,
-		In:    folderFilter,
-	}
-	threads, err := v.app.config.Client.GetThreads(ctx, v.app.config.GrantID, params)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load threads", err)
-		return
-	}
-	v.threads = threads
-	v.render()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		params := &domain.ThreadQueryParams{
+			Limit: 50,
+			In:    folderFilter,
+		}
+		threads, err := v.app.config.Client.GetThreads(ctx, grantID, params)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load threads", err)
+			return
+		}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			if v.effectiveFolderID() != requestedFolderID {
+				return // folder switched while fetch was in flight; drop stale data
+			}
+			v.threads = threads
+			v.render()
+		})
+	}()
 }
 
 // updateLayout rebuilds the layout based on folder panel visibility.

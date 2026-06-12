@@ -18,7 +18,9 @@ func NewTemplateCmd() *cobra.Command {
 		Long: `Manage Nylas-hosted templates at the application or grant scope.
 
 Use --scope app for application-level templates and --scope grant to target
-templates attached to a specific grant.`,
+templates attached to a specific grant.
+
+API reference: https://developer.nylas.com/docs/reference/api/application-level-templates/`,
 	}
 
 	common.AddOutputFlags(cmd)

@@ -205,10 +205,7 @@ func newSignaturesDeleteCmd() *cobra.Command {
 					return struct{}{}, common.WrapGetError("signature", err)
 				}
 				if !yes {
-					fmt.Printf("Delete signature %q (%s)? [y/N]: ", signature.Name, signature.ID)
-					var confirm string
-					_, _ = fmt.Scanln(&confirm)
-					if confirm != "y" && confirm != "Y" && confirm != "yes" {
+					if !common.Confirm(fmt.Sprintf("Delete signature %q (%s)?", signature.Name, signature.ID), false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

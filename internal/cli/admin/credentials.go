@@ -16,7 +16,9 @@ func newCredentialsCmd() *cobra.Command {
 		Use:     "credentials",
 		Aliases: []string{"credential", "cred"},
 		Short:   "Manage connector credentials",
-		Long:    "Manage authentication credentials for connectors (OAuth, service accounts, etc.).",
+		Long: `Manage authentication credentials for connectors (OAuth, service accounts, etc.).
+
+API reference: https://developer.nylas.com/docs/reference/api/connector-credentials/`,
 	}
 
 	cmd.AddCommand(newCredentialListCmd())
@@ -204,10 +206,7 @@ func newCredentialDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to delete credential %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete credential %s?", args[0]), false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

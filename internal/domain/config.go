@@ -30,6 +30,10 @@ const (
 	// all Slack messages or channels (10m).
 	TimeoutBulkOperation = 10 * time.Minute
 
+	// TimeoutDownload is the timeout for streamed file/attachment downloads (15m).
+	// Large or slow downloads would be cut off mid-stream by TimeoutAPI.
+	TimeoutDownload = 15 * time.Minute
+
 	// TimeoutQuickCheck is the timeout for quick checks like version checking (5s).
 	TimeoutQuickCheck = 5 * time.Second
 

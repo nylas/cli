@@ -9,7 +9,9 @@ func newEventsCmd() *cobra.Command {
 		Use:     "events",
 		Aliases: []string{"ev", "event"},
 		Short:   "Manage calendar events",
-		Long:    "List, create, update, delete, and manage calendar events",
+		Long: `List, create, update, delete, and manage calendar events
+
+API reference: https://developer.nylas.com/docs/reference/api/events/`,
 	}
 
 	cmd.AddCommand(newEventsListCmd())

@@ -42,16 +42,23 @@ func NewGrantsView(app *App) *GrantsView {
 	return v
 }
 
+// Load fetches grants in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
 func (v *GrantsView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	grants, err := v.app.config.Client.ListGrants(ctx)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load grants", err)
-		return
-	}
-	v.grants = grants
-	v.render()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		grants, err := v.app.config.Client.ListGrants(ctx)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load grants", err)
+			return
+		}
+		v.app.QueueUpdateDraw(func() {
+			v.grants = grants
+			v.render()
+		})
+	}()
 }
 
 func (v *GrantsView) Refresh() { v.Load() }

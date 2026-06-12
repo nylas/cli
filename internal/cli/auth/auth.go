@@ -27,7 +27,9 @@ Commands:
   providers List available authentication providers
   detect    Detect provider from email address
   scopes    Show OAuth scopes for a grant
-  migrate   Migrate credentials to system keyring`,
+  migrate   Migrate credentials to system keyring
+
+API reference: https://developer.nylas.com/docs/v3/auth/`,
 	}
 
 	cmd.AddCommand(newLoginCmd())

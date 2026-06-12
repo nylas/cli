@@ -20,7 +20,9 @@ func newRecurringCmd() *cobra.Command {
 		Use:   "recurring",
 		Short: "Manage recurring events",
 		Long: `Manage recurring calendar events, including viewing all instances,
-updating or deleting specific occurrences.`,
+updating or deleting specific occurrences.
+
+API reference: https://developer.nylas.com/docs/v3/calendar/recurring-events/`,
 	}
 
 	cmd.AddCommand(newRecurringListCmd())
@@ -242,10 +244,7 @@ This adds an exception to the recurrence rule.`,
 			}
 
 			if !skipConfirm {
-				fmt.Printf("Are you sure you want to delete this recurring event instance? (y/N): ")
-				var response string
-				_, _ = fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
+				if !common.Confirm("Are you sure you want to delete this recurring event instance?", false) {
 					fmt.Println("Cancelled")
 					return nil
 				}

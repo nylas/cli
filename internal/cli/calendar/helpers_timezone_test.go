@@ -1,6 +1,8 @@
 package calendar
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -85,4 +87,101 @@ func TestGetSystemTimeZone(t *testing.T) {
 	if err != nil {
 		t.Errorf("getSystemTimeZone() returned invalid timezone %q: %v", tz, err)
 	}
+}
+
+func TestGetSystemTimeZone_RespectsTZEnv(t *testing.T) {
+	// Arizona does not observe DST and is not reachable via the UTC-offset
+	// heuristic, so this only passes if TZ is read directly.
+	t.Setenv("TZ", "America/Phoenix")
+
+	if got := getSystemTimeZone(); got != "America/Phoenix" {
+		t.Errorf("getSystemTimeZone() = %q, want %q", got, "America/Phoenix")
+	}
+}
+
+func TestGetSystemTimeZone_IgnoresInvalidTZEnv(t *testing.T) {
+	t.Setenv("TZ", "Not/AZone")
+
+	tz := getSystemTimeZone()
+	if tz == "Not/AZone" {
+		t.Error("getSystemTimeZone() returned the invalid TZ value verbatim")
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		t.Errorf("getSystemTimeZone() returned invalid timezone %q: %v", tz, err)
+	}
+}
+
+func TestZoneFromZoneinfoPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "linux zoneinfo path",
+			path: "/usr/share/zoneinfo/America/New_York",
+			want: "America/New_York",
+		},
+		{
+			name: "macOS zoneinfo path",
+			path: "/var/db/timezone/zoneinfo/Asia/Tokyo",
+			want: "Asia/Tokyo",
+		},
+		{
+			name: "single-segment zone",
+			path: "/usr/share/zoneinfo/UTC",
+			want: "UTC",
+		},
+		{
+			name: "no zoneinfo marker",
+			path: "/etc/localtime",
+			want: "",
+		},
+		{
+			name: "invalid zone after marker",
+			path: "/usr/share/zoneinfo/Not/AZone",
+			want: "",
+		},
+		{
+			name: "empty path",
+			path: "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := zoneFromZoneinfoPath(tt.path); got != tt.want {
+				t.Errorf("zoneFromZoneinfoPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestZoneFromLocaltimeSymlink(t *testing.T) {
+	t.Run("resolves zone from symlink target", func(t *testing.T) {
+		dir := t.TempDir()
+		zoneDir := filepath.Join(dir, "zoneinfo", "America")
+		if err := os.MkdirAll(zoneDir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(zoneDir, "Phoenix")
+		if err := os.WriteFile(target, []byte("TZif"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		link := filepath.Join(dir, "localtime")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := zoneFromLocaltimeSymlink(link); got != "America/Phoenix" {
+			t.Errorf("zoneFromLocaltimeSymlink() = %q, want %q", got, "America/Phoenix")
+		}
+	})
+
+	t.Run("missing path returns empty", func(t *testing.T) {
+		if got := zoneFromLocaltimeSymlink(filepath.Join(t.TempDir(), "missing")); got != "" {
+			t.Errorf("zoneFromLocaltimeSymlink() = %q, want empty", got)
+		}
+	})
 }

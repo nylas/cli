@@ -367,9 +367,9 @@ const Chat = {
     },
 
     escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        // Delegate to Markdown.escape, which is quote-safe (also escapes
+        // " and ') and therefore safe in attribute context too.
+        return Markdown.escape(text);
     }
 };
 

@@ -14,6 +14,10 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
+// maxErrorBodyBytes caps how much of an error response body is read into
+// error messages, matching the 10KB cap used by the Nylas HTTP client.
+const maxErrorBodyBytes = 10 * 1024
+
 // BaseClient provides common HTTP client functionality for AI providers.
 type BaseClient struct {
 	apiKey  string
@@ -87,14 +91,23 @@ func (b *BaseClient) DoJSONRequest(ctx context.Context, method, endpoint string,
 	return resp, nil
 }
 
+// apiError builds an error from a non-2xx response, including up to
+// maxErrorBodyBytes of the body and falling back to a status-only message
+// when the body can't be read or is empty. It does not close the body.
+func apiError(resp *http.Response) error {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+	if err != nil || len(body) == 0 {
+		return fmt.Errorf("API error (status %d)", resp.StatusCode)
+	}
+	return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+}
+
 // ReadJSONResponse reads and unmarshals a JSON response.
 func (b *BaseClient) ReadJSONResponse(resp *http.Response, v any) error {
 	defer func() { _ = resp.Body.Close() }()
 
-	// Check for HTTP errors
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		return apiError(resp)
 	}
 
 	// Decode response

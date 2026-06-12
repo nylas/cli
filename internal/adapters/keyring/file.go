@@ -289,6 +289,12 @@ func (f *EncryptedFileStore) saveSecrets(secrets map[string]string) error {
 		_ = tmp.Close()
 		return err
 	}
+	// Flush to disk before the rename so a crash can't leave an empty or
+	// truncated credential store behind the new name.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}

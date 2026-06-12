@@ -20,7 +20,9 @@ func NewCalendarCmd() *cobra.Command {
 		Short:   "Manage calendars and events",
 		Long: `Manage calendars and events from your connected accounts.
 
-View calendars, list events, create new events, and more.`,
+View calendars, list events, create new events, and more.
+
+API reference: https://developer.nylas.com/docs/v3/calendar/`,
 	}
 
 	cmd.AddCommand(newListCmd())

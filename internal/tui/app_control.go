@@ -48,8 +48,16 @@ func (a *App) Stop() {
 }
 
 // Flash displays a temporary message.
+// Safe to call from any goroutine, including the event loop — the status
+// mutation is marshaled through QueueUpdateDraw from a new goroutine so
+// callers never block the event loop waiting on itself.
 func (a *App) Flash(level FlashLevel, msg string, args ...any) {
-	a.status.Flash(level, fmt.Sprintf(msg, args...))
+	text := fmt.Sprintf(msg, args...)
+	go func() {
+		a.QueueUpdateDraw(func() {
+			a.status.Flash(level, text)
+		})
+	}()
 }
 
 // Styles returns the app styles.
@@ -83,13 +91,11 @@ func (a *App) SwitchGrant(grantID, email, provider string) error {
 	// Update status indicator
 	a.status.UpdateGrant(email, provider, grantID)
 
-	// Refresh the current view to load data for the new grant
+	// Refresh the current view to load data for the new grant.
+	// SwitchGrant runs on the event loop; Refresh is non-blocking (views
+	// fetch in their own goroutine and apply via QueueUpdateDraw).
 	if view := a.getCurrentView(); view != nil {
-		go func() {
-			a.QueueUpdateDraw(func() {
-				view.Refresh()
-			})
-		}()
+		view.Refresh()
 	}
 
 	return nil
@@ -98,6 +104,14 @@ func (a *App) SwitchGrant(grantID, email, provider string) error {
 // CanSwitchGrant returns true if grant switching is available.
 func (a *App) CanSwitchGrant() bool {
 	return a.config.GrantStore != nil
+}
+
+// grantStillCurrent reports whether a grant ID snapshot taken when a fetch
+// started still matches the active grant. Must be called from the event loop.
+// Apply callbacks use it to drop in-flight results after SwitchGrant so a
+// view never renders the previous grant's data.
+func (a *App) grantStillCurrent(grantID string) bool {
+	return grantID == a.config.GrantID
 }
 
 // ============================================================================

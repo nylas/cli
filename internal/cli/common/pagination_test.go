@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -217,7 +218,7 @@ func TestFetchAllPages_ContextCancellation(t *testing.T) {
 		}
 		return PageResult[string]{
 			Data:       []string{"item"},
-			NextCursor: "more",
+			NextCursor: "more-" + strconv.Itoa(fetcherCalls), // Advancing cursor
 		}, nil
 	}
 
@@ -396,7 +397,7 @@ func TestFetchAllPages_WithProgress(t *testing.T) {
 		}
 		return PageResult[string]{
 			Data:       []string{"item1", "item2"},
-			NextCursor: "more",
+			NextCursor: "more-" + strconv.Itoa(fetcherCalls), // Advancing cursor
 		}, nil
 	}
 
@@ -518,4 +519,56 @@ func TestPaginationMode(t *testing.T) {
 			assert.NotEqual(t, PaginateSinglePage, PaginateAll)
 		})
 	}
+}
+
+func TestFetchAllPages_StuckCursor(t *testing.T) {
+	ResetLogger()
+	InitLogger(false, true)
+
+	config := DefaultPaginationConfig()
+	config.ShowProgress = false
+
+	fetcherCalls := 0
+	fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
+		fetcherCalls++
+		// Buggy server: always claims more results with a cursor that never advances.
+		return PageResult[string]{
+			Data:       []string{"item-" + strconv.Itoa(fetcherCalls)},
+			NextCursor: "stuck-cursor",
+		}, nil
+	}
+
+	results, err := FetchAllPages(context.Background(), config, fetcher)
+
+	require.NoError(t, err)
+	// Page 1 uses cursor "", page 2 uses "stuck-cursor" and returns the same
+	// cursor again — pagination must stop instead of looping forever.
+	assert.Equal(t, 2, fetcherCalls)
+	assert.Len(t, results, 2)
+}
+
+func TestFetchAllPages_EmptyPageClaimingMore(t *testing.T) {
+	ResetLogger()
+	InitLogger(false, true)
+
+	config := DefaultPaginationConfig()
+	config.ShowProgress = false
+
+	fetcherCalls := 0
+	fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
+		fetcherCalls++
+		// Buggy server: returns no items but keeps advancing the cursor,
+		// claiming there is always more data.
+		return PageResult[string]{
+			Data:       nil,
+			NextCursor: "cursor-" + strconv.Itoa(fetcherCalls),
+		}, nil
+	}
+
+	results, err := FetchAllPages(context.Background(), config, fetcher)
+
+	require.NoError(t, err)
+	// An empty page that claims more results must terminate pagination.
+	assert.Equal(t, 1, fetcherCalls)
+	assert.Empty(t, results)
 }

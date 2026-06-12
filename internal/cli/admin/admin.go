@@ -13,7 +13,9 @@ func NewAdminCmd() *cobra.Command {
 		Long: `Administration commands for managing applications, connectors, credentials, and grants.
 
 These commands require API key authentication and are used for managing
-the Nylas platform at an organizational level.`,
+the Nylas platform at an organizational level.
+
+API reference: https://developer.nylas.com/docs/reference/api/applications/`,
 	}
 
 	cmd.AddCommand(newApplicationsCmd())

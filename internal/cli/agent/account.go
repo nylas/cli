@@ -12,6 +12,8 @@ Agent accounts are managed email identities backed by the Nylas provider.
 This command always uses provider=nylas and keeps connector setup out of the
 user's path.
 
+API reference: https://developer.nylas.com/docs/v3/agent-accounts/provisioning/
+
 	Examples:
 	  # Create a new agent account
 	  nylas agent account create me@yourapp.nylas.email

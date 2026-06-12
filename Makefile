@@ -237,6 +237,19 @@ test-cleanup:
 		fi \
 	done
 	@echo ""
+	@echo "4. Cleaning test agent lists..."
+	@./bin/nylas agent list list 2>/dev/null | \
+		grep -A1 "^it-rule-matrix-" | \
+		grep "ID:" | \
+		awk '{print $$2}' | \
+		while read list_id; do \
+			if [ ! -z "$$list_id" ]; then \
+				echo "  Deleting test list: $$list_id"; \
+				./bin/nylas agent list delete $$list_id --yes 2>/dev/null && \
+				echo "    ✓ Deleted list $$list_id" || echo "    ⚠ Could not delete $$list_id"; \
+			fi \
+		done
+	@echo ""
 	@echo "✓ Test cleanup complete"
 
 # ============================================================================

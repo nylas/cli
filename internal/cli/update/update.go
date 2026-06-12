@@ -1,12 +1,10 @@
 package update
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -97,14 +95,7 @@ func runUpdate(ctx context.Context, checkOnly, force, yes bool) error {
 
 	// Confirm update
 	if !yes {
-		fmt.Print("\nDo you want to update? [y/N]: ")
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("read input: %w", err)
-		}
-		response = strings.TrimSpace(strings.ToLower(response))
-		if response != "y" && response != "yes" {
+		if !common.Confirm("\nDo you want to update?", false) {
 			fmt.Println("Update cancelled.")
 			return nil
 		}

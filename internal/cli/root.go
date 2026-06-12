@@ -21,7 +21,8 @@ var rootCmd = &cobra.Command{
   nylas contacts list    List contacts
   nylas commands --json  Machine-readable command tree
 
-Documentation: https://cli.nylas.com/`,
+Documentation: https://cli.nylas.com/
+API reference: https://developer.nylas.com/`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

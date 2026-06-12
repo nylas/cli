@@ -172,13 +172,8 @@ func newClearCmd() *cobra.Command {
 
 			if !force {
 				fmt.Printf("This will delete %d log files (%s).\n", fileCount, common.FormatSize(totalSize))
-				fmt.Print("Are you sure? [y/N]: ")
 
-				var confirm string
-				if _, err := fmt.Scanln(&confirm); err != nil {
-					return nil // No input, assume no
-				}
-				if confirm != "y" && confirm != "Y" && confirm != "yes" {
+				if !common.Confirm("Are you sure?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

@@ -20,6 +20,7 @@ type NylasClient interface {
 	AgentClient
 	PolicyClient
 	RuleClient
+	ListClient
 	SchedulerClient
 	AdminClient
 	TransactionalClient

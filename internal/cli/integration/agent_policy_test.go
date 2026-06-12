@@ -83,9 +83,6 @@ func TestCLI_AgentPolicyLifecycle_CreateGetListUpdateDelete(t *testing.T) {
 	if !strings.Contains(readTextStdout, "Limits:") {
 		t.Fatalf("policy read text output should include limits section\noutput: %s", readTextStdout)
 	}
-	if !strings.Contains(readTextStdout, "Options:") {
-		t.Fatalf("policy read text output should include options section\noutput: %s", readTextStdout)
-	}
 	if !strings.Contains(readTextStdout, "Spam detection:") {
 		t.Fatalf("policy read text output should include spam detection section\noutput: %s", readTextStdout)
 	}

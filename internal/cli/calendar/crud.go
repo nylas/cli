@@ -169,17 +169,13 @@ func newDeleteCmd() *cobra.Command {
 						return struct{}{}, common.WrapGetError("calendar", err)
 					}
 
-					fmt.Println("Delete this calendar?")
 					fmt.Printf("  Name: %s\n", cal.Name)
 					fmt.Printf("  ID:   %s\n", cal.ID)
 					if cal.IsPrimary {
 						_, _ = common.Yellow.Printf("  Warning: This is a PRIMARY calendar!\n")
 					}
-					fmt.Print("\n[y/N]: ")
 
-					var confirm string
-					_, _ = fmt.Scanln(&confirm) // Ignore error - empty string treated as "no"
-					if confirm != "y" && confirm != "Y" && confirm != "yes" {
+					if !common.Confirm("\nDelete this calendar?", false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

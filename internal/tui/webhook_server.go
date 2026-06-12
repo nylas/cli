@@ -184,16 +184,7 @@ func (v *WebhookServerView) startServer() {
 	v.cancelFunc = cancel
 
 	// Set up event handler
-	v.server.OnEvent(func(event *ports.WebhookEvent) {
-		v.events = append([]*ports.WebhookEvent{event}, v.events...)
-		if len(v.events) > v.maxEvents {
-			v.events = v.events[:v.maxEvents]
-		}
-		v.app.QueueUpdateDraw(func() {
-			v.renderEvents()
-			v.renderStatus()
-		})
-	})
+	v.server.OnEvent(v.recordEvent)
 
 	// Start server in goroutine
 	go func() {
@@ -214,6 +205,20 @@ func (v *WebhookServerView) startServer() {
 			v.app.Flash(FlashInfo, "Webhook server started on port %d", v.port)
 		})
 	}()
+}
+
+// recordEvent prepends a webhook event and re-renders. It is invoked from
+// the webhook server goroutine, so the slice mutation and rendering are both
+// marshaled onto the event loop via QueueUpdateDraw.
+func (v *WebhookServerView) recordEvent(event *ports.WebhookEvent) {
+	v.app.QueueUpdateDraw(func() {
+		v.events = append([]*ports.WebhookEvent{event}, v.events...)
+		if len(v.events) > v.maxEvents {
+			v.events = v.events[:v.maxEvents]
+		}
+		v.renderEvents()
+		v.renderStatus()
+	})
 }
 
 func (v *WebhookServerView) stopServer() {

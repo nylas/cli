@@ -262,38 +262,3 @@ func (p *PatternLearner) analyzeProductivityPatterns(events []domain.Event) []Pr
 
 	return insights
 }
-
-// Helper functions for string operations
-
-func splitLines(s string) []string {
-	lines := []string{}
-	current := ""
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, current)
-			current = ""
-		} else {
-			current += string(s[i])
-		}
-	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return lines
-}
-
-func trimSpace(s string) string {
-	// Trim leading and trailing whitespace
-	start := 0
-	end := len(s)
-
-	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
-		start++
-	}
-
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
-		end--
-	}
-
-	return s[start:end]
-}

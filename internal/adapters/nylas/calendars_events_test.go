@@ -302,6 +302,10 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 							"status": "yes",
 						},
 					},
+					"metadata": map[string]any{
+						"timezone_locked": "true",
+						"project":         "apollo",
+					},
 				},
 			},
 			statusCode: http.StatusOK,
@@ -351,6 +355,12 @@ func TestHTTPClient_GetEvent(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.eventID, event.ID)
+			if wantMeta, ok := tt.serverResponse["data"].(map[string]any)["metadata"]; ok {
+				for k, v := range wantMeta.(map[string]any) {
+					assert.Equal(t, v, event.Metadata[k],
+						"metadata must survive the adapter conversion (IsTimezoneLocked depends on it)")
+				}
+			}
 		})
 	}
 }
@@ -526,6 +536,13 @@ func TestHTTPClient_UpdateEvent(t *testing.T) {
 				},
 			},
 			wantFields: []string{"participants"},
+		},
+		{
+			name: "updates metadata",
+			request: &domain.UpdateEventRequest{
+				Metadata: map[string]string{"timezone_locked": "true"},
+			},
+			wantFields: []string{"metadata"},
 		},
 	}
 

@@ -48,17 +48,29 @@ func NewDraftsView(app *App) *DraftsView {
 	return v
 }
 
+// Load fetches drafts in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
 func (v *DraftsView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	grantID := v.app.config.GrantID
 
-	drafts, err := v.app.config.Client.GetDrafts(ctx, v.app.config.GrantID, 50)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load drafts", err)
-		return
-	}
-	v.drafts = drafts
-	v.render()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		drafts, err := v.app.config.Client.GetDrafts(ctx, grantID, 50)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load drafts", err)
+			return
+		}
+		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
+			v.drafts = drafts
+			v.render()
+		})
+	}()
 }
 
 func (v *DraftsView) Refresh() {

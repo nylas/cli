@@ -19,7 +19,9 @@ func newVirtualCmd() *cobra.Command {
 		Use:   "virtual",
 		Short: "Manage virtual calendars",
 		Long: `Virtual calendars allow scheduling without connecting to a third-party provider.
-Perfect for conference rooms, equipment, or external contractors.`,
+Perfect for conference rooms, equipment, or external contractors.
+
+API reference: https://developer.nylas.com/docs/v3/calendar/virtual-calendars/`,
 	}
 
 	cmd.AddCommand(newVirtualListCmd())
@@ -178,10 +180,7 @@ func newVirtualDeleteCmd() *cobra.Command {
 			grantID := args[0]
 
 			if !skipConfirm {
-				fmt.Printf("Are you sure you want to delete virtual calendar grant %s? (y/N): ", grantID)
-				var response string
-				_, _ = fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete virtual calendar grant %s?", grantID), false) {
 					fmt.Println("Cancelled")
 					return nil
 				}

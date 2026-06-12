@@ -161,6 +161,41 @@ func TestWrapError_GenericForbiddenFallsThrough(t *testing.T) {
 	}
 }
 
+func TestWrapError_PlanLimitForbidden(t *testing.T) {
+	// The inbox service returns a 403 (forbidden_access) for billing-plan
+	// capacity limits on rules and lists. These must NOT be reported as an
+	// API-key permission problem — the user needs to remove items or upgrade.
+	cases := []struct {
+		name    string
+		message string
+	}{
+		{"rules cap reached", "Maximum number of rules (5) reached for this plan"},
+		{"lists cap reached", "Maximum number of lists (50) reached for this plan"},
+		{"rules not allowed", "Rules are not allowed for this plan"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			apiErr := &domain.APIError{
+				StatusCode: 403,
+				Type:       "forbidden_access",
+				Message:    tc.message,
+				RequestID:  "req-plan-1",
+			}
+			result := WrapError(fmt.Errorf("failed to create rule: %w", apiErr))
+
+			require.NotNil(t, result)
+			// Surface the server's real reason, not "Permission denied".
+			assert.Equal(t, tc.message, result.Message)
+			assert.Equal(t, "req-plan-1", result.RequestID)
+			joined := strings.Join(append(result.Suggestions, result.Suggestion), " | ")
+			assert.Contains(t, strings.ToLower(joined), "plan",
+				"plan-limit 403 must suggest a plan/limit action")
+			assert.NotContains(t, strings.ToLower(joined), "api key",
+				"plan-limit 403 must not blame the API key")
+		})
+	}
+}
+
 func TestWrapError_APIErrorStatusClassification(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -3,10 +3,7 @@
 package slack
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -64,14 +61,9 @@ Examples:
 
 			if !noConfirm {
 				fmt.Printf("Channel: %s\n", common.Cyan.Sprint(channelName))
-				fmt.Printf("Message: %s\n\n", text)
-				fmt.Print("Send this message? [y/N]: ")
+				fmt.Printf("Message: %s\n", text)
 
-				reader := bufio.NewReader(os.Stdin)
-				confirm, _ := reader.ReadString('\n')
-				confirm = strings.TrimSpace(strings.ToLower(confirm))
-
-				if confirm != "y" && confirm != "yes" {
+				if !common.Confirm("\nSend this message?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}
@@ -159,13 +151,8 @@ Examples:
 				if broadcast {
 					fmt.Println("(Also posting to channel)")
 				}
-				fmt.Print("\nSend this reply? [y/N]: ")
 
-				reader := bufio.NewReader(os.Stdin)
-				confirm, _ := reader.ReadString('\n')
-				confirm = strings.TrimSpace(strings.ToLower(confirm))
-
-				if confirm != "y" && confirm != "yes" {
+				if !common.Confirm("\nSend this reply?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

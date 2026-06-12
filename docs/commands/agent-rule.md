@@ -2,7 +2,7 @@
 
 Detailed reference for `nylas agent rule`.
 
-Rules are backed by `/v3/rules` and attach to workspaces via `rules_ids[]`.
+Rules are backed by `/v3/rules` and attach to workspaces via `rule_ids[]`.
 
 ## Commands
 
@@ -89,7 +89,7 @@ nylas agent rule create --data-file rule.json
 nylas agent rule create --data '{"name":"Block Example","trigger":"inbound","match":{"operator":"any","conditions":[{"field":"from.domain","operator":"is","value":"example.com"}]},"actions":[{"type":"mark_as_spam"}]}'
 ```
 
-The rule is created via `/v3/rules` then attached to the default grant's workspace `rules_ids[]`.
+The rule is created via `/v3/rules` then attached to the default grant's workspace `rule_ids[]`.
 
 ## Updating Rules
 
@@ -116,7 +116,7 @@ Behavior:
 
 ## Relationship to Workspaces
 
-Rules attach to workspaces via `rules_ids[]`. The practical flow:
+Rules attach to workspaces via `rule_ids[]`. The practical flow:
 
 1. create a workspace: `nylas workspace create --name "My Workspace"`
 2. create a policy: `nylas agent policy create --name "Strict Policy"`

@@ -17,7 +17,9 @@ func newBookingsCmd() *cobra.Command {
 		Use:     "bookings",
 		Aliases: []string{"booking"},
 		Short:   "Manage scheduler bookings",
-		Long:    "Manage scheduler bookings (scheduled meetings).",
+		Long: `Manage scheduler bookings (scheduled meetings).
+
+API reference: https://developer.nylas.com/docs/reference/api/bookings/`,
 	}
 
 	cmd.AddCommand(newBookingShowCmd())
@@ -203,10 +205,7 @@ func newBookingCancelCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to cancel booking %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to cancel booking %s?", args[0]), false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

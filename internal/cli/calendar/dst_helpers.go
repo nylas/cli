@@ -2,7 +2,6 @@ package calendar
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/adapters/utilities/timezone"
@@ -121,9 +120,5 @@ func confirmDSTConflict(warning *domain.DSTWarning) bool {
 	}
 
 	// Ask for confirmation
-	fmt.Print("Create anyway? [y/N]: ")
-	var confirm string
-	_, _ = fmt.Scanln(&confirm)
-
-	return strings.ToLower(confirm) == "y" || strings.ToLower(confirm) == "yes"
+	return common.Confirm("Create anyway?", false)
 }

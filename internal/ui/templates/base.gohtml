@@ -24,20 +24,13 @@
     <!-- Toast Notifications Container -->
     <div id="toast-container"></div>
 
-    <!-- Initial State from Server -->
-    <script>
-        window.__INITIAL_STATE__ = {
-            configured: {{.Configured}},
-            clientID: "{{.ClientID}}",
-            region: "{{.Region}}",
-            hasAPIKey: {{.HasAPIKey}},
-            defaultGrant: "{{.DefaultGrant}}",
-            grants: {{.GrantsJSON}},
-            commands: {{.CommandsJSON}}
-        };
-    </script>
+    <!-- Initial State from Server. Non-executable JSON data block: inline
+         executable <script> is blocked by the strict CSP (script-src 'self').
+         Parsed by readInitialState() in app.js. -->
+    <script type="application/json" id="initial-state">{{.InitialStateJSON}}</script>
     <!-- JavaScript Modules -->
     <script src="/js/helpers.js"></script>
+    <script src="/js/actions.js"></script>
     <script src="/js/theme.js"></script>
     <script src="/js/toast.js"></script>
     <script src="/js/timestamps.js"></script>

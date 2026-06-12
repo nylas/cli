@@ -32,6 +32,8 @@ func newPolicyCmd() *cobra.Command {
 Policies are backed by the /v3/policies API. Agent accounts inherit policy
 settings from their workspace policy_id attachment.
 
+API reference: https://developer.nylas.com/docs/v3/agent-accounts/policies-rules-lists/
+
 Examples:
   nylas agent policy list
   nylas agent policy get <policy-id>
@@ -165,7 +167,6 @@ func printPolicyDetails(policy domain.Policy) {
 
 	printPolicyStringListSection("Rules", policy.Rules)
 	printPolicyLimitsSection(policy.Limits)
-	printPolicyOptionsSection(policy.Options)
 	printPolicySpamDetectionSection(policy.SpamDetection)
 	fmt.Println()
 }
@@ -240,28 +241,6 @@ func printPolicyLimitsSection(limits *domain.PolicyLimits) {
 	}
 	if limits.LimitSpamRetentionPeriodInDays != nil {
 		printPolicyField("Spam retention", formatPolicyDays(*limits.LimitSpamRetentionPeriodInDays))
-		printed = true
-	}
-
-	if !printed {
-		fmt.Println("  none")
-	}
-}
-
-func printPolicyOptionsSection(options *domain.PolicyOptions) {
-	printPolicySectionHeader("Options")
-	if options == nil {
-		fmt.Println("  none")
-		return
-	}
-
-	printed := false
-	if options.AdditionalFolders != nil {
-		printPolicyValueList("Additional folders", *options.AdditionalFolders)
-		printed = true
-	}
-	if options.UseCidrAliasing != nil {
-		printPolicyField("CIDR aliasing", fmt.Sprintf("%t", *options.UseCidrAliasing))
 		printed = true
 	}
 

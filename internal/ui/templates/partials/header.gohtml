@@ -15,7 +15,7 @@
     <div class="header-controls" id="header-controls" style="{{if not .Configured}}display: none;{{end}}">
         <!-- Client ID Dropdown -->
         <div class="dropdown" id="client-dropdown">
-            <button class="dropdown-btn" onclick="toggleDropdown('client-dropdown')">
+            <button class="dropdown-btn" data-action="toggle-dropdown" data-target="client-dropdown">
                 <span class="dropdown-label">CLIENT</span>
                 <span class="dropdown-value" id="selected-client">{{if .ClientID}}{{slice .ClientID 0 8}}...{{else}}Not Set{{end}}</span>
                 <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -40,7 +40,7 @@
 
         <!-- Grant Dropdown -->
         <div class="dropdown" id="grant-dropdown">
-            <button class="dropdown-btn" onclick="toggleDropdown('grant-dropdown')">
+            <button class="dropdown-btn" data-action="toggle-dropdown" data-target="grant-dropdown">
                 <span class="dropdown-label">ACCOUNT</span>
                 <span class="dropdown-value" id="selected-grant">{{if .DefaultGrantEmail}}{{.DefaultGrantEmail}}{{else}}Select Account{{end}}</span>
                 <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -49,7 +49,7 @@
             </button>
             <div class="dropdown-menu" id="grant-menu">
                 {{range .Grants}}
-                <button class="dropdown-item{{if eq .ID $.DefaultGrant}} active{{end}}" data-grant="{{.ID}}" onclick="selectGrant('{{.ID}}', '{{.Email}}')">
+                <button class="dropdown-item{{if eq .ID $.DefaultGrant}} active{{end}}" data-grant="{{.ID}}" data-action="select-grant" data-email="{{.Email}}">
                     <span class="item-avatar">{{slice .Email 0 1 | upper}}</span>
                     <span class="item-info">
                         <span class="item-title">{{.Email}}</span>
@@ -63,7 +63,7 @@
                 <div class="empty-state">No accounts connected</div>
                 {{end}}
                 <div class="dropdown-divider"></div>
-                <button class="dropdown-item add-new" onclick="runCommand('auth login')">
+                <button class="dropdown-item add-new" data-action="run-command" data-command="auth login">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
                         <line x1="12" y1="8" x2="12" y2="16"/>
@@ -76,7 +76,7 @@
     </div>
 
     <!-- Theme Toggle (always available, regardless of configuration state) -->
-    <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+    <button class="theme-btn" data-action="toggle-theme" title="Toggle theme" aria-label="Toggle theme">
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
         </svg>

@@ -54,10 +54,7 @@ type DeleteConfig struct {
 func RunDelete(config DeleteConfig) error {
 	// Confirmation prompt
 	if !config.Force {
-		fmt.Printf("Are you sure you want to delete %s %s? [y/N] ", config.ResourceName, config.ResourceID)
-		var confirm string
-		_, _ = fmt.Scanln(&confirm)
-		if strings.ToLower(confirm) != "y" && strings.ToLower(confirm) != "yes" {
+		if !Confirm(fmt.Sprintf("Are you sure you want to delete %s %s?", config.ResourceName, config.ResourceID), false) {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -209,10 +206,7 @@ func NewDeleteCommand(config DeleteCommandConfig) *cobra.Command {
 
 				// Confirm deletion
 				if !force {
-					fmt.Printf("Are you sure you want to delete %s %s? [y/N] ", config.ResourceName, resourceID)
-					var confirm string
-					_, _ = fmt.Scanln(&confirm)
-					if strings.ToLower(confirm) != "y" && strings.ToLower(confirm) != "yes" {
+					if !Confirm(fmt.Sprintf("Are you sure you want to delete %s %s?", config.ResourceName, resourceID), false) {
 						fmt.Println("Cancelled.")
 						return nil
 					}

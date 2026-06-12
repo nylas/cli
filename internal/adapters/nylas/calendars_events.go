@@ -185,6 +185,9 @@ func (c *HTTPClient) UpdateEvent(ctx context.Context, grantID, calendarID, event
 	if req.Reminders != nil {
 		payload["reminders"] = req.Reminders
 	}
+	if len(req.Metadata) > 0 {
+		payload["metadata"] = req.Metadata
+	}
 
 	resp, err := c.doJSONRequest(ctx, "PUT", queryURL, payload)
 	if err != nil {

@@ -2,6 +2,8 @@
 
 Manage Nylas agent resources from the CLI.
 
+**New to agent accounts?** Start with the [getting started guide](agent-getting-started.md).
+
 Agent accounts are managed email identities backed by provider `nylas`. Unlike OAuth grants, they do not require a third-party mailbox connection. Account operations live under `nylas agent account`, while `nylas agent status` reports connector and account readiness.
 
 ## Commands
@@ -24,8 +26,17 @@ nylas agent rule create --name "Block Example" --condition from.domain,is,exampl
 nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive
 nylas agent rule update <rule-id> --name "Updated Rule" --description "Block example.org"
 nylas agent rule delete <rule-id>
+nylas agent list list
+nylas agent list get <list-id>
+nylas agent list create --name "Blocked domains" --type domain --item spam.com
+nylas agent list add <list-id> junk.net
+nylas agent list remove <list-id> junk.net
+nylas agent list delete <list-id> --yes
 nylas agent status
 ```
+
+Lists hold normalized values (domains, TLDs, or addresses) referenced by rule
+`in_list` conditions. **Details:** [Agent list reference](agent-list.md)
 
 ## List Agent Accounts
 
@@ -204,4 +215,5 @@ When the active grant is an agent account (`provider=nylas`):
 
 - [Agent policies](agent-policy.md)
 - [Agent rules](agent-rule.md)
+- [Agent lists](agent-list.md)
 - [Email commands](email.md)

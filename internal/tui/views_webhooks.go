@@ -42,16 +42,23 @@ func NewWebhooksView(app *App) *WebhooksView {
 	return v
 }
 
+// Load fetches webhooks in a background goroutine and applies the results on
+// the event loop via QueueUpdateDraw. Must be called from the event loop;
+// it is non-blocking.
 func (v *WebhooksView) Load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	webhooks, err := v.app.config.Client.ListWebhooks(ctx)
-	if err != nil {
-		v.app.FlashLoadError("Failed to load webhooks", err)
-		return
-	}
-	v.webhooks = webhooks
-	v.render()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		webhooks, err := v.app.config.Client.ListWebhooks(ctx)
+		if err != nil {
+			v.app.FlashLoadError("Failed to load webhooks", err)
+			return
+		}
+		v.app.QueueUpdateDraw(func() {
+			v.webhooks = webhooks
+			v.render()
+		})
+	}()
 }
 
 func (v *WebhooksView) Refresh() { v.Load() }

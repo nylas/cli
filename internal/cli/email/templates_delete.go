@@ -1,10 +1,7 @@
 package email
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/nylas/cli/internal/adapters/templates"
 	"github.com/nylas/cli/internal/cli/common"
@@ -53,12 +50,8 @@ By default, you'll be prompted for confirmation. Use --force to skip the prompt.
 				if tpl.UsageCount > 0 {
 					_, _ = common.Yellow.Printf("  Used:    %d time(s)\n", tpl.UsageCount)
 				}
-				fmt.Print("\nAre you sure? [y/N]: ")
 
-				reader := bufio.NewReader(os.Stdin)
-				confirm, _ := reader.ReadString('\n')
-				confirm = strings.ToLower(strings.TrimSpace(confirm))
-				if confirm != "y" && confirm != "yes" {
+				if !common.Confirm("\nAre you sure?", false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

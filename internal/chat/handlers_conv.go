@@ -58,7 +58,7 @@ func (s *Server) listConversations(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) createConversation(w http.ResponseWriter, _ *http.Request) {
-	conv, err := s.memory.Create(string(s.agent.Type))
+	conv, err := s.memory.Create(string(s.ActiveAgent().Type))
 	if err != nil {
 		http.Error(w, "Failed to create conversation", http.StatusInternalServerError)
 		return

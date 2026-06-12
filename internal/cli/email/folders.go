@@ -14,7 +14,9 @@ func newFoldersCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "folders",
 		Short: "Manage email folders/labels",
-		Long:  "List, create, update, and delete email folders or labels.",
+		Long: `List, create, update, and delete email folders or labels.
+
+API reference: https://developer.nylas.com/docs/v3/email/folders/`,
 	}
 
 	cmd.AddCommand(newFoldersListCmd())

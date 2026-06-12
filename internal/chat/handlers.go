@@ -20,6 +20,11 @@ type chatRequest struct {
 // maxToolIterations is the maximum number of tool call rounds per message.
 const maxToolIterations = 5
 
+// defaultRunTimeout is the budget for one agent-run segment (agent calls and
+// tool execution). Approval waits are not charged against it: after a gated
+// tool call resolves, the remaining work gets a fresh budget.
+const defaultRunTimeout = 120 * time.Second
+
 // handleChat processes a chat message via SSE streaming.
 // POST /api/chat
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +52,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Capture agent and context builder once, under the lock, so a concurrent
+	// SetAgent cannot race with this request's reads.
 	agent := s.ActiveAgent()
+	contextBuilder := s.ActiveContext()
 
 	// Load or create conversation
 	var conv *Conversation
@@ -85,9 +93,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	conv, _ = s.memory.Get(conv.ID)
 
 	// Check if compaction needed
-	if s.context.NeedsCompaction(conv) {
+	if contextBuilder.NeedsCompaction(conv) {
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
-		_ = s.context.Compact(ctx, conv)
+		_ = contextBuilder.Compact(ctx, conv)
 		cancel()
 		conv, _ = s.memory.Get(conv.ID) // reload after compaction
 	}
@@ -95,11 +103,17 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Send thinking event
 	sendSSE(w, flusher, "thinking", map[string]string{"agent": string(agent.Type)})
 
-	// Build prompt and run agent loop
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
-	defer cancel()
+	// Build prompt and run agent loop. ctx may be replaced with a fresh
+	// budget after an approval wait, so defer through a closure to always
+	// release the latest one.
+	runTimeout := s.runTimeout
+	if runTimeout <= 0 {
+		runTimeout = defaultRunTimeout
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), runTimeout)
+	defer func() { cancel() }()
 
-	prompt := s.context.BuildPrompt(conv, req.Message)
+	prompt := contextBuilder.BuildPrompt(conv, req.Message)
 	var finalResponse string
 
 	for i := range maxToolIterations {
@@ -156,8 +170,32 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"preview":     preview,
 				})
 
-				// Block until user approves/rejects or timeout
-				decision, _ := pa.Wait()
+				// The server's WriteTimeout is counted from the start of the
+				// request; a long agent run followed by the full approval
+				// window could exceed it and kill the SSE stream mid-wait.
+				// Push the connection write deadline out to cover the wait
+				// plus the post-approval run budget (best effort: not every
+				// ResponseWriter supports deadlines).
+				_ = http.NewResponseController(w).SetWriteDeadline(
+					time.Now().Add(approvalTimeout + runTimeout))
+
+				// Block until user approves/rejects, the approval timeout
+				// expires, or the CLIENT disconnects. The wait is bound to
+				// the raw request context — NOT the agent-run ctx, which may
+				// be nearly exhausted by the time the agent asks — so the
+				// user keeps the full approval window. If no decision
+				// arrived, discard the pending entry so it cannot leak or be
+				// resolved late.
+				decision, resolved := pa.Wait(r.Context())
+				if !resolved {
+					s.approvals.Discard(pa.ID)
+				}
+
+				// Time spent waiting on the user is not charged against the
+				// agent run: restart the run budget so an action approved
+				// late doesn't execute (and follow-up agent iterations don't
+				// run) against an already-expired context.
+				ctx, cancel = renewRunContext(r.Context(), cancel, runTimeout)
 
 				sendSSE(w, flusher, "approval_resolved", map[string]any{
 					"approval_id": pa.ID,
@@ -239,6 +277,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		"conversation_id": conv.ID,
 		"title":           conv.Title,
 	})
+}
+
+// renewRunContext releases the previous agent-run context and returns a fresh
+// one with a full timeout budget, derived from the request context so it is
+// still cancelled when the client disconnects.
+func renewRunContext(parent context.Context, oldCancel context.CancelFunc, timeout time.Duration) (context.Context, context.CancelFunc) {
+	oldCancel()
+	return context.WithTimeout(parent, timeout)
 }
 
 // generateTitle asks the agent to generate a short title for the conversation.
