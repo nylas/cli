@@ -4,12 +4,60 @@
 window.RulesPolicyManager = {
     policiesLoaded: false,
     rulesLoaded: false,
+    workspaceLoaded: false,
+    listsLoaded: false,
 
     async loadAll(force = false) {
         await Promise.all([
+            this.loadWorkspace(force),
             this.loadPolicies(force),
             this.loadRules(force),
+            this.loadLists(force),
         ]);
+    },
+
+    async loadWorkspace(force = false) {
+        if (this.workspaceLoaded && !force) {
+            return;
+        }
+
+        const container = document.getElementById('workspaceDetails');
+        if (!container || typeof AirAPI === 'undefined') {
+            return;
+        }
+
+        container.innerHTML = this.loadingMarkup('Loading workspace...');
+
+        try {
+            const response = await AirAPI.getWorkspace();
+            this.renderWorkspace(response.workspace || null);
+            this.workspaceLoaded = true;
+        } catch (error) {
+            console.error('Failed to load workspace:', error);
+            this.renderError(container, 'workspace', error);
+        }
+    },
+
+    async loadLists(force = false) {
+        if (this.listsLoaded && !force) {
+            return;
+        }
+
+        const container = document.getElementById('agentListList');
+        if (!container || typeof AirAPI === 'undefined') {
+            return;
+        }
+
+        container.innerHTML = this.loadingMarkup('Loading lists...');
+
+        try {
+            const response = await AirAPI.getAgentLists();
+            this.renderLists(response.lists || []);
+            this.listsLoaded = true;
+        } catch (error) {
+            console.error('Failed to load lists:', error);
+            this.renderError(container, 'lists', error);
+        }
     },
 
     async loadPolicies(force = false) {
@@ -64,6 +112,117 @@ window.RulesPolicyManager = {
     async refreshRules() {
         this.rulesLoaded = false;
         await this.loadRules(true);
+    },
+
+    async refreshWorkspace() {
+        this.workspaceLoaded = false;
+        await this.loadWorkspace(true);
+    },
+
+    async refreshLists() {
+        this.listsLoaded = false;
+        await this.loadLists(true);
+    },
+
+    renderWorkspace(workspace) {
+        const container = document.getElementById('workspaceDetails');
+        if (!container) {
+            return;
+        }
+
+        if (!workspace) {
+            container.innerHTML = this.emptyMarkup(
+                '🗂️',
+                'No workspace attached',
+                'This Nylas account is not associated with a workspace right now.'
+            );
+            container.classList.add('rules-policy-empty');
+            return;
+        }
+
+        container.classList.remove('rules-policy-empty');
+
+        const ruleIDs = Array.isArray(workspace.rule_ids) ? workspace.rule_ids : [];
+        const tags = [];
+        if (workspace.default === true) {
+            tags.push('Default workspace');
+        }
+        if (workspace.auto_group === true) {
+            tags.push('Auto group');
+        }
+        if (workspace.domain) {
+            tags.push(`Domain ${workspace.domain}`);
+        }
+
+        container.innerHTML = `
+            <article class="rules-policy-card">
+                <div class="rules-policy-card-header">
+                    <div>
+                        <h3 class="rules-policy-card-title">${this.escape(workspace.name || workspace.workspace_id || 'Unnamed workspace')}</h3>
+                        <p class="rules-policy-card-meta">${this.escape(workspace.workspace_id || 'No workspace ID')}</p>
+                    </div>
+                    <span class="rules-policy-pill">Workspace</span>
+                </div>
+                ${tags.length ? `
+                <div class="rules-policy-section">
+                    <div class="rules-policy-section-label">Scope</div>
+                    <div class="rules-policy-tags">${tags.map((tag) => `<span class="rules-policy-tag">${this.escape(tag)}</span>`).join('')}</div>
+                </div>` : ''}
+                <div class="rules-policy-section">
+                    <div class="rules-policy-section-label">Attached Policy</div>
+                    <div class="rules-policy-tags">
+                        ${workspace.policy_id ? `<span class="rules-policy-tag rules-policy-tag-mono">${this.escape(workspace.policy_id)}</span>` : '<span class="rules-policy-tag">No policy attached</span>'}
+                    </div>
+                </div>
+                <div class="rules-policy-section">
+                    <div class="rules-policy-section-label">Attached Rules</div>
+                    <div class="rules-policy-tags">
+                        ${ruleIDs.length ? ruleIDs.map((id) => `<span class="rules-policy-tag rules-policy-tag-mono">${this.escape(id)}</span>`).join('') : '<span class="rules-policy-tag">No rules attached</span>'}
+                    </div>
+                </div>
+            </article>
+        `;
+    },
+
+    renderLists(lists) {
+        const container = document.getElementById('agentListList');
+        if (!container) {
+            return;
+        }
+
+        if (!lists.length) {
+            container.innerHTML = this.emptyMarkup(
+                '📋',
+                'No lists configured',
+                'This application does not have any lists for rule in_list conditions yet.'
+            );
+            container.classList.add('rules-policy-empty');
+            return;
+        }
+
+        container.classList.remove('rules-policy-empty');
+        container.innerHTML = lists.map((list) => {
+            const itemsCount = typeof list.items_count === 'number' ? list.items_count : 0;
+
+            return `
+                <article class="rules-policy-card">
+                    <div class="rules-policy-card-header">
+                        <div>
+                            <h3 class="rules-policy-card-title">${this.escape(list.name || list.id || 'Unnamed list')}</h3>
+                            <p class="rules-policy-card-meta">${this.escape(list.id || 'No list ID')}</p>
+                        </div>
+                        <span class="rules-policy-pill">${this.escape(list.type || 'list')}</span>
+                    </div>
+                    ${list.description ? `<p class="rules-policy-description">${this.escape(list.description)}</p>` : ''}
+                    <div class="rules-policy-section">
+                        <div class="rules-policy-section-label">Items</div>
+                        <div class="rules-policy-tags">
+                            <span class="rules-policy-tag">${this.escape(`${itemsCount} item${itemsCount === 1 ? '' : 's'}`)}</span>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }).join('');
     },
 
     renderPolicies(policies) {

@@ -2,6 +2,7 @@ package air
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -35,17 +36,13 @@ func (s *Server) handleListPolicies(w http.ResponseWriter, r *http.Request) {
 
 	account, err := s.nylasClient.GetAgentAccount(ctx, grant.ID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch default agent account: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch default agent account", err)
 		return
 	}
 
 	policyID, err := s.resolveAccountPolicyID(ctx, account)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to resolve workspace policy: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to resolve workspace policy", err)
 		return
 	}
 	if policyID == "" {
@@ -55,9 +52,13 @@ func (s *Server) handleListPolicies(w http.ResponseWriter, r *http.Request) {
 
 	policy, err := s.nylasClient.GetPolicy(ctx, policyID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch policy: " + err.Error(),
-		})
+		// A workspace can reference a policy that has since been deleted;
+		// render that as "no policies" rather than an error.
+		if errors.Is(err, domain.ErrPolicyNotFound) {
+			writeJSON(w, http.StatusOK, PoliciesResponse{Policies: []domain.Policy{}})
+			return
+		}
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch policy", err)
 		return
 	}
 
@@ -89,17 +90,13 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 
 	account, err := s.nylasClient.GetAgentAccount(ctx, grant.ID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch default agent account: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch default agent account", err)
 		return
 	}
 
 	ruleIDs, err := s.resolveAccountRuleIDs(ctx, account)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to resolve workspace rules: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to resolve workspace rules", err)
 		return
 	}
 	if len(ruleIDs) == 0 {
@@ -109,9 +106,7 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 
 	allRules, err := s.nylasClient.ListRules(ctx)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to fetch rules: " + err.Error(),
-		})
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch rules", err)
 		return
 	}
 
@@ -131,13 +126,99 @@ func (s *Server) handleListRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, RulesResponse{Rules: rules})
 }
 
+func (s *Server) handleAgentWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	if s.handleDemoMode(w, WorkspaceResponse{Workspace: demoWorkspace()}) {
+		return
+	}
+	if !s.requireConfig(w) {
+		return
+	}
+
+	grant, ok := s.requireDefaultGrantInfo(w)
+	if !ok {
+		return
+	}
+	if grant.Provider != domain.ProviderNylas {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": rulesPolicyUnsupportedMessage})
+		return
+	}
+
+	ctx, cancel := s.withTimeout(r)
+	defer cancel()
+
+	account, err := s.nylasClient.GetAgentAccount(ctx, grant.ID)
+	if err != nil {
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch default agent account", err)
+		return
+	}
+
+	wsID := strings.TrimSpace(account.WorkspaceID)
+	if wsID == "" {
+		writeJSON(w, http.StatusOK, WorkspaceResponse{})
+		return
+	}
+
+	workspace, err := s.nylasClient.GetWorkspace(ctx, wsID)
+	if err != nil {
+		if errors.Is(err, domain.ErrWorkspaceNotFound) {
+			writeJSON(w, http.StatusOK, WorkspaceResponse{})
+			return
+		}
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch workspace", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, WorkspaceResponse{Workspace: workspace})
+}
+
+func (s *Server) handleAgentLists(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	if s.handleDemoMode(w, AgentListsResponse{Lists: demoAgentLists()}) {
+		return
+	}
+	if !s.requireConfig(w) {
+		return
+	}
+
+	grant, ok := s.requireDefaultGrantInfo(w)
+	if !ok {
+		return
+	}
+	if grant.Provider != domain.ProviderNylas {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": rulesPolicyUnsupportedMessage})
+		return
+	}
+
+	ctx, cancel := s.withTimeout(r)
+	defer cancel()
+
+	lists, err := s.nylasClient.ListLists(ctx)
+	if err != nil {
+		writeUpstreamError(w, http.StatusInternalServerError, "Failed to fetch lists", err)
+		return
+	}
+	if lists == nil {
+		lists = []domain.AgentList{}
+	}
+
+	writeJSON(w, http.StatusOK, AgentListsResponse{Lists: lists})
+}
+
 func (s *Server) resolveAccountPolicyID(ctx context.Context, account *domain.AgentAccount) (string, error) {
 	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
 		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
-		if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrWorkspaceNotFound):
+			// A deleted workspace must not break the endpoint; fall back to
+			// the policy reference stored on the account itself.
+		case err != nil:
 			return "", err
-		}
-		if ws != nil {
+		case ws != nil:
 			return strings.TrimSpace(ws.PolicyID), nil
 		}
 	}
@@ -147,10 +228,12 @@ func (s *Server) resolveAccountPolicyID(ctx context.Context, account *domain.Age
 func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.AgentAccount) ([]string, error) {
 	if wsID := strings.TrimSpace(account.WorkspaceID); wsID != "" {
 		ws, err := s.nylasClient.GetWorkspace(ctx, wsID)
-		if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrWorkspaceNotFound):
+			// Deleted workspace: fall back to the account's policy rules.
+		case err != nil:
 			return nil, err
-		}
-		if ws != nil {
+		case ws != nil:
 			var ids []string
 			for _, id := range ws.RulesIDs {
 				if id = strings.TrimSpace(id); id != "" {
@@ -163,6 +246,9 @@ func (s *Server) resolveAccountRuleIDs(ctx context.Context, account *domain.Agen
 	if policyID := strings.TrimSpace(account.Settings.PolicyID); policyID != "" {
 		policy, err := s.nylasClient.GetPolicy(ctx, policyID)
 		if err != nil {
+			if errors.Is(err, domain.ErrPolicyNotFound) {
+				return nil, nil
+			}
 			return nil, err
 		}
 		return policy.Rules, nil
@@ -178,6 +264,29 @@ func demoPolicies() []domain.Policy {
 			ApplicationID:  "app-demo",
 			OrganizationID: "org-demo",
 			Rules:          []string{"rule-demo-inbound"},
+		},
+	}
+}
+
+func demoWorkspace() *domain.Workspace {
+	return &domain.Workspace{
+		ID:        "workspace-demo",
+		Name:      "Demo Tenant Workspace",
+		AutoGroup: true,
+		Default:   true,
+		PolicyID:  "policy-demo-default",
+		RulesIDs:  []string{"rule-demo-inbound"},
+	}
+}
+
+func demoAgentLists() []domain.AgentList {
+	return []domain.AgentList{
+		{
+			ID:          "list-demo-domains",
+			Name:        "Blocked domains",
+			Description: "Domains flagged by the demo inbound rule.",
+			Type:        "domain",
+			ItemsCount:  2,
 		},
 	}
 }

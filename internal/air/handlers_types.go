@@ -76,6 +76,16 @@ type RulesResponse struct {
 	Rules []domain.Rule `json:"rules"`
 }
 
+// WorkspaceResponse represents the agent workspace API response.
+type WorkspaceResponse struct {
+	Workspace *domain.Workspace `json:"workspace"`
+}
+
+// AgentListsResponse represents the agent lists API response.
+type AgentListsResponse struct {
+	Lists []domain.AgentList `json:"lists"`
+}
+
 // EmailParticipantResponse represents an email participant.
 type EmailParticipantResponse struct {
 	Name  string `json:"name"`

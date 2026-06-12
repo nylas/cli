@@ -16,12 +16,11 @@ func TestListLists(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/lists", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
+		// Live shape: data is a bare array of lists.
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{
-				"items": []map[string]any{
-					{"id": "list-001", "name": "Blocked domains", "type": "domain", "items_count": 2},
-					{"id": "list-002", "name": "VIP addresses", "type": "address", "items_count": 5},
-				},
+			"data": []map[string]any{
+				{"id": "list-001", "name": "Blocked domains", "type": "domain", "items_count": 2},
+				{"id": "list-002", "name": "VIP addresses", "type": "address", "items_count": 5},
 			},
 		})
 	}))
@@ -47,14 +46,14 @@ func TestListLists_Pagination(t *testing.T) {
 		if calls == 1 {
 			assert.Empty(t, r.URL.Query().Get("page_token"))
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data":        map[string]any{"items": []map[string]any{{"id": "list-001"}}},
+				"data":        []map[string]any{{"id": "list-001"}},
 				"next_cursor": "cursor-2",
 			})
 			return
 		}
 		assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{"items": []map[string]any{{"id": "list-002"}}},
+			"data": []map[string]any{{"id": "list-002"}},
 		})
 	}))
 	defer server.Close()
@@ -67,6 +66,26 @@ func TestListLists_Pagination(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lists, 2)
 	assert.Equal(t, 2, calls)
+}
+
+func TestListLists_RepeatedCursorFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Always hand back the same cursor: a healthy client must bail out
+		// instead of looping forever.
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":        []map[string]any{{"id": "list-001"}},
+			"next_cursor": "stuck-cursor",
+		})
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient()
+	client.baseURL = server.URL
+	client.SetCredentials("", "", "test-api-key")
+
+	_, err := client.ListLists(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "repeated cursor")
 }
 
 func TestGetList(t *testing.T) {
@@ -170,8 +189,12 @@ func TestGetListItems(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/lists/list-001/items", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
+		// Live shape: data is a bare array of item objects, values under "value".
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{"items": []string{"spam.com", "junk.net"}},
+			"data": []map[string]any{
+				{"id": "item-1", "list_id": "list-001", "value": "spam.com", "created_at": 1781232377},
+				{"id": "item-2", "list_id": "list-001", "value": "junk.net", "created_at": 1781232378},
+			},
 		})
 	}))
 	defer server.Close()
@@ -193,14 +216,14 @@ func TestGetListItems_Pagination(t *testing.T) {
 		if calls == 1 {
 			assert.Empty(t, r.URL.Query().Get("page_token"))
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data":        map[string]any{"items": []string{"spam.com"}},
+				"data":        []map[string]any{{"id": "item-1", "value": "spam.com"}},
 				"next_cursor": "cursor-2",
 			})
 			return
 		}
 		assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{"items": []string{"junk.net"}},
+			"data": []map[string]any{{"id": "item-2", "value": "junk.net"}},
 		})
 	}))
 	defer server.Close()
@@ -213,6 +236,24 @@ func TestGetListItems_Pagination(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"spam.com", "junk.net"}, items)
 	assert.Equal(t, 2, calls)
+}
+
+func TestGetListItems_RepeatedCursorFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":        []map[string]any{{"id": "item-1", "value": "spam.com"}},
+			"next_cursor": "stuck-cursor",
+		})
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient()
+	client.baseURL = server.URL
+	client.SetCredentials("", "", "test-api-key")
+
+	_, err := client.GetListItems(context.Background(), "list-001")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "repeated cursor")
 }
 
 func TestAddListItems(t *testing.T) {

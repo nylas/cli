@@ -314,6 +314,10 @@ run `nylas auth switch <agent-grant-id>` first.
 **Connector readiness**: `nylas agent status` verifies the `nylas` connector
 exists and shows managed accounts.
 
+**Visual inspection**: `nylas air` exposes a Policy & Rules page (Email →
+Policy & Rules) showing the active agent account's workspace, policy, rules,
+and lists in one view.
+
 ## See Also
 
 - [Agent command reference](agent.md)

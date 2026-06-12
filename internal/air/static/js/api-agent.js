@@ -8,5 +8,13 @@ Object.assign(AirAPI, {
 
     async getRules() {
         return this.request('/rules');
+    },
+
+    async getWorkspace() {
+        return this.request('/workspace');
+    },
+
+    async getAgentLists() {
+        return this.request('/lists');
     }
 });

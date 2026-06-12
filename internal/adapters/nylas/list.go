@@ -9,21 +9,23 @@ import (
 )
 
 type listListResponse struct {
-	Data struct {
-		Items []domain.AgentList `json:"items"`
-	} `json:"data"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Data       []domain.AgentList `json:"data"`
+	NextCursor string             `json:"next_cursor,omitempty"`
 }
 
 type listResponse struct {
 	Data domain.AgentList `json:"data"`
 }
 
+// agentListItem is one entry of GET /v3/lists/{id}/items; only the normalized
+// value is exposed to callers.
+type agentListItem struct {
+	Value string `json:"value"`
+}
+
 type listItemsResponse struct {
-	Data struct {
-		Items []string `json:"items"`
-	} `json:"data"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Data       []agentListItem `json:"data"`
+	NextCursor string          `json:"next_cursor,omitempty"`
 }
 
 // ListLists lists all lists available to the authenticated application.
@@ -44,7 +46,7 @@ func (c *HTTPClient) ListLists(ctx context.Context) ([]domain.AgentList, error) 
 			return nil, err
 		}
 
-		lists = append(lists, result.Data.Items...)
+		lists = append(lists, result.Data...)
 
 		if result.NextCursor == "" {
 			break
@@ -131,7 +133,9 @@ func (c *HTTPClient) GetListItems(ctx context.Context, listID string) ([]string,
 			return nil, err
 		}
 
-		items = append(items, result.Data.Items...)
+		for _, item := range result.Data {
+			items = append(items, item.Value)
+		}
 
 		if result.NextCursor == "" {
 			break

@@ -8,6 +8,7 @@ type Workspace struct {
 	Name          string   `json:"name,omitempty"`
 	Domain        *string  `json:"domain,omitempty"`
 	AutoGroup     bool     `json:"auto_group,omitempty"`
+	Default       bool     `json:"default"`
 	PolicyID      string   `json:"policy_id,omitempty"`
 	RulesIDs      []string `json:"rule_ids,omitempty"`
 	CreatedAt     UnixTime `json:"created_at,omitempty"`

@@ -31,6 +31,32 @@ func TestUpdateWorkspaceRequest_RuleIDsWireName(t *testing.T) {
 	}
 }
 
+func TestWorkspace_DefaultWireField(t *testing.T) {
+	// The server marks the connector's default workspace with "default": true.
+	// Dropping the field hides which workspace new agent accounts attach to.
+	const body = `{"workspace_id":"ws-1","auto_group":true,"default":true}`
+
+	var ws Workspace
+	if err := json.Unmarshal([]byte(body), &ws); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !ws.Default {
+		t.Fatalf("Workspace must decode \"default\" into Default; got %#v", ws)
+	}
+
+	data, err := json.Marshal(ws)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal marshaled: %v", err)
+	}
+	if string(raw["default"]) != "true" {
+		t.Fatalf("Workspace JSON output must include \"default\"; got %s", data)
+	}
+}
+
 func TestWorkspace_RuleIDsWireName(t *testing.T) {
 	// The server returns "rule_ids"; it must populate RulesIDs on read.
 	const body = `{"workspace_id":"ws-1","rule_ids":["rule-a","rule-b"]}`
