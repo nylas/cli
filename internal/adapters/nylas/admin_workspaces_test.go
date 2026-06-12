@@ -79,6 +79,40 @@ func TestHTTPClient_AssignWorkspaceGrants_Remove(t *testing.T) {
 	assert.Equal(t, []string{"grant-2"}, result.GrantsRemoved)
 }
 
+// Detaching a policy requires the PATCH body to carry "policy_id": null — the
+// API rejects "" with "policy_id must be a valid UUID or null", and omitting
+// the field leaves the stale attachment in place.
+func TestHTTPClient_UpdateWorkspace_DetachPolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/workspaces/ws-1", r.URL.Path)
+		assert.Equal(t, "PATCH", r.Method)
+
+		var body map[string]json.RawMessage
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		raw, ok := body["policy_id"]
+		require.True(t, ok, "policy_id must be present in the detach PATCH")
+		assert.Equal(t, "null", string(raw), "policy_id must be JSON null, not %s", raw)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{"workspace_id": "ws-1"},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	detach := ""
+	result, err := client.UpdateWorkspace(context.Background(), "ws-1", &domain.UpdateWorkspaceRequest{
+		PolicyID: &detach,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ws-1", result.ID)
+}
+
 func TestHTTPClient_AssignWorkspaceGrants_Validation(t *testing.T) {
 	client := nylas.NewHTTPClient()
 	client.SetCredentials("client-id", "secret", "api-key")

@@ -148,8 +148,11 @@ func newUpdateCmd() *cobra.Command {
 		Short: "Update a workspace",
 		Long: `Update a workspace's policy or rules.
 
+Pass an empty --policy-id to detach the current policy (plan maximums apply).
+
 Examples:
   nylas workspace update <workspace-id> --policy-id <policy-id>
+  nylas workspace update <workspace-id> --policy-id ""
   nylas workspace update <workspace-id> --rules-ids rule1,rule2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -186,7 +189,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach")
+	cmd.Flags().StringVar(&policyID, "policy-id", "", "Policy ID to attach (empty string detaches the current policy)")
 	cmd.Flags().StringSliceVar(&rulesIDs, "rules-ids", nil, "Rule IDs to attach (comma-separated)")
 
 	return cmd
