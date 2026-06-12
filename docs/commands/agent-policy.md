@@ -133,6 +133,12 @@ Policies attach to workspaces via `policy_id`. To assign a policy to an agent ac
 nylas workspace update <workspace-id> --policy-id <policy-id>
 ```
 
+To detach a policy from a workspace (plan maximums apply afterwards):
+
+```bash
+nylas workspace update <workspace-id> --policy-id ""
+```
+
 The API auto-creates a default workspace when an agent account is created
 (and may create a starter "Default Policy" mirroring your plan's maximums).
 A workspace with no `policy_id` attached runs at your billing plan's maximum
@@ -152,7 +158,8 @@ If `nylas agent policy delete` fails:
 - the policy is still attached to one or more agent workspaces (the CLI
   blocks the delete to avoid leaving dangling `policy_id` references)
 - run `nylas agent policy list` to see the attached workspace mappings, then
-  detach with `nylas workspace update <workspace-id> --policy-id <other-id>`
+  detach with `nylas workspace update <workspace-id> --policy-id ""` (or swap
+  in another policy with `--policy-id <other-id>`)
 
 ## See Also
 

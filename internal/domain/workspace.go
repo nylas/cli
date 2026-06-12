@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 // Workspace represents a grant workspace. For provider=nylas accounts, this is
 // the attachment point for policy and rule relationships.
 type Workspace struct {
@@ -25,9 +27,28 @@ type CreateWorkspaceRequest struct {
 }
 
 // UpdateWorkspaceRequest updates workspace policy/rule attachments.
+// PolicyID semantics: nil leaves the policy untouched; a pointer to the empty
+// string detaches it (the API accepts a UUID or null, never "").
 type UpdateWorkspaceRequest struct {
 	PolicyID *string   `json:"policy_id,omitempty"`
 	RulesIDs *[]string `json:"rule_ids,omitempty"`
+}
+
+// MarshalJSON serializes a PolicyID pointing at the empty string as JSON null,
+// which is the only detach signal the API accepts.
+func (r UpdateWorkspaceRequest) MarshalJSON() ([]byte, error) {
+	out := make(map[string]any, 2)
+	if r.PolicyID != nil {
+		if *r.PolicyID == "" {
+			out["policy_id"] = nil
+		} else {
+			out["policy_id"] = *r.PolicyID
+		}
+	}
+	if r.RulesIDs != nil {
+		out["rule_ids"] = *r.RulesIDs
+	}
+	return json.Marshal(out)
 }
 
 // WorkspaceAssignRequest moves grants into or out of a workspace via the
