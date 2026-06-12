@@ -16,7 +16,9 @@ func newSessionsCmd() *cobra.Command {
 		Use:     "sessions",
 		Aliases: []string{"session"},
 		Short:   "Manage scheduler sessions",
-		Long:    "Manage scheduler sessions for booking workflows.",
+		Long: `Manage scheduler sessions for booking workflows.
+
+API reference: https://developer.nylas.com/docs/reference/api/sessions/`,
 	}
 
 	cmd.AddCommand(newSessionCreateCmd())

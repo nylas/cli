@@ -2,6 +2,9 @@ package ui
 
 import (
 	"bytes"
+	"encoding/json"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -62,6 +65,66 @@ func TestLoadTemplates_FunctionsAvailable(t *testing.T) {
 
 	if buf.String() != "HELLO" {
 		t.Errorf("Expected 'HELLO', got %q", buf.String())
+	}
+}
+
+// TestBaseTemplate_InitialStateIsParseableJSON verifies the CSP-safe
+// <script type="application/json"> data block survives html/template's
+// contextual escaping as valid JSON, including breakout payloads in the data.
+// The strict CSP (script-src 'self') blocks inline executable scripts, so the
+// UI depends on this block being parseable by JSON.parse in app.js.
+func TestBaseTemplate_InitialStateIsParseableJSON(t *testing.T) {
+	t.Parallel()
+
+	tmpl, err := loadTemplates()
+	if err != nil {
+		t.Fatalf("loadTemplates() failed: %v", err)
+	}
+
+	data := PageData{
+		Configured:   true,
+		ClientID:     `client-"</script><script>alert(1)</script>`,
+		Region:       "us",
+		HasAPIKey:    true,
+		DefaultGrant: "grant-1",
+		Grants: []Grant{
+			{ID: "grant-1", Email: `evil"@example.com`, Provider: "google"},
+		},
+		Commands: GetDefaultCommands(),
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+		t.Fatalf("ExecuteTemplate(base) failed: %v", err)
+	}
+	html := buf.String()
+
+	if strings.Contains(html, "window.__INITIAL_STATE__") {
+		t.Error("inline executable initial-state script still present (blocked by CSP)")
+	}
+
+	re := regexp.MustCompile(`(?s)<script type="application/json" id="initial-state">(.*?)</script>`)
+	m := re.FindStringSubmatch(html)
+	if m == nil {
+		t.Fatal("initial-state JSON data block not found in rendered page")
+	}
+
+	var state struct {
+		Configured   bool    `json:"configured"`
+		ClientID     string  `json:"clientID"`
+		Region       string  `json:"region"`
+		DefaultGrant string  `json:"defaultGrant"`
+		Grants       []Grant `json:"grants"`
+	}
+	if err := json.Unmarshal([]byte(m[1]), &state); err != nil {
+		t.Fatalf("initial-state block is not valid JSON: %v\nblock: %s", err, m[1])
+	}
+
+	if !state.Configured || state.Region != "us" || state.DefaultGrant != "grant-1" {
+		t.Errorf("initial state round-trip mismatch: %+v", state)
+	}
+	if state.ClientID != data.ClientID {
+		t.Errorf("ClientID round-trip mismatch: got %q want %q", state.ClientID, data.ClientID)
 	}
 }
 

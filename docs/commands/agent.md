@@ -2,6 +2,8 @@
 
 Manage Nylas agent resources from the CLI.
 
+**New to agent accounts?** Start with the [getting started guide](agent-getting-started.md).
+
 Agent accounts are managed email identities backed by provider `nylas`. Unlike OAuth grants, they do not require a third-party mailbox connection. Account operations live under `nylas agent account`, while `nylas agent status` reports connector and account readiness.
 
 ## Commands
@@ -11,6 +13,7 @@ nylas agent account list
 nylas agent account create <email>
 nylas agent account update [agent-id|email] --app-password 'ValidAgentPass123ABC!'
 nylas agent account get <agent-id|email>
+nylas agent account move <agent-id|email> --workspace <workspace-id>
 nylas agent account delete <agent-id|email>
 nylas agent policy list
 nylas agent policy create --name <name>
@@ -24,8 +27,19 @@ nylas agent rule create --name "Block Example" --condition from.domain,is,exampl
 nylas agent rule create --name "Archive outbound mail" --trigger outbound --condition recipient.domain,is,example.com --condition outbound.type,is,compose --action archive
 nylas agent rule update <rule-id> --name "Updated Rule" --description "Block example.org"
 nylas agent rule delete <rule-id>
+nylas agent list list
+nylas agent list get <list-id>
+nylas agent list create --name "Blocked domains" --type domain --item spam.com
+nylas agent list add <list-id> junk.net
+nylas agent list remove <list-id> junk.net
+nylas agent list delete <list-id> --yes
+nylas agent overview
+nylas agent studio
 nylas agent status
 ```
+
+Lists hold normalized values (domains, TLDs, or addresses) referenced by rule
+`in_list` conditions. **Details:** [Agent list reference](agent-list.md)
 
 ## List Agent Accounts
 
@@ -123,6 +137,21 @@ Behavior:
 
 Use this when you want to add mail-client access after creation or rotate an existing IMAP/SMTP app password.
 
+## Move Agent Account
+
+```bash
+nylas agent account move me@yourapp.nylas.email --workspace 12345678-1234-1234-1234-123456789012
+nylas agent account move 12345678-1234-1234-1234-123456789012 --workspace <workspace-id>
+```
+
+Moves the account to another workspace; the target workspace's policy and
+rules govern it immediately. Moves use the workspace manual-assign API
+(`POST /v3/workspaces/{id}/manual-assign`), which reassigns the grant even
+when it currently belongs to another workspace. Use `nylas workspace list`
+to find workspace IDs. The same move is available visually in
+[Agent Studio](agent-studio.md) by dragging an account chip onto a
+workspace card.
+
 ## Delete Agent Account
 
 ```bash
@@ -131,6 +160,33 @@ nylas agent account delete me@yourapp.nylas.email --yes
 ```
 
 Deleting an agent account revokes the underlying `provider=nylas` grant.
+
+## Resource Overview
+
+```bash
+nylas agent overview
+nylas agent overview --json
+nylas agent tree          # alias
+```
+
+Renders one tree per agent account showing its workspace, attached policy,
+attached rules, and the lists those rules reference:
+
+```
+support@yourapp.nylas.email  valid
+└── Workspace: Support workspace (default, auto-group, shared with 1 other account(s))
+    ├── Policy: Default Policy
+    └── Rules (2)
+        ├── Block listed domains (inbound)
+        │   └── List: Blocked domains (domain, 12 items)
+        └── Archive newsletters (inbound) [disabled]
+```
+
+The overview also flags problems the API does not prevent:
+- ⚠ dangling references — workspace `policy_id`/`rule_ids` or rule `in_list`
+  conditions pointing at deleted resources
+- auto-group workspaces shared by multiple accounts (changes affect them all)
+- unattached policies/rules and lists referenced by no rule
 
 ## Connector Status
 
@@ -204,4 +260,6 @@ When the active grant is an agent account (`provider=nylas`):
 
 - [Agent policies](agent-policy.md)
 - [Agent rules](agent-rule.md)
+- [Agent lists](agent-list.md)
+- [Agent Studio](agent-studio.md)
 - [Email commands](email.md)

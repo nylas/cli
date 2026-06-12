@@ -16,7 +16,9 @@ func newConnectorsCmd() *cobra.Command {
 		Use:     "connectors",
 		Aliases: []string{"connector", "conn"},
 		Short:   "Manage email provider connectors",
-		Long:    "Manage email provider connectors (Google, Microsoft, IMAP, etc.).",
+		Long: `Manage email provider connectors (Google, Microsoft, IMAP, etc.).
+
+API reference: https://developer.nylas.com/docs/reference/api/connectors-integrations/`,
 	}
 
 	cmd.AddCommand(newConnectorListCmd())
@@ -254,10 +256,7 @@ func newConnectorDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to delete connector %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete connector %s?", args[0]), false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

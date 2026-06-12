@@ -94,11 +94,12 @@ func (s *Server) Start() error {
 	// Template-rendered index page
 	mux.HandleFunc("/", s.handleIndex)
 
-	// Wrap with loopback-only host validation and same-origin protection.
-	// Without this, any visited webpage could POST to /api/exec or
-	// /api/config/setup on the local UI port.
+	// Wrap with loopback-only host validation, same-origin protection and
+	// security headers (strict CSP). Without this, any visited webpage could
+	// POST to /api/exec or /api/config/setup on the local UI port.
 	handler := webguard.HostValidationMiddleware(
-		webguard.OriginProtectionMiddleware(mux))
+		webguard.OriginProtectionMiddleware(
+			webguard.SecurityHeadersMiddleware(mux)))
 
 	server := &http.Server{
 		Addr:              s.addr,

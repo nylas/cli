@@ -3,12 +3,12 @@ package email
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +18,9 @@ func newAttachmentsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "attachments",
 		Short: "Manage email attachments",
-		Long:  "Commands to list, view, and download email attachments.",
+		Long: `Commands to list, view, and download email attachments.
+
+API reference: https://developer.nylas.com/docs/v3/email/attachments/`,
 	}
 
 	cmd.AddCommand(newAttachmentsListCmd())
@@ -169,8 +171,12 @@ func newAttachmentsDownloadCmd() *cobra.Command {
 					return struct{}{}, common.NewInputError(fmt.Sprintf("output path is a directory: %s", finalOutputPath))
 				}
 
-				// Download the attachment
-				reader, err := client.DownloadAttachment(ctx, grantID, messageID, attachmentID)
+				// Download the attachment with a dedicated long timeout:
+				// the WithClient context carries the default API timeout,
+				// which would cut off large downloads mid-stream.
+				dlCtx, dlCancel := common.CreateContextWithTimeout(domain.TimeoutDownload)
+				defer dlCancel()
+				reader, err := client.DownloadAttachment(dlCtx, grantID, messageID, attachmentID)
 				if err != nil {
 					return struct{}{}, common.WrapDownloadError("attachment", err)
 				}
@@ -181,10 +187,13 @@ func newAttachmentsDownloadCmd() *cobra.Command {
 				if err != nil {
 					return struct{}{}, common.WrapCreateError("output file", err)
 				}
+				// Backstop close for early-error paths; CopyAndClose performs
+				// the error-checked close before success is reported.
 				defer func() { _ = file.Close() }()
 
-				// Copy content
-				written, err := io.Copy(file, reader)
+				// Copy content and close, surfacing write errors that only
+				// appear at Close time on some filesystems.
+				written, err := common.CopyAndClose(file, reader)
 				if err != nil {
 					return struct{}{}, common.WrapWriteError("file", err)
 				}

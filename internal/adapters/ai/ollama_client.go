@@ -152,6 +152,10 @@ func (c *OllamaClient) StreamChat(ctx context.Context, req *domain.ChatRequest, 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp)
+	}
+
 	// Stream response
 	decoder := json.NewDecoder(resp.Body)
 	for {

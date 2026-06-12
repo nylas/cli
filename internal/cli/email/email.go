@@ -10,7 +10,9 @@ func NewEmailCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "email",
 		Short: "Manage emails",
-		Long:  "Commands for managing emails: list, read, send, search, and more.",
+		Long: `Commands for managing emails: list, read, send, search, and more.
+
+API reference: https://developer.nylas.com/docs/v3/email/`,
 	}
 
 	cmd.AddCommand(newListCmd())

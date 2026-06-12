@@ -118,6 +118,7 @@ func convertEvent(e eventResponse) domain.Event {
 		MasterEventID: e.MasterEventID,
 		ICalUID:       e.ICalUID,
 		HtmlLink:      e.HtmlLink,
+		Metadata:      e.Metadata,
 		CreatedAt:     time.Unix(e.CreatedAt, 0),
 		UpdatedAt:     time.Unix(e.UpdatedAt, 0),
 		Object:        e.Object,

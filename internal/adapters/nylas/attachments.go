@@ -47,16 +47,29 @@ func (c *HTTPClient) GetAttachment(ctx context.Context, grantID, messageID, atta
 func (c *HTTPClient) DownloadAttachment(ctx context.Context, grantID, messageID, attachmentID string) (io.ReadCloser, error) {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s/attachments/%s/download", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID), url.PathEscape(attachmentID))
 
+	// The response body streams under the request context, so the default
+	// API timeout would cut off large/slow downloads mid-stream. Apply the
+	// dedicated download timeout when the caller hasn't set a deadline.
+	cancel := context.CancelFunc(func() {})
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		ctx, cancel = context.WithTimeout(ctx, domain.TimeoutDownload)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	c.setAuthHeader(req)
 
 	resp, err := c.doRequest(ctx, req)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("%w: %v", domain.ErrNetworkError, err)
 	}
+
+	// Release the download context when the body is closed or fully read.
+	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
 
 	if resp.StatusCode == http.StatusNotFound {
 		_ = resp.Body.Close()

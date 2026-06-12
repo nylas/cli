@@ -27,6 +27,7 @@ func newEventsCreateCmd() *cobra.Command {
 		ignoreDSTWarning   bool
 		ignoreWorkingHours bool
 		lockTimezone       bool
+		eventTimezone      string
 	)
 
 	cmd := &cobra.Command{
@@ -66,8 +67,8 @@ Examples:
 					return struct{}{}, err
 				}
 
-				// Parse times
-				when, err := parseEventTime(startTime, endTime, allDay)
+				// Parse times in the requested timezone (system timezone if not set)
+				when, err := parseEventTime(startTime, endTime, allDay, eventTimezone)
 				if err != nil {
 					return struct{}{}, err
 				}
@@ -191,6 +192,7 @@ Examples:
 	cmd.Flags().BoolVar(&ignoreDSTWarning, "ignore-dst-warning", false, "Skip DST conflict warnings")
 	cmd.Flags().BoolVar(&ignoreWorkingHours, "ignore-working-hours", false, "Skip working hours validation")
 	cmd.Flags().BoolVar(&lockTimezone, "lock-timezone", false, "Lock event to its timezone (always display in this timezone)")
+	cmd.Flags().StringVar(&eventTimezone, "timezone", "", "IANA timezone for start/end times (e.g., America/Los_Angeles). Defaults to system timezone.")
 
 	_ = cmd.MarkFlagRequired("title")
 	_ = cmd.MarkFlagRequired("start")
@@ -268,6 +270,7 @@ func newEventsUpdateCmd() *cobra.Command {
 		visibility     string
 		lockTimezone   bool
 		unlockTimezone bool
+		eventTimezone  string
 	)
 
 	cmd := &cobra.Command{
@@ -288,6 +291,15 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			eventID := args[0]
 			grantArgs := args[1:]
+
+			// The timezone is only applied while parsing new times, so alone
+			// it would silently do nothing.
+			if cmd.Flags().Changed("timezone") && !cmd.Flags().Changed("start") {
+				return common.NewUserError(
+					"--timezone requires --start",
+					"Provide --start (and optionally --end) to re-set the event time in that timezone",
+				)
+			}
 
 			_, err := common.WithClient(grantArgs, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				// Get calendar ID if not specified
@@ -319,9 +331,9 @@ Examples:
 					req.Visibility = &visibility
 				}
 
-				// Handle time changes
+				// Handle time changes (parsed in the requested timezone, system timezone if not set)
 				if cmd.Flags().Changed("start") {
-					when, err := parseEventTime(startTime, endTime, allDay)
+					when, err := parseEventTime(startTime, endTime, allDay, eventTimezone)
 					if err != nil {
 						return struct{}{}, err
 					}
@@ -345,16 +357,23 @@ Examples:
 					)
 				}
 
-				if lockTimezone {
-					if req.Metadata == nil {
-						req.Metadata = make(map[string]string)
+				if lockTimezone || unlockTimezone {
+					// The update replaces the metadata object wholesale, so
+					// merge with the event's existing metadata to avoid
+					// clobbering unrelated keys.
+					existing, err := client.GetEvent(ctx, grantID, calID, eventID)
+					if err != nil {
+						return struct{}{}, common.WrapFetchError("event", err)
 					}
-					req.Metadata["timezone_locked"] = "true"
-				} else if unlockTimezone {
-					if req.Metadata == nil {
-						req.Metadata = make(map[string]string)
+					req.Metadata = make(map[string]string, len(existing.Metadata)+1)
+					for k, v := range existing.Metadata {
+						req.Metadata[k] = v
 					}
-					req.Metadata["timezone_locked"] = "false"
+					if lockTimezone {
+						req.Metadata["timezone_locked"] = "true"
+					} else {
+						req.Metadata["timezone_locked"] = "false"
+					}
 				}
 
 				event, err := common.RunWithSpinnerResult("Updating event...", func() (*domain.Event, error) {
@@ -397,6 +416,7 @@ Examples:
 	cmd.Flags().StringVar(&visibility, "visibility", "", "Event visibility (public, private, default)")
 	cmd.Flags().BoolVar(&lockTimezone, "lock-timezone", false, "Lock event to its timezone")
 	cmd.Flags().BoolVar(&unlockTimezone, "unlock-timezone", false, "Remove timezone lock from event")
+	cmd.Flags().StringVar(&eventTimezone, "timezone", "", "IANA timezone for start/end times (e.g., America/Los_Angeles). Defaults to system timezone.")
 
 	return cmd
 }

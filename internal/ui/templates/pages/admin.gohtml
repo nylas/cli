@@ -18,14 +18,14 @@
                         <div class="detail-cmd-row">
                             <code id="admin-detail-cmd">nylas admin</code>
                             <div class="action-buttons">
-                                <button class="run-btn" id="admin-run-btn" onclick="runAdminCmd()">
+                                <button class="run-btn" id="admin-run-btn" data-action="run-cmd" data-section="admin">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <polygon points="5 3 19 12 5 21 5 3"/>
                                     </svg>
                                     Run
                                     <span class="spinner"></span>
                                 </button>
-                                <button class="refresh-btn" onclick="refreshAdminCmd()" title="Re-run command">
+                                <button class="refresh-btn" data-action="refresh-cmd" data-section="admin" title="Re-run command">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <polyline points="23 4 23 10 17 10"/>
                                         <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
@@ -40,7 +40,7 @@
                             <div class="output-header">
                                 <h3>Output</h3>
                                 <div class="output-actions">
-                                    <button class="copy-output-btn" onclick="copyOutput('admin')">
+                                    <button class="copy-output-btn" data-action="copy-output" data-section="admin">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2"/>
                                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>

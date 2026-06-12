@@ -3,6 +3,7 @@ package webguard
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +32,47 @@ func TestIsLoopbackHost(t *testing.T) {
 				t.Fatalf("IsLoopbackHost(%q) = %v, want %v", tc.host, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSecurityHeadersMiddleware(t *testing.T) {
+	t.Parallel()
+
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	headers := map[string]string{
+		"X-Frame-Options":        "SAMEORIGIN",
+		"X-Content-Type-Options": "nosniff",
+		"X-XSS-Protection":       "1; mode=block",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
+	}
+	for name, want := range headers {
+		if got := rec.Header().Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("Content-Security-Policy header missing")
+	}
+	// script-src 'self' without 'unsafe-inline' is the load-bearing part of
+	// the policy: it blocks injected inline <script> and on* handlers.
+	if !strings.Contains(csp, "script-src 'self';") {
+		t.Errorf("CSP must contain strict script-src 'self', got %q", csp)
+	}
+	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
+		t.Errorf("CSP script-src must not allow unsafe-inline, got %q", csp)
+	}
+	for _, directive := range []string{"frame-ancestors 'self'", "base-uri 'self'", "form-action 'self'", "object-src 'none'"} {
+		if !strings.Contains(csp, directive) {
+			t.Errorf("CSP missing directive %q, got %q", directive, csp)
+		}
 	}
 }
 

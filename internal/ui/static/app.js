@@ -2,6 +2,19 @@
 // Nylas CLI - Dashboard (Main Entry Point)
 // =============================================================================
 
+// readInitialState parses the server-rendered <script type="application/json">
+// data block (CSP-safe replacement for an inline executable script).
+function readInitialState() {
+    const el = document.getElementById('initial-state');
+    if (!el) return null;
+    try {
+        return JSON.parse(el.textContent);
+    } catch (err) {
+        console.error('Failed to parse initial state');
+        return null;
+    }
+}
+
 // Initialize application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize all modules
@@ -13,8 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initToast();
 
     // Use server-provided initial state (hybrid SSR)
-    if (window.__INITIAL_STATE__) {
-        initFromServerState(window.__INITIAL_STATE__);
+    const initialState = readInitialState();
+    if (initialState) {
+        initFromServerState(initialState);
     } else {
         // Fallback to API call if no initial state
         checkConfig();

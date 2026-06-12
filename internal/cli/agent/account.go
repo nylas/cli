@@ -12,6 +12,8 @@ Agent accounts are managed email identities backed by the Nylas provider.
 This command always uses provider=nylas and keeps connector setup out of the
 user's path.
 
+API reference: https://developer.nylas.com/docs/v3/agent-accounts/provisioning/
+
 	Examples:
 	  # Create a new agent account
 	  nylas agent account create me@yourapp.nylas.email
@@ -25,6 +27,9 @@ user's path.
   # Show one agent account
   nylas agent account get <agent-id|email>
 
+  # Move an agent account to another workspace
+  nylas agent account move <agent-id|email> --workspace <workspace-id>
+
   # Delete an agent account
   nylas agent account delete <agent-id|email>`,
 	}
@@ -33,6 +38,7 @@ user's path.
 	cmd.AddCommand(newUpdateCmd())
 	cmd.AddCommand(newListCmd())
 	cmd.AddCommand(newGetCmd())
+	cmd.AddCommand(newMoveCmd())
 	cmd.AddCommand(newDeleteCmd())
 
 	return cmd

@@ -16,7 +16,9 @@ func newGrantsCmd() *cobra.Command {
 		Use:     "grants",
 		Aliases: []string{"grant"},
 		Short:   "Manage grants",
-		Long:    "View and manage grants across all applications.",
+		Long: `View and manage grants across all applications.
+
+API reference: https://developer.nylas.com/docs/reference/api/manage-grants/`,
 	}
 
 	cmd.AddCommand(newGrantListCmd())

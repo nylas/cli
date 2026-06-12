@@ -14,7 +14,9 @@ func newThreadsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "threads",
 		Short: "Manage email threads/conversations",
-		Long:  "List, view, mark, and delete email threads (conversations).",
+		Long: `List, view, mark, and delete email threads (conversations).
+
+API reference: https://developer.nylas.com/docs/v3/email/threads/`,
 	}
 
 	cmd.AddCommand(newThreadsListCmd())
@@ -259,15 +261,11 @@ func newThreadsDeleteCmd() *cobra.Command {
 						return struct{}{}, common.WrapGetError("thread", err)
 					}
 
-					fmt.Println("Delete this thread?")
 					fmt.Printf("  Subject:      %s\n", thread.Subject)
 					fmt.Printf("  Messages:     %d\n", len(thread.MessageIDs))
 					fmt.Printf("  Participants: %s\n", common.FormatParticipants(thread.Participants))
-					fmt.Print("\n[y/N]: ")
 
-					var confirm string
-					_, _ = fmt.Scanln(&confirm) // Ignore error - empty string treated as "no"
-					if confirm != "y" && confirm != "Y" && confirm != "yes" {
+					if !common.Confirm("\nDelete this thread?", false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

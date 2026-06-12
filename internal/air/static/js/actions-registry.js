@@ -184,6 +184,12 @@ document.addEventListener('DOMContentLoaded', function() {
     Actions.register('rules-refresh-rules', function() {
         if (typeof RulesPolicyManager !== 'undefined') RulesPolicyManager.refreshRules();
     });
+    Actions.register('rules-refresh-workspace', function() {
+        if (typeof RulesPolicyManager !== 'undefined') RulesPolicyManager.refreshWorkspace();
+    });
+    Actions.register('rules-refresh-lists', function() {
+        if (typeof RulesPolicyManager !== 'undefined') RulesPolicyManager.refreshLists();
+    });
 
     // ========== SNOOZE ==========
     Actions.register('close-snooze-overlay', function(target, e) {

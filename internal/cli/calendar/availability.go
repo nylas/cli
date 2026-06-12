@@ -20,7 +20,9 @@ func newAvailabilityCmd() *cobra.Command {
 		Long: `Check calendar availability and find free meeting times.
 
 Use 'nylas calendar availability check' to see free/busy times for calendars.
-Use 'nylas calendar availability find' to find available meeting slots.`,
+Use 'nylas calendar availability find' to find available meeting slots.
+
+API reference: https://developer.nylas.com/docs/reference/api/availability/`,
 	}
 
 	cmd.AddCommand(newFreeBusyCmd())

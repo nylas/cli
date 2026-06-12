@@ -13,7 +13,9 @@ func NewContactsCmd() *cobra.Command {
 		Short:   "Manage contacts",
 		Long: `Manage contacts from your connected accounts.
 
-View contacts, create new contacts, update and delete contacts.`,
+View contacts, create new contacts, update and delete contacts.
+
+API reference: https://developer.nylas.com/docs/v3/email/contacts/`,
 	}
 
 	cmd.AddCommand(newListCmd())

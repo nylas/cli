@@ -2,6 +2,7 @@ package ui
 
 import (
 	"io/fs"
+	"log/slog"
 	"net/http"
 )
 
@@ -22,10 +23,13 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Build page data
 	data := s.buildPageData()
 
-	// Render template
+	// Render template. Template errors can include data field paths and
+	// snippets of upstream content; log the raw error and return a
+	// generic message to the client.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.ExecuteTemplate(w, "base", data); err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("template render failed", "template", "base", "err", err)
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 	}
 }
 

@@ -66,12 +66,13 @@ type eventResponse struct {
 			ReminderMethod  string `json:"reminder_method"`
 		} `json:"overrides"`
 	} `json:"reminders"`
-	MasterEventID string `json:"master_event_id"`
-	ICalUID       string `json:"ical_uid"`
-	HtmlLink      string `json:"html_link"`
-	CreatedAt     int64  `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at"`
-	Object        string `json:"object"`
+	MasterEventID string            `json:"master_event_id"`
+	ICalUID       string            `json:"ical_uid"`
+	HtmlLink      string            `json:"html_link"`
+	Metadata      map[string]string `json:"metadata"`
+	CreatedAt     int64             `json:"created_at"`
+	UpdatedAt     int64             `json:"updated_at"`
+	Object        string            `json:"object"`
 }
 
 // GetCalendars retrieves all calendars for a grant.

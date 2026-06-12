@@ -118,6 +118,7 @@ func (c *ComposeView) send() {
 	// Send asynchronously
 	c.app.Flash(FlashInfo, "Sending message...")
 
+	grantID := c.app.config.GrantID
 	go func() {
 		// Email send operations should complete within 30 seconds
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -133,15 +134,13 @@ func (c *ComposeView) send() {
 				Subject: subject,
 				Body:    htmlBody,
 			}
-			_, err = c.app.config.Client.UpdateDraft(ctx, c.app.config.GrantID, c.draft.ID, updateReq)
+			_, err = c.app.config.Client.UpdateDraft(ctx, grantID, c.draft.ID, updateReq)
 			if err != nil {
-				c.app.QueueUpdateDraw(func() {
-					c.app.Flash(FlashError, "Failed to update draft: %v", err)
-				})
+				c.app.Flash(FlashError, "Failed to update draft: %v", err)
 				return
 			}
 			// Then send the draft
-			_, err = c.app.config.Client.SendDraft(ctx, c.app.config.GrantID, c.draft.ID, nil)
+			_, err = c.app.config.Client.SendDraft(ctx, grantID, c.draft.ID, nil)
 		} else {
 			// Normal send flow
 			req := &domain.SendMessageRequest{
@@ -156,13 +155,11 @@ func (c *ComposeView) send() {
 				req.ReplyToMsgID = c.replyToMsg.ID
 			}
 
-			_, err = c.app.config.Client.SendMessage(ctx, c.app.config.GrantID, req)
+			_, err = c.app.config.Client.SendMessage(ctx, grantID, req)
 		}
 
 		if err != nil {
-			c.app.QueueUpdateDraw(func() {
-				c.app.Flash(FlashError, "Failed to send: %v", err)
-			})
+			c.app.Flash(FlashError, "Failed to send: %v", err)
 			return
 		}
 
@@ -294,6 +291,7 @@ func (c *ComposeView) saveDraft() {
 
 	c.app.Flash(FlashInfo, "Saving draft...")
 
+	grantID := c.app.config.GrantID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -301,16 +299,14 @@ func (c *ComposeView) saveDraft() {
 		var err error
 		if c.mode == ComposeModeDraft && c.draft != nil {
 			// Update existing draft
-			_, err = c.app.config.Client.UpdateDraft(ctx, c.app.config.GrantID, c.draft.ID, req)
+			_, err = c.app.config.Client.UpdateDraft(ctx, grantID, c.draft.ID, req)
 		} else {
 			// Create new draft
-			_, err = c.app.config.Client.CreateDraft(ctx, c.app.config.GrantID, req)
+			_, err = c.app.config.Client.CreateDraft(ctx, grantID, req)
 		}
 
 		if err != nil {
-			c.app.QueueUpdateDraw(func() {
-				c.app.Flash(FlashError, "Failed to save draft: %v", err)
-			})
+			c.app.Flash(FlashError, "Failed to save draft: %v", err)
 			return
 		}
 

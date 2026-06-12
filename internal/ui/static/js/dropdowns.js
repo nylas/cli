@@ -71,8 +71,8 @@ function updateAccountDropdown() {
 
     // Build menu
     let menuHTML = currentGrants.map(g => `
-        <button class="dropdown-item ${g.id === currentDefaultGrant ? 'active' : ''}" onclick="selectAccount('${esc(g.id)}')">
-            <div class="item-avatar">${g.email[0].toUpperCase()}</div>
+        <button class="dropdown-item ${g.id === currentDefaultGrant ? 'active' : ''}" data-action="select-account" data-grant-id="${esc(g.id)}">
+            <div class="item-avatar">${esc(g.email[0].toUpperCase())}</div>
             <div class="item-info">
                 <span class="item-title">${esc(g.email)}</span>
                 <span class="item-subtitle">${formatProvider(g.provider)}</span>
@@ -86,7 +86,7 @@ function updateAccountDropdown() {
     }
 
     menuHTML += `
-        <button class="dropdown-item add-new" onclick="showAddAccount()">
+        <button class="dropdown-item add-new" data-action="show-add-account">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span class="item-title">Add Account</span>
         </button>

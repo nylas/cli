@@ -12,6 +12,23 @@
         </button>
     </div>
     <div class="rules-policy-shell">
+        <section class="rules-policy-panel" aria-labelledby="workspaceSectionTitle">
+            <div class="rules-policy-header">
+                <div>
+                    <h2 id="workspaceSectionTitle" class="rules-policy-title">Workspace</h2>
+                    <p class="rules-policy-subtitle">Attachment point linking this account to its policy and rules.</p>
+                </div>
+                <button class="btn-secondary" type="button" data-action="rules-refresh-workspace">Refresh</button>
+            </div>
+            <div class="rules-policy-list" id="workspaceDetails">
+                <div class="empty-state">
+                    <div class="empty-icon">🗂️</div>
+                    <div class="empty-title">Workspace loads on demand</div>
+                    <div class="empty-message">Open this view on a Nylas-managed account to inspect its workspace.</div>
+                </div>
+            </div>
+        </section>
+
         <section class="rules-policy-panel" aria-labelledby="policiesSectionTitle">
             <div class="rules-policy-header">
                 <div>
@@ -42,6 +59,23 @@
                     <div class="empty-icon">⚙️</div>
                     <div class="empty-title">Rules load on demand</div>
                     <div class="empty-message">Open this view on a Nylas-managed account to inspect active rules.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="rules-policy-panel" aria-labelledby="listsSectionTitle">
+            <div class="rules-policy-header">
+                <div>
+                    <h2 id="listsSectionTitle" class="rules-policy-title">Lists</h2>
+                    <p class="rules-policy-subtitle">Typed value sets referenced by rule in_list conditions.</p>
+                </div>
+                <button class="btn-secondary" type="button" data-action="rules-refresh-lists">Refresh</button>
+            </div>
+            <div class="rules-policy-list" id="agentListList">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-title">Lists load on demand</div>
+                    <div class="empty-message">Open this view on a Nylas-managed account to inspect configured lists.</div>
                 </div>
             </div>
         </section>

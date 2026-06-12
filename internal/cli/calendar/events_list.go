@@ -38,12 +38,9 @@ Examples:
   nylas calendar events list --show-tz`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Auto-detect timezone if not specified
-			if targetTZ == "" && cmd.Flags().Changed("timezone") {
-				// User explicitly set --timezone="" to clear
-				targetTZ = ""
-			} else if targetTZ == "" {
-				// Default to local timezone for conversion display
+			// Auto-detect timezone if not specified.
+			// An explicit --timezone="" disables conversion.
+			if targetTZ == "" && !cmd.Flags().Changed("timezone") {
 				targetTZ = getLocalTimeZone()
 			}
 
@@ -102,6 +99,18 @@ Examples:
 
 				fmt.Printf("Found %d event(s):\n\n", len(events))
 
+				// Resolve the local timezone name at most once for the whole
+				// list: getLocalTimeZone reads env vars and resolves symlinks
+				// on every call, which is wasteful per event. Not memoized at
+				// package level so t.Setenv-based tests keep working.
+				var cachedLocalTZ string
+				localTZ := func() string {
+					if cachedLocalTZ == "" {
+						cachedLocalTZ = getLocalTimeZone()
+					}
+					return cachedLocalTZ
+				}
+
 				for _, event := range events {
 					// Title with timezone badge (if showing timezone info)
 					fmt.Printf("%s", common.Cyan.Sprint(event.Title))
@@ -110,7 +119,7 @@ Examples:
 						start := event.When.StartDateTime()
 						originalTZ := start.Location().String()
 						if originalTZ == "Local" {
-							originalTZ = getLocalTimeZone()
+							originalTZ = localTZ()
 						}
 
 						// Add colored timezone badge

@@ -258,13 +258,13 @@ func (p *PatternLearner) generateRecommendations(ctx context.Context, events []d
 
 	// Parse recommendations (simple line-based parsing)
 	recommendations := []string{}
-	lines := splitLines(response.Content)
+	lines := strings.Split(response.Content, "\n")
 	for _, line := range lines {
-		trimmed := trimSpace(line)
+		trimmed := strings.TrimSpace(line)
 		if trimmed != "" && len(trimmed) > 10 {
 			// Remove numbering if present
 			if len(trimmed) > 3 && trimmed[0] >= '1' && trimmed[0] <= '9' && trimmed[1] == '.' {
-				trimmed = trimSpace(trimmed[3:])
+				trimmed = strings.TrimSpace(trimmed[3:])
 			}
 			recommendations = append(recommendations, trimmed)
 		}

@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -179,7 +180,10 @@ func (c *ClaudeClient) StreamChat(ctx context.Context, req *domain.ChatRequest, 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Simple SSE parsing (production would use proper SSE library)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp)
+	}
+
 	scanner := &sseScanner{reader: resp.Body}
 	for scanner.Scan() {
 		event := scanner.Event()
@@ -246,46 +250,90 @@ func (c *ClaudeClient) convertTools(tools []domain.Tool) []map[string]any {
 	return result
 }
 
-// Simple SSE event scanner
+// sseEvent is a single parsed Server-Sent Event.
 type sseEvent struct {
 	Type string
 	Data map[string]any
 }
 
+// sseScanner is a line-based SSE reader (see internal/adapters/mcp/proxy.go
+// readSSE for the same approach). It buffers across reads, accumulates
+// "data:" payload lines, dispatches one event per blank-line boundary, and
+// skips non-data lines (event:, comments, pings) without ending the stream.
 type sseScanner struct {
-	reader io.Reader
-	err    error
-	event  sseEvent
+	reader  io.Reader
+	scanner *bufio.Scanner
+	err     error
+	event   sseEvent
 }
 
+// Scan advances to the next parseable event. It returns false at end of
+// stream or on read error (check Err).
 func (s *sseScanner) Scan() bool {
-	buf := make([]byte, 4096)
-	n, err := s.reader.Read(buf)
-	if err != nil {
-		if err != io.EOF {
+	if s.scanner == nil {
+		s.scanner = bufio.NewScanner(s.reader)
+		// Anthropic events can be large; allow lines up to 1MB.
+		s.scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	}
+
+	var data strings.Builder
+	for s.scanner.Scan() {
+		line := strings.TrimSuffix(s.scanner.Text(), "\r")
+
+		if line == "" {
+			// Blank line marks the end of an event; dispatch accumulated data.
+			if data.Len() > 0 {
+				if s.parseEvent(data.String()) {
+					return true
+				}
+				data.Reset()
+			}
+			continue
+		}
+
+		if payload, ok := strings.CutPrefix(line, "data:"); ok {
+			payload = strings.TrimPrefix(payload, " ")
+			if data.Len() > 0 {
+				data.WriteByte('\n')
+			}
+			data.WriteString(payload)
+		}
+		// Other fields (event:, id:, retry:) and comments (":...") are skipped.
+	}
+
+	// Dispatch a trailing event not terminated by a blank line.
+	if data.Len() > 0 {
+		if s.parseEvent(data.String()) {
+			return true
+		}
+		// Mid-stream parse failures are skipped because the next event
+		// recovers the stream; here there is no next event, so dropping
+		// the accumulated data silently would hide data loss. Prefer the
+		// underlying read error (it explains the truncation) if present.
+		if err := s.scanner.Err(); err != nil {
 			s.err = err
+		} else {
+			s.err = fmt.Errorf("malformed trailing SSE event at end of stream (%d bytes)", data.Len())
 		}
 		return false
 	}
 
-	// Simplified SSE parsing
-	data := string(buf[:n])
-	if strings.Contains(data, "data: {") {
-		start := strings.Index(data, "{")
-		end := strings.LastIndex(data, "}")
-		if start >= 0 && end > start {
-			jsonData := data[start : end+1]
-			var evt map[string]any
-			if err := json.Unmarshal([]byte(jsonData), &evt); err == nil {
-				if t, ok := evt["type"].(string); ok {
-					s.event = sseEvent{Type: t, Data: evt}
-					return true
-				}
-			}
-		}
-	}
-
+	s.err = s.scanner.Err()
 	return false
+}
+
+// parseEvent unmarshals an event payload; returns false for unparseable data.
+func (s *sseScanner) parseEvent(payload string) bool {
+	var evt map[string]any
+	if err := json.Unmarshal([]byte(payload), &evt); err != nil {
+		return false
+	}
+	t, ok := evt["type"].(string)
+	if !ok {
+		return false
+	}
+	s.event = sseEvent{Type: t, Data: evt}
+	return true
 }
 
 func (s *sseScanner) Event() sseEvent {

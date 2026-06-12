@@ -14,7 +14,9 @@ func newScheduledCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scheduled",
 		Short: "Manage scheduled messages",
-		Long:  "List, view, and cancel scheduled messages.",
+		Long: `List, view, and cancel scheduled messages.
+
+API reference: https://developer.nylas.com/docs/v3/email/scheduled-send/`,
 	}
 
 	cmd.AddCommand(newScheduledListCmd())
@@ -140,15 +142,11 @@ func newScheduledCancelCmd() *cobra.Command {
 
 					closeTime := time.Unix(scheduled.CloseTime, 0)
 
-					fmt.Println("Cancel this scheduled message?")
 					fmt.Printf("  Schedule ID: %s\n", scheduled.ScheduleID)
 					fmt.Printf("  Status:      %s\n", scheduled.Status)
 					fmt.Printf("  Send at:     %s\n", closeTime.Format(common.DisplayDateTime))
-					fmt.Print("\n[y/N]: ")
 
-					var confirm string
-					_, _ = fmt.Scanln(&confirm) // Ignore error - empty string treated as "no"
-					if confirm != "y" && confirm != "Y" && confirm != "yes" {
+					if !common.Confirm("\nCancel this scheduled message?", false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

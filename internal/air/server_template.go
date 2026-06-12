@@ -138,12 +138,7 @@ func loadTemplates() (*template.Template, error) {
 }
 
 // Template functions.
-var templateFuncs = template.FuncMap{
-	"safeHTML": func(s string) template.HTML {
-		//nolint:gosec // G203: We control the input, this is for rendering pre-defined HTML
-		return template.HTML(s)
-	},
-}
+var templateFuncs = template.FuncMap{}
 
 var (
 	templatesOnce      sync.Once

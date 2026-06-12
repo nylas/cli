@@ -2,6 +2,7 @@ package nylas
 
 import (
 	"context"
+	"errors"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -122,7 +123,7 @@ func (m *MockClient) DeleteConnector(ctx context.Context, connectorID string) er
 
 func (m *MockClient) ListWorkspaces(ctx context.Context) ([]domain.Workspace, error) {
 	return []domain.Workspace{
-		{ID: "workspace-1", Name: "Agent Workspace", PolicyID: "policy-1"},
+		{ID: "workspace-1", Name: "Agent Workspace", Default: true, PolicyID: "policy-1"},
 	}, nil
 }
 
@@ -130,6 +131,7 @@ func (m *MockClient) GetWorkspace(ctx context.Context, workspaceID string) (*dom
 	return &domain.Workspace{
 		ID:       workspaceID,
 		Name:     "Agent Workspace",
+		Default:  workspaceID == "workspace-1",
 		PolicyID: "policy-1",
 		RulesIDs: []string{"rule-1"},
 	}, nil
@@ -141,6 +143,17 @@ func (m *MockClient) CreateWorkspace(ctx context.Context, req *domain.CreateWork
 		Name:     req.Name,
 		PolicyID: req.PolicyID,
 		RulesIDs: req.RulesIDs,
+	}, nil
+}
+
+func (m *MockClient) AssignWorkspaceGrants(ctx context.Context, workspaceID string, req *domain.WorkspaceAssignRequest) (*domain.WorkspaceAssignResult, error) {
+	if req == nil || (len(req.AssignGrants) == 0 && len(req.RemoveGrants) == 0) {
+		return nil, errors.New("at least one grant must be assigned or removed")
+	}
+	return &domain.WorkspaceAssignResult{
+		WorkspaceID:    workspaceID,
+		GrantsAssigned: append([]string(nil), req.AssignGrants...),
+		GrantsRemoved:  append([]string(nil), req.RemoveGrants...),
 	}, nil
 }
 

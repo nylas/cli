@@ -121,6 +121,11 @@ func (c *HTTPClient) SetMaxRetries(retries int) {
 	c.maxRetries = retries
 }
 
+// SetRequestTimeout sets the default per-request timeout (for testing purposes).
+func (c *HTTPClient) SetRequestTimeout(timeout time.Duration) {
+	c.requestTimeout = timeout
+}
+
 // setAuthHeader sets the authorization header on the request.
 func (c *HTTPClient) setAuthHeader(req *http.Request) {
 	if c.apiKey != "" {
@@ -255,7 +260,6 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 	req.Header.Set("User-Agent", version.UserAgent())
 
 	var lastErr error
-	var lastResp *http.Response
 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		// Apply rate limiting - wait for permission to proceed
@@ -310,7 +314,6 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 
 		// Check if we should retry based on status code
 		if c.shouldRetryStatus(resp.StatusCode) && attempt < c.maxRetries {
-			lastResp = resp
 			_ = resp.Body.Close() // Close body before retry; error doesn't affect retry logic
 
 			delay := c.calculateBackoff(attempt, resp)
@@ -325,10 +328,7 @@ func (c *HTTPClient) doRequest(ctx context.Context, req *http.Request) (*http.Re
 		return resp, nil
 	}
 
-	// All retries exhausted
-	if lastResp != nil {
-		return lastResp, nil
-	}
+	// Unreachable: the final attempt always returns above; this satisfies the compiler.
 	return nil, lastErr
 }
 

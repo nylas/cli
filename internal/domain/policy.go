@@ -8,7 +8,6 @@ type Policy struct {
 	OrganizationID string               `json:"organization_id,omitempty"`
 	Rules          []string             `json:"rules,omitempty"`
 	Limits         *PolicyLimits        `json:"limits,omitempty"`
-	Options        *PolicyOptions       `json:"options,omitempty"`
 	SpamDetection  *PolicySpamDetection `json:"spam_detection,omitempty"`
 	CreatedAt      UnixTime             `json:"created_at,omitempty"`
 	UpdatedAt      UnixTime             `json:"updated_at,omitempty"`
@@ -24,12 +23,6 @@ type PolicyLimits struct {
 	LimitCountDailyMessagePerGrant  *int64    `json:"limit_count_daily_message_per_grant,omitempty"`
 	LimitInboxRetentionPeriodInDays *int      `json:"limit_inbox_retention_period,omitempty"`
 	LimitSpamRetentionPeriodInDays  *int      `json:"limit_spam_retention_period,omitempty"`
-}
-
-// PolicyOptions contains option settings for a policy.
-type PolicyOptions struct {
-	AdditionalFolders *[]string `json:"additional_folders,omitempty"`
-	UseCidrAliasing   *bool     `json:"use_cidr_aliasing,omitempty"`
 }
 
 // PolicySpamDetection contains spam detection settings for a policy.

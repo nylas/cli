@@ -69,11 +69,7 @@ groups with the original conversation in mail clients.`,
 				printReplyPreview(req)
 
 				if !noConfirm {
-					fmt.Print("\nSend this reply? [y/N]: ")
-					reader := bufio.NewReader(os.Stdin)
-					confirm, _ := reader.ReadString('\n')
-					confirm = strings.ToLower(strings.TrimSpace(confirm))
-					if confirm != "y" && confirm != "yes" {
+					if !common.Confirm("\nSend this reply?", false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

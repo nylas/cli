@@ -109,6 +109,12 @@ func FetchAllPages[T any](ctx context.Context, config PaginationConfig, fetcher 
 			break
 		}
 
+		// Guard against server-side pagination bugs that would loop forever:
+		// an empty page that claims more results, or a cursor that doesn't advance.
+		if len(page.Data) == 0 || page.NextCursor == cursor {
+			break
+		}
+
 		cursor = page.NextCursor
 	}
 

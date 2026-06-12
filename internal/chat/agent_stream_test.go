@@ -2,12 +2,37 @@ package chat
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStreamClaude_ScannerError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake claude binary")
+	}
+	t.Parallel()
+
+	// A single output line larger than the scanner's 1MB buffer triggers
+	// bufio.ErrTooLong. Without the scanner.Err() check this was silently
+	// swallowed: the loop just stopped and an empty response was returned
+	// with a nil error, hiding the truncation from the user.
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-claude.sh")
+	content := "#!/bin/sh\nhead -c 2097152 /dev/zero | tr '\\0' 'a'\n"
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o700))
+
+	agent := Agent{Type: AgentClaude, Path: script}
+	_, err := agent.streamClaude(context.Background(), "prompt", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "claude stream read")
+}
 
 func TestSupportsStreaming(t *testing.T) {
 	tests := []struct {

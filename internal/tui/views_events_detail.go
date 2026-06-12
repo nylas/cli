@@ -85,10 +85,7 @@ func (v *EventsView) showDayDetail() {
 					} else {
 						v.app.PopDetail()
 						v.app.ShowEventForm(calendarID, &evt, func(updatedEvent *domain.Event) {
-							go func() {
-								v.loadEventsForCalendar(calendarID)
-								v.app.QueueUpdateDraw(func() {})
-							}()
+							v.loadEventsForCalendar(calendarID)
 						})
 					}
 				}
@@ -103,10 +100,7 @@ func (v *EventsView) showDayDetail() {
 					} else {
 						v.app.PopDetail()
 						v.app.DeleteEvent(calendarID, &evt, func() {
-							go func() {
-								v.loadEventsForCalendar(calendarID)
-								v.app.QueueUpdateDraw(func() {})
-							}()
+							v.loadEventsForCalendar(calendarID)
 						})
 					}
 				}

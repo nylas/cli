@@ -122,6 +122,16 @@ func TestEventsCreateCmd(t *testing.T) {
 		flag := cmd.Flags().Lookup("calendar")
 		assert.NotNil(t, flag)
 	})
+
+	t.Run("has_timezone_flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("timezone")
+		assert.NotNil(t, flag)
+	})
+
+	t.Run("has_lock_timezone_flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("lock-timezone")
+		assert.NotNil(t, flag)
+	})
 }
 
 func TestEventsDeleteCmd(t *testing.T) {
@@ -212,6 +222,16 @@ func TestEventsUpdateCmd(t *testing.T) {
 
 	t.Run("has_calendar_flag", func(t *testing.T) {
 		flag := cmd.Flags().Lookup("calendar")
+		assert.NotNil(t, flag)
+	})
+
+	t.Run("has_timezone_flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("timezone")
+		assert.NotNil(t, flag)
+	})
+
+	t.Run("has_lock_timezone_flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("lock-timezone")
 		assert.NotNil(t, flag)
 	})
 }

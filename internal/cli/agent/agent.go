@@ -14,6 +14,8 @@ Agent account operations live under the account subcommand. Top-level status
 reports the readiness of the nylas connector and the currently configured
 managed accounts.
 
+API reference: https://developer.nylas.com/docs/v3/agent-accounts/
+
 	Examples:
 	  # Create a new agent account
 	  nylas agent account create me@yourapp.nylas.email
@@ -40,6 +42,9 @@ managed accounts.
 	cmd.AddCommand(newAccountCmd())
 	cmd.AddCommand(newPolicyCmd())
 	cmd.AddCommand(newRuleCmd())
+	cmd.AddCommand(newAgentListCmd())
+	cmd.AddCommand(newOverviewCmd())
+	cmd.AddCommand(newStudioCmd())
 	cmd.AddCommand(newStatusCmd())
 
 	return cmd

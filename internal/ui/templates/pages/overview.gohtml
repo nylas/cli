@@ -49,7 +49,7 @@
                     {{if eq .ID $.DefaultGrant}}
                     <span class="account-badge">DEFAULT</span>
                     {{else}}
-                    <button class="account-action" onclick="setDefaultGrant('{{.ID}}')">Set Default</button>
+                    <button class="account-action" data-action="set-default-grant" data-grant-id="{{.ID}}">Set Default</button>
                     {{end}}
                 </div>
                 {{else}}
@@ -113,19 +113,19 @@
         <h3 class="card-title">QUICK COMMANDS</h3>
         <div class="card-divider"></div>
         <div class="commands-grid">
-            <div class="cmd-card" onclick="copyText('nylas auth status')">
+            <div class="cmd-card" data-action="copy-text" data-copy-text="nylas auth status">
                 <code>nylas auth status</code>
                 <span>Check authentication</span>
             </div>
-            <div class="cmd-card" onclick="copyText('nylas email list')">
+            <div class="cmd-card" data-action="copy-text" data-copy-text="nylas email list">
                 <code>nylas email list</code>
                 <span>List recent emails</span>
             </div>
-            <div class="cmd-card" onclick="copyText('nylas calendar list')">
+            <div class="cmd-card" data-action="copy-text" data-copy-text="nylas calendar list">
                 <code>nylas calendar list</code>
                 <span>List calendars</span>
             </div>
-            <div class="cmd-card" onclick="copyText('nylas calendar events')">
+            <div class="cmd-card" data-action="copy-text" data-copy-text="nylas calendar events">
                 <code>nylas calendar events</code>
                 <span>View calendar events</span>
             </div>

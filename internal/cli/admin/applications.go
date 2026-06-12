@@ -16,7 +16,9 @@ func newApplicationsCmd() *cobra.Command {
 		Use:     "applications",
 		Aliases: []string{"app", "apps"},
 		Short:   "Manage Nylas applications",
-		Long:    "Manage Nylas applications in your organization.",
+		Long: `Manage Nylas applications in your organization.
+
+API reference: https://developer.nylas.com/docs/reference/api/applications/`,
 	}
 
 	cmd.AddCommand(newAppListCmd())
@@ -244,10 +246,7 @@ func newAppDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to delete application %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete application %s?", args[0]), false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

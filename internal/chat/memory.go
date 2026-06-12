@@ -254,12 +254,43 @@ func (m *MemoryStore) readFile(path string) (*Conversation, error) {
 	return &conv, nil
 }
 
+// writeFile persists a conversation atomically: it writes to a temp file in
+// the same directory and renames it into place, so concurrent readers never
+// observe a partially written file (same pattern as adapters/keyring/file.go).
 func (m *MemoryStore) writeFile(conv *Conversation) error {
 	data, err := json.MarshalIndent(conv, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal conversation: %w", err)
 	}
-	return os.WriteFile(m.filePath(conv.ID), data, 0600)
+
+	tmp, err := os.CreateTemp(m.basePath, "."+conv.ID+".tmp.*")
+	if err != nil {
+		return fmt.Errorf("create temp conversation file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp conversation file: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp conversation file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp conversation file: %w", err)
+	}
+	if err := os.Rename(tmpPath, m.filePath(conv.ID)); err != nil {
+		return fmt.Errorf("rename conversation file: %w", err)
+	}
+	tmpPath = "" // success: nothing to clean up
+
+	return nil
 }
 
 func generateID() (string, error) {

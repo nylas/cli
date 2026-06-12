@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -458,6 +459,34 @@ func TestHandleIndex_NotFoundForNonRoot(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}
+
+// TestHandleIndex_TemplateErrorIsGeneric verifies that template execution
+// failures do not leak the raw error (data field paths, template internals)
+// to the client; the real error is logged server-side instead.
+func TestHandleIndex_TemplateErrorIsGeneric(t *testing.T) {
+	t.Parallel()
+
+	// A base template referencing a field that does not exist on PageData
+	// fails at execution time.
+	tmpl := template.Must(template.New("base").Parse(`{{.NoSuchField}}`))
+	server := &Server{demoMode: true, templates: tmpl}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	server.handleIndex(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "NoSuchField") || strings.Contains(body, "Template error") {
+		t.Errorf("Raw template error leaked to client: %q", body)
+	}
+	if !strings.Contains(body, "Failed to render page") {
+		t.Errorf("Expected generic error message, got %q", body)
 	}
 }
 

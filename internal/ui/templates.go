@@ -77,6 +77,20 @@ func (p PageData) CommandsJSON() template.JS {
 	return safeJSJSON(p.Commands)
 }
 
+// InitialStateJSON returns the full initial page state as JSON for the
+// CSP-safe <script type="application/json"> data block in base.gohtml.
+func (p PageData) InitialStateJSON() template.JS {
+	return safeJSJSON(map[string]any{
+		"configured":   p.Configured,
+		"clientID":     p.ClientID,
+		"region":       p.Region,
+		"hasAPIKey":    p.HasAPIKey,
+		"defaultGrant": p.DefaultGrant,
+		"grants":       p.Grants,
+		"commands":     p.Commands,
+	})
+}
+
 // Template functions.
 var templateFuncs = template.FuncMap{
 	"upper": strings.ToUpper,

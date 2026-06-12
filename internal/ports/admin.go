@@ -76,6 +76,10 @@ type AdminClient interface {
 	// DeleteWorkspace deletes a workspace.
 	DeleteWorkspace(ctx context.Context, workspaceID string) error
 
+	// AssignWorkspaceGrants moves grants into or out of a workspace
+	// (POST /v3/workspaces/{id}/manual-assign).
+	AssignWorkspaceGrants(ctx context.Context, workspaceID string, req *domain.WorkspaceAssignRequest) (*domain.WorkspaceAssignResult, error)
+
 	// ================================
 	// CREDENTIAL OPERATIONS
 	// ================================

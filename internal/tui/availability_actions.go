@@ -22,44 +22,52 @@ func (v *AvailabilityView) fetchAvailability() {
 	v.timeline.SetText("[gray]Loading availability...[-]")
 	v.slotsList.Clear()
 
+	// Snapshot view state on the event loop; the goroutine below must not
+	// read fields that the event loop may mutate concurrently.
+	participants := make([]domain.AvailabilityParticipant, len(v.participants))
+	for i, email := range v.participants {
+		participants[i] = domain.AvailabilityParticipant{
+			Email: email,
+		}
+	}
+
+	req := &domain.AvailabilityRequest{
+		StartTime:       v.startDate.Unix(),
+		EndTime:         v.endDate.Add(24 * time.Hour).Unix(), // Include full end day
+		DurationMinutes: v.duration,
+		Participants:    participants,
+		IntervalMinutes: 15,
+	}
+
+	// Also fetch free/busy for timeline visualization
+	freeBusyReq := &domain.FreeBusyRequest{
+		StartTime: v.startDate.Unix(),
+		EndTime:   v.endDate.Add(24 * time.Hour).Unix(),
+		Emails:    append([]string(nil), v.participants...),
+	}
+	grantID := v.app.config.GrantID
+
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Build participants list
-		participants := make([]domain.AvailabilityParticipant, len(v.participants))
-		for i, email := range v.participants {
-			participants[i] = domain.AvailabilityParticipant{
-				Email: email,
-			}
-		}
-
-		req := &domain.AvailabilityRequest{
-			StartTime:       v.startDate.Unix(),
-			EndTime:         v.endDate.Add(24 * time.Hour).Unix(), // Include full end day
-			DurationMinutes: v.duration,
-			Participants:    participants,
-			IntervalMinutes: 15,
-		}
-
 		resp, err := v.app.config.Client.GetAvailability(ctx, req)
 		if err != nil {
 			v.app.QueueUpdateDraw(func() {
+				if !v.app.grantStillCurrent(grantID) {
+					return // grant switched while fetch was in flight; drop stale result
+				}
 				v.timeline.SetText(fmt.Sprintf("[red]Failed to load availability: %v[-]", err))
 			})
 			return
 		}
 
-		// Also fetch free/busy for timeline visualization
-		freeBusyReq := &domain.FreeBusyRequest{
-			StartTime: v.startDate.Unix(),
-			EndTime:   v.endDate.Add(24 * time.Hour).Unix(),
-			Emails:    v.participants,
-		}
-
-		freeBusyResp, _ := v.app.config.Client.GetFreeBusy(ctx, v.app.config.GrantID, freeBusyReq)
+		freeBusyResp, _ := v.app.config.Client.GetFreeBusy(ctx, grantID, freeBusyReq)
 
 		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
 			v.slots = resp.Data.TimeSlots
 			if freeBusyResp != nil {
 				v.freeBusy = freeBusyResp.Data

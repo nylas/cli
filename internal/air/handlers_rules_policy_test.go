@@ -1,6 +1,7 @@
 package air
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -91,6 +92,165 @@ func TestHandleListRules_NylasProvider(t *testing.T) {
 	}
 }
 
+// policyNotFoundClient simulates a workspace whose policy_id references a
+// deleted policy: GetPolicy returns ErrPolicyNotFound.
+type policyNotFoundClient struct {
+	*nylasmock.MockClient
+}
+
+func (c *policyNotFoundClient) GetPolicy(ctx context.Context, policyID string) (*domain.Policy, error) {
+	return nil, domain.ErrPolicyNotFound
+}
+
+func TestHandleListPolicies_DanglingPolicyReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	server := newRulesPolicyTestServer(domain.ProviderNylas)
+	server.nylasClient = &policyNotFoundClient{MockClient: nylasmock.NewMockClient()}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/policies", nil)
+	w := httptest.NewRecorder()
+
+	server.handleListPolicies(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("dangling policy_id should render as empty state, not an error: expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp PoliciesResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Policies) != 0 {
+		t.Fatalf("expected no policies for a dangling policy reference, got %d", len(resp.Policies))
+	}
+}
+
+// workspaceNotFoundClient simulates an agent account whose workspace was
+// deleted: GetWorkspace returns ErrWorkspaceNotFound.
+type workspaceNotFoundClient struct {
+	*nylasmock.MockClient
+}
+
+func (c *workspaceNotFoundClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
+	return nil, domain.ErrWorkspaceNotFound
+}
+
+func TestHandleRulesPolicy_DanglingWorkspaceDegradesGracefully(t *testing.T) {
+	t.Parallel()
+
+	server := newRulesPolicyTestServer(domain.ProviderNylas)
+	server.nylasClient = &workspaceNotFoundClient{MockClient: nylasmock.NewMockClient()}
+
+	t.Run("policies fall back to empty state", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/policies", nil)
+		w := httptest.NewRecorder()
+
+		server.handleListPolicies(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("a deleted workspace must not break the policies endpoint: expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("rules fall back to empty state", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/rules", nil)
+		w := httptest.NewRecorder()
+
+		server.handleListRules(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("a deleted workspace must not break the rules endpoint: expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+		}
+	})
+}
+
+// policyErrorClient simulates a transient failure fetching the policy.
+type policyErrorClient struct {
+	*nylasmock.MockClient
+}
+
+func (c *policyErrorClient) GetPolicy(ctx context.Context, policyID string) (*domain.Policy, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func TestHandleListPolicies_PolicyFetchErrorStays500(t *testing.T) {
+	t.Parallel()
+
+	server := newRulesPolicyTestServer(domain.ProviderNylas)
+	server.nylasClient = &policyErrorClient{MockClient: nylasmock.NewMockClient()}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/policies", nil)
+	w := httptest.NewRecorder()
+
+	server.handleListPolicies(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("only ErrPolicyNotFound may degrade to an empty state; other errors must surface: expected status 500, got %d (body: %s)", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAgentWorkspace_NylasProvider(t *testing.T) {
+	t.Parallel()
+
+	server := newRulesPolicyTestServer(domain.ProviderNylas)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	w := httptest.NewRecorder()
+
+	server.handleAgentWorkspace(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp WorkspaceResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Workspace == nil {
+		t.Fatal("expected workspace to be populated")
+	}
+	if resp.Workspace.ID != "workspace-1" {
+		t.Fatalf("expected workspace-1, got %q", resp.Workspace.ID)
+	}
+	if resp.Workspace.PolicyID == "" {
+		t.Fatal("expected workspace policy ID to be populated")
+	}
+	if len(resp.Workspace.RulesIDs) == 0 {
+		t.Fatal("expected workspace rule IDs to be populated")
+	}
+}
+
+func TestHandleAgentLists_NylasProvider(t *testing.T) {
+	t.Parallel()
+
+	server := newRulesPolicyTestServer(domain.ProviderNylas)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/lists", nil)
+	w := httptest.NewRecorder()
+
+	server.handleAgentLists(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp AgentListsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Lists) != 1 {
+		t.Fatalf("expected exactly one list, got %d", len(resp.Lists))
+	}
+	if resp.Lists[0].ID != "list-1" {
+		t.Fatalf("expected list-1, got %q", resp.Lists[0].ID)
+	}
+	if resp.Lists[0].Type == "" {
+		t.Fatal("expected list type to be populated")
+	}
+}
+
 func TestHandleRulesPolicy_RejectsNonNylasProvider(t *testing.T) {
 	t.Parallel()
 
@@ -103,6 +263,8 @@ func TestHandleRulesPolicy_RejectsNonNylasProvider(t *testing.T) {
 	}{
 		{name: "policies", handler: server.handleListPolicies, path: "/api/policies"},
 		{name: "rules", handler: server.handleListRules, path: "/api/rules"},
+		{name: "workspace", handler: server.handleAgentWorkspace, path: "/api/workspace"},
+		{name: "lists", handler: server.handleAgentLists, path: "/api/lists"},
 	}
 
 	for _, tt := range tests {

@@ -155,10 +155,7 @@ func (a *App) setupKeys() {
 			case 'r':
 				// Refresh (lowercase only - uppercase R is for reply)
 				if currentView != nil {
-					go func() {
-						currentView.Refresh()
-						a.QueueUpdateDraw(func() {})
-					}()
+					currentView.Refresh()
 				}
 				return nil
 

@@ -43,6 +43,7 @@ func (v *MessagesView) showDetail(thread *domain.Thread) {
 	_, _ = fmt.Fprintf(detail, "[%s]Loading messages...[-]\n\n", muted)
 
 	// Fetch all messages in the thread asynchronously
+	grantID := v.app.config.GrantID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -50,13 +51,16 @@ func (v *MessagesView) showDetail(thread *domain.Thread) {
 		// Fetch each message in the thread
 		var messages []*domain.Message
 		for _, msgID := range thread.MessageIDs {
-			msg, err := v.app.config.Client.GetMessage(ctx, v.app.config.GrantID, msgID)
+			msg, err := v.app.config.Client.GetMessage(ctx, grantID, msgID)
 			if err == nil {
 				messages = append(messages, msg)
 			}
 		}
 
 		v.app.QueueUpdateDraw(func() {
+			if !v.app.grantStillCurrent(grantID) {
+				return // grant switched while fetch was in flight; drop stale data
+			}
 			detail.Clear()
 
 			// Clear attachments list

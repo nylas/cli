@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -146,7 +147,7 @@ func TestPendingApproval_Wait(t *testing.T) {
 			store.Resolve(pa.ID, expectedDecision)
 		}()
 
-		decision, ok := pa.Wait()
+		decision, ok := pa.Wait(context.Background())
 		if !ok {
 			t.Fatal("Wait returned false, want true")
 		}
@@ -164,6 +165,78 @@ func TestPendingApproval_Wait(t *testing.T) {
 		// Skip this in normal test runs
 		t.Skip("Timeout test would take 5 minutes")
 	})
+
+	t.Run("wait unblocks on context cancellation", func(t *testing.T) {
+		t.Parallel()
+
+		store := NewApprovalStore()
+		call := ToolCall{Name: "send_email", Args: map[string]any{}}
+		pa := store.Create(call, map[string]any{})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			cancel()
+		}()
+
+		done := make(chan struct{})
+		var decision ApprovalDecision
+		var ok bool
+		go func() {
+			decision, ok = pa.Wait(ctx)
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Wait did not unblock on context cancellation")
+		}
+
+		if ok {
+			t.Error("Wait returned ok=true on cancellation, want false")
+		}
+		if decision.Approved {
+			t.Error("Cancelled wait must not approve the action")
+		}
+	})
+}
+
+func TestApprovalStore_Discard(t *testing.T) {
+	t.Parallel()
+
+	store := NewApprovalStore()
+	call := ToolCall{Name: "send_email", Args: map[string]any{}}
+	pa := store.Create(call, map[string]any{})
+
+	store.Discard(pa.ID)
+
+	// A late resolve after discard must fail so the HTTP endpoints can
+	// report the approval as gone instead of returning a misleading 200.
+	if store.Resolve(pa.ID, ApprovalDecision{Approved: true}) {
+		t.Error("Resolve succeeded after Discard, want false")
+	}
+}
+
+func TestApprovalStore_DiscardAfterCancelledWait(t *testing.T) {
+	t.Parallel()
+
+	store := NewApprovalStore()
+	call := ToolCall{Name: "send_email", Args: map[string]any{}}
+	pa := store.Create(call, map[string]any{})
+
+	// Simulate the handler flow: Wait aborted by ctx, then Discard so the
+	// pending entry does not leak in the store forever.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok := pa.Wait(ctx); ok {
+		t.Fatal("Wait with cancelled context returned ok=true, want false")
+	}
+	store.Discard(pa.ID)
+
+	if _, loaded := store.pending.Load(pa.ID); loaded {
+		t.Error("pending entry still present after Discard, approval leaked")
+	}
 }
 
 func TestPendingApproval_WaitConcurrent(t *testing.T) {
@@ -188,7 +261,7 @@ func TestPendingApproval_WaitConcurrent(t *testing.T) {
 				store.Resolve(pa.ID, ApprovalDecision{Approved: idx%2 == 0})
 			}()
 
-			decision, ok := pa.Wait()
+			decision, ok := pa.Wait(context.Background())
 			if !ok {
 				t.Errorf("Wait for approval %d failed", idx)
 			}

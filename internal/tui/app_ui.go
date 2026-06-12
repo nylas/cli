@@ -135,10 +135,7 @@ func (a *App) onCommand(cmd string) {
 	// View commands
 	case "refresh", "reload":
 		if view := a.getCurrentView(); view != nil {
-			go func() {
-				view.Refresh()
-				a.QueueUpdateDraw(func() {})
-			}()
+			view.Refresh()
 		}
 	case "top", "first", "gg":
 		a.goToTop()
@@ -174,10 +171,7 @@ func (a *App) onFilter(filter string) {
 	a.hidePrompt()
 	if view := a.getCurrentView(); view != nil {
 		view.Filter(filter)
-		go func() {
-			view.Refresh()
-			a.QueueUpdateDraw(func() {})
-		}()
+		view.Refresh()
 	}
 }
 
@@ -196,11 +190,9 @@ func (a *App) navigateTo(name string) {
 	a.menu.SetHints(view.Hints())
 	a.SetFocus(view.Primitive())
 
-	// Load data asynchronously
-	go func() {
-		view.Load()
-		a.QueueUpdateDraw(func() {})
-	}()
+	// Load data. Load is non-blocking: views fetch in their own goroutine
+	// and apply results via QueueUpdateDraw.
+	view.Load()
 }
 
 func (a *App) goBack() *tcell.EventKey {

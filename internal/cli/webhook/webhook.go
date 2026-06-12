@@ -16,7 +16,9 @@ func NewWebhookCmd() *cobra.Command {
 Use webhooks for direct HTTPS push delivery, or Pub/Sub channels for
 high-volume queue-based notification delivery.
 
-Note: Notification destination management requires an API key (admin-level access).`,
+Note: Notification destination management requires an API key (admin-level access).
+
+API reference: https://developer.nylas.com/docs/v3/notifications/`,
 	}
 
 	cmd.AddCommand(newListCmd())

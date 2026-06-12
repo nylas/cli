@@ -11,6 +11,52 @@ import (
 	"strings"
 )
 
+// SecurityHeadersMiddleware adds defensive HTTP response headers, including a
+// strict Content Security Policy with script-src 'self' (no inline scripts or
+// inline event handlers). Pages served behind this middleware must load all
+// JavaScript from external files and attach handlers via addEventListener.
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Prevent clickjacking
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+
+		// Prevent MIME sniffing
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		// Enable XSS protection (legacy browsers)
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+
+		// Referrer policy
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// Content Security Policy.
+		//
+		// script-src 'self' deliberately omits 'unsafe-inline': every server
+		// using this middleware serves only external JS files with event
+		// handlers attached via addEventListener / data-action delegation.
+		// State handed from Go templates to JS must use non-executable
+		// <script type="application/json"> data blocks.
+		//
+		// frame-ancestors / base-uri / form-action / object-src prevent
+		// clickjacking, base-tag injection, form-action redirection and
+		// legacy plugin embeds even on browsers that ignore the older
+		// X-Frame-Options header.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"script-src 'self'; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"img-src 'self' data: https:; "+
+				"font-src 'self' data: https://fonts.gstatic.com; "+
+				"connect-src 'self' https://api.us.nylas.com https://api.eu.nylas.com; "+
+				"frame-ancestors 'self'; "+
+				"base-uri 'self'; "+
+				"form-action 'self'; "+
+				"object-src 'none';")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // HostValidationMiddleware rejects requests whose Host header does not target
 // a loopback address. This is the primary defence against DNS-rebinding
 // attacks reaching a server bound to 127.0.0.1.

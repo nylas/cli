@@ -3,8 +3,11 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -245,6 +248,35 @@ func TestReadJSONResponse(t *testing.T) {
 		}
 	})
 
+	t.Run("truncates oversized error body", func(t *testing.T) {
+		// Error bodies are capped at maxErrorBodyBytes (10KB), matching the
+		// Nylas HTTP client, so a hostile/huge error response can't balloon memory.
+		hugeBody := strings.Repeat("x", 64*1024)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(hugeBody))
+		}))
+		defer server.Close()
+
+		client := NewBaseClient("key", "model", server.URL, 0)
+		resp, err := client.DoJSONRequest(context.Background(), http.MethodGet, "/test", nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected request error: %v", err)
+		}
+
+		var result map[string]any
+		err = client.ReadJSONResponse(resp, &result)
+		if err == nil {
+			t.Fatal("expected error for HTTP 500")
+		}
+		if !contains(err.Error(), "API error (status 500)") {
+			t.Errorf("expected API error message, got: %v", err)
+		}
+		if got := strings.Count(err.Error(), "x"); got != maxErrorBodyBytes {
+			t.Errorf("error body length = %d, want truncated to %d", got, maxErrorBodyBytes)
+		}
+	})
+
 	t.Run("handles invalid JSON", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -420,6 +452,69 @@ func TestFallbackStreamChat(t *testing.T) {
 }
 
 // Helper function
+func TestAPIError(t *testing.T) {
+	t.Run("includes body in message", func(t *testing.T) {
+		resp := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(`{"error":"bad request"}`)),
+		}
+		err := apiError(resp)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !contains(err.Error(), `API error (status 400): {"error":"bad request"}`) {
+			t.Errorf("expected body in error message, got: %v", err)
+		}
+	})
+
+	t.Run("falls back to status-only on empty body", func(t *testing.T) {
+		resp := &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(strings.NewReader("")),
+		}
+		err := apiError(resp)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if err.Error() != "API error (status 500)" {
+			t.Errorf("expected status-only message, got: %v", err)
+		}
+	})
+
+	t.Run("truncates oversized body", func(t *testing.T) {
+		resp := &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", 64*1024))),
+		}
+		err := apiError(resp)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if got := strings.Count(err.Error(), "x"); got != maxErrorBodyBytes {
+			t.Errorf("error body length = %d, want truncated to %d", got, maxErrorBodyBytes)
+		}
+	})
+
+	t.Run("falls back to status-only on body read error", func(t *testing.T) {
+		resp := &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Body:       io.NopCloser(errReader{}),
+		}
+		err := apiError(resp)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if err.Error() != "API error (status 502)" {
+			t.Errorf("expected status-only message, got: %v", err)
+		}
+	})
+}
+
+// errReader always fails, simulating a connection dropped mid-body.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("read failed") }
+
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsSubstring(s, substr)))
 }

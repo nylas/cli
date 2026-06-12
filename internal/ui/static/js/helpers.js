@@ -27,18 +27,28 @@ function formatProvider(p) {
     return m[p?.toLowerCase()] || p || 'Unknown';
 }
 
+// esc HTML-escapes a value so it is safe in both element content and
+// double/single-quoted attribute context. The textContent/innerHTML DOM
+// trick is intentionally NOT used here: it leaves " and ' unescaped,
+// which allows breaking out of attribute values.
 function esc(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+    return (s == null ? '' : String(s))
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-function copyOutput(section) {
+// copyOutput copies a section's output text. `trigger` is the clicked
+// element (passed by the delegated dispatcher in actions.js); the legacy
+// implicit global `event` is not used because it does not exist in Firefox.
+function copyOutput(section, trigger) {
     const el = document.getElementById(section + '-output');
     if (!el) return;
 
     const text = el.textContent || el.innerText;
-    const btn = event.target.closest('.copy-output-btn');
+    const btn = trigger ? trigger.closest('.copy-output-btn') : null;
 
     navigator.clipboard.writeText(text).then(() => {
         if (btn) {
@@ -54,9 +64,12 @@ function copyOutput(section) {
     });
 }
 
-function copyText(text) {
+// copyText copies arbitrary text. `trigger` is the clicked element; the
+// 'copied' feedback class is only applied when it sits inside a .cmd-copy.
+function copyText(text, trigger) {
     navigator.clipboard.writeText(text).then(() => {
-        event.target.closest('.cmd-copy').classList.add('copied');
+        const btn = trigger ? trigger.closest('.cmd-copy') : null;
+        if (btn) btn.classList.add('copied');
         setTimeout(() => {
             document.querySelectorAll('.cmd-copy.copied').forEach(el => el.classList.remove('copied'));
         }, 1000);
@@ -90,4 +103,15 @@ function copyCmd(el) {
         el.classList.add('copied');
         setTimeout(() => el.classList.remove('copied'), 1000);
     });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        copyOutput,
+        copyText,
+        esc,
+        formatProvider,
+        truncate,
+        truncateEmail,
+    };
 }

@@ -388,7 +388,35 @@ nylas calendar events list --show-tz
 nylas calendar events show <event-id> --timezone Europe/London
 ```
 
-**Auto-detection:** Commands use your system timezone by default.
+**Auto-detection:** Commands use your system timezone by default (detected from the `TZ` environment variable, then the `/etc/localtime` symlink).
+
+### Creating Events in a Specific Timezone
+
+Event start/end times are parsed in your system timezone by default. Use `--timezone` on `events create` and `events update` to parse them in another IANA zone; the zone is recorded on the event (`start_timezone`/`end_timezone`). On `events update`, `--timezone` only applies while parsing a new time, so it requires `--start`:
+
+```bash
+# 2pm New York time, regardless of where you run the command
+nylas calendar events create --title "NY Standup" \
+  --start "2026-06-15 14:00" --timezone America/New_York
+```
+
+**All-day events take a date only** (`YYYY-MM-DD`). Combining `--all-day` with a time component (e.g., `--start "2026-06-15 10:00"`) is an error — remove `--all-day` to create a timed event.
+
+### Timezone Locking
+
+Lock an event to its timezone with `--lock-timezone` on `events create` or `events update` — useful for in-person meetings that should always display in the venue's timezone:
+
+```bash
+# Create a locked event (confirmation shows the recorded zone)
+nylas calendar events create --title "On-site" \
+  --start "2026-06-15 09:00" --timezone Europe/London --lock-timezone
+
+# Lock or unlock an existing event
+nylas calendar events update <event-id> --lock-timezone
+nylas calendar events update <event-id> --unlock-timezone
+```
+
+Locked events keep their recorded timezone in list/show views (shown with a 🔒 indicator) and are never converted to the viewer's timezone.
 
 ### DST (Daylight Saving Time) Warnings
 
@@ -423,13 +451,9 @@ working_hours:
 
 See [Calendar Commands](commands/calendar.md) for detailed configuration examples.
 
-### Natural Language Time Parsing
+### Event Time Formats
 
-Parser supports: `"in 2 hours"`, `"tomorrow at 3pm"`, `"next Tuesday 2pm"`, `"Dec 25 10:00 AM"`, ISO formats. Integration with event creation is planned.
-
-### Upcoming Features
-
-**Timezone Locking (Planned):** Lock events to specific timezone for in-person meetings.
+Event creation accepts `YYYY-MM-DD HH:MM`, `YYYY-MM-DDTHH:MM[:SS]`, RFC3339, or `YYYY-MM-DD` (all-day). Natural language scheduling is available via `nylas calendar schedule ai`.
 
 ---
 

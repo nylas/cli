@@ -21,7 +21,9 @@ Commands:
   status     Show current dashboard authentication status
   refresh    Refresh dashboard session tokens
   apps       Manage Nylas applications
-  orgs       Manage organizations (list, switch)`,
+  orgs       Manage organizations (list, switch)
+
+Guide: https://developer.nylas.com/docs/dev-guide/dashboard/`,
 	}
 
 	cmd.AddCommand(newRegisterCmd())

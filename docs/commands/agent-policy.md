@@ -77,10 +77,6 @@ Example payload:
     "limit_inbox_retention_period": 30,
     "limit_spam_retention_period": 7
   },
-  "options": {
-    "additional_folders": [],
-    "use_cidr_aliasing": false
-  },
   "spam_detection": {
     "use_list_dnsbl": false,
     "use_header_anomaly_detection": false,

@@ -17,7 +17,9 @@ func NewWorkflowCmd() *cobra.Command {
 		Short: "Manage hosted workflows",
 		Long: `Manage Nylas-hosted workflows at the application or grant scope.
 
-Workflows connect booking events to hosted templates.`,
+Workflows connect booking events to hosted templates.
+
+API reference: https://developer.nylas.com/docs/reference/api/application-level-workflows/`,
 	}
 
 	common.AddOutputFlags(cmd)

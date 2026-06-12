@@ -32,10 +32,7 @@ func (v *EventsView) showRecurringEventEditDialog(calendarID string, evt *domain
 		// For editing a single occurrence, we pass the event as-is
 		// The API will handle creating an exception
 		v.app.ShowEventForm(calendarID, &eventCopy, func(updatedEvent *domain.Event) {
-			go func() {
-				v.loadEventsForCalendar(calendarID)
-				v.app.QueueUpdateDraw(func() {})
-			}()
+			v.loadEventsForCalendar(calendarID)
 		})
 	})
 
@@ -50,10 +47,7 @@ func (v *EventsView) showRecurringEventEditDialog(calendarID string, evt *domain
 			v.app.Flash(FlashInfo, "Editing series from instance...")
 		}
 		v.app.ShowEventForm(calendarID, editEvt, func(updatedEvent *domain.Event) {
-			go func() {
-				v.loadEventsForCalendar(calendarID)
-				v.app.QueueUpdateDraw(func() {})
-			}()
+			v.loadEventsForCalendar(calendarID)
 		})
 	})
 
@@ -99,10 +93,7 @@ func (v *EventsView) showRecurringEventDeleteDialog(calendarID string, evt *doma
 			fmt.Sprintf("Delete this occurrence of '%s'?", eventCopy.Title),
 			func() {
 				v.app.DeleteEvent(calendarID, &eventCopy, func() {
-					go func() {
-						v.loadEventsForCalendar(calendarID)
-						v.app.QueueUpdateDraw(func() {})
-					}()
+					v.loadEventsForCalendar(calendarID)
 				})
 			})
 	})
@@ -119,10 +110,7 @@ func (v *EventsView) showRecurringEventDeleteDialog(calendarID string, evt *doma
 					deleteEvt = &domain.Event{ID: eventCopy.MasterEventID}
 				}
 				v.app.DeleteEvent(calendarID, deleteEvt, func() {
-					go func() {
-						v.loadEventsForCalendar(calendarID)
-						v.app.QueueUpdateDraw(func() {})
-					}()
+					v.loadEventsForCalendar(calendarID)
 				})
 			})
 	})

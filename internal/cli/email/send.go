@@ -325,16 +325,12 @@ Supports hosted templates:
 				}
 
 				if !noConfirm {
-					if scheduledTime.IsZero() {
-						fmt.Print("\nSend this email? [y/N]: ")
-					} else {
-						fmt.Print("\nSchedule this email? [y/N]: ")
+					prompt := "\nSend this email?"
+					if !scheduledTime.IsZero() {
+						prompt = "\nSchedule this email?"
 					}
 
-					reader := bufio.NewReader(os.Stdin)
-					confirm, _ := reader.ReadString('\n')
-					confirm = strings.ToLower(strings.TrimSpace(confirm))
-					if confirm != "y" && confirm != "yes" {
+					if !common.Confirm(prompt, false) {
 						fmt.Println("Cancelled.")
 						return struct{}{}, nil
 					}

@@ -71,9 +71,9 @@ function renderDatalist(id, suggestions) {
     if (!suggestions || suggestions.length === 0) return '';
 
     let options = suggestions.map(s => {
-        // Escape HTML in label
-        const safeLabel = (s.label || s.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        return `<option value="${s.id}">${safeLabel}</option>`;
+        // Escape both value attribute and label: suggestions are parsed from
+        // CLI output and must not be able to break out of the attribute.
+        return `<option value="${esc(s.id)}">${esc(s.label || s.id)}</option>`;
     }).join('');
 
     return `<datalist id="${id}">${options}</datalist>`;
@@ -88,7 +88,7 @@ function showParamInput(section, param, flags) {
     // Render flags panel if flags exist
     if (flags && flags.length > 0) {
         html += `<div class="flags-panel">
-            <div class="flags-header" onclick="toggleFlagsPanel('${section}')">
+            <div class="flags-header" data-action="toggle-flags-panel" data-section="${section}">
                 <span>Options</span>
                 <svg class="flags-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>

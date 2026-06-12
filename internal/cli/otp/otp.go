@@ -16,7 +16,9 @@ Commands:
   get       Get the latest OTP code
   watch     Watch for new OTP codes
   list      List configured accounts
-  messages  Show recent messages (debug)`,
+  messages  Show recent messages (debug)
+
+Guide: https://developer.nylas.com/docs/cookbook/cli/extract-otp-codes/`,
 	}
 
 	cmd.AddCommand(newGetCmd())

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/domain"
@@ -204,6 +205,35 @@ func TestHTTPClient_DownloadAttachment(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Nil(t, reader)
+	})
+
+	t.Run("streams past the default request timeout", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("first-chunk-"))
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			// Stall mid-stream for longer than the default request timeout.
+			time.Sleep(300 * time.Millisecond)
+			_, _ = w.Write([]byte("second-chunk"))
+		}))
+		defer server.Close()
+
+		client := nylas.NewHTTPClient()
+		client.SetCredentials("client-id", "secret", "api-key")
+		client.SetBaseURL(server.URL)
+		// Shrink the default API timeout below the server's mid-stream stall to
+		// prove downloads use the dedicated (longer) download timeout instead.
+		client.SetRequestTimeout(50 * time.Millisecond)
+
+		reader, err := client.DownloadAttachment(context.Background(), "grant-123", "msg-456", "attach-789")
+		require.NoError(t, err)
+		defer func() { _ = reader.Close() }()
+
+		content, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		assert.Equal(t, "first-chunk-second-chunk", string(content))
 	})
 }
 

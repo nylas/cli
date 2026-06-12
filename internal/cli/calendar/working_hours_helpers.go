@@ -15,6 +15,11 @@ import (
 
 // checkWorkingHoursViolation checks if an event time falls outside working hours.
 // Returns warning message if outside working hours, empty string otherwise.
+//
+// NOTE: Working hours in the config are plain "HH:MM" wall-clock values with no
+// timezone. The comparison uses eventTime's own wall clock (Hour/Minute in its
+// location), so callers must pass eventTime in the timezone the working hours
+// were configured for — normally the user's local/event timezone.
 func checkWorkingHoursViolation(eventTime time.Time, config *domain.Config) string {
 	if config == nil || config.WorkingHours == nil {
 		// No working hours configured, skip validation
@@ -96,11 +101,7 @@ func confirmWorkingHoursViolation(violation string, eventTime time.Time, schedul
 	fmt.Println()
 
 	// Ask for confirmation
-	fmt.Print("Create anyway? [y/N]: ")
-	var confirm string
-	_, _ = fmt.Scanln(&confirm)
-
-	return strings.ToLower(confirm) == "y" || strings.ToLower(confirm) == "yes"
+	return common.Confirm("Create anyway?", false)
 }
 
 // parseTimeString parses a time string in "HH:MM" format.
@@ -117,6 +118,10 @@ func parseTimeString(s string) (hour, min int, err error) {
 
 // checkBreakViolation checks if an event time falls during a break period.
 // Returns error message if during break (hard block), empty string otherwise.
+//
+// NOTE: Like checkWorkingHoursViolation, this compares eventTime's own wall
+// clock against timezone-less "HH:MM" config values; pass eventTime in the
+// timezone the breaks were configured for.
 func checkBreakViolation(eventTime time.Time, config *domain.Config) string {
 	if config == nil || config.WorkingHours == nil {
 		return "" // No working hours or breaks configured

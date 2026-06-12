@@ -255,7 +255,13 @@ func TestCLI_AuthList_DoesNotRequireFileStorePassphrase(t *testing.T) {
 	configHome := filepath.Join(tempDir, "xdg")
 	cacheHome := filepath.Join(tempDir, "cache")
 
-	stdout, stderr, err := runCLIWithOverrides(5*time.Second, map[string]string{
+	// The API currently takes ~15s to return a 401 for an invalid key on
+	// GET /v3/grants (TTFB ~15s; connect/TLS are instant). The CLI waits for
+	// that response, so the wrapper timeout must exceed the server latency or
+	// the process is killed before the credential error is printed. Tracked as
+	// a server-side fix (invalid-key auth should fail fast); 25s leaves margin
+	// over the observed ~15s until then.
+	stdout, stderr, err := runCLIWithOverrides(25*time.Second, map[string]string{
 		"XDG_CONFIG_HOME":             configHome,
 		"XDG_CACHE_HOME":              cacheHome,
 		"HOME":                        tempDir,

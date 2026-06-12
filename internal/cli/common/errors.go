@@ -98,6 +98,19 @@ func WrapError(err error) *CLIError {
 				RequestID:  apiErr.RequestID,
 			}
 		case apiErr.StatusCode == http.StatusForbidden:
+			// Billing-plan capacity limits (rules/lists) are returned as a 403
+			// with a "...for this plan" message. These are not an API-key
+			// permission problem, so surface the real reason and a plan action.
+			msg := strings.TrimSpace(apiErr.Message)
+			if strings.Contains(strings.ToLower(msg), "for this plan") {
+				return &CLIError{
+					Err:        err,
+					Message:    msg,
+					Suggestion: "This is a billing-plan limit, not a permissions issue. Remove existing items (e.g. 'nylas agent rule delete <id>') or upgrade your plan to raise the limit",
+					Code:       ErrCodePermissionDenied,
+					RequestID:  apiErr.RequestID,
+				}
+			}
 			return &CLIError{
 				Err:        err,
 				Message:    "Permission denied",

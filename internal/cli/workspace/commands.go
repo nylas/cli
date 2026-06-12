@@ -231,7 +231,11 @@ func printWorkspaceSummary(ws domain.Workspace, index int) {
 	if name == "" {
 		name = ws.ID
 	}
-	fmt.Printf("%d. %s  %s\n", index+1, common.Cyan.Sprint(name), common.Dim.Sprint(ws.ID))
+	marker := ""
+	if ws.Default {
+		marker = "  " + common.Dim.Sprint("(default)")
+	}
+	fmt.Printf("%d. %s  %s%s\n", index+1, common.Cyan.Sprint(name), common.Dim.Sprint(ws.ID), marker)
 	if ws.PolicyID != "" {
 		_, _ = common.Dim.Printf("   Policy ID: %s\n", ws.PolicyID)
 	}
@@ -253,6 +257,7 @@ func printWorkspaceDetails(ws domain.Workspace) {
 		fmt.Printf("Domain:        %s\n", *ws.Domain)
 	}
 	fmt.Printf("Auto Group:    %t\n", ws.AutoGroup)
+	fmt.Printf("Default:       %t\n", ws.Default)
 	if ws.PolicyID != "" {
 		fmt.Printf("Policy ID:     %s\n", ws.PolicyID)
 	}

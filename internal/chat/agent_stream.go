@@ -76,6 +76,17 @@ func (a *Agent) streamClaude(ctx context.Context, prompt string, onToken TokenCa
 		}
 	}
 
+	// A scanner error means the stream was truncated mid-read (e.g. a line
+	// exceeding the buffer); any collected output is unreliable, so surface
+	// the error instead of returning a partial response. Drain the rest of
+	// stdout first so the child is not stuck writing to a full pipe, then
+	// reap the process.
+	if scanErr := scanner.Err(); scanErr != nil {
+		_, _ = io.Copy(io.Discard, stdout)
+		_ = cmd.Wait()
+		return "", fmt.Errorf("claude stream read: %w", scanErr)
+	}
+
 	if err := cmd.Wait(); err != nil {
 		// If we got output, return it despite the error
 		if full.Len() > 0 {

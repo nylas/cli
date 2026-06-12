@@ -203,10 +203,7 @@ func newCallbackURIDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
-				fmt.Printf("Are you sure you want to delete callback URI %s? (y/N): ", args[0])
-				var confirm string
-				_, _ = fmt.Scanln(&confirm)
-				if confirm != "y" && confirm != "Y" {
+				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete callback URI %s?", args[0]), false) {
 					fmt.Println("Cancelled.")
 					return nil
 				}

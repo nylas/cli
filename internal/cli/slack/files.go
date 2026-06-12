@@ -4,7 +4,6 @@ package slack
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -331,8 +330,12 @@ Examples:
 				return common.NewInputError(fmt.Sprintf("output path is a directory: %s", outputPath))
 			}
 
-			// Download the file
-			reader, err := client.DownloadFile(ctx, file.DownloadURL)
+			// Download the file with a dedicated long timeout: the command
+			// context carries the default API timeout, which would cut off
+			// large downloads mid-stream.
+			dlCtx, dlCancel := common.CreateContextWithTimeout(domain.TimeoutDownload)
+			defer dlCancel()
+			reader, err := client.DownloadFile(dlCtx, file.DownloadURL)
 			if err != nil {
 				return common.WrapDownloadError("file", err)
 			}
@@ -343,10 +346,13 @@ Examples:
 			if err != nil {
 				return common.WrapCreateError("output file", err)
 			}
+			// Backstop close for early-error paths; CopyAndClose performs
+			// the error-checked close before success is reported.
 			defer func() { _ = outFile.Close() }()
 
-			// Copy content
-			written, err := io.Copy(outFile, reader)
+			// Copy content and close, surfacing write errors that only
+			// appear at Close time on some filesystems.
+			written, err := common.CopyAndClose(outFile, reader)
 			if err != nil {
 				return common.WrapWriteError("file", err)
 			}
