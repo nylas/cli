@@ -41,9 +41,9 @@ a chip.
 
 ## Accounts view
 
-One row per account: status dot, email, workspace, governing policy (🔒 when
-it is the plan ceiling), rule count, and a shared-workspace badge. Substring
-search filters by email, workspace, or policy. Inline quick actions:
+One row per account: status dot, email, workspace, governing policy ("plan
+maximums" when none is attached), rule count, and a shared-workspace badge.
+Substring search filters by email, workspace, or policy. Inline quick actions:
 
 - **✈ Test** — send a self-addressed test email
 - **⟳ Rotate** — rotate the app password (the new password is shown once)
@@ -54,18 +54,19 @@ Account moves use the workspace `manual-assign` API; the workspace can also
 be chosen up-front when creating the account, or moved from the terminal
 with `nylas agent account move <email> --workspace <id>`.
 
-## Plan ceiling
+## Plan limits
 
-The policy attached to the default workspace is your **plan ceiling**: it
-renders locked (🔒) and cannot be edited, deleted, or swapped. Custom policy
-limits are validated against the ceiling both in the editor and server-side
-(`above_plan_ceiling` on violation).
+Your **billing plan** caps every policy limit, enforced by the Nylas API:
+omitted limits default to the plan maximum, and values above it are rejected.
+A workspace with no policy attached simply runs at plan maximums, so any
+policy — including the default workspace's — can be edited, deleted, or
+swapped freely.
 
 ## Creating resources
 
 The **＋ New** menu creates agent accounts (with an app-password generator and
-optional workspace pick), workspaces, policies (ceiling-bounded limit fields),
-rules, and lists — plus one-click rule recipes.
+optional workspace pick), workspaces, policies (blank limits default to plan
+maximums), rules, and lists — plus one-click rule recipes.
 
 The **rule builder** is sentence-shaped and constrained by the live API
 matrix: inbound rules only offer `from.*` fields; outbound adds `recipient.*`

@@ -108,7 +108,7 @@ window.StudioAccounts = {
         if (!q) {
             return true;
         }
-        const policy = acct.policy ? (acct.policy.name || acct.policy.id) : '';
+        const policy = acct.policy ? (acct.policy.name || acct.policy.id) : 'plan maximums';
         return [acct.email, acct.workspace_name, acct.workspace_id, policy]
             .some((field) => (field || '').toLowerCase().includes(q));
     },
@@ -152,10 +152,9 @@ window.StudioAccounts = {
         const meta = D.el('div', 'acct-meta');
         const wsName = StudioBoard.displayName(acct.workspace_name) || acct.workspace_id || 'no workspace';
         D.add(meta, D.el('span', '', (acct.status || 'unknown') + ' · ' + wsName));
-        const ceiling = StudioBoard.ceilingPolicyID(StudioBoard.state || {});
         const policy = acct.policy
-            ? ((acct.policy.id === ceiling ? '🔒 ' : '🛡 ') + (acct.policy.name || acct.policy.id))
-            : 'no policy';
+            ? '🛡 ' + (acct.policy.name || acct.policy.id)
+            : 'plan maximums';
         D.add(meta, D.el('span', '', policy + ' · ' + (acct.rules || []).length + ' ⚡'));
         D.add(row, meta);
 

@@ -95,16 +95,15 @@ window.StudioDrawer = {
         });
     },
 
-    showPolicy(policy, locked) {
+    showPolicy(policy) {
         const D = StudioDOM;
-        const title = (locked ? '🔒 ' : '🛡 ') + (policy.name || policy.id);
-        const sub = locked ? 'Plan ceiling — read-only' : 'Custom policy';
-        this.open(title, sub, (drawer) => {
+        const title = '🛡 ' + (policy.name || policy.id);
+        this.open(title, 'Policy', (drawer) => {
             D.add(drawer, D.kv('Policy ID', policy.id, true));
             if (policy.missing) {
-                D.add(drawer, D.el('div', 'slot slot-warn', '⚠ This policy no longer exists but is still referenced.'));
+                D.add(drawer, D.el('div', 'slot slot-warn', '⚠ This policy no longer exists but is still referenced — affected accounts run at your plan\'s maximum limits.'));
             }
-            if (!locked && !policy.missing) {
+            if (!policy.missing) {
                 const actions = D.el('div', 'drawer-actions');
                 const edit = D.el('button', 'btn', '✎ Edit policy');
                 edit.addEventListener('click', async () => {
@@ -119,7 +118,7 @@ window.StudioDrawer = {
                 D.add(drawer, actions);
 
                 this.dangerZone(drawer, 'Delete policy…',
-                    'Workspaces referencing it fall back to no policy.',
+                    'Workspaces referencing it fall back to your plan\'s maximum limits.',
                     () => this.confirmAndRun(
                         'Delete policy "' + (policy.name || policy.id) + '"?',
                         () => StudioAPI.deletePolicy(policy.id)));

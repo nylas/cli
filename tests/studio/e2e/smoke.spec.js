@@ -22,10 +22,12 @@ test.describe('Agent Studio', () => {
     await expect(page.locator('.palette .palette-label').first()).toContainText('Policies');
   });
 
-  test('plan-ceiling policy renders locked', async ({ page }) => {
-    const locked = page.locator('.chip-policy.locked');
-    await expect(locked.first()).toBeVisible();
-    await expect(locked.first()).toContainText('plan ceiling');
+  test('workspace without a policy shows the plan-maximums fallback', async ({ page }) => {
+    // No policy is special: a workspace with no policy attached (or a stale
+    // reference) must explain that plan maximums apply.
+    const noPolicy = page.locator('.ws-card').filter({ hasNot: page.locator('.slot-policy') });
+    test.skip(await noPolicy.count() === 0, 'every workspace has a policy attached');
+    await expect(noPolicy.first().getByText('plan maximums apply')).toBeVisible();
   });
 
   test('clicking an account chip opens the inspector drawer', async ({ page }) => {
@@ -38,13 +40,18 @@ test.describe('Agent Studio', () => {
     await expect(drawer).not.toHaveClass(/open/);
   });
 
-  test('locked policy drawer offers no edit or delete', async ({ page }) => {
-    await page.locator('.chip-policy.locked').first().click();
+  test('every policy drawer offers edit and delete', async ({ page }) => {
+    // No policy is a read-only plan ceiling: the ceiling is the billing plan,
+    // enforced by the API, so every policy is editable and deletable.
+    // (Missing-policy chips carry a .chip-tag and render without edit/delete,
+    // so exclude them by class, not by name text.)
+    const chips = page.locator('.chip-policy').filter({ hasNot: page.locator('.chip-tag') });
+    test.skip(await chips.count() === 0, 'no policies in live board state');
+    await chips.first().click();
     const drawer = page.locator('#drawer');
     await expect(drawer).toHaveClass(/open/);
-    await expect(drawer.getByText('Plan ceiling — read-only')).toBeVisible();
-    await expect(drawer.getByRole('button', { name: /Edit policy/ })).toHaveCount(0);
-    await expect(drawer.getByRole('button', { name: /Delete policy/ })).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: /Edit policy/ })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: /Delete policy/ })).toBeVisible();
   });
 
   test('new menu lists all create flows and recipes', async ({ page }) => {
@@ -88,12 +95,13 @@ test.describe('Agent Studio', () => {
     await modal.getByRole('button', { name: 'Cancel' }).click();
   });
 
-  test('ceiling chip is draggable but its drop is rejected server-side', async ({ page }) => {
-    // The locked chip may be dragged onto non-default workspaces (legitimate
-    // attach); swapping the DEFAULT workspace's policy is rejected both by a
-    // client guard and a server-side 403.
-    const locked = page.locator('.chip-policy.locked').first();
-    await expect(locked).toHaveAttribute('draggable', 'true');
+  test('policy chips are draggable', async ({ page }) => {
+    // Any policy may be attached to any workspace, including the default one
+    // — there is no locked plan-ceiling chip. (Missing-policy chips carry a
+    // .chip-tag and are the one non-draggable case.)
+    const chips = page.locator('.chip-policy').filter({ hasNot: page.locator('.chip-tag') });
+    test.skip(await chips.count() === 0, 'no policies in live board state');
+    await expect(chips.first()).toHaveAttribute('draggable', 'true');
   });
 
   test('view tabs switch between board and accounts', async ({ page }) => {

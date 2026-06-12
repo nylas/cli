@@ -114,7 +114,7 @@ window.StudioBuilders = {
             const workspace = M.select(wsOptions, '');
             D.add(modal, M.field('Workspace', workspace));
 
-            D.add(modal, D.el('div', 'modal-note', 'A workspace and the plan-ceiling policy attach automatically when none is chosen.'));
+            D.add(modal, D.el('div', 'modal-note', 'Without a workspace, the account lands in the default workspace and runs at your plan\'s limits unless a policy is attached.'));
 
             M.actions(modal, 'Create account', () => {
                 const body = { email: email.value.trim() };
@@ -139,19 +139,9 @@ window.StudioBuilders = {
         });
     },
 
-    async policyForm(existing) {
+    policyForm(existing) {
         const M = StudioModal;
         const D = StudioDOM;
-        const ceilingID = StudioBoard.ceilingPolicyID(StudioBoard.state);
-        let ceiling = null;
-        if (ceilingID) {
-            try {
-                ceiling = await StudioAPI.getPolicy(ceilingID);
-            } catch (_error) {
-                ceiling = null;
-            }
-        }
-        const ceilingLimits = (ceiling && ceiling.limits) || {};
         const limitFields = [
             ['limit_count_daily_message_per_grant', 'Daily messages / account'],
             ['limit_attachment_size_limit', 'Attachment size (bytes)'],
@@ -161,38 +151,29 @@ window.StudioBuilders = {
         ];
 
         M.open(existing ? 'Edit policy' : 'New policy',
-            'Limits are capped by your plan ceiling', (modal) => {
+            'Blank limits default to your plan\'s maximum; values above it are rejected by the API', (modal) => {
             const name = M.input('Policy name', existing ? existing.name : '');
             D.add(modal, M.field('Name', name));
 
             const inputs = {};
             for (const [key, label] of limitFields) {
-                const max = ceilingLimits[key];
-                const input = M.input(max !== undefined && max !== null ? 'plan max ' + max : 'API default');
+                const input = M.input('plan maximum');
                 input.type = 'number';
-                if (max !== undefined && max !== null) {
-                    input.max = String(max);
-                }
                 if (existing && existing.limits && existing.limits[key] !== undefined && existing.limits[key] !== null) {
                     input.value = String(existing.limits[key]);
                 }
-                inputs[key] = { input, max };
-                D.add(modal, M.field(label + (max !== undefined && max !== null ? ' · max ' + max : ''), input));
+                inputs[key] = input;
+                D.add(modal, M.field(label, input));
             }
 
             M.actions(modal, existing ? 'Save policy' : 'Create policy', () => {
                 const body = { name: name.value.trim() };
                 const limits = {};
                 for (const key of Object.keys(inputs)) {
-                    const { input, max } = inputs[key];
-                    if (input.value === '') {
+                    if (inputs[key].value === '') {
                         continue;
                     }
-                    const value = Number(input.value);
-                    if (max !== undefined && max !== null && value > max) {
-                        throw new Error(key + ' exceeds the plan ceiling (' + value + ' > ' + max + ')');
-                    }
-                    limits[key] = value;
+                    limits[key] = Number(inputs[key].value);
                 }
                 if (Object.keys(limits).length) {
                     body.limits = limits;

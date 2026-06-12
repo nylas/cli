@@ -27,28 +27,34 @@ func TestHandlePolicyCreate(t *testing.T) {
 	}
 }
 
-func TestHandlePolicyPatch_DefaultPolicyImmutable(t *testing.T) {
+func TestHandlePolicyPatch_DefaultWorkspacePolicyMutable(t *testing.T) {
 	t.Parallel()
 	server := newTestServer()
 
-	// policy-1 is attached to the default workspace (workspace-1) in the mock,
-	// making it the plan-ceiling policy: edits must be rejected server-side.
+	// policy-1 is attached to the default workspace (workspace-1) in the mock.
+	// Per the documented model, no policy is the plan ceiling — the ceiling is
+	// the billing plan, enforced by the Nylas API — so every policy is
+	// editable, including the default workspace's.
 	w := doJSON(t, server.routePolicies, http.MethodPatch, "/api/policies/policy-1", `{"name":"Renamed"}`)
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("default policy is the plan ceiling and must be immutable: expected 403, got %d (body: %s)", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("every policy must be editable (plan ceiling is API-enforced): expected 200, got %d (body: %s)", w.Code, w.Body.String())
 	}
+	decodeMutation(t, w)
 }
 
-func TestHandlePolicyDelete_DefaultPolicyImmutable(t *testing.T) {
+func TestHandlePolicyDelete_DefaultWorkspacePolicyAllowed(t *testing.T) {
 	t.Parallel()
 	server := newTestServer()
 
+	// Deleting any policy is allowed: workspaces left without a policy run at
+	// the billing plan's maximum limits.
 	w := doJSON(t, server.routePolicies, http.MethodDelete, "/api/policies/policy-1", "")
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 deleting the plan-ceiling policy, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 deleting the default workspace's policy, got %d (body: %s)", w.Code, w.Body.String())
 	}
+	decodeMutation(t, w)
 }
 
 func TestHandlePolicyPatch_CustomPolicyAllowed(t *testing.T) {
@@ -63,44 +69,63 @@ func TestHandlePolicyPatch_CustomPolicyAllowed(t *testing.T) {
 	decodeMutation(t, w)
 }
 
-// ceilingClient gives the plan-ceiling policy (policy-1) explicit limits so
-// validation against them can be exercised.
-type ceilingClient struct {
-	*nylasmock.MockClient
+// CreatePolicy and UpdatePolicy simulate the Nylas API rejecting a policy
+// whose limits exceed the billing plan's maximum (the API returns 403 for
+// plan caps). planLimitClient is declared in handlers_mutations_test.go.
+func (c *planLimitClient) CreatePolicy(ctx context.Context, payload map[string]any) (*domain.Policy, error) {
+	return nil, &domain.APIError{StatusCode: http.StatusForbidden, Message: "limit exceeds plan maximum"}
 }
 
-func (c *ceilingClient) GetPolicy(ctx context.Context, policyID string) (*domain.Policy, error) {
-	daily := int64(500)
-	return &domain.Policy{
-		ID:   policyID,
-		Name: "Default Policy",
-		Limits: &domain.PolicyLimits{
-			LimitCountDailyMessagePerGrant: &daily,
-		},
-	}, nil
+func (c *planLimitClient) UpdatePolicy(ctx context.Context, policyID string, payload map[string]any) (*domain.Policy, error) {
+	return nil, &domain.APIError{StatusCode: http.StatusForbidden, Message: "limit exceeds plan maximum"}
 }
 
-func TestHandlePolicyCreate_RejectsLimitsAboveCeiling(t *testing.T) {
+func TestHandlePolicyCreate_SurfacesPlanLimitError(t *testing.T) {
 	t.Parallel()
-	server := NewServer("127.0.0.1:0", &ceilingClient{MockClient: nylasmock.NewMockClient()})
+	server := NewServer("127.0.0.1:0", &planLimitClient{MockClient: nylasmock.NewMockClient()})
 
+	// Plan maximums are enforced by the Nylas API, not by Studio: the handler
+	// forwards the payload and must surface the API's rejection as a
+	// structured plan_limit error the UI can render.
 	w := doJSON(t, server.routePolicies, http.MethodPost, "/api/policies",
 		`{"name":"Over","limits":{"limit_count_daily_message_per_grant":600}}`)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("limits above the plan ceiling must be rejected: expected 400, got %d (body: %s)", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("API plan rejection must be surfaced: expected 403, got %d (body: %s)", w.Code, w.Body.String())
 	}
 	var resp map[string]string
 	_ = json.NewDecoder(w.Body).Decode(&resp)
-	if resp["error"] != "above_plan_ceiling" {
-		t.Fatalf("expected structured above_plan_ceiling error, got %q", resp["error"])
+	if resp["error"] != "plan_limit" {
+		t.Fatalf("expected structured plan_limit error, got %q", resp["error"])
 	}
 }
 
-func TestHandlePolicyCreate_AllowsLimitsWithinCeiling(t *testing.T) {
+func TestHandlePolicyPatch_SurfacesPlanLimitError(t *testing.T) {
 	t.Parallel()
-	server := NewServer("127.0.0.1:0", &ceilingClient{MockClient: nylasmock.NewMockClient()})
+	server := NewServer("127.0.0.1:0", &planLimitClient{MockClient: nylasmock.NewMockClient()})
 
+	// With the client-side ceiling validation removed, the PATCH path relies
+	// entirely on the API's plan enforcement — its rejection must surface as
+	// the same structured plan_limit error as create.
+	w := doJSON(t, server.routePolicies, http.MethodPatch, "/api/policies/policy-7",
+		`{"name":"Over","limits":{"limit_count_daily_message_per_grant":600}}`)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("API plan rejection must be surfaced on update: expected 403, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] != "plan_limit" {
+		t.Fatalf("expected structured plan_limit error, got %q", resp["error"])
+	}
+}
+
+func TestHandlePolicyCreate_ForwardsLimitsToAPI(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	// Studio performs no client-side limit validation — payloads go to the
+	// API as-is and succeed unless the API rejects them.
 	w := doJSON(t, server.routePolicies, http.MethodPost, "/api/policies",
 		`{"name":"Within","limits":{"limit_count_daily_message_per_grant":200}}`)
 

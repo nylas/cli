@@ -68,24 +68,16 @@ func (s *Server) handleWorkspacePatch(w http.ResponseWriter, r *http.Request, id
 	ctx, cancel := s.withTimeout(r)
 	defer cancel()
 
-	ws, err := s.nylasClient.GetWorkspace(ctx, id)
-	if err != nil {
-		writeMutationError(w, "Failed to load workspace", err)
-		return
-	}
-
-	// The default workspace's policy defines the plan ceiling; swapping it
-	// would silently change which policy the ceiling protection guards.
-	if body.PolicyID != nil && ws.Default {
-		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error":   "default_workspace_policy_locked",
-			"message": "The default workspace's policy is your plan ceiling and cannot be swapped",
-		})
-		return
-	}
-
 	update := &domain.UpdateWorkspaceRequest{PolicyID: body.PolicyID}
 	if len(body.AddRuleIDs) > 0 || len(body.RemoveRuleIDs) > 0 {
+		// Rule changes are read-modify-write: the API replaces the whole
+		// rule_ids list, so the current attachments must be fetched first.
+		// Policy-only patches skip the extra round-trip.
+		ws, err := s.nylasClient.GetWorkspace(ctx, id)
+		if err != nil {
+			writeMutationError(w, "Failed to load workspace", err)
+			return
+		}
 		ruleIDs := applyRuleIDChanges(ws.RulesIDs, body.AddRuleIDs, body.RemoveRuleIDs)
 		update.RulesIDs = &ruleIDs
 	}

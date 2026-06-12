@@ -69,10 +69,6 @@ window.StudioDragDrop = {
 
     handleDrop(payload, ws) {
         if (payload.kind === 'policy') {
-            if (ws.default) {
-                this.toast('The default workspace’s policy is your plan ceiling and cannot be swapped.');
-                return;
-            }
             if (ws.policy && ws.policy.id === payload.id) {
                 return;
             }
