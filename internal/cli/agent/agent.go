@@ -43,6 +43,7 @@ API reference: https://developer.nylas.com/docs/v3/agent-accounts/
 	cmd.AddCommand(newPolicyCmd())
 	cmd.AddCommand(newRuleCmd())
 	cmd.AddCommand(newAgentListCmd())
+	cmd.AddCommand(newOverviewCmd())
 	cmd.AddCommand(newStatusCmd())
 
 	return cmd

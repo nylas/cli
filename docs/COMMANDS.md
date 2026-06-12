@@ -493,6 +493,7 @@ nylas agent list items <list-id>               # Show list items
 nylas agent list add <list-id> <item>...       # Add items to a list
 nylas agent list remove <list-id> <item>...    # Remove items from a list
 nylas agent list delete <list-id> --yes        # Delete a list
+nylas agent overview                           # Tree of accounts → workspace → policy/rules → lists
 nylas agent status                             # Check connector + account status
 ```
 

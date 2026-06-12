@@ -32,6 +32,7 @@ nylas agent list create --name "Blocked domains" --type domain --item spam.com
 nylas agent list add <list-id> junk.net
 nylas agent list remove <list-id> junk.net
 nylas agent list delete <list-id> --yes
+nylas agent overview
 nylas agent status
 ```
 
@@ -142,6 +143,33 @@ nylas agent account delete me@yourapp.nylas.email --yes
 ```
 
 Deleting an agent account revokes the underlying `provider=nylas` grant.
+
+## Resource Overview
+
+```bash
+nylas agent overview
+nylas agent overview --json
+nylas agent tree          # alias
+```
+
+Renders one tree per agent account showing its workspace, attached policy,
+attached rules, and the lists those rules reference:
+
+```
+support@yourapp.nylas.email  valid
+└── Workspace: Support workspace (default, auto-group, shared with 1 other account(s))
+    ├── Policy: Default Policy
+    └── Rules (2)
+        ├── Block listed domains (inbound)
+        │   └── List: Blocked domains (domain, 12 items)
+        └── Archive newsletters (inbound) [disabled]
+```
+
+The overview also flags problems the API does not prevent:
+- ⚠ dangling references — workspace `policy_id`/`rule_ids` or rule `in_list`
+  conditions pointing at deleted resources
+- auto-group workspaces shared by multiple accounts (changes affect them all)
+- unattached policies/rules and lists referenced by no rule
 
 ## Connector Status
 
