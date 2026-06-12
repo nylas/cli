@@ -1,4 +1,4 @@
-.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
+.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-studio test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
 
 # Disable parallel Make execution - prevents Go build cache corruption on btrfs (CachyOS)
 .NOTPARALLEL:
@@ -311,6 +311,17 @@ test-playwright-ui:
 	@cd tests && npm run test:config
 	@cd tests && UI_E2E_DEMO=true npx playwright test --project=ui-chromium
 	@echo "✓ UI E2E tests complete!"
+
+test-playwright-studio:
+	@echo "=== Running Playwright Agent Studio Tests ==="
+	@command -v npm >/dev/null 2>&1 || { \
+		echo "ERROR: npm not installed"; \
+		exit 1; \
+	}
+	@$(MAKE) --no-print-directory build
+	@cd tests && npm install
+	@cd tests && npx playwright test --project=studio-chromium
+	@echo "✓ Agent Studio E2E tests complete!"
 
 test-playwright-interactive:
 	@echo "=== Running Playwright E2E Tests (Interactive Mode) ==="

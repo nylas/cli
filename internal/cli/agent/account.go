@@ -27,6 +27,9 @@ API reference: https://developer.nylas.com/docs/v3/agent-accounts/provisioning/
   # Show one agent account
   nylas agent account get <agent-id|email>
 
+  # Move an agent account to another workspace
+  nylas agent account move <agent-id|email> --workspace <workspace-id>
+
   # Delete an agent account
   nylas agent account delete <agent-id|email>`,
 	}
@@ -35,6 +38,7 @@ API reference: https://developer.nylas.com/docs/v3/agent-accounts/provisioning/
 	cmd.AddCommand(newUpdateCmd())
 	cmd.AddCommand(newListCmd())
 	cmd.AddCommand(newGetCmd())
+	cmd.AddCommand(newMoveCmd())
 	cmd.AddCommand(newDeleteCmd())
 
 	return cmd

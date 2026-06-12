@@ -19,7 +19,7 @@ func TestNewAgentCmd(t *testing.T) {
 	assert.Contains(t, cmd.Short, "agent")
 	assert.Contains(t, cmd.Long, "account subcommand")
 
-	expected := []string{"account", "policy", "rule", "list", "overview", "status"}
+	expected := []string{"account", "policy", "rule", "list", "overview", "studio", "status"}
 	cmdMap := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
 		cmdMap[sub.Name()] = true
@@ -43,7 +43,7 @@ func TestAccountCmd(t *testing.T) {
 	assert.Equal(t, "account", cmd.Use)
 	assert.Contains(t, cmd.Short, "accounts")
 
-	expected := []string{"create", "update", "list", "get", "delete"}
+	expected := []string{"create", "update", "list", "get", "delete", "move"}
 	cmdMap := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
 		cmdMap[sub.Name()] = true

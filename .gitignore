@@ -194,3 +194,6 @@ playwright-report/
 *phase*.md
 ci-output.txt
 ci-results.txt
+
+# Brainstorming visual companion sessions
+.superpowers/

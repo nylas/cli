@@ -29,3 +29,21 @@ type UpdateWorkspaceRequest struct {
 	PolicyID *string   `json:"policy_id,omitempty"`
 	RulesIDs *[]string `json:"rule_ids,omitempty"`
 }
+
+// WorkspaceAssignRequest moves grants into or out of a workspace via the
+// manual-assign endpoint. The API requires these exact field names; assigning
+// a grant moves it even if it currently belongs to another workspace, while
+// removing leaves it in no workspace (not the default one).
+type WorkspaceAssignRequest struct {
+	AssignGrants []string `json:"assign_grants,omitempty"`
+	RemoveGrants []string `json:"remove_grants,omitempty"`
+}
+
+// WorkspaceAssignResult reports which grants the API assigned or removed.
+type WorkspaceAssignResult struct {
+	ApplicationID  string   `json:"application_id,omitempty"`
+	WorkspaceID    string   `json:"workspace_id,omitempty"`
+	Domain         string   `json:"domain,omitempty"`
+	GrantsAssigned []string `json:"grants_assigned,omitempty"`
+	GrantsRemoved  []string `json:"grants_removed,omitempty"`
+}

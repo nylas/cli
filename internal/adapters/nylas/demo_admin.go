@@ -2,6 +2,7 @@ package nylas
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -228,6 +229,17 @@ func (d *DemoClient) CreateWorkspace(ctx context.Context, req *domain.CreateWork
 		Name:     req.Name,
 		PolicyID: req.PolicyID,
 		RulesIDs: req.RulesIDs,
+	}, nil
+}
+
+func (d *DemoClient) AssignWorkspaceGrants(ctx context.Context, workspaceID string, req *domain.WorkspaceAssignRequest) (*domain.WorkspaceAssignResult, error) {
+	if req == nil || (len(req.AssignGrants) == 0 && len(req.RemoveGrants) == 0) {
+		return nil, errors.New("at least one grant must be assigned or removed")
+	}
+	return &domain.WorkspaceAssignResult{
+		WorkspaceID:    workspaceID,
+		GrantsAssigned: append([]string(nil), req.AssignGrants...),
+		GrantsRemoved:  append([]string(nil), req.RemoveGrants...),
 	}, nil
 }
 

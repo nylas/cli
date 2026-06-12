@@ -13,6 +13,7 @@ nylas agent account list
 nylas agent account create <email>
 nylas agent account update [agent-id|email] --app-password 'ValidAgentPass123ABC!'
 nylas agent account get <agent-id|email>
+nylas agent account move <agent-id|email> --workspace <workspace-id>
 nylas agent account delete <agent-id|email>
 nylas agent policy list
 nylas agent policy create --name <name>
@@ -33,6 +34,7 @@ nylas agent list add <list-id> junk.net
 nylas agent list remove <list-id> junk.net
 nylas agent list delete <list-id> --yes
 nylas agent overview
+nylas agent studio
 nylas agent status
 ```
 
@@ -134,6 +136,21 @@ Behavior:
 - preserves the existing account email and policy attachment
 
 Use this when you want to add mail-client access after creation or rotate an existing IMAP/SMTP app password.
+
+## Move Agent Account
+
+```bash
+nylas agent account move me@yourapp.nylas.email --workspace 12345678-1234-1234-1234-123456789012
+nylas agent account move 12345678-1234-1234-1234-123456789012 --workspace <workspace-id>
+```
+
+Moves the account to another workspace; the target workspace's policy and
+rules govern it immediately. Moves use the workspace manual-assign API
+(`POST /v3/workspaces/{id}/manual-assign`), which reassigns the grant even
+when it currently belongs to another workspace. Use `nylas workspace list`
+to find workspace IDs. The same move is available visually in
+[Agent Studio](agent-studio.md) by dragging an account chip onto a
+workspace card.
 
 ## Delete Agent Account
 
@@ -244,4 +261,5 @@ When the active grant is an agent account (`provider=nylas`):
 - [Agent policies](agent-policy.md)
 - [Agent rules](agent-rule.md)
 - [Agent lists](agent-list.md)
+- [Agent Studio](agent-studio.md)
 - [Email commands](email.md)

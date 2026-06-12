@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%237c5cff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/css/studio.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo"></div>
+    <span class="brand">Agent Studio</span>
+    <nav class="tabs" aria-label="Views">
+      <button class="tab active" data-view="board" type="button">Board</button>
+      <button class="tab" data-view="accounts" type="button">Accounts</button>
+    </nav>
+    <div class="topbar-meta">
+      <span class="totals" id="totals">Loading…</span>
+      <button class="btn-new" id="newBtn" type="button">＋ New ▾</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="palette" id="palette" aria-label="Resource palette"></nav>
+    <main class="board" id="board">
+      <div class="empty">Loading board…</div>
+    </main>
+    <main class="accounts-view" id="accountsView" hidden></main>
+  </div>
+
+  <footer class="statusbar" id="statusbar"></footer>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer" aria-label="Resource details"></aside>
+
+  <div class="menu" id="newMenu"></div>
+  <div class="toast" id="toast"></div>
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modal"></div></div>
+
+  <script src="/static/js/dom.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/modal.js"></script>
+  <script src="/static/js/dragdrop.js"></script>
+  <script src="/static/js/drawers.js"></script>
+  <script src="/static/js/builders.js"></script>
+  <script src="/static/js/accounts.js"></script>
+  <script src="/static/js/board.js"></script>
+</body>
+</html>

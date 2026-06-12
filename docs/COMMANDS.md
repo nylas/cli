@@ -468,6 +468,7 @@ nylas agent account create <email>             # Create agent account
 nylas agent account create <email> --app-password PW  # Create account with IMAP/SMTP app password
 nylas agent account update [agent-id|email] --app-password PW  # Add or rotate IMAP/SMTP app password
 nylas agent account get <agent-id|email>       # Show one agent account
+nylas agent account move <agent-id|email> --workspace <id>  # Move account to another workspace
 nylas agent account delete <agent-id|email>    # Delete/revoke agent account
 nylas agent account delete <agent-id|email> --yes  # Skip confirmation
 nylas agent policy list                        # List all policies
@@ -494,6 +495,7 @@ nylas agent list add <list-id> <item>...       # Add items to a list
 nylas agent list remove <list-id> <item>...    # Remove items from a list
 nylas agent list delete <list-id> --yes        # Delete a list
 nylas agent overview                           # Tree of accounts → workspace → policy/rules → lists
+nylas agent studio                             # Visual management UI (drag-drop board, localhost:7368)
 nylas agent status                             # Check connector + account status
 ```
 
