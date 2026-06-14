@@ -52,4 +52,27 @@ type SchedulerClient interface {
 
 	// CancelBooking cancels a booking.
 	CancelBooking(ctx context.Context, bookingID string, reason string) error
+
+	// ================================
+	// GROUP EVENT OPERATIONS
+	// ================================
+
+	// ListGroupEvents retrieves the group events for a configuration within a
+	// time window. calendarID, startTime, and endTime (Unix seconds) are all
+	// required by the API.
+	ListGroupEvents(ctx context.Context, grantID, configID, calendarID string, startTime, endTime int64) ([]domain.GroupEvent, error)
+
+	// CreateGroupEvent creates a group event under a configuration. The API may
+	// return more than one event (e.g. when recurrence is set).
+	CreateGroupEvent(ctx context.Context, grantID, configID string, req *domain.CreateGroupEventRequest) ([]domain.GroupEvent, error)
+
+	// UpdateGroupEvent updates a group event.
+	UpdateGroupEvent(ctx context.Context, grantID, configID, eventID string, req *domain.UpdateGroupEventRequest) ([]domain.GroupEvent, error)
+
+	// DeleteGroupEvent deletes a group event.
+	DeleteGroupEvent(ctx context.Context, grantID, configID, eventID string) error
+
+	// ImportGroupEvents imports existing provider events as group events under a
+	// configuration. This endpoint is configuration-scoped (not grant-scoped).
+	ImportGroupEvents(ctx context.Context, configID string, items []domain.ImportGroupEventItem) ([]domain.GroupEvent, error)
 }

@@ -62,6 +62,21 @@ type CreateNotetakerRequest struct {
 	BotConfig   *BotConfig `json:"bot_config,omitempty"`
 }
 
+// NotetakerMeetingSettings controls what a notetaker records. Pointer fields
+// distinguish "unset" (leave as-is) from an explicit true/false.
+type NotetakerMeetingSettings struct {
+	VideoRecording *bool `json:"video_recording,omitempty"`
+	AudioRecording *bool `json:"audio_recording,omitempty"`
+	Transcription  *bool `json:"transcription,omitempty"`
+}
+
+// UpdateNotetakerRequest updates a scheduled notetaker before it joins.
+type UpdateNotetakerRequest struct {
+	JoinTime        int64                     `json:"join_time,omitempty"` // Unix timestamp for when to join
+	Name            string                    `json:"name,omitempty"`      // Bot display name
+	MeetingSettings *NotetakerMeetingSettings `json:"meeting_settings,omitempty"`
+}
+
 // NotetakerListResponse represents a list of notetakers.
 type NotetakerListResponse struct {
 	Data       []Notetaker `json:"data"`

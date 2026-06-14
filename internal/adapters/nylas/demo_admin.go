@@ -92,6 +92,39 @@ func (d *DemoClient) CancelBooking(ctx context.Context, bookingID string, reason
 	return nil
 }
 
+// Group Event Demo Implementations
+
+func (d *DemoClient) ListGroupEvents(ctx context.Context, grantID, configID, calendarID string, startTime, endTime int64) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: "ge-001", Title: "Annual Philosophy Club Meeting", CalendarID: "primary", Capacity: 50, Location: "Library, Cave Room"},
+		{ID: "ge-002", Title: "Intro to Stoicism Workshop", CalendarID: "primary", Capacity: 20},
+	}, nil
+}
+
+func (d *DemoClient) CreateGroupEvent(ctx context.Context, grantID, configID string, req *domain.CreateGroupEventRequest) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: "ge-new", Title: req.Title, CalendarID: req.CalendarID, Capacity: req.Capacity, Participants: req.Participants, When: req.When},
+	}, nil
+}
+
+func (d *DemoClient) UpdateGroupEvent(ctx context.Context, grantID, configID, eventID string, req *domain.UpdateGroupEventRequest) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: eventID, Title: req.Title, CalendarID: req.CalendarID, Capacity: req.Capacity},
+	}, nil
+}
+
+func (d *DemoClient) DeleteGroupEvent(ctx context.Context, grantID, configID, eventID string) error {
+	return nil
+}
+
+func (d *DemoClient) ImportGroupEvents(ctx context.Context, configID string, items []domain.ImportGroupEventItem) ([]domain.GroupEvent, error) {
+	events := make([]domain.GroupEvent, 0, len(items))
+	for _, it := range items {
+		events = append(events, domain.GroupEvent{ID: "ge-import", CalendarID: it.CalendarID, Capacity: it.Capacity})
+	}
+	return events, nil
+}
+
 // Admin Demo Implementations
 
 func (d *DemoClient) ListApplications(ctx context.Context) ([]domain.Application, error) {

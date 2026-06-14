@@ -191,3 +191,18 @@ func (d *DemoClient) UpdateMessage(ctx context.Context, grantID, messageID strin
 func (d *DemoClient) DeleteMessage(ctx context.Context, grantID, messageID string) error {
 	return nil
 }
+
+// CleanMessages simulates cleaning messages into display-ready text.
+func (d *DemoClient) CleanMessages(ctx context.Context, grantID string, req *domain.CleanMessagesRequest) ([]domain.CleanedMessage, error) {
+	result := make([]domain.CleanedMessage, 0, len(req.MessageIDs))
+	for _, id := range req.MessageIDs {
+		result = append(result, domain.CleanedMessage{
+			ID:           id,
+			GrantID:      grantID,
+			Object:       "message",
+			Subject:      "Quarterly Review",
+			Conversation: "Thanks for the update — the numbers look great. Let's sync on Thursday.",
+		})
+	}
+	return result, nil
+}

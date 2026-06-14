@@ -162,6 +162,28 @@ func (d *DemoClient) DeleteNotetaker(ctx context.Context, grantID, notetakerID s
 	return nil
 }
 
+// LeaveNotetaker simulates an active notetaker leaving its meeting.
+func (d *DemoClient) LeaveNotetaker(ctx context.Context, grantID, notetakerID string) error {
+	return nil
+}
+
+// UpdateNotetaker simulates updating a scheduled notetaker.
+func (d *DemoClient) UpdateNotetaker(ctx context.Context, grantID, notetakerID string, req *domain.UpdateNotetakerRequest) (*domain.Notetaker, error) {
+	now := time.Now()
+	nt := &domain.Notetaker{
+		ID:        notetakerID,
+		State:     domain.NotetakerStateScheduled,
+		UpdatedAt: now,
+	}
+	if req.JoinTime > 0 {
+		nt.JoinTime = time.Unix(req.JoinTime, 0)
+	}
+	if req.Name != "" {
+		nt.BotConfig = &domain.BotConfig{Name: req.Name}
+	}
+	return nt, nil
+}
+
 // GetNotetakerMedia returns demo notetaker media.
 func (d *DemoClient) GetNotetakerMedia(ctx context.Context, grantID, notetakerID string) (*domain.MediaData, error) {
 	return &domain.MediaData{

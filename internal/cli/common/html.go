@@ -2,8 +2,22 @@ package common
 
 import (
 	"html"
+	"regexp"
 	"strings"
 )
+
+// blockTagRe matches opening, closing, and self-closing block-level tags —
+// with or without attributes — so they can be turned into newlines before the
+// generic tag stripper runs. The optional `(?:\s[^>]*)?` consumes any
+// attributes, which is what bare-string matching missed: a tag like
+// <br class="x"/> or <p style="..."> would otherwise be stripped with no
+// separator, silently joining adjacent lines.
+//
+// Table cell elements (table, td, th, tbody, thead, tfoot) are intentionally
+// excluded because they're typically layout; tr is included to separate rows.
+// The `\s`/`/`/`>` boundary after the tag name prevents over-matching names
+// that merely share a prefix (e.g. <pre> must not match <p>).
+var blockTagRe = regexp.MustCompile(`(?i)</?(?:br|p|div|tr|li|h[1-6])(?:\s[^>]*)?/?>`)
 
 // StripHTML removes HTML tags from a string and decodes HTML entities.
 func StripHTML(s string) string {
@@ -12,20 +26,9 @@ func StripHTML(s string) string {
 	s = RemoveTagWithContent(s, "script")
 	s = RemoveTagWithContent(s, "head")
 
-	// Replace block-level elements with newlines before stripping tags
-	// Note: table cell elements (table, td, th, tbody, thead, tfoot) are NOT included
-	// because they're typically used for layout; tr is included to separate rows
-	blockTags := []string{"br", "p", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"}
-	for _, tag := range blockTags {
-		// Handle <br>, <br/>, <br />
-		s = strings.ReplaceAll(s, "<"+tag+">", "\n")
-		s = strings.ReplaceAll(s, "<"+tag+"/>", "\n")
-		s = strings.ReplaceAll(s, "<"+tag+" />", "\n")
-		s = strings.ReplaceAll(s, "</"+tag+">", "\n")
-		// Case insensitive
-		s = strings.ReplaceAll(s, "<"+strings.ToUpper(tag)+">", "\n")
-		s = strings.ReplaceAll(s, "</"+strings.ToUpper(tag)+">", "\n")
-	}
+	// Replace block-level elements (including attributed/self-closing forms)
+	// with newlines before stripping the remaining tags.
+	s = blockTagRe.ReplaceAllString(s, "\n")
 
 	// Strip remaining HTML tags
 	var result strings.Builder

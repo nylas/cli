@@ -40,6 +40,8 @@ API reference: https://developer.nylas.com/docs/v3/notetaker/`,
 	cmd.AddCommand(newShowCmd())
 	cmd.AddCommand(newCreateCmd())
 	cmd.AddCommand(newDeleteCmd())
+	cmd.AddCommand(newLeaveCmd())
+	cmd.AddCommand(newUpdateCmd())
 	cmd.AddCommand(newMediaCmd())
 
 	return cmd

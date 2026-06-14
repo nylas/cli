@@ -90,4 +90,36 @@ func (m *MockClient) CancelBooking(ctx context.Context, bookingID string, reason
 	return nil
 }
 
+// Group Event Mock Implementations
+
+func (m *MockClient) ListGroupEvents(ctx context.Context, grantID, configID, calendarID string, startTime, endTime int64) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: "ge-1", Title: "Philosophy Club", CalendarID: "primary", Capacity: 50},
+	}, nil
+}
+
+func (m *MockClient) CreateGroupEvent(ctx context.Context, grantID, configID string, req *domain.CreateGroupEventRequest) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: "ge-new", Title: req.Title, CalendarID: req.CalendarID, Capacity: req.Capacity, Participants: req.Participants, When: req.When},
+	}, nil
+}
+
+func (m *MockClient) UpdateGroupEvent(ctx context.Context, grantID, configID, eventID string, req *domain.UpdateGroupEventRequest) ([]domain.GroupEvent, error) {
+	return []domain.GroupEvent{
+		{ID: eventID, Title: req.Title, CalendarID: req.CalendarID, Capacity: req.Capacity},
+	}, nil
+}
+
+func (m *MockClient) DeleteGroupEvent(ctx context.Context, grantID, configID, eventID string) error {
+	return nil
+}
+
+func (m *MockClient) ImportGroupEvents(ctx context.Context, configID string, items []domain.ImportGroupEventItem) ([]domain.GroupEvent, error) {
+	events := make([]domain.GroupEvent, 0, len(items))
+	for _, it := range items {
+		events = append(events, domain.GroupEvent{ID: "ge-import", CalendarID: it.CalendarID, Capacity: it.Capacity})
+	}
+	return events, nil
+}
+
 // Admin Mock Implementations

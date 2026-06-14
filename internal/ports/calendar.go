@@ -40,6 +40,11 @@ type CalendarClient interface {
 	// GetEvent retrieves a specific event.
 	GetEvent(ctx context.Context, grantID, calendarID, eventID string) (*domain.Event, error)
 
+	// ImportEvents bulk-reads events from a calendar over a time window
+	// (GET /v3/grants/{id}/events/import), including expanded recurring
+	// instances. Intended for migration/export. CalendarID is required.
+	ImportEvents(ctx context.Context, grantID string, params *domain.EventQueryParams) ([]domain.Event, error)
+
 	// CreateEvent creates a new event.
 	CreateEvent(ctx context.Context, grantID, calendarID string, req *domain.CreateEventRequest) (*domain.Event, error)
 
@@ -61,6 +66,9 @@ type CalendarClient interface {
 
 	// GetAvailability retrieves availability across multiple accounts.
 	GetAvailability(ctx context.Context, req *domain.AvailabilityRequest) (*domain.AvailabilityResponse, error)
+
+	// ListRoomResources retrieves bookable room and equipment resources for a grant.
+	ListRoomResources(ctx context.Context, grantID string) ([]domain.RoomResource, error)
 
 	// ================================
 	// VIRTUAL CALENDAR OPERATIONS
