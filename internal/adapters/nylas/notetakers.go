@@ -3,6 +3,7 @@ package nylas
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -129,6 +130,70 @@ func (c *HTTPClient) CreateNotetaker(ctx context.Context, grantID string, req *d
 func (c *HTTPClient) DeleteNotetaker(ctx context.Context, grantID, notetakerID string) error {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
 	return c.doDelete(ctx, queryURL)
+}
+
+// LeaveNotetaker instructs an active notetaker to leave the meeting it is in.
+// Unlike DeleteNotetaker, the notetaker record and any generated media are kept.
+func (c *HTTPClient) LeaveNotetaker(ctx context.Context, grantID, notetakerID string) error {
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s/leave", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
+	resp, err := c.doJSONRequest(ctx, "POST", queryURL, map[string]any{}, http.StatusOK, http.StatusAccepted)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
+// UpdateNotetaker updates a scheduled notetaker (join time, name, settings)
+// via PATCH. Only fields the caller set are sent.
+func (c *HTTPClient) UpdateNotetaker(ctx context.Context, grantID, notetakerID string, req *domain.UpdateNotetakerRequest) (*domain.Notetaker, error) {
+	if req == nil {
+		return nil, fmt.Errorf("%w: update request cannot be nil", domain.ErrInvalidInput)
+	}
+
+	queryURL := fmt.Sprintf("%s/v3/grants/%s/notetakers/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(notetakerID))
+
+	payload := map[string]any{}
+	if req.JoinTime > 0 {
+		payload["join_time"] = req.JoinTime
+	}
+	if req.Name != "" {
+		payload["name"] = req.Name
+	}
+	if req.MeetingSettings != nil {
+		ms := map[string]any{}
+		if req.MeetingSettings.VideoRecording != nil {
+			ms["video_recording"] = *req.MeetingSettings.VideoRecording
+		}
+		if req.MeetingSettings.AudioRecording != nil {
+			ms["audio_recording"] = *req.MeetingSettings.AudioRecording
+		}
+		if req.MeetingSettings.Transcription != nil {
+			ms["transcription"] = *req.MeetingSettings.Transcription
+		}
+		if len(ms) > 0 {
+			payload["meeting_settings"] = ms
+		}
+	}
+
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("%w: no fields to update", domain.ErrInvalidInput)
+	}
+
+	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data notetakerResponse `json:"data"`
+	}
+	if err := c.decodeJSONResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	notetaker := convertNotetaker(result.Data)
+	return &notetaker, nil
 }
 
 // GetNotetakerMedia retrieves the media (recording/transcript) for a notetaker.

@@ -20,6 +20,14 @@ func (d *DemoClient) GetCalendar(ctx context.Context, grantID, calendarID string
 	return &domain.Calendar{ID: calendarID, Name: "Demo Calendar", IsPrimary: true}, nil
 }
 
+// ListRoomResources returns demo room resources.
+func (d *DemoClient) ListRoomResources(ctx context.Context, grantID string) ([]domain.RoomResource, error) {
+	return []domain.RoomResource{
+		{Email: "boardroom@demo.nylas.com", Name: "Boardroom", Capacity: 20, Building: "Main", FloorName: "5", FloorNumber: 5, Object: "room_resource"},
+		{Email: "huddle-1@demo.nylas.com", Name: "Huddle Room 1", Capacity: 4, Building: "Main", FloorName: "2", FloorNumber: 2, Object: "room_resource"},
+	}, nil
+}
+
 // CreateCalendar simulates creating a calendar.
 func (d *DemoClient) CreateCalendar(ctx context.Context, grantID string, req *domain.CreateCalendarRequest) (*domain.Calendar, error) {
 	return &domain.Calendar{

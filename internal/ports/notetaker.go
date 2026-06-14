@@ -20,6 +20,13 @@ type NotetakerClient interface {
 	// DeleteNotetaker deletes a notetaker.
 	DeleteNotetaker(ctx context.Context, grantID, notetakerID string) error
 
+	// LeaveNotetaker instructs an active notetaker to leave its meeting,
+	// keeping the notetaker record and any generated media.
+	LeaveNotetaker(ctx context.Context, grantID, notetakerID string) error
+
+	// UpdateNotetaker updates a scheduled notetaker (join time, name, settings).
+	UpdateNotetaker(ctx context.Context, grantID, notetakerID string, req *domain.UpdateNotetakerRequest) (*domain.Notetaker, error)
+
 	// GetNotetakerMedia retrieves media data for a notetaker.
 	GetNotetakerMedia(ctx context.Context, grantID, notetakerID string) (*domain.MediaData, error)
 }

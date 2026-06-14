@@ -17,6 +17,11 @@ func (d *DemoClient) GetEventsWithCursor(ctx context.Context, grantID, calendarI
 	return &domain.EventListResponse{Data: d.getDemoEvents()}, nil
 }
 
+// ImportEvents returns demo events for bulk import/export.
+func (d *DemoClient) ImportEvents(ctx context.Context, grantID string, params *domain.EventQueryParams) ([]domain.Event, error) {
+	return d.getDemoEvents(), nil
+}
+
 func (d *DemoClient) getDemoEvents() []domain.Event {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

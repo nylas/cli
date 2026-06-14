@@ -20,6 +20,7 @@ API reference: https://developer.nylas.com/docs/reference/api/events/`,
 	cmd.AddCommand(newEventsUpdateCmd())
 	cmd.AddCommand(newEventsDeleteCmd())
 	cmd.AddCommand(newEventsRSVPCmd())
+	cmd.AddCommand(newEventsImportCmd())
 
 	return cmd
 }

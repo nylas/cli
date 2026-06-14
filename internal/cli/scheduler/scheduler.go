@@ -22,6 +22,7 @@ API reference: https://developer.nylas.com/docs/v3/scheduler/`,
 	cmd.AddCommand(newConfigurationsCmd())
 	cmd.AddCommand(newSessionsCmd())
 	cmd.AddCommand(newBookingsCmd())
+	cmd.AddCommand(newGroupEventsCmd())
 
 	return cmd
 }

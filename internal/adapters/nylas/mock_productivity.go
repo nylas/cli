@@ -45,6 +45,23 @@ func (m *MockClient) DeleteNotetaker(ctx context.Context, grantID, notetakerID s
 	return nil
 }
 
+// LeaveNotetaker simulates an active notetaker leaving its meeting.
+func (m *MockClient) LeaveNotetaker(ctx context.Context, grantID, notetakerID string) error {
+	return nil
+}
+
+// UpdateNotetaker simulates updating a scheduled notetaker.
+func (m *MockClient) UpdateNotetaker(ctx context.Context, grantID, notetakerID string, req *domain.UpdateNotetakerRequest) (*domain.Notetaker, error) {
+	nt := &domain.Notetaker{
+		ID:    notetakerID,
+		State: domain.NotetakerStateScheduled,
+	}
+	if req.Name != "" {
+		nt.BotConfig = &domain.BotConfig{Name: req.Name}
+	}
+	return nt, nil
+}
+
 // GetNotetakerMedia retrieves notetaker media.
 func (m *MockClient) GetNotetakerMedia(ctx context.Context, grantID, notetakerID string) (*domain.MediaData, error) {
 	return &domain.MediaData{

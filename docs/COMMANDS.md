@@ -206,6 +206,10 @@ nylas email delete <message-id>                                # Delete email
 nylas email mark read <message-id>                             # Mark as read
 nylas email mark unread <message-id>                           # Mark as unread
 nylas email mark starred <message-id>                          # Star a message
+nylas email move <message-id> --folder <folder-id>             # Move a message to a folder
+nylas email move <message-id> --archive                        # Archive a message (clear folders/labels)
+nylas email clean <message-id>                                 # Strip quoted replies & signatures (clean conversation)
+nylas email clean <id-1> <id-2> --keep-links                   # Clean multiple messages, keep links (--json for raw HTML)
 nylas email attachments list <message-id>                      # List attachments
 nylas email attachments download <message-id> <attachment-id>  # Download attachment
 nylas email metadata show <message-id>                         # Show message metadata
@@ -361,7 +365,9 @@ nylas calendar events create --title T --start TIME --end TIME   # Create event
 nylas calendar events update <event-id> --title "New Title"      # Update event
 nylas calendar events delete <event-id>                          # Delete event
 nylas calendar events rsvp <event-id> --status yes               # RSVP to event
+nylas calendar events import --calendar primary --start 2026-01-01 --end 2026-12-31 --json  # Bulk export/migrate
 nylas calendar availability check                                # Check availability
+nylas calendar resources                                         # List bookable rooms/equipment (alias: rooms)
 nylas calendar recurring list                                    # List recurring events
 nylas calendar virtual list                                      # List virtual meetings
 nylas calendar focus-time list                                   # List focus time blocks
@@ -809,10 +815,21 @@ nylas notetaker show <notetaker-id>
 # Get recording and transcript URLs
 nylas notetaker media <notetaker-id>
 
+# Update a scheduled notetaker (before it joins)
+nylas notetaker update <notetaker-id> --join-time "tomorrow 2pm"
+nylas notetaker update <notetaker-id> --bot-name "Recorder" --transcription=false
+
+# Make an active notetaker leave the meeting (keeps the recording)
+nylas notetaker leave <notetaker-id>
+
 # Delete/cancel a notetaker
 nylas notetaker delete <notetaker-id>             # With confirmation
 nylas notetaker delete <notetaker-id> --yes       # Skip confirmation
 ```
+
+> **`leave` vs `delete`:** `leave` removes an *active* bot from its meeting and triggers
+> recording/transcript generation, keeping the notetaker record. `delete` cancels a
+> scheduled bot or removes the notetaker and any unsaved media entirely.
 
 **Aliases:** `nylas nt`, `nylas bot`
 
@@ -888,6 +905,14 @@ nylas scheduler configurations delete <config-id>     # Delete configuration
 # Sessions
 nylas scheduler sessions create                       # Create booking session
 nylas scheduler sessions show <session-id>            # Show session details
+
+# Group events (shared/group booking under a configuration; alias: ge)
+nylas scheduler group-events list <config-id> --calendar primary  # List group events (in a time window)
+nylas scheduler group-events create <config-id> --calendar primary \
+  --title "Workshop" --capacity 50 --start "2026-07-01 18:00" --end "2026-07-01 19:00"
+nylas scheduler group-events update <config-id> <event-id> --capacity 80
+nylas scheduler group-events delete <config-id> <event-id>    # Delete a group event
+nylas scheduler group-events import <config-id> --file events.json  # Import provider events
 ```
 
 **Details:** `docs/commands/scheduler.md`

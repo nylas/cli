@@ -13,6 +13,14 @@ func (m *MockClient) GetEvents(ctx context.Context, grantID, calendarID string, 
 	return []domain.Event{}, nil
 }
 
+// ImportEvents bulk-reads events for a calendar.
+func (m *MockClient) ImportEvents(ctx context.Context, grantID string, params *domain.EventQueryParams) ([]domain.Event, error) {
+	if m.GetEventsFunc != nil {
+		return m.GetEventsFunc(ctx, grantID, params.CalendarID, params)
+	}
+	return []domain.Event{}, nil
+}
+
 // GetEventsWithCursor retrieves events with pagination.
 func (m *MockClient) GetEventsWithCursor(ctx context.Context, grantID, calendarID string, params *domain.EventQueryParams) (*domain.EventListResponse, error) {
 	if m.GetEventsWithCursorFunc != nil {

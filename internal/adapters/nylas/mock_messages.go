@@ -126,6 +126,21 @@ func (m *MockClient) UpdateMessage(ctx context.Context, grantID, messageID strin
 	return msg, nil
 }
 
+// CleanMessages returns mock cleaned messages.
+func (m *MockClient) CleanMessages(ctx context.Context, grantID string, req *domain.CleanMessagesRequest) ([]domain.CleanedMessage, error) {
+	result := make([]domain.CleanedMessage, 0, len(req.MessageIDs))
+	for _, id := range req.MessageIDs {
+		result = append(result, domain.CleanedMessage{
+			ID:           id,
+			GrantID:      grantID,
+			Object:       "message",
+			Subject:      "Test Subject",
+			Conversation: "Cleaned conversation text",
+		})
+	}
+	return result, nil
+}
+
 // DeleteMessage deletes a message.
 func (m *MockClient) DeleteMessage(ctx context.Context, grantID, messageID string) error {
 	m.DeleteMessageCalled = true

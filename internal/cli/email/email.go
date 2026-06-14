@@ -21,6 +21,8 @@ API reference: https://developer.nylas.com/docs/v3/email/`,
 	cmd.AddCommand(newReplyCmd())
 	cmd.AddCommand(newSearchCmd())
 	cmd.AddCommand(newMarkCmd())
+	cmd.AddCommand(newMoveCmd())
+	cmd.AddCommand(newCleanCmd())
 	cmd.AddCommand(newDeleteCmd())
 	cmd.AddCommand(newFoldersCmd())
 	cmd.AddCommand(newThreadsCmd())

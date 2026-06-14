@@ -32,6 +32,7 @@ API reference: https://developer.nylas.com/docs/v3/calendar/`,
 	cmd.AddCommand(newDeleteCmd())
 	cmd.AddCommand(newEventsCmd())
 	cmd.AddCommand(newAvailabilityCmd())
+	cmd.AddCommand(newResourcesCmd())
 	cmd.AddCommand(newVirtualCmd())
 	cmd.AddCommand(newRecurringCmd())
 	cmd.AddCommand(newFindTimeCmd())

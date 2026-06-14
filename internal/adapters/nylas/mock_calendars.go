@@ -15,6 +15,13 @@ func (m *MockClient) GetCalendars(ctx context.Context, grantID string) ([]domain
 	}, nil
 }
 
+// ListRoomResources returns mock room resources.
+func (m *MockClient) ListRoomResources(ctx context.Context, grantID string) ([]domain.RoomResource, error) {
+	return []domain.RoomResource{
+		{Email: "room-a@example.com", Name: "Conference Room A", Capacity: 10, Building: "HQ", FloorName: "3", Object: "room_resource"},
+	}, nil
+}
+
 // GetCalendar retrieves a single calendar.
 func (m *MockClient) GetCalendar(ctx context.Context, grantID, calendarID string) (*domain.Calendar, error) {
 	return &domain.Calendar{
