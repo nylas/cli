@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"context"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -510,6 +513,127 @@ func TestValidateAgentAppPassword(t *testing.T) {
 	assert.EqualError(t, validateAgentAppPassword("short"), "app password must be between 18 and 40 characters")
 	assert.EqualError(t, validateAgentAppPassword("Invalid Agent Pass123"), "app password must use printable ASCII characters only and cannot contain spaces")
 	assert.EqualError(t, validateAgentAppPassword("alllowercasepassword123"), "app password must include at least one uppercase letter, one lowercase letter, and one digit")
+}
+
+func TestValidateAgentName(t *testing.T) {
+	assert.NoError(t, validateAgentName(""), "empty name is valid (field omitted)")
+	assert.NoError(t, validateAgentName("Support Bot"))
+	assert.NoError(t, validateAgentName(strings.Repeat("a", 256)), "256 chars is the upper bound")
+	// Length is measured in runes, not bytes: 256 multi-byte chars are valid
+	// even though they span far more than 256 bytes.
+	assert.NoError(t, validateAgentName(strings.Repeat("あ", 256)), "256 multi-byte runes must be accepted")
+
+	assert.EqualError(t, validateAgentName(strings.Repeat("a", 257)), "name must be 256 characters or fewer")
+	assert.EqualError(t, validateAgentName(strings.Repeat("あ", 257)), "name must be 256 characters or fewer")
+}
+
+func TestCreateCmd_HasNameFlag(t *testing.T) {
+	cmd := newCreateCmd()
+	assert.NotNil(t, cmd.Flags().Lookup("name"), "create command must expose a --name flag")
+}
+
+func TestUpdateCmd_HasNameFlag(t *testing.T) {
+	cmd := newUpdateCmd()
+	assert.NotNil(t, cmd.Flags().Lookup("name"), "update command must expose a --name flag")
+}
+
+func TestResolveEffectiveName(t *testing.T) {
+	// Not provided: the existing name is preserved (the grant update replaces
+	// the whole record, so omitting it would clear the name).
+	assert.Equal(t, "Existing Bot", resolveEffectiveName("Existing Bot", "", false))
+	assert.Equal(t, "Existing Bot", resolveEffectiveName("Existing Bot", "Ignored", false))
+
+	// Provided: the caller's value wins. (An explicit empty value resolves to ""
+	// here, but the adapter omits an empty name from the payload, so this does
+	// not clear an existing name end-to-end — clearing is unsupported.)
+	assert.Equal(t, "Renamed Bot", resolveEffectiveName("Existing Bot", "Renamed Bot", true))
+	assert.Equal(t, "", resolveEffectiveName("Existing Bot", "", true))
+}
+
+func TestUpdateAgentAccount_RetryPathPreservesName(t *testing.T) {
+	// When create is retried without the app password and then patched to set
+	// it, the patch must carry the name so it is not wiped.
+	initialErr := &domain.APIError{
+		StatusCode: http.StatusBadRequest,
+		Message:    "settings.app_password is an unknown field",
+	}
+	var createNames, updateNames []string
+	createCalls := 0
+
+	client := stubAgentClient{
+		listFn: func(ctx context.Context) ([]domain.AgentAccount, error) { return nil, nil },
+		createFn: func(ctx context.Context, email, name, appPassword, workspaceID string) (*domain.AgentAccount, error) {
+			createCalls++
+			createNames = append(createNames, name)
+			if appPassword != "" {
+				return nil, initialErr
+			}
+			return &domain.AgentAccount{ID: "agent-new", Email: email, Name: name, Provider: domain.ProviderNylas}, nil
+		},
+		updateFn: func(ctx context.Context, grantID, email, name, appPassword string) (*domain.AgentAccount, error) {
+			updateNames = append(updateNames, name)
+			return &domain.AgentAccount{ID: grantID, Email: email, Name: name, Provider: domain.ProviderNylas}, nil
+		},
+	}
+
+	account, err := createAgentAccountWithFallback(context.Background(), client, "agent@example.com", "Support Bot", "ValidAgentPass123ABC!")
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	assert.Equal(t, []string{"Support Bot", "Support Bot"}, createNames, "both create attempts carry the name")
+	assert.Equal(t, []string{"Support Bot"}, updateNames, "the password-setting patch preserves the name")
+	assert.Equal(t, "Support Bot", account.Name)
+}
+
+func TestUpdateAgentAccount_ExistingAccountFallbackPreservesName(t *testing.T) {
+	// Initial create fails on app_password, an existing account is found, and
+	// we set the password via update. With no --name supplied, the existing
+	// account's name must be preserved (not wiped by the full-record PATCH).
+	initialErr := &domain.APIError{
+		StatusCode: http.StatusBadRequest,
+		Message:    "settings.app_password is an unknown field",
+	}
+	var updateName string
+
+	client := stubAgentClient{
+		listFn: func(ctx context.Context) ([]domain.AgentAccount, error) {
+			return []domain.AgentAccount{{
+				ID:       "agent-existing",
+				Email:    "agent@example.com",
+				Name:     "Existing Bot",
+				Provider: domain.ProviderNylas,
+			}}, nil
+		},
+		createFn: func(ctx context.Context, email, name, appPassword, workspaceID string) (*domain.AgentAccount, error) {
+			return nil, initialErr
+		},
+		updateFn: func(ctx context.Context, grantID, email, name, appPassword string) (*domain.AgentAccount, error) {
+			updateName = name
+			return &domain.AgentAccount{ID: grantID, Email: email, Name: name, Provider: domain.ProviderNylas}, nil
+		},
+	}
+
+	// No name supplied by the caller (empty) — must fall back to the existing name.
+	account, err := createAgentAccountWithFallback(context.Background(), client, "agent@example.com", "", "ValidAgentPass123ABC!")
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	assert.Equal(t, "Existing Bot", updateName, "existing display name must be preserved when no name is supplied")
+	assert.Equal(t, "Existing Bot", account.Name)
+}
+
+func TestCreateAgentAccountWithFallback_PassesNameToCreate(t *testing.T) {
+	var gotName string
+	client := stubAgentClient{
+		createFn: func(ctx context.Context, email, name, appPassword, workspaceID string) (*domain.AgentAccount, error) {
+			gotName = name
+			return &domain.AgentAccount{ID: "agent-new", Email: email, Name: name, Provider: domain.ProviderNylas}, nil
+		},
+	}
+
+	account, err := createAgentAccountWithFallback(context.Background(), client, "agent@example.com", "Support Bot", "")
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	assert.Equal(t, "Support Bot", gotName)
+	assert.Equal(t, "Support Bot", account.Name)
 }
 
 func TestDeleteCmd(t *testing.T) {

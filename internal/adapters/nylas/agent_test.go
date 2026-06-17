@@ -255,11 +255,14 @@ func TestCreateAgentAccount(t *testing.T) {
 		assert.Equal(t, "agent@example.com", settings["email"])
 		assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
 		assert.Equal(t, "workspace-123", payload["workspace_id"])
+		assert.Equal(t, "Support Bot", payload["name"])
+		assert.NotContains(t, settings, "name", "name must be a top-level grant field, not a setting")
 
 		response := map[string]any{
 			"data": map[string]any{
 				"id":           "agent-new",
 				"email":        "agent@example.com",
+				"name":         "Support Bot",
 				"provider":     "nylas",
 				"grant_status": "valid",
 				"workspace_id": "workspace-123",
@@ -276,12 +279,42 @@ func TestCreateAgentAccount(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "ValidAgentPass123ABC!", "workspace-123")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "Support Bot", "ValidAgentPass123ABC!", "workspace-123")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-new", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
+	assert.Equal(t, "Support Bot", account.Name)
 	assert.Equal(t, "workspace-123", account.WorkspaceID)
 	assert.Empty(t, account.Settings.PolicyID)
+}
+
+func TestCreateAgentAccount_OmitsNameWhenEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.NotContains(t, payload, "name", "name must be omitted from the payload when empty")
+
+		response := map[string]any{
+			"data": map[string]any{
+				"id":           "agent-new",
+				"email":        "agent@example.com",
+				"provider":     "nylas",
+				"grant_status": "valid",
+				"created_at":   time.Now().Unix(),
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient()
+	client.baseURL = server.URL
+	client.SetCredentials("", "", "test-api-key")
+
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "", "")
+	require.NoError(t, err)
+	assert.Empty(t, account.Name)
 }
 
 func TestUpdateAgentAccount(t *testing.T) {
@@ -320,6 +353,7 @@ func TestUpdateAgentAccount(t *testing.T) {
 			assert.Equal(t, "agent@example.com", settings["email"])
 			assert.Equal(t, "ValidAgentPass123ABC!", settings["app_password"])
 			assert.NotContains(t, settings, "policy_id")
+			assert.NotContains(t, payload, "name", "name must be omitted when empty")
 
 			response := map[string]any{
 				"data": map[string]any{
@@ -346,13 +380,62 @@ func TestUpdateAgentAccount(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.UpdateAgentAccount(context.Background(), "agent-123", "agent@example.com", "ValidAgentPass123ABC!")
+	account, err := client.UpdateAgentAccount(context.Background(), "agent-123", "agent@example.com", "", "ValidAgentPass123ABC!")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-123", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
 	assert.Equal(t, "policy-123", account.Settings.PolicyID)
 	assert.EqualValues(t, 1, atomic.LoadInt32(&getCalls))
 	assert.EqualValues(t, 1, atomic.LoadInt32(&patchCalls))
+}
+
+func TestUpdateAgentAccount_SendsNameTopLevel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			response := map[string]any{
+				"data": map[string]any{
+					"id":           "agent-123",
+					"email":        "agent@example.com",
+					"provider":     "nylas",
+					"grant_status": "valid",
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		case http.MethodPatch:
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+
+			assert.Equal(t, "Renamed Bot", payload["name"])
+			settings, ok := payload["settings"].(map[string]any)
+			require.True(t, ok)
+			assert.NotContains(t, settings, "name", "name must be top-level, not a setting")
+
+			response := map[string]any{
+				"data": map[string]any{
+					"id":           "agent-123",
+					"email":        "agent@example.com",
+					"name":         "Renamed Bot",
+					"provider":     "nylas",
+					"grant_status": "valid",
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient()
+	client.baseURL = server.URL
+	client.SetCredentials("", "", "test-api-key")
+
+	account, err := client.UpdateAgentAccount(context.Background(), "agent-123", "agent@example.com", "Renamed Bot", "")
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed Bot", account.Name)
 }
 
 func TestUpdateAgentAccount_PreservesEmptyPolicyID(t *testing.T) {
@@ -408,7 +491,7 @@ func TestUpdateAgentAccount_PreservesEmptyPolicyID(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.UpdateAgentAccount(context.Background(), "agent-123", "agent@example.com", "ValidAgentPass123ABC!")
+	account, err := client.UpdateAgentAccount(context.Background(), "agent-123", "agent@example.com", "", "ValidAgentPass123ABC!")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-123", account.ID)
 	assert.EqualValues(t, 1, atomic.LoadInt32(&patchCalls))
@@ -435,7 +518,7 @@ func TestCreateAgentAccount_RejectsNonNylasResponse(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	_, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "")
+	_, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "non-nylas managed grant")
 }
@@ -461,7 +544,7 @@ func TestUpdateAgentAccount_RejectsNonNylasResponse(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	_, err := client.UpdateAgentAccount(context.Background(), "grant-001", "agent@example.com", "ValidAgentPass123ABC!")
+	_, err := client.UpdateAgentAccount(context.Background(), "grant-001", "agent@example.com", "", "ValidAgentPass123ABC!")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "grant is not a nylas agent account")
 }
@@ -485,7 +568,7 @@ func TestCreateAgentAccount_DirectResponseFallback(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-direct", account.ID)
 	assert.Equal(t, "agent@example.com", account.Email)
@@ -516,7 +599,7 @@ func TestCreateAgentAccount_OmitsWorkspaceIDWhenEmpty(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "")
+	account, err := client.CreateAgentAccount(context.Background(), "agent@example.com", "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "agent-new", account.ID)
 }
@@ -554,7 +637,7 @@ func TestUpdateAgentAccount_RejectsNonNylasGrantBeforePatch(t *testing.T) {
 	client.baseURL = server.URL
 	client.SetCredentials("", "", "test-api-key")
 
-	_, err := client.UpdateAgentAccount(context.Background(), "grant-001", "agent@example.com", "ValidAgentPass123ABC!")
+	_, err := client.UpdateAgentAccount(context.Background(), "grant-001", "agent@example.com", "", "ValidAgentPass123ABC!")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "grant is not a nylas agent account")
 	assert.EqualValues(t, 0, atomic.LoadInt32(&patchCalls))

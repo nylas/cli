@@ -298,7 +298,7 @@ func createAgentWithPolicyForTest(t *testing.T, email, policyID string) *domain.
 
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), domain.TimeoutAPI)
-	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	account, err := client.CreateAgentAccount(ctx, email, "", "", "")
 	cancel()
 	if err != nil {
 		t.Fatalf("failed to create agent for policy attach: %v", err)

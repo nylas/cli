@@ -471,8 +471,10 @@ Create and manage Nylas-managed agent accounts backed by provider `nylas`.
 ```bash
 nylas agent account list                       # List agent accounts
 nylas agent account create <email>             # Create agent account
+nylas agent account create <email> --name "Support Bot"  # Create account with a display name
 nylas agent account create <email> --app-password PW  # Create account with IMAP/SMTP app password
 nylas agent account update [agent-id|email] --app-password PW  # Add or rotate IMAP/SMTP app password
+nylas agent account update [agent-id|email] --name "Support Bot"  # Set/rename the display name
 nylas agent account get <agent-id|email>       # Show one agent account
 nylas agent account move <agent-id|email> --workspace <id>  # Move account to another workspace
 nylas agent account delete <agent-id|email>    # Delete/revoke agent account

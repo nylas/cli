@@ -34,7 +34,7 @@ func TestCLI_AgentUpdate_UsesDefaultGrant(t *testing.T) {
 
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	account, err := client.CreateAgentAccount(ctx, email, "", "", "")
 	cancel()
 	if err != nil {
 		t.Fatalf("failed to create agent account %q for default update test: %v", email, err)

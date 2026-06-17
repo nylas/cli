@@ -5,6 +5,7 @@ type AgentAccount struct {
 	ID           string               `json:"id"`
 	Provider     Provider             `json:"provider"`
 	Email        string               `json:"email"`
+	Name         string               `json:"name,omitempty"`
 	GrantStatus  string               `json:"grant_status"`
 	WorkspaceID  string               `json:"workspace_id,omitempty"`
 	Settings     AgentAccountSettings `json:"settings,omitempty"`

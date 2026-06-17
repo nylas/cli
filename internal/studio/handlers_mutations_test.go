@@ -189,6 +189,37 @@ func TestHandleAccountCreate_RequiresEmail(t *testing.T) {
 	}
 }
 
+func TestHandleAccountCreate_AcceptsName(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	w := doJSON(t, server.routeAccounts, http.MethodPost, "/api/accounts",
+		`{"email":"bot@app.nylas.email","name":"Support Bot"}`)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	resp := decodeMutation(t, w)
+	if resp.ID != "agent-new" {
+		t.Fatalf("expected created account ID, got %q", resp.ID)
+	}
+}
+
+func TestHandleAccountCreate_RejectsTooLongName(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	// 257 multi-byte runes: well within byte limits a naive check might allow,
+	// but over the documented 256-character limit.
+	longName := strings.Repeat("あ", 257)
+	w := doJSON(t, server.routeAccounts, http.MethodPost, "/api/accounts",
+		`{"email":"bot@app.nylas.email","name":"`+longName+`"}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for over-long name, got %d (body: %s)", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleAccountPatch_RotatePassword(t *testing.T) {
 	t.Parallel()
 	server := newTestServer()
@@ -200,6 +231,98 @@ func TestHandleAccountPatch_RotatePassword(t *testing.T) {
 		t.Fatalf("expected 200, got %d (body: %s)", w.Code, w.Body.String())
 	}
 	decodeMutation(t, w)
+}
+
+func TestHandleAccountPatch_NameOnly(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	w := doJSON(t, server.routeAccounts, http.MethodPatch, "/api/accounts/agent-1",
+		`{"name":"Renamed Bot"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for name-only update, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	decodeMutation(t, w)
+}
+
+func TestHandleAccountPatch_RequiresAField(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	w := doJSON(t, server.routeAccounts, http.MethodPatch, "/api/accounts/agent-1", `{}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when neither app_password nor name is set, got %d", w.Code)
+	}
+}
+
+func TestHandleAccountPatch_RejectsTooLongName(t *testing.T) {
+	t.Parallel()
+	server := newTestServer()
+
+	longName := strings.Repeat("あ", 257)
+	w := doJSON(t, server.routeAccounts, http.MethodPatch, "/api/accounts/agent-1",
+		`{"name":"`+longName+`"}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for over-long name, got %d (body: %s)", w.Code, w.Body.String())
+	}
+}
+
+// accountUpdateRecorder returns a non-empty existing name from GetAgentAccount
+// and records the name forwarded to UpdateAgentAccount, so tests can assert the
+// preservation branch (the grant PATCH replaces the full record).
+type accountUpdateRecorder struct {
+	*nylasmock.MockClient
+	existingName string
+	gotName      string
+}
+
+func (c *accountUpdateRecorder) GetAgentAccount(ctx context.Context, grantID string) (*domain.AgentAccount, error) {
+	acct, err := c.MockClient.GetAgentAccount(ctx, grantID)
+	if err != nil {
+		return nil, err
+	}
+	acct.Name = c.existingName
+	return acct, nil
+}
+
+func (c *accountUpdateRecorder) UpdateAgentAccount(ctx context.Context, grantID, email, name, appPassword string) (*domain.AgentAccount, error) {
+	c.gotName = name
+	return c.MockClient.UpdateAgentAccount(ctx, grantID, email, name, appPassword)
+}
+
+func TestHandleAccountPatch_PreservesExistingNameOnPasswordRotation(t *testing.T) {
+	t.Parallel()
+	client := &accountUpdateRecorder{MockClient: nylasmock.NewMockClient(), existingName: "Existing Bot"}
+	server := NewServer("127.0.0.1:0", client)
+
+	w := doJSON(t, server.routeAccounts, http.MethodPatch, "/api/accounts/agent-1",
+		`{"app_password":"NewValidAgentPass456DEF!"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	if client.gotName != "Existing Bot" {
+		t.Fatalf("expected existing name to be preserved, got %q", client.gotName)
+	}
+}
+
+func TestHandleAccountPatch_OverridesNameWhenProvided(t *testing.T) {
+	t.Parallel()
+	client := &accountUpdateRecorder{MockClient: nylasmock.NewMockClient(), existingName: "Existing Bot"}
+	server := NewServer("127.0.0.1:0", client)
+
+	w := doJSON(t, server.routeAccounts, http.MethodPatch, "/api/accounts/agent-1",
+		`{"name":"Renamed Bot"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+	if client.gotName != "Renamed Bot" {
+		t.Fatalf("expected provided name to override, got %q", client.gotName)
+	}
 }
 
 func TestHandleAccountDelete(t *testing.T) {

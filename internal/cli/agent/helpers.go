@@ -97,6 +97,9 @@ func printAgentDetails(account domain.AgentAccount) {
 	fmt.Printf("ID:           %s\n", account.ID)
 	fmt.Printf("Provider:     %s\n", account.Provider.DisplayName())
 	fmt.Printf("Email:        %s\n", account.Email)
+	if account.Name != "" {
+		fmt.Printf("Name:         %s\n", account.Name)
+	}
 	fmt.Printf("Status:       %s\n", common.FormatGrantStatus(account.GrantStatus))
 	if account.CredentialID != "" {
 		fmt.Printf("Credential:   %s\n", account.CredentialID)
