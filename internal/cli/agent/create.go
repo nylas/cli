@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
@@ -15,6 +16,7 @@ import (
 
 func newCreateCmd() *cobra.Command {
 	var appPassword string
+	var name string
 
 	cmd := &cobra.Command{
 		Use:   "create <email>",
@@ -31,19 +33,21 @@ To attach a custom policy after creation:
 Examples:
   nylas agent account create me@yourapp.nylas.email
   nylas agent account create support@yourapp.nylas.email --json
+  nylas agent account create support@yourapp.nylas.email --name 'Support Bot'
   nylas agent account create debug@yourapp.nylas.email --app-password 'ValidAgentPass123ABC!'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCreate(args[0], appPassword, common.IsJSON(cmd))
+			return runCreate(args[0], name, appPassword, common.IsJSON(cmd))
 		},
 	}
 
+	cmd.Flags().StringVar(&name, "name", "", "Optional display name for the agent account (1-256 characters)")
 	cmd.Flags().StringVar(&appPassword, "app-password", "", "Optional IMAP/SMTP app password for mail-client access")
 
 	return cmd
 }
 
-func runCreate(email, appPassword string, jsonOutput bool) error {
+func runCreate(email, name, appPassword string, jsonOutput bool) error {
 	email = strings.TrimSpace(email)
 	if email == "" {
 		common.PrintError("Email address cannot be empty")
@@ -52,6 +56,11 @@ func runCreate(email, appPassword string, jsonOutput bool) error {
 	if strings.Contains(email, " ") {
 		common.PrintError("Email address should not contain spaces")
 		return common.NewInputError("invalid email address - should not contain spaces")
+	}
+	name = strings.TrimSpace(name)
+	if err := validateAgentName(name); err != nil {
+		common.PrintError(err.Error())
+		return err
 	}
 	if err := validateAgentAppPassword(appPassword); err != nil {
 		common.PrintError(err.Error())
@@ -63,7 +72,7 @@ func runCreate(email, appPassword string, jsonOutput bool) error {
 			return struct{}{}, common.WrapCreateError("nylas connector", err)
 		}
 
-		account, err := createAgentAccountWithFallback(ctx, client, email, appPassword)
+		account, err := createAgentAccountWithFallback(ctx, client, email, name, appPassword)
 		if err != nil {
 			return struct{}{}, common.WrapCreateError("agent account", err)
 		}
@@ -94,15 +103,22 @@ func runCreate(email, appPassword string, jsonOutput bool) error {
 	return err
 }
 
-func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClient, email, appPassword string) (*domain.AgentAccount, error) {
-	account, err := client.CreateAgentAccount(ctx, email, appPassword, "")
+func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClient, email, name, appPassword string) (*domain.AgentAccount, error) {
+	account, err := client.CreateAgentAccount(ctx, email, name, appPassword, "")
 	if err == nil || appPassword == "" || !shouldRetryAgentCreateWithoutPassword(err) {
 		return account, err
 	}
 
 	existingAccount, lookupErr := findExistingAgentAccountByEmail(ctx, client, email)
 	if lookupErr == nil && existingAccount != nil {
-		updated, updateErr := client.UpdateAgentAccount(ctx, existingAccount.ID, email, appPassword)
+		// Apply the requested name when given, otherwise preserve the existing
+		// account's name — the grant update replaces the full record, so an
+		// empty name would clear it.
+		effectiveName := name
+		if effectiveName == "" {
+			effectiveName = existingAccount.Name
+		}
+		updated, updateErr := client.UpdateAgentAccount(ctx, existingAccount.ID, email, effectiveName, appPassword)
 		if updateErr == nil {
 			if updated == nil {
 				return existingAccount, nil
@@ -113,12 +129,14 @@ func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClien
 		return nil, fmt.Errorf("failed to set app password on existing agent account %s: %w", email, updateErr)
 	}
 
-	account, retryErr := client.CreateAgentAccount(ctx, email, "", "")
+	account, retryErr := client.CreateAgentAccount(ctx, email, name, "", "")
 	if retryErr != nil {
 		return nil, fmt.Errorf("failed to create agent account after retrying without app password: %w", retryErr)
 	}
 
-	updated, updateErr := client.UpdateAgentAccount(ctx, account.ID, email, appPassword)
+	// Re-send name so the password-setting update preserves it (the grant
+	// update replaces the full record).
+	updated, updateErr := client.UpdateAgentAccount(ctx, account.ID, email, name, appPassword)
 	if updateErr == nil {
 		return updated, nil
 	}
@@ -207,6 +225,20 @@ func shouldRetryAgentCreateWithoutPassword(err error) bool {
 	}
 
 	return false
+}
+
+// validateAgentName enforces the grant name constraints (1-256 characters when
+// set). An empty name is valid and omits the field from the create payload.
+// Length is measured in Unicode characters (runes), not bytes, to match the
+// documented "1-256 characters" limit for multi-byte names.
+func validateAgentName(name string) error {
+	if name == "" {
+		return nil
+	}
+	if utf8.RuneCountInString(name) > 256 {
+		return common.NewInputError("name must be 256 characters or fewer")
+	}
+	return nil
 }
 
 func validateAgentAppPassword(appPassword string) error {

@@ -61,6 +61,7 @@ Notes:
 
 - the `nylas` connector is created automatically on first use
 - the API auto-creates a **default workspace and policy** for the account
+- add `--name 'Support Bot'` to set a display name on the account (1–256 characters)
 - add `--app-password 'ValidAgentPass123ABC!'` to also enable IMAP/SMTP
   mail-client access (see Step 7)
 - `--json` prints the raw payload for scripting:

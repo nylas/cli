@@ -67,6 +67,7 @@ Agent Accounts (2)
 
 ```bash
 nylas agent account create me@yourapp.nylas.email
+nylas agent account create me@yourapp.nylas.email --name 'Support Bot'
 nylas agent account create me@yourapp.nylas.email --app-password 'ValidAgentPass123ABC!'
 nylas agent account create support@yourapp.nylas.email --json
 ```
@@ -76,6 +77,7 @@ Behavior:
 - automatically creates the `nylas` connector first if it does not exist
 - the API auto-creates a default workspace and policy for the account
 - stores the created grant locally like other authenticated accounts
+- optionally sets a top-level `name` (display name) on the grant
 - optionally sets `settings.app_password` on the grant for IMAP/SMTP mail client access
 
 To attach a custom policy after creation:
@@ -93,6 +95,18 @@ Email:      me@yourapp.nylas.email
 Provider:   nylas
 Status:     valid
 ```
+
+### `--name`
+
+Use `--name` to set a top-level display name on the agent account grant. This is a single name field (not split into first/last) and is independent of `settings`.
+
+```bash
+nylas agent account create me@yourapp.nylas.email --name 'Support Bot'
+```
+
+Requirements:
+- 1 to 256 characters when set
+- omitted from the request entirely when not provided
 
 ### `--app-password`
 
@@ -127,15 +141,26 @@ You can look up an agent account by grant ID or by email address. If you omit th
 ```bash
 nylas agent account update --app-password 'ValidAgentPass123ABC!'
 nylas agent account update 12345678-1234-1234-1234-123456789012 --app-password 'ValidAgentPass123ABC!'
+nylas agent account update me@yourapp.nylas.email --name 'Support Bot'
 nylas agent account update me@yourapp.nylas.email --app-password 'ValidAgentPass123ABC!' --json
 ```
 
 Behavior:
 - updates the resolved local `provider=nylas` grant when no identifier is passed
-- currently supports rotating or adding `settings.app_password`
+- supports rotating or adding `settings.app_password` and/or setting the top-level `name`
+- requires at least one of `--app-password` or `--name`
 - preserves the existing account email and policy attachment
+- preserves the existing display name when `--name` is not passed (the grant update replaces the full record, so the CLI re-sends the current name)
 
-Use this when you want to add mail-client access after creation or rotate an existing IMAP/SMTP app password.
+Use this when you want to add mail-client access after creation, rotate an existing IMAP/SMTP app password, or rename the account.
+
+### `--name` (update)
+
+`--name` sets the top-level display name (1–256 characters). Omit it to leave the current name unchanged. Clearing an existing name (setting it back to empty) is not currently supported by the grant API.
+
+```bash
+nylas agent account update me@yourapp.nylas.email --name 'Support Bot'
+```
 
 ## Move Agent Account
 

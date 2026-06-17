@@ -11,6 +11,7 @@ import (
 type managedGrantResponse struct {
 	ID           string               `json:"id"`
 	Email        string               `json:"email"`
+	Name         string               `json:"name,omitempty"`
 	Provider     domain.Provider      `json:"provider"`
 	GrantStatus  string               `json:"grant_status"`
 	WorkspaceID  string               `json:"workspace_id,omitempty"`
@@ -98,6 +99,7 @@ func convertManagedGrantToAgentAccount(grant managedGrantResponse) domain.AgentA
 		ID:           grant.ID,
 		Provider:     grant.Provider,
 		Email:        grant.Email,
+		Name:         grant.Name,
 		GrantStatus:  grant.GrantStatus,
 		WorkspaceID:  grant.WorkspaceID,
 		CreatedAt:    grant.CreatedAt,

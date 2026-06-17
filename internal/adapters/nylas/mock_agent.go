@@ -28,21 +28,23 @@ func (m *MockClient) GetAgentAccount(ctx context.Context, grantID string) (*doma
 	}, nil
 }
 
-func (m *MockClient) CreateAgentAccount(ctx context.Context, email, appPassword, workspaceID string) (*domain.AgentAccount, error) {
+func (m *MockClient) CreateAgentAccount(ctx context.Context, email, name, appPassword, workspaceID string) (*domain.AgentAccount, error) {
 	return &domain.AgentAccount{
 		ID:          "agent-new",
 		Provider:    domain.ProviderNylas,
 		Email:       email,
+		Name:        name,
 		GrantStatus: "valid",
 		WorkspaceID: "workspace-new",
 	}, nil
 }
 
-func (m *MockClient) UpdateAgentAccount(ctx context.Context, grantID, email, appPassword string) (*domain.AgentAccount, error) {
+func (m *MockClient) UpdateAgentAccount(ctx context.Context, grantID, email, name, appPassword string) (*domain.AgentAccount, error) {
 	return &domain.AgentAccount{
 		ID:          grantID,
 		Provider:    domain.ProviderNylas,
 		Email:       email,
+		Name:        name,
 		GrantStatus: "valid",
 		WorkspaceID: "workspace-1",
 	}, nil

@@ -294,7 +294,7 @@ func TestCLI_AgentUpdate_ByEmail(t *testing.T) {
 
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	account, err := client.CreateAgentAccount(ctx, email, "", "", "")
 	cancel()
 	if err != nil {
 		t.Fatalf("failed to create agent account %q for update test: %v", email, err)
@@ -608,14 +608,14 @@ func newAgentTestEmail(t *testing.T, prefix string) string {
 }
 
 func createAgentForTest(t *testing.T, client interface {
-	CreateAgentAccount(context.Context, string, string, string) (*domain.AgentAccount, error)
+	CreateAgentAccount(context.Context, string, string, string, string) (*domain.AgentAccount, error)
 }, email string) *domain.AgentAccount {
 	t.Helper()
 	acquireRateLimit(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	account, err := client.CreateAgentAccount(ctx, email, "", "")
+	account, err := client.CreateAgentAccount(ctx, email, "", "", "")
 	if err != nil {
 		t.Fatalf("failed to create agent account %q for test setup: %v", email, err)
 	}
