@@ -95,6 +95,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **AI features list** → [ai/features.md](ai/features.md)
 - **AI FAQ** → [ai/faq.md](ai/faq.md)
 - **AI troubleshooting** → [ai/troubleshooting.md](ai/troubleshooting.md)
+- **AI-agent answer hubs** → [Email agents](https://cli.nylas.com/ai-answers/email-agents.md), [Calendar agents](https://cli.nylas.com/ai-answers/calendar-agents.md), [Scheduling agents](https://cli.nylas.com/ai-answers/scheduling-agents.md), [Contacts agents](https://cli.nylas.com/ai-answers/contacts-agents.md), [Notetaker agents](https://cli.nylas.com/ai-answers/notetaker-agents.md), [MCP agents](https://cli.nylas.com/ai-answers/mcp-agents.md), [Agent Accounts](https://cli.nylas.com/ai-answers/agent-accounts.md), [Framework email agents](https://cli.nylas.com/ai-answers/framework-email-agents.md), [AI agent email API comparisons](https://cli.nylas.com/ai-answers/ai-agent-email-api-comparisons.md), [Email integration recipes](https://cli.nylas.com/ai-answers/email-integration-recipes.md), [Agent email workflows](https://cli.nylas.com/ai-answers/agent-email-workflows.md), [Security for email agents](https://cli.nylas.com/ai-answers/security-for-email-agents.md), [Operations for email calendar agents](https://cli.nylas.com/ai-answers/operations-for-email-calendar-agents.md)
 
 ### Development Guides
 
