@@ -143,7 +143,7 @@ nylas mcp    # Start the MCP server for AI assistants
 nylas ai     # Chat with your data
 ```
 
-Works with Claude Code, Cursor, Codex CLI, and any MCP-compatible assistant.
+Works with Claude Code, Cursor, Codex CLI, and any MCP-compatible assistant. For agent-focused markdown references, see the [email agents](https://cli.nylas.com/ai-answers/email-agents.md), [calendar agents](https://cli.nylas.com/ai-answers/calendar-agents.md), [MCP agents](https://cli.nylas.com/ai-answers/mcp-agents.md), and [Agent Accounts](https://cli.nylas.com/ai-answers/agent-accounts.md) hubs.
 
 ## Guides
 
