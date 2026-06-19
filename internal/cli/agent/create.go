@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const agentDomainDashboardURL = "https://dashboard-v3.nylas.com/"
+
 func newCreateCmd() *cobra.Command {
 	var appPassword string
 	var name string
@@ -48,7 +50,7 @@ Examples:
 }
 
 func runCreate(email, name, appPassword string, jsonOutput bool) error {
-	email = strings.TrimSpace(email)
+	email = normalizeAgentAccountEmail(email)
 	if email == "" {
 		common.PrintError("Email address cannot be empty")
 		return common.NewInputError("email address cannot be empty")
@@ -106,7 +108,7 @@ func runCreate(email, name, appPassword string, jsonOutput bool) error {
 func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClient, email, name, appPassword string) (*domain.AgentAccount, error) {
 	account, err := client.CreateAgentAccount(ctx, email, name, appPassword, "")
 	if err == nil || appPassword == "" || !shouldRetryAgentCreateWithoutPassword(err) {
-		return account, err
+		return account, wrapAgentAccountCreateError(email, err)
 	}
 
 	existingAccount, lookupErr := findExistingAgentAccountByEmail(ctx, client, email)
@@ -131,7 +133,7 @@ func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClien
 
 	account, retryErr := client.CreateAgentAccount(ctx, email, name, "", "")
 	if retryErr != nil {
-		return nil, fmt.Errorf("failed to create agent account after retrying without app password: %w", retryErr)
+		return nil, fmt.Errorf("failed to create agent account after retrying without app password: %w", wrapAgentAccountCreateError(email, retryErr))
 	}
 
 	// Re-send name so the password-setting update preserves it (the grant
@@ -156,6 +158,14 @@ func createAgentAccountWithFallback(ctx context.Context, client ports.AgentClien
 		account.ID,
 		updateErr,
 	)
+}
+
+func normalizeAgentAccountEmail(email string) string {
+	email = strings.TrimSpace(email)
+	if email == "" || strings.Contains(email, "@") {
+		return email
+	}
+	return email + "@nylas.email"
 }
 
 func findExistingAgentAccountByEmail(ctx context.Context, client ports.AgentClient, email string) (*domain.AgentAccount, error) {
@@ -225,6 +235,106 @@ func shouldRetryAgentCreateWithoutPassword(err error) bool {
 	}
 
 	return false
+}
+
+type agentAccountDomainErrorKind int
+
+const (
+	agentAccountDomainErrorNone agentAccountDomainErrorKind = iota
+	agentAccountDomainErrorMissing
+	agentAccountDomainErrorLimit
+)
+
+func wrapAgentAccountCreateError(email string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	kind, apiErr := classifyAgentAccountDomainError(err)
+	if kind == agentAccountDomainErrorNone {
+		return err
+	}
+
+	domainName := agentAccountDomainFromEmail(email)
+	if domainName == "" {
+		domainName = "the requested domain"
+	}
+
+	suggestions := []string{
+		fmt.Sprintf("Create or register %q as an agent domain in the Nylas Dashboard: %s", domainName, agentDomainDashboardURL),
+	}
+
+	message := fmt.Sprintf("Cannot create agent account because domain %q is not registered", domainName)
+	if kind == agentAccountDomainErrorLimit {
+		message = "Maximum number of agent account domains reached"
+		suggestions = append(suggestions, "Remove an unused domain or use an email address on one of your existing agent domains")
+	} else {
+		suggestions = append(suggestions, "Or use an email address on an agent domain already registered in the Dashboard")
+		suggestions = append(suggestions, fmt.Sprintf("After registering the domain, retry: nylas agent account create %s", email))
+	}
+
+	requestID := ""
+	if apiErr != nil {
+		requestID = apiErr.RequestID
+	}
+
+	return &common.CLIError{
+		Err:         err,
+		Message:     message,
+		Suggestions: suggestions,
+		Code:        common.ErrCodeInvalidInput,
+		RequestID:   requestID,
+	}
+}
+
+func classifyAgentAccountDomainError(err error) (agentAccountDomainErrorKind, *domain.APIError) {
+	var apiErr *domain.APIError
+	if !errors.As(err, &apiErr) {
+		return agentAccountDomainErrorNone, nil
+	}
+	if apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusUnprocessableEntity && apiErr.StatusCode != http.StatusNotFound {
+		return agentAccountDomainErrorNone, apiErr
+	}
+
+	msg := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	if !strings.Contains(msg, "domain") {
+		return agentAccountDomainErrorNone, apiErr
+	}
+
+	limitPhrases := []string{
+		"maximum",
+		"max",
+		"limit",
+	}
+	for _, phrase := range limitPhrases {
+		if strings.Contains(msg, phrase) {
+			return agentAccountDomainErrorLimit, apiErr
+		}
+	}
+
+	missingPhrases := []string{
+		"not registered",
+		"not found",
+		"does not exist",
+		"doesn't exist",
+		"missing",
+		"unknown",
+	}
+	for _, phrase := range missingPhrases {
+		if strings.Contains(msg, phrase) {
+			return agentAccountDomainErrorMissing, apiErr
+		}
+	}
+
+	return agentAccountDomainErrorNone, apiErr
+}
+
+func agentAccountDomainFromEmail(email string) string {
+	_, domainName, ok := strings.Cut(strings.TrimSpace(email), "@")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(domainName)
 }
 
 // validateAgentName enforces the grant name constraints (1-256 characters when

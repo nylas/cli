@@ -79,6 +79,8 @@ Behavior:
 - stores the created grant locally like other authenticated accounts
 - optionally sets a top-level `name` (display name) on the grant
 - optionally sets `settings.app_password` on the grant for IMAP/SMTP mail client access
+- treats a bare account name such as `agent` as `agent@nylas.email`
+- when the requested domain is not registered, points to `https://dashboard-v3.nylas.com/` to create or register the agent domain before retrying
 
 To attach a custom policy after creation:
 ```bash
