@@ -86,8 +86,11 @@ func TestRunNonInteractive_ReconfiguresExistingAPIKey(t *testing.T) {
 	}
 
 	printCompleteCalls := 0
-	printCompleteFn = func() {
+	printCompleteFn = func(status SetupStatus) {
 		printCompleteCalls++
+		if !status.HasAPIKey {
+			t.Fatal("expected completion status with API key configured")
+		}
 	}
 
 	err := runNonInteractive(wizardOpts{

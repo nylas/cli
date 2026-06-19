@@ -21,6 +21,7 @@ Commands:
   status     Show current dashboard authentication status
   refresh    Refresh dashboard session tokens
   apps       Manage Nylas applications
+  domains    Manage inbox and Agent Account domains
   orgs       Manage organizations (list, switch)
 
 Guide: https://developer.nylas.com/docs/dev-guide/dashboard/`,
@@ -33,6 +34,7 @@ Guide: https://developer.nylas.com/docs/dev-guide/dashboard/`,
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newRefreshCmd())
 	cmd.AddCommand(newAppsCmd())
+	cmd.AddCommand(newDomainsCmd())
 	cmd.AddCommand(newOrgsCmd())
 
 	return cmd
