@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,11 @@ func TestCreateAgentAccountWithFallback_ReturnsRetryError(t *testing.T) {
 		StatusCode: http.StatusBadRequest,
 		Message:    "settings.app_password is an unknown field",
 	}
-	retryErr := errors.New("domain is not registered")
+	retryErr := &domain.APIError{
+		StatusCode: http.StatusBadRequest,
+		Message:    "domain is not registered",
+		RequestID:  "req-123",
+	}
 	createCalls := 0
 
 	client := stubAgentClient{
@@ -89,8 +94,17 @@ func TestCreateAgentAccountWithFallback_ReturnsRetryError(t *testing.T) {
 	assert.Nil(t, account)
 	assert.ErrorIs(t, err, retryErr)
 	assert.ErrorContains(t, err, "retrying without app password")
+	assert.ErrorContains(t, err, "Cannot create agent account because domain")
 	assert.NotErrorIs(t, err, initialErr)
 	assert.Equal(t, 2, createCalls)
+
+	var cliErr *common.CLIError
+	require.ErrorAs(t, err, &cliErr)
+	assert.Equal(t, "req-123", cliErr.RequestID)
+	assert.Equal(t, `Cannot create agent account because domain "example.com" is not registered`, cliErr.Message)
+	assert.Contains(t, cliErr.Suggestions, `Create or register "example.com" as an agent domain in the Nylas Dashboard: `+agentDomainDashboardURL)
+	assert.Contains(t, cliErr.Suggestions, "Or use an email address on an agent domain already registered in the Dashboard")
+	assert.Contains(t, cliErr.Suggestions, "After registering the domain, retry: nylas agent account create agent@example.com")
 }
 
 func TestCreateAgentAccountWithFallback_SkipsCleanupForExistingGrant(t *testing.T) {
@@ -399,4 +413,86 @@ func TestCreateAgentAccountWithFallback_DoesNotRetryInvalidPasswordValue(t *test
 	assert.Nil(t, account)
 	assert.ErrorIs(t, err, initialErr)
 	assert.Equal(t, 1, createCalls)
+}
+
+func TestNormalizeAgentAccountEmail(t *testing.T) {
+	assert.Equal(t, "agent@nylas.email", normalizeAgentAccountEmail(" agent "))
+	assert.Equal(t, "agent@example.com", normalizeAgentAccountEmail(" agent@example.com "))
+	assert.Equal(t, "", normalizeAgentAccountEmail(" "))
+}
+
+func TestWrapAgentAccountCreateError_DomainFailures(t *testing.T) {
+	tests := []struct {
+		name              string
+		err               error
+		email             string
+		wantMessage       string
+		wantSuggestion    string
+		wantRetry         string
+		wantOriginalError bool
+	}{
+		{
+			name: "missing domain",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Domain doesn't exist",
+				RequestID:  "req-domain",
+			},
+			email:          "support@example.com",
+			wantMessage:    `Cannot create agent account because domain "example.com" is not registered`,
+			wantSuggestion: `Create or register "example.com" as an agent domain in the Nylas Dashboard: ` + agentDomainDashboardURL,
+			wantRetry:      "After registering the domain, retry: nylas agent account create support@example.com",
+		},
+		{
+			name: "live api missing domain wording",
+			err: &domain.APIError{
+				StatusCode: http.StatusNotFound,
+				Type:       "api.not_found_error",
+				Message:    "Provisioning the inbox failed: Domain not found",
+				RequestID:  "req-domain",
+			},
+			email:          "agent@missing.nylas.email",
+			wantMessage:    `Cannot create agent account because domain "missing.nylas.email" is not registered`,
+			wantSuggestion: `Create or register "missing.nylas.email" as an agent domain in the Nylas Dashboard: ` + agentDomainDashboardURL,
+			wantRetry:      "After registering the domain, retry: nylas agent account create agent@missing.nylas.email",
+		},
+		{
+			name: "domain limit",
+			err: &domain.APIError{
+				StatusCode: http.StatusUnprocessableEntity,
+				Message:    "maximum number of domains reached",
+			},
+			email:          "support@example.com",
+			wantMessage:    "Maximum number of agent account domains reached",
+			wantSuggestion: `Create or register "example.com" as an agent domain in the Nylas Dashboard: ` + agentDomainDashboardURL,
+			wantRetry:      "Remove an unused domain or use an email address on one of your existing agent domains",
+		},
+		{
+			name: "unrelated api error",
+			err: &domain.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "invalid email address",
+			},
+			email:             "support@example.com",
+			wantOriginalError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := wrapAgentAccountCreateError(tt.email, tt.err)
+			require.Error(t, err)
+			if tt.wantOriginalError {
+				assert.Same(t, tt.err, err)
+				return
+			}
+
+			var cliErr *common.CLIError
+			require.ErrorAs(t, err, &cliErr)
+			assert.Equal(t, tt.wantMessage, cliErr.Message)
+			assert.Contains(t, cliErr.Suggestions, tt.wantSuggestion)
+			assert.Contains(t, cliErr.Suggestions, tt.wantRetry)
+			assert.ErrorIs(t, err, tt.err)
+		})
+	}
 }
