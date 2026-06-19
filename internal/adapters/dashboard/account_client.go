@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -215,6 +216,158 @@ func (c *AccountClient) SwitchOrg(ctx context.Context, orgPublicID, userToken, o
 	var result domain.DashboardSwitchOrgResponse
 	if err := c.doPost(ctx, "/sessions/switch-org", body, headers, userToken, &result); err != nil {
 		return nil, fmt.Errorf("failed to switch organization: %w", err)
+	}
+	return &result, nil
+}
+
+// ListDomains lists inbox/agent-account domains for the active dashboard organization.
+func (c *AccountClient) ListDomains(ctx context.Context, limit int, pageToken, userToken, orgToken string) (domain.DashboardInboxDomainPage, error) {
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if pageToken != "" {
+		q.Set("pageToken", pageToken)
+	}
+	path := "/orgs/inbox/domains"
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	headers := bearerHeaders(userToken, orgToken)
+	raw, err := c.doGetRawResponse(ctx, path, headers, userToken)
+	if err != nil {
+		return domain.DashboardInboxDomainPage{}, fmt.Errorf("failed to list domains: %w", err)
+	}
+
+	result, err := decodeDomainPage(raw)
+	if err != nil {
+		return domain.DashboardInboxDomainPage{}, fmt.Errorf("failed to list domains: %w", err)
+	}
+	return result, nil
+}
+
+func decodeDomainPage(raw rawResponse) (domain.DashboardInboxDomainPage, error) {
+	var domains []domain.DashboardInboxDomain
+	if err := json.Unmarshal(raw.Data, &domains); err == nil {
+		return domain.DashboardInboxDomainPage{
+			Domains:    domains,
+			NextCursor: raw.NextCursor,
+		}, nil
+	}
+
+	var payload struct {
+		Domains         *[]domain.DashboardInboxDomain `json:"domains"`
+		NextCursor      string                         `json:"nextCursor"`
+		NextCursorSnake string                         `json:"next_cursor"`
+		PageToken       string                         `json:"pageToken"`
+	}
+	if err := json.Unmarshal(raw.Data, &payload); err != nil {
+		return domain.DashboardInboxDomainPage{}, fmt.Errorf("failed to decode response: %w", err)
+	}
+	if payload.Domains == nil {
+		return domain.DashboardInboxDomainPage{}, fmt.Errorf("failed to decode response: missing domains")
+	}
+
+	nextCursor := raw.NextCursor
+	for _, cursor := range []string{payload.NextCursor, payload.NextCursorSnake, payload.PageToken} {
+		if nextCursor == "" && cursor != "" {
+			nextCursor = cursor
+		}
+	}
+
+	return domain.DashboardInboxDomainPage{
+		Domains:    *payload.Domains,
+		NextCursor: nextCursor,
+	}, nil
+}
+
+// GetDomain retrieves an inbox domain by ID or address.
+func (c *AccountClient) GetDomain(ctx context.Context, domainIDOrAddress, region, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	path := "/orgs/inbox/domains/" + url.PathEscape(domainIDOrAddress)
+	if region != "" {
+		path += "?region=" + url.QueryEscape(region)
+	}
+
+	headers := bearerHeaders(userToken, orgToken)
+	var result domain.DashboardInboxDomain
+	if err := c.doGet(ctx, path, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to get domain: %w", err)
+	}
+	return &result, nil
+}
+
+// CheckDomainAvailability checks org-scoped availability for a domain address.
+func (c *AccountClient) CheckDomainAvailability(ctx context.Context, domainAddress, userToken, orgToken string) (*domain.DashboardInboxDomainAvailability, error) {
+	path := "/orgs/inbox/domains/availability?domainAddress=" + url.QueryEscape(domainAddress)
+	headers := bearerHeaders(userToken, orgToken)
+
+	var result domain.DashboardInboxDomainAvailability
+	if err := c.doGet(ctx, path, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to check domain availability: %w", err)
+	}
+	return &result, nil
+}
+
+// CreateDomain creates/registers an inbox domain.
+func (c *AccountClient) CreateDomain(ctx context.Context, input domain.DashboardCreateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	headers := bearerHeaders(userToken, orgToken)
+	var result domain.DashboardInboxDomain
+	if err := c.doPost(ctx, "/orgs/inbox/domains", input, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to create domain: %w", err)
+	}
+	return &result, nil
+}
+
+// UpdateDomain updates an inbox domain.
+func (c *AccountClient) UpdateDomain(ctx context.Context, domainID, region string, input domain.DashboardUpdateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	path := "/orgs/inbox/domains/" + url.PathEscape(domainID) + "?region=" + url.QueryEscape(region)
+	headers := bearerHeaders(userToken, orgToken)
+
+	var result domain.DashboardInboxDomain
+	if err := c.doPatch(ctx, path, input, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to update domain: %w", err)
+	}
+	return &result, nil
+}
+
+// DeleteDomain deletes an inbox domain.
+func (c *AccountClient) DeleteDomain(ctx context.Context, domainID, region, userToken, orgToken string) (bool, error) {
+	path := "/orgs/inbox/domains/" + url.PathEscape(domainID) + "?region=" + url.QueryEscape(region)
+	headers := bearerHeaders(userToken, orgToken)
+
+	var result struct {
+		Success bool `json:"success"`
+	}
+	if err := c.doDelete(ctx, path, headers, userToken, &result); err != nil {
+		return false, fmt.Errorf("failed to delete domain: %w", err)
+	}
+	return result.Success, nil
+}
+
+// GetDomainInfo returns DNS-record info for a verification type.
+func (c *AccountClient) GetDomainInfo(ctx context.Context, domainID, region, verificationType, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error) {
+	q := url.Values{}
+	q.Set("region", region)
+	q.Set("type", verificationType)
+	path := "/orgs/inbox/domains/" + url.PathEscape(domainID) + "/info?" + q.Encode()
+	headers := bearerHeaders(userToken, orgToken)
+
+	var result domain.DashboardDomainVerificationResult
+	if err := c.doGet(ctx, path, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to get domain DNS info: %w", err)
+	}
+	return &result, nil
+}
+
+// VerifyDomain triggers verification for a DNS/authentication record type.
+func (c *AccountClient) VerifyDomain(ctx context.Context, domainID, region string, input domain.DashboardVerifyInboxDomainInput, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error) {
+	path := "/orgs/inbox/domains/" + url.PathEscape(domainID) + "/verify?region=" + url.QueryEscape(region)
+	headers := bearerHeaders(userToken, orgToken)
+
+	var result domain.DashboardDomainVerificationResult
+	if err := c.doPost(ctx, path, input, headers, userToken, &result); err != nil {
+		return nil, fmt.Errorf("failed to verify domain: %w", err)
 	}
 	return &result, nil
 }

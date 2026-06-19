@@ -21,7 +21,7 @@ import (
 var setupCallbackProvisioner = EnsureOAuthCallbackURI
 
 // printComplete prints the final success message.
-func printComplete() {
+func printComplete(status SetupStatus) {
 	fmt.Println()
 	_, _ = common.Bold.Println("  ══════════════════════════════════════════")
 	fmt.Println()
@@ -32,8 +32,30 @@ func printComplete() {
 	fmt.Println("    nylas calendar events     Upcoming events")
 	fmt.Println("    nylas auth status         Check configuration")
 	fmt.Println()
+	fmt.Println("  Register a free Agent Account email domain:")
+	for _, cmd := range domainRegistrationCommands(status) {
+		fmt.Printf("    %s\n", cmd)
+	}
+	fmt.Println()
+	fmt.Println("  Create an Agent Account on that domain:")
+	fmt.Println("    nylas agent account create user@<subdomain>.nylas.email")
+	fmt.Println()
 	fmt.Println("  Documentation: https://cli.nylas.com/")
 	fmt.Println()
+}
+
+func domainRegistrationCommands(status SetupStatus) []string {
+	switch status.ActiveAppRegion {
+	case "us", "eu":
+		return []string{
+			fmt.Sprintf("nylas dashboard domains create <subdomain>.nylas.email --region %s", status.ActiveAppRegion),
+		}
+	default:
+		return []string{
+			"nylas dashboard domains create <subdomain>.nylas.email --region us",
+			"nylas dashboard domains create <subdomain>.nylas.email --region eu",
+		}
+	}
 }
 
 // printStepRecovery prints manual recovery instructions when a step fails.

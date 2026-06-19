@@ -8,17 +8,25 @@ import (
 
 // MockAccountClient is a test mock for ports.DashboardAccountClient.
 type MockAccountClient struct {
-	RegisterFn               func(ctx context.Context, email, password string, privacyPolicyAccepted bool) (*domain.DashboardRegisterResponse, error)
-	VerifyEmailCodeFn        func(ctx context.Context, email, code, region string) (*domain.DashboardAuthResponse, error)
-	ResendVerificationCodeFn func(ctx context.Context, email string) error
-	LoginFn                  func(ctx context.Context, email, password, orgPublicID string) (*domain.DashboardAuthResponse, *domain.DashboardMFARequired, error)
-	LoginMFAFn               func(ctx context.Context, userPublicID, code, orgPublicID string) (*domain.DashboardAuthResponse, error)
-	RefreshFn                func(ctx context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error)
-	LogoutFn                 func(ctx context.Context, userToken, orgToken string) error
-	SSOStartFn               func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error)
-	SSOPollFn                func(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
-	GetCurrentSessionFn      func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
-	SwitchOrgFn              func(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
+	RegisterFn                func(ctx context.Context, email, password string, privacyPolicyAccepted bool) (*domain.DashboardRegisterResponse, error)
+	VerifyEmailCodeFn         func(ctx context.Context, email, code, region string) (*domain.DashboardAuthResponse, error)
+	ResendVerificationCodeFn  func(ctx context.Context, email string) error
+	LoginFn                   func(ctx context.Context, email, password, orgPublicID string) (*domain.DashboardAuthResponse, *domain.DashboardMFARequired, error)
+	LoginMFAFn                func(ctx context.Context, userPublicID, code, orgPublicID string) (*domain.DashboardAuthResponse, error)
+	RefreshFn                 func(ctx context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error)
+	LogoutFn                  func(ctx context.Context, userToken, orgToken string) error
+	SSOStartFn                func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error)
+	SSOPollFn                 func(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
+	GetCurrentSessionFn       func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
+	SwitchOrgFn               func(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
+	ListDomainsFn             func(ctx context.Context, limit int, pageToken, userToken, orgToken string) (domain.DashboardInboxDomainPage, error)
+	GetDomainFn               func(ctx context.Context, domainIDOrAddress, region, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+	CheckDomainAvailabilityFn func(ctx context.Context, domainAddress, userToken, orgToken string) (*domain.DashboardInboxDomainAvailability, error)
+	CreateDomainFn            func(ctx context.Context, input domain.DashboardCreateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+	UpdateDomainFn            func(ctx context.Context, domainID, region string, input domain.DashboardUpdateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+	DeleteDomainFn            func(ctx context.Context, domainID, region, userToken, orgToken string) (bool, error)
+	GetDomainInfoFn           func(ctx context.Context, domainID, region, verificationType, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error)
+	VerifyDomainFn            func(ctx context.Context, domainID, region string, input domain.DashboardVerifyInboxDomainInput, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error)
 }
 
 func (m *MockAccountClient) Register(ctx context.Context, email, password string, privacyPolicyAccepted bool) (*domain.DashboardRegisterResponse, error) {
@@ -59,6 +67,54 @@ func (m *MockAccountClient) SwitchOrg(ctx context.Context, orgPublicID, userToke
 		return m.SwitchOrgFn(ctx, orgPublicID, userToken, orgToken)
 	}
 	return &domain.DashboardSwitchOrgResponse{}, nil
+}
+func (m *MockAccountClient) ListDomains(ctx context.Context, limit int, pageToken, userToken, orgToken string) (domain.DashboardInboxDomainPage, error) {
+	if m.ListDomainsFn != nil {
+		return m.ListDomainsFn(ctx, limit, pageToken, userToken, orgToken)
+	}
+	return domain.DashboardInboxDomainPage{}, nil
+}
+func (m *MockAccountClient) GetDomain(ctx context.Context, domainIDOrAddress, region, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	if m.GetDomainFn != nil {
+		return m.GetDomainFn(ctx, domainIDOrAddress, region, userToken, orgToken)
+	}
+	return &domain.DashboardInboxDomain{}, nil
+}
+func (m *MockAccountClient) CheckDomainAvailability(ctx context.Context, domainAddress, userToken, orgToken string) (*domain.DashboardInboxDomainAvailability, error) {
+	if m.CheckDomainAvailabilityFn != nil {
+		return m.CheckDomainAvailabilityFn(ctx, domainAddress, userToken, orgToken)
+	}
+	return &domain.DashboardInboxDomainAvailability{}, nil
+}
+func (m *MockAccountClient) CreateDomain(ctx context.Context, input domain.DashboardCreateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	if m.CreateDomainFn != nil {
+		return m.CreateDomainFn(ctx, input, userToken, orgToken)
+	}
+	return &domain.DashboardInboxDomain{}, nil
+}
+func (m *MockAccountClient) UpdateDomain(ctx context.Context, domainID, region string, input domain.DashboardUpdateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error) {
+	if m.UpdateDomainFn != nil {
+		return m.UpdateDomainFn(ctx, domainID, region, input, userToken, orgToken)
+	}
+	return &domain.DashboardInboxDomain{}, nil
+}
+func (m *MockAccountClient) DeleteDomain(ctx context.Context, domainID, region, userToken, orgToken string) (bool, error) {
+	if m.DeleteDomainFn != nil {
+		return m.DeleteDomainFn(ctx, domainID, region, userToken, orgToken)
+	}
+	return false, nil
+}
+func (m *MockAccountClient) GetDomainInfo(ctx context.Context, domainID, region, verificationType, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error) {
+	if m.GetDomainInfoFn != nil {
+		return m.GetDomainInfoFn(ctx, domainID, region, verificationType, userToken, orgToken)
+	}
+	return &domain.DashboardDomainVerificationResult{}, nil
+}
+func (m *MockAccountClient) VerifyDomain(ctx context.Context, domainID, region string, input domain.DashboardVerifyInboxDomainInput, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error) {
+	if m.VerifyDomainFn != nil {
+		return m.VerifyDomainFn(ctx, domainID, region, input, userToken, orgToken)
+	}
+	return &domain.DashboardDomainVerificationResult{}, nil
 }
 
 // MockGatewayClient is a test mock for ports.DashboardGatewayClient.

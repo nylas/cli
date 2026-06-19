@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +16,19 @@ import (
 	"github.com/nylas/cli/internal/ports"
 	"golang.org/x/term"
 )
+
+type domainService interface {
+	ListDomains(ctx context.Context, limit int, pageToken string) (domain.DashboardInboxDomainPage, error)
+	GetDomain(ctx context.Context, domainIDOrAddress, region string) (*domain.DashboardInboxDomain, error)
+	CheckAvailability(ctx context.Context, domainAddress string) (*domain.DashboardInboxDomainAvailability, error)
+	CreateDomain(ctx context.Context, input domain.DashboardCreateInboxDomainInput) (*domain.DashboardInboxDomain, error)
+	UpdateDomain(ctx context.Context, domainID, region string, input domain.DashboardUpdateInboxDomainInput) (*domain.DashboardInboxDomain, error)
+	DeleteDomain(ctx context.Context, domainID, region string) (bool, error)
+	GetDomainInfo(ctx context.Context, domainID, region, verificationType string) (*domain.DashboardDomainVerificationResult, error)
+	VerifyDomain(ctx context.Context, domainID, region string, input domain.DashboardVerifyInboxDomainInput) (*domain.DashboardDomainVerificationResult, error)
+}
+
+var createDomainServiceFn = createDomainService
 
 // createDPoPService creates a DPoP service backed by the keyring.
 func createDPoPService() (ports.DPoP, ports.SecretStore, error) {
@@ -53,6 +67,18 @@ func createAppService() (*dashboardapp.AppService, error) {
 
 	gatewayClient := dashboard.NewGatewayClient(dpopSvc)
 	return dashboardapp.NewAppService(gatewayClient, secretStore), nil
+}
+
+// createDomainService creates the dashboard domain management service.
+func createDomainService() (domainService, error) {
+	dpopSvc, secretStore, err := createDPoPService()
+	if err != nil {
+		return nil, err
+	}
+
+	baseURL := getDashboardAccountBaseURL(secretStore)
+	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
+	return dashboardapp.NewDomainService(accountClient, secretStore), nil
 }
 
 // getDashboardAccountBaseURL returns the dashboard-account base URL.

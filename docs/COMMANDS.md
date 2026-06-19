@@ -114,7 +114,7 @@ nylas auth migrate               # Migrate from v2 to v3
 
 ## Dashboard
 
-Manage your Nylas Dashboard account, applications, and API keys directly from the CLI.
+Manage your Nylas Dashboard account, applications, domains, and API keys directly from the CLI.
 
 ### Account
 
@@ -160,6 +160,21 @@ nylas dashboard apps apikeys create --expires 30 # Expire in 30 days
 ```
 
 After creating a key, you choose: activate in CLI (recommended), copy to clipboard, or save to file.
+
+### Domains
+
+```bash
+nylas dashboard domains list                         # List inbox and Agent Account domains
+nylas dashboard domains check example.com            # Check org-scoped availability
+nylas dashboard domains create example.com --region us  # Register a domain
+nylas dashboard domains show example.com             # Show a registered domain
+nylas dashboard domains dns example.com              # Show DNS records to configure
+nylas dashboard domains verify example.com --type ownership  # Verify one record
+nylas dashboard domains verify example.com --all     # Verify all supported records
+nylas dashboard domains delete example.com --yes     # Delete a domain
+```
+
+Domain creation registers the domain in your active Dashboard organization and requires `--region us|eu`. Existing-domain commands infer the region from `domains list` when `--region` is omitted; pass `--region` to override or disambiguate. Configure the DNS records from `domains dns`, then run `domains verify`.
 
 ---
 

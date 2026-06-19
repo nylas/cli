@@ -63,7 +63,7 @@ func New(secrets ports.SecretStore) (*Service, error) {
 // GenerateProof creates a DPoP proof JWT for the given HTTP method and URL.
 // If accessToken is non-empty, the proof includes an ath claim.
 func (s *Service) GenerateProof(method, rawURL string, accessToken string) (string, error) {
-	// Normalize the URL: strip fragment and query
+	// Normalize the URL for the dashboard-account DPoP contract.
 	htu, err := normalizeHTU(rawURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: invalid URL: %w", domain.ErrDashboardDPoP, err)
@@ -132,14 +132,17 @@ func (s *Service) computeThumbprint() string {
 	return base64urlEncode(hash[:])
 }
 
-// normalizeHTU strips the fragment and query from a URL per DPoP spec.
+// normalizeHTU strips the fragment from a URL.
+//
+// RFC 9449 excludes query strings from htu, but dashboard-account currently
+// validates DPoP proofs against the full request URL including the query string
+// for query-bearing endpoints added under TW-5656.
 func normalizeHTU(rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "", err
 	}
 	u.Fragment = ""
-	u.RawQuery = ""
 	return u.String(), nil
 }
 

@@ -96,7 +96,7 @@ func runWizard(opts wizardOpts) error {
 	stepGrantSync(&status)
 
 	// Done!
-	printComplete()
+	printComplete(status)
 	return nil
 }
 
@@ -143,7 +143,7 @@ func runNonInteractive(opts wizardOpts, status SetupStatus) error {
 	// Refresh status after activation.
 	status = getSetupStatusFn()
 	stepGrantSyncFn(&status)
-	printCompleteFn()
+	printCompleteFn(status)
 	return nil
 }
 

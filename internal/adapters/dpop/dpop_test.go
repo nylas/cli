@@ -133,6 +133,26 @@ func TestGenerateProof_WithAccessToken(t *testing.T) {
 	assert.Equal(t, expectedATH, claims.ATH)
 }
 
+func TestGenerateProof_KeepsQueryInHTU(t *testing.T) {
+	t.Parallel()
+	store := newMockSecretStore()
+	svc, err := New(store)
+	require.NoError(t, err)
+
+	proof, err := svc.GenerateProof("GET", "https://example.com/path?domainAddress=foo.nylas.email#ignored", "token")
+	require.NoError(t, err)
+
+	parts := strings.Split(proof, ".")
+	require.Len(t, parts, 3)
+
+	claimsJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var claims jwtClaims
+	require.NoError(t, json.Unmarshal(claimsJSON, &claims))
+	assert.Equal(t, "https://example.com/path?domainAddress=foo.nylas.email", claims.HTU)
+}
+
 func TestGenerateProof_SignatureVerifies(t *testing.T) {
 	t.Parallel()
 	store := newMockSecretStore()
@@ -210,9 +230,9 @@ func TestGenerateProof_URLNormalization(t *testing.T) {
 			expected: "https://example.com/path",
 		},
 		{
-			name:     "strips query",
+			name:     "keeps query",
 			inputURL: "https://example.com/path?key=value",
-			expected: "https://example.com/path",
+			expected: "https://example.com/path?key=value",
 		},
 		{
 			name:     "preserves path",

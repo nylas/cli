@@ -133,6 +133,86 @@ type GatewayCreatedAPIKey struct {
 	CreatedAt   float64  `json:"createdAt"`
 }
 
+// DashboardInboxRegion is a dashboard-account inbox domain region.
+type DashboardInboxRegion string
+
+const (
+	DashboardInboxRegionUS DashboardInboxRegion = "us"
+	DashboardInboxRegionEU DashboardInboxRegion = "eu"
+)
+
+// DashboardInboxDomain is an inbox/agent-account domain managed through dashboard-account.
+type DashboardInboxDomain struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	DomainAddress     string `json:"domainAddress"`
+	OrganizationID    string `json:"organizationId"`
+	Region            string `json:"region"`
+	Branded           bool   `json:"branded"`
+	VerifiedOwnership bool   `json:"verifiedOwnership"`
+	VerifiedMX        bool   `json:"verifiedMx"`
+	VerifiedSPF       bool   `json:"verifiedSpf"`
+	VerifiedDKIM      bool   `json:"verifiedDkim"`
+	VerifiedDMARC     bool   `json:"verifiedDmarc"`
+	VerifiedARC       bool   `json:"verifiedArc"`
+	VerifiedFeedback  bool   `json:"verifiedFeedback"`
+	CreatedAt         int64  `json:"createdAt"`
+	UpdatedAt         int64  `json:"updatedAt"`
+}
+
+// DashboardInboxDomainPage is a page of inbox/agent-account domains.
+type DashboardInboxDomainPage struct {
+	Domains    []DashboardInboxDomain `json:"domains"`
+	NextCursor string                 `json:"next_cursor,omitempty"`
+}
+
+// DashboardInboxDomainAvailability is the org-scoped preflight availability result.
+type DashboardInboxDomainAvailability struct {
+	DomainAddress string  `json:"domainAddress"`
+	Available     bool    `json:"available"`
+	ConflictsWith *string `json:"conflictsWith"`
+}
+
+// DashboardCreateInboxDomainInput is the request body for creating an inbox domain.
+type DashboardCreateInboxDomainInput struct {
+	Name          string `json:"name"`
+	DomainAddress string `json:"domainAddress"`
+	Region        string `json:"region"`
+}
+
+// DashboardUpdateInboxDomainInput is the request body for renaming an inbox domain.
+type DashboardUpdateInboxDomainInput struct {
+	Name string `json:"name"`
+}
+
+// DashboardVerifyInboxDomainInput is the request body for triggering verification.
+type DashboardVerifyInboxDomainInput struct {
+	Type string `json:"type"`
+}
+
+// DashboardDomainVerificationAttempt is the DNS record that should be configured.
+type DashboardDomainVerificationAttempt struct {
+	Type    string                                   `json:"type,omitempty"`
+	Options DashboardDomainVerificationAttemptOption `json:"options"`
+}
+
+// DashboardDomainVerificationAttemptOption describes a DNS record requirement.
+type DashboardDomainVerificationAttemptOption struct {
+	Host  string `json:"host,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+// DashboardDomainVerificationResult is returned for DNS info and verification attempts.
+type DashboardDomainVerificationResult struct {
+	DomainID  string                              `json:"domainId,omitempty"`
+	Attempt   *DashboardDomainVerificationAttempt `json:"attempt,omitempty"`
+	Status    string                              `json:"status"`
+	CreatedAt int64                               `json:"createdAt,omitempty"`
+	ExpiresAt int64                               `json:"expiresAt,omitempty"`
+	Message   string                              `json:"message"`
+}
+
 // DashboardSessionRelation represents an org membership in the session response.
 type DashboardSessionRelation struct {
 	OrgPublicID string `json:"orgPublicId"`

@@ -41,6 +41,30 @@ type DashboardAccountClient interface {
 
 	// SwitchOrg switches the session to a different organization.
 	SwitchOrg(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
+
+	// ListDomains lists inbox/agent-account domains for the active dashboard organization.
+	ListDomains(ctx context.Context, limit int, pageToken, userToken, orgToken string) (domain.DashboardInboxDomainPage, error)
+
+	// GetDomain retrieves an inbox domain by ID or address.
+	GetDomain(ctx context.Context, domainIDOrAddress, region, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+
+	// CheckDomainAvailability checks org-scoped availability for a domain address.
+	CheckDomainAvailability(ctx context.Context, domainAddress, userToken, orgToken string) (*domain.DashboardInboxDomainAvailability, error)
+
+	// CreateDomain creates/registers an inbox domain.
+	CreateDomain(ctx context.Context, input domain.DashboardCreateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+
+	// UpdateDomain updates an inbox domain.
+	UpdateDomain(ctx context.Context, domainID, region string, input domain.DashboardUpdateInboxDomainInput, userToken, orgToken string) (*domain.DashboardInboxDomain, error)
+
+	// DeleteDomain deletes an inbox domain.
+	DeleteDomain(ctx context.Context, domainID, region, userToken, orgToken string) (bool, error)
+
+	// GetDomainInfo returns DNS-record info for a verification type.
+	GetDomainInfo(ctx context.Context, domainID, region, verificationType, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error)
+
+	// VerifyDomain triggers verification for a DNS/authentication record type.
+	VerifyDomain(ctx context.Context, domainID, region string, input domain.DashboardVerifyInboxDomainInput, userToken, orgToken string) (*domain.DashboardDomainVerificationResult, error)
 }
 
 // DashboardGatewayClient defines the interface for dashboard API gateway GraphQL operations.
