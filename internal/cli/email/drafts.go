@@ -36,6 +36,7 @@ API reference: https://developer.nylas.com/docs/reference/api/drafts/`,
 
 func newDraftsListCmd() *cobra.Command {
 	var limit int
+	var showID bool
 
 	cmd := &cobra.Command{
 		Use:   "list [grant-id]",
@@ -59,9 +60,17 @@ func newDraftsListCmd() *cobra.Command {
 					return struct{}{}, nil
 				}
 
+				// Widen the ID column when --id shows full IDs (otherwise the
+				// IDs are truncated for a compact table).
+				idWidth := 15
+				if showID {
+					idWidth = 50
+				}
+
 				fmt.Printf("Found %d drafts:\n\n", len(drafts))
-				fmt.Printf("%-15s %-25s %-35s %s\n", "ID", "TO", "SUBJECT", "UPDATED")
-				fmt.Println("--------------------------------------------------------------------------------")
+				header := fmt.Sprintf("%-*s %-25s %-35s %s", idWidth, "ID", "TO", "SUBJECT", "UPDATED")
+				fmt.Println(header)
+				fmt.Println(strings.Repeat("-", len(header)))
 
 				for _, d := range drafts {
 					toStr := ""
@@ -76,12 +85,18 @@ func newDraftsListCmd() *cobra.Command {
 					}
 					subj = common.Truncate(subj, 33)
 
-					// Show first 12 chars of ID
-					idShort := common.Truncate(d.ID, 15)
-
 					dateStr := common.FormatTimeAgo(d.UpdatedAt)
 
-					fmt.Printf("%-15s %-25s %-35s %s\n", idShort, toStr, subj, common.Dim.Sprint(dateStr))
+					id := d.ID
+					if !showID {
+						id = common.Truncate(d.ID, 15)
+					}
+					fmt.Printf("%-*s %-25s %-35s %s\n", idWidth, id, toStr, subj, common.Dim.Sprint(dateStr))
+				}
+
+				if !showID {
+					fmt.Println()
+					_, _ = common.Dim.Printf("Use --id to see full draft IDs\n")
 				}
 
 				return struct{}{}, nil
@@ -91,6 +106,7 @@ func newDraftsListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVarP(&limit, "limit", "l", 10, "Number of drafts to fetch")
+	cmd.Flags().BoolVar(&showID, "id", false, "Show full draft IDs")
 
 	return cmd
 }
@@ -304,7 +320,14 @@ func newDraftsShowCmd() *cobra.Command {
 			if len(draft.Cc) > 0 {
 				fmt.Printf("Cc:      %s\n", common.FormatParticipants(draft.Cc))
 			}
-			fmt.Printf("Updated: %s\n", draft.UpdatedAt.Format(common.DisplayDateTime))
+			// Mirror the list view: an unset timestamp (zero value or epoch,
+			// from the API omitting/nulling created_at/updated_at) shows as
+			// "unknown" rather than a nonsensical date.
+			updated := "unknown"
+			if !draft.UpdatedAt.IsZero() && draft.UpdatedAt.Unix() != 0 {
+				updated = draft.UpdatedAt.Format(common.DisplayDateTime)
+			}
+			fmt.Printf("Updated: %s\n", updated)
 
 			// Show attachments if any
 			if len(draft.Attachments) > 0 {

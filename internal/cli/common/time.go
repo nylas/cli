@@ -152,7 +152,15 @@ func ParseHumanTime(input string, opts ParseHumanTimeOpts) (time.Time, error) {
 }
 
 // FormatTimeAgo formats a time as a relative string (e.g., "2 hours ago").
+// An unset timestamp — the zero value (year 1) or the Unix epoch, which is how
+// an omitted or null API timestamp typically decodes — renders as "unknown"
+// rather than a nonsensical "56 years ago". A genuine pre-1970 timestamp
+// (negative Unix seconds) is still formatted normally.
 func FormatTimeAgo(t time.Time) string {
+	if t.IsZero() || t.Unix() == 0 {
+		return "unknown"
+	}
+
 	now := time.Now()
 	diff := now.Sub(t)
 

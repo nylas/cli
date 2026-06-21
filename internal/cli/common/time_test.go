@@ -2,6 +2,7 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -135,6 +136,28 @@ func TestFormatTimeAgo(t *testing.T) {
 			name:     "2 years ago",
 			time:     now.Add(-730 * 24 * time.Hour),
 			expected: "2 years ago",
+		},
+		{
+			// Zero value (year 1) — an omitted API timestamp. Must not render
+			// as "292 years ago".
+			name:     "zero time is unknown",
+			time:     time.Time{},
+			expected: "unknown",
+		},
+		{
+			// Unix epoch — a null API timestamp. Must not render as
+			// "56 years ago".
+			name:     "epoch is unknown",
+			time:     time.Unix(0, 0),
+			expected: "unknown",
+		},
+		{
+			// A genuine pre-1970 timestamp (negative Unix seconds) is real
+			// data, not "unset" — it must still format as a relative duration,
+			// not "unknown". Guards against an over-broad Unix() <= 0 check.
+			name:     "pre-1970 timestamp is not unknown",
+			time:     time.Unix(-100, 0),
+			expected: fmt.Sprintf("%d years ago", int(now.Sub(time.Unix(-100, 0)).Hours()/(24*365))),
 		},
 	}
 
