@@ -7,6 +7,7 @@ import (
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -71,6 +72,21 @@ func TestDraftsCommand(t *testing.T) {
 		for _, expected := range expectedCmds {
 			assert.True(t, cmdMap[expected], "Missing expected subcommand: %s", expected)
 		}
+	})
+
+	t.Run("list_has_id_flag", func(t *testing.T) {
+		// The --id flag lets users retrieve full draft IDs (needed for
+		// show/send/delete) without resorting to --json. It matches the
+		// convention used by `email list`, `folders`, and `threads`.
+		var listCmd *cobra.Command
+		for _, sub := range cmd.Commands() {
+			if sub.Name() == "list" {
+				listCmd = sub
+				break
+			}
+		}
+		assert.NotNil(t, listCmd, "drafts list subcommand should exist")
+		assert.NotNil(t, listCmd.Flags().Lookup("id"), "drafts list should expose an --id flag")
 	})
 }
 

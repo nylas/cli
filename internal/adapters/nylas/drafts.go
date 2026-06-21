@@ -51,8 +51,12 @@ type draftResponse struct {
 		ContentType string `json:"content_type"`
 		Size        int64  `json:"size"`
 	} `json:"attachments"`
-	CreatedAt int64 `json:"created_at"`
-	UpdatedAt int64 `json:"updated_at"`
+	CreatedAt domain.UnixTime `json:"created_at"`
+	UpdatedAt domain.UnixTime `json:"updated_at"`
+	// Date is the draft's compose/last-saved time. The Nylas v3 drafts API
+	// returns created_at/updated_at as null and puts the real timestamp here,
+	// mirroring the message `date` field.
+	Date domain.UnixTime `json:"date"`
 }
 
 // GetDrafts retrieves drafts for a grant.
@@ -400,7 +404,21 @@ func convertDraft(d draftResponse) domain.Draft {
 		ReplyToMsgID: d.ReplyToMsgID,
 		ThreadID:     d.ThreadID,
 		Attachments:  util.Map(d.Attachments, convertAttachment),
-		CreatedAt:    time.Unix(d.CreatedAt, 0),
-		UpdatedAt:    time.Unix(d.UpdatedAt, 0),
+		// The Nylas v3 drafts API returns created_at/updated_at as null
+		// (decoded to the Unix epoch); fall back to the `date` field so drafts
+		// don't render as 1970.
+		CreatedAt: firstSetTime(d.CreatedAt, d.Date),
+		UpdatedAt: firstSetTime(d.UpdatedAt, d.Date),
 	}
+}
+
+// firstSetTime returns primary when it is populated, otherwise fallback. The
+// Nylas v3 drafts API leaves created_at/updated_at unset in two ways: omitted
+// entirely (decodes to the zero time, year 1) or sent as null (decodes to the
+// Unix epoch). Both count as unset, so we fall back to the `date` field.
+func firstSetTime(primary, fallback domain.UnixTime) time.Time {
+	if !primary.IsZero() && primary.Unix() != 0 {
+		return primary.Time
+	}
+	return fallback.Time
 }

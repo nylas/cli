@@ -4,11 +4,19 @@
 package nylas
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// ut builds a domain.UnixTime from Unix seconds for draftResponse fixtures.
+func ut(sec int64) domain.UnixTime {
+	return domain.UnixTime{Time: time.Unix(sec, 0)}
+}
 
 func TestConvertDraft(t *testing.T) {
 	now := time.Now().Unix()
@@ -63,8 +71,8 @@ func TestConvertDraft(t *testing.T) {
 				Size:        50000,
 			},
 		},
-		CreatedAt: now - 3600,
-		UpdatedAt: now,
+		CreatedAt: ut(now - 3600),
+		UpdatedAt: ut(now),
 	}
 
 	draft := convertDraft(apiDraft)
@@ -120,8 +128,8 @@ func TestConvertDrafts(t *testing.T) {
 			}{
 				{Name: "User1", Email: "user1@example.com"},
 			},
-			CreatedAt: now,
-			UpdatedAt: now,
+			CreatedAt: ut(now),
+			UpdatedAt: ut(now),
 		},
 		{
 			ID:      "draft-2",
@@ -134,8 +142,8 @@ func TestConvertDrafts(t *testing.T) {
 			}{
 				{Name: "User2", Email: "user2@example.com"},
 			},
-			CreatedAt: now,
-			UpdatedAt: now,
+			CreatedAt: ut(now),
+			UpdatedAt: ut(now),
 		},
 	}
 
@@ -154,4 +162,51 @@ func TestConvertDrafts_Empty(t *testing.T) {
 	drafts := convertDrafts([]draftResponse{})
 	assert.NotNil(t, drafts)
 	assert.Len(t, drafts, 0)
+}
+
+// TestConvertDraft_DateFallback verifies that drafts use the `date` field for
+// timestamps. The Nylas v3 drafts API carries the real timestamp in `date` and
+// leaves created_at/updated_at unset — without this fallback the CLI renders
+// every draft at the zero time ("292 years ago") or the Unix epoch.
+//
+// The two cases are decoded from raw JSON so the test exercises the real
+// unmarshal path: created_at/updated_at omitted (decodes to the zero time) and
+// sent as null (decodes to the Unix epoch).
+func TestConvertDraft_DateFallback(t *testing.T) {
+	date := int64(1782059501)
+
+	cases := map[string]string{
+		"omitted": `{"id":"d","date":1782059501}`,
+		"null":    `{"id":"d","created_at":null,"updated_at":null,"date":1782059501}`,
+	}
+
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			var d draftResponse
+			require.NoError(t, json.Unmarshal([]byte(raw), &d))
+
+			draft := convertDraft(d)
+
+			assert.Equal(t, time.Unix(date, 0), draft.UpdatedAt, "UpdatedAt should fall back to date")
+			assert.Equal(t, time.Unix(date, 0), draft.CreatedAt, "CreatedAt should fall back to date")
+		})
+	}
+}
+
+// TestConvertDraft_ExplicitTimestampsWin verifies created_at/updated_at take
+// precedence over date when the API does provide them.
+func TestConvertDraft_ExplicitTimestampsWin(t *testing.T) {
+	date := int64(1782059501)
+	created := date - 3600
+	updated := date - 60
+
+	draft := convertDraft(draftResponse{
+		ID:        "draft-explicit",
+		Date:      ut(date),
+		CreatedAt: ut(created),
+		UpdatedAt: ut(updated),
+	})
+
+	assert.Equal(t, time.Unix(created, 0), draft.CreatedAt)
+	assert.Equal(t, time.Unix(updated, 0), draft.UpdatedAt)
 }

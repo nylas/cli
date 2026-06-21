@@ -335,6 +335,7 @@ nylas email threads delete <thread-id>             # Delete thread
 
 ```bash
 nylas email drafts list                           # List drafts
+nylas email drafts list --id                      # Show full draft IDs
 nylas email drafts show <draft-id>                # Show draft details
 nylas email drafts create --to EMAIL --subject S  # Create draft
 nylas email drafts create --to EMAIL --subject S --signature-id SIG  # Create draft with stored signature
