@@ -460,6 +460,8 @@ func TestGrantFromDefault(t *testing.T) {
 func TestValidateDefaultGrant(t *testing.T) {
 	// Isolate any self-heal write to a throwaway cache location.
 	t.Setenv("HOME", t.TempDir())
+	// Avoid touching the real system keychain (hangs on locked CI runners).
+	t.Setenv("NYLAS_DISABLE_KEYRING", "true")
 	ctx := context.Background()
 
 	t.Run("removed default returns a clear, actionable error", func(t *testing.T) {
