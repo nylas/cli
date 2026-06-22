@@ -68,7 +68,18 @@ func (s *GrantService) ListGrants(ctx context.Context) ([]domain.GrantStatus, er
 		})
 	}
 	_ = s.grantStore.ReplaceGrants(cacheGrants)
-	if !defaultStillExists {
+	switch {
+	case defaultGrant == "":
+		// No default resolved from either store; nothing to reconcile.
+	case defaultStillExists:
+		// The resolved default is live. Persist it to BOTH stores so the grant
+		// cache (authoritative for every other command, e.g. GetGrantID) agrees
+		// with what auth list shows. Without this, a default that survives only
+		// in config surfaces here while commands like `email list` report "no
+		// grant" — the confusing split the user hit.
+		_ = PersistDefaultGrant(s.config, s.grantStore, defaultGrant)
+	default:
+		// Resolved default no longer exists on Nylas; clear it everywhere.
 		_ = PersistDefaultGrant(s.config, s.grantStore, "")
 	}
 

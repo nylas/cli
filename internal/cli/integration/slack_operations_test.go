@@ -10,57 +10,6 @@ import (
 )
 
 // =============================================================================
-// SLACK USERS TESTS
-// =============================================================================
-
-func TestSlack_UsersList(t *testing.T) {
-	skipIfMissingSlackCreds(t)
-
-	tests := []struct {
-		name     string
-		args     []string
-		contains []string
-	}{
-		{
-			name:     "list users (subcommand)",
-			args:     []string{"slack", "users", "list", "--limit", "5"},
-			contains: []string{}, // Just verify it runs
-		},
-		{
-			name:     "list users with limit",
-			args:     []string{"slack", "users", "list", "--limit", "5"},
-			contains: []string{},
-		},
-		{
-			name:     "list users with IDs",
-			args:     []string{"slack", "users", "list", "--id", "--limit", "5"},
-			contains: []string{"[U"}, // User IDs start with U
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := runSlackCLI(t, tt.args...)
-
-			if err != nil {
-				if strings.Contains(stderr, "not authenticated") {
-					t.Skip("Not authenticated with Slack")
-				}
-				t.Fatalf("Command failed: %v\nstderr: %s", err, stderr)
-			}
-
-			for _, expected := range tt.contains {
-				if !strings.Contains(stdout, expected) {
-					t.Errorf("Expected output to contain %q\nGot: %s", expected, stdout)
-				}
-			}
-
-			t.Logf("Output:\n%s", stdout)
-		})
-	}
-}
-
-// =============================================================================
 // SLACK SEARCH TESTS
 // =============================================================================
 
@@ -202,59 +151,4 @@ func TestSlack_SendMessage(t *testing.T) {
 	}
 
 	t.Logf("Send output:\n%s", stdout)
-}
-
-// =============================================================================
-// SLACK WORKFLOW TEST
-// =============================================================================
-
-func TestSlack_Workflow(t *testing.T) {
-	skipIfMissingSlackCreds(t)
-
-	// Test a typical workflow: auth status -> list channels -> read messages
-
-	t.Run("auth_status", func(t *testing.T) {
-		stdout, stderr, err := runSlackCLI(t, "slack", "auth", "status")
-		if err != nil {
-			if strings.Contains(stderr, "not authenticated") {
-				t.Skip("Not authenticated with Slack")
-			}
-			t.Fatalf("Auth status failed: %v", err)
-		}
-		t.Logf("Auth: %s", strings.TrimSpace(stdout))
-	})
-
-	t.Run("list_channels", func(t *testing.T) {
-		stdout, stderr, err := runSlackCLI(t, "slack", "channels", "list", "--limit", "5")
-		if err != nil {
-			t.Fatalf("List channels failed: %v\nstderr: %s", err, stderr)
-		}
-
-		// Verify test channel exists
-		if !strings.Contains(stdout, slackUserChannel) {
-			t.Logf("Warning: Test channel %s not found in first 5 channels", slackUserChannel)
-		}
-		t.Logf("Channels: %d lines", len(strings.Split(stdout, "\n")))
-	})
-
-	t.Run("read_messages", func(t *testing.T) {
-		stdout, stderr, err := runSlackCLI(t, "slack", "messages", "list", "--channel-id", slackUserChannel, "--limit", "3")
-		if err != nil {
-			if strings.Contains(stderr, "channel not found") {
-				t.Skipf("Channel %s not found", slackUserChannel)
-			}
-			t.Fatalf("Read messages failed: %v\nstderr: %s", err, stderr)
-		}
-
-		lines := strings.Split(strings.TrimSpace(stdout), "\n")
-		t.Logf("Messages: %d lines of output", len(lines))
-	})
-
-	t.Run("list_users", func(t *testing.T) {
-		stdout, stderr, err := runSlackCLI(t, "slack", "users", "list", "--limit", "5")
-		if err != nil {
-			t.Fatalf("List users failed: %v\nstderr: %s", err, stderr)
-		}
-		t.Logf("Users: %d lines", len(strings.Split(stdout, "\n")))
-	})
 }

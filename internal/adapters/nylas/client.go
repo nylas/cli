@@ -16,6 +16,7 @@ import (
 
 	"github.com/nylas/cli/internal/adapters/providers"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/version"
 	"golang.org/x/time/rate"
@@ -74,11 +75,11 @@ type HTTPClient struct {
 // Retry logic handles transient errors with exponential backoff and Retry-After header support.
 func NewHTTPClient() *HTTPClient {
 	return &HTTPClient{
-		httpClient: &http.Client{
-			// Remove global timeout since we use per-request context timeouts
-			Timeout: 0,
-		},
-		baseURL: baseURLUS,
+		// Nylas enforces a server-side 120s request ceiling, which matches the
+		// shared client's default timeout. Per-request context deadlines
+		// (requestTimeout) still apply as the tighter bound for normal calls.
+		httpClient: httputil.DefaultClient,
+		baseURL:    baseURLUS,
 		// Create token bucket rate limiter: 10 requests/second, burst of 20
 		rateLimiter:    rate.NewLimiter(rate.Limit(defaultRateLimit), defaultRateLimit*2),
 		requestTimeout: domain.TimeoutAPI,

@@ -100,6 +100,37 @@ func TestGrantService_ListGrantsClearsStaleConfigDefault(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNoDefaultGrant)
 }
 
+// TestGrantService_ListGrantsRestoresLiveConfigDefaultToCache covers the split
+// the user hit: the grant cache lost its default (e.g. a self-heal cleared it)
+// but config still points at a valid, live grant. auth list must write that
+// default back into the cache so other commands (GetGrantID/email list) agree,
+// instead of leaving auth list showing a default no one else can see.
+func TestGrantService_ListGrantsRestoresLiveConfigDefaultToCache(t *testing.T) {
+	grantStore := newMockGrantStore()
+	configStore := newMockConfigStore()
+	configStore.config.DefaultGrant = "grant-2" // config-only default; cache has none
+	client := nylas.NewMockClient()
+	client.ListGrantsFunc = func(ctx context.Context) ([]domain.Grant, error) {
+		return []domain.Grant{
+			{ID: "grant-1", Email: "one@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+			{ID: "grant-2", Email: "two@example.com", Provider: domain.ProviderGoogle, GrantStatus: "valid"},
+		}, nil
+	}
+
+	svc := NewGrantService(client, grantStore, configStore)
+
+	got, err := svc.ListGrants(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.True(t, got[1].IsDefault)
+
+	// The live default is now in the cache, so GetGrantID-style lookups resolve it.
+	defaultGrant, err := grantStore.GetDefaultGrant()
+	require.NoError(t, err)
+	assert.Equal(t, "grant-2", defaultGrant)
+	assert.Equal(t, "grant-2", configStore.config.DefaultGrant)
+}
+
 func TestGrantService_CachedGrantCountUsesGrantStore(t *testing.T) {
 	grantStore := newMockGrantStore()
 	grantStore.grants["grant-1"] = domain.GrantInfo{ID: "grant-1", Email: "one@example.com"}

@@ -323,12 +323,6 @@ func FormatError(err error) string {
 		_, _ = Yellow.Fprintf(&sb, "  • %s\n", cliErr.Suggestion)
 	}
 
-	// Original error in debug mode
-	if IsDebug() && cliErr.Err != nil && cliErr.Err.Error() != cliErr.Message {
-		_, _ = sb.WriteString("\n")
-		_, _ = Dim.Fprintf(&sb, "Debug details: %s\n", cliErr.Err.Error())
-	}
-
 	return sb.String()
 }
 

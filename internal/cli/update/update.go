@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nylas/cli/internal/cli"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/version"
 )
 
 // NewUpdateCmd creates the update command.
@@ -53,7 +53,7 @@ This command will:
 }
 
 func runUpdate(ctx context.Context, checkOnly, force, yes bool) error {
-	currentVersion := cli.Version
+	currentVersion := version.Version
 
 	fmt.Printf("Current version: %s\n", currentVersion)
 

@@ -53,8 +53,7 @@ func TestRunDelete_Confirmation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ResetLogger()
-			InitLogger(false, tt.quiet)
+			SetQuiet(tt.quiet)
 			if !tt.quiet {
 				withStdin(t, tt.stdin)
 			}
@@ -81,8 +80,7 @@ func TestRunDelete_Confirmation(t *testing.T) {
 }
 
 func TestRunDelete_WrapsDeleteError(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	deleteErr := errors.New("backend exploded")
 	err := RunDelete(DeleteConfig{
@@ -117,8 +115,7 @@ func TestNewDeleteCommand_Confirmation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ResetLogger()
-			InitLogger(false, tt.quiet)
+			SetQuiet(tt.quiet)
 			if !tt.quiet {
 				withStdin(t, tt.stdin)
 			}
@@ -148,8 +145,7 @@ func TestNewDeleteCommand_Confirmation(t *testing.T) {
 // resolves the grant ID from the second positional argument and honors
 // --force.
 func TestNewDeleteCommand_GrantPathForce(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	deleted := false
 	cmd := NewDeleteCommand(DeleteCommandConfig{

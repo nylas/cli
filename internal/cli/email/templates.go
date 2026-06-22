@@ -3,7 +3,6 @@ package email
 import (
 	"github.com/nylas/cli/internal/adapters/templates"
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -47,6 +46,6 @@ Templates are local to your machine and are not synced with Nylas.`,
 }
 
 // getTemplateStore creates a template store instance.
-func getTemplateStore() ports.TemplateStore {
+func getTemplateStore() *templates.FileStore {
 	return templates.NewDefaultFileStore()
 }

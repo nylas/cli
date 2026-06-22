@@ -260,49 +260,6 @@ func TestQueryParams_GetBool_Comprehensive(t *testing.T) {
 	}
 }
 
-// TestQueryParams_GetBoolPtr_Comprehensive tests boolean pointer parsing.
-func TestQueryParams_GetBoolPtr_Comprehensive(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		query   string
-		key     string
-		wantNil bool
-		wantVal bool
-	}{
-		// Present values
-		{"true", "flag=true", "flag", false, true},
-		{"false", "flag=false", "flag", false, false},
-		{"other", "flag=other", "flag", false, false},
-
-		// Nil cases
-		{"empty value", "flag=", "flag", true, false},
-		{"missing key", "", "flag", true, false},
-		{"different key", "other=true", "flag", true, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			values, _ := url.ParseQuery(tt.query)
-			q := NewQueryParams(values)
-			got := q.GetBoolPtr(tt.key)
-
-			if tt.wantNil {
-				if got != nil {
-					t.Errorf("GetBoolPtr() = %v, want nil", *got)
-				}
-			} else {
-				if got == nil {
-					t.Errorf("GetBoolPtr() = nil, want %v", tt.wantVal)
-				} else if *got != tt.wantVal {
-					t.Errorf("GetBoolPtr() = %v, want %v", *got, tt.wantVal)
-				}
-			}
-		})
-	}
-}
-
 // TestQueryParams_GetString_Comprehensive tests string parsing.
 func TestQueryParams_GetString_Comprehensive(t *testing.T) {
 	t.Parallel()
@@ -342,35 +299,22 @@ func TestQueryParams_GetString_Comprehensive(t *testing.T) {
 	}
 }
 
-// TestQueryParams_Has_Comprehensive tests key presence detection.
-func TestQueryParams_Has_Comprehensive(t *testing.T) {
+// TestQueryParams_Get covers the raw Get accessor, including the missing-key
+// case where it must return an empty string.
+func TestQueryParams_Get(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		query string
-		key   string
-		want  bool
-	}{
-		{"key with value", "key=value", "key", true},
-		{"key without value", "key=", "key", true},
-		{"key only", "key", "key", true},
-		{"missing key", "other=value", "key", false},
-		{"empty query", "", "key", false},
-		{"similar key prefix", "keyboard=value", "key", false},
-		{"similar key suffix", "mykey=value", "key", false},
-		{"case sensitive", "Key=value", "key", false},
-	}
+	values, _ := url.ParseQuery("foo=bar&empty=")
+	q := NewQueryParams(values)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			values, _ := url.ParseQuery(tt.query)
-			q := NewQueryParams(values)
-			got := q.Has(tt.key)
-			if got != tt.want {
-				t.Errorf("Has() = %v, want %v", got, tt.want)
-			}
-		})
+	if got := q.Get("foo"); got != "bar" {
+		t.Errorf("Get(foo) = %q, want %q", got, "bar")
+	}
+	if got := q.Get("empty"); got != "" {
+		t.Errorf("Get(empty) = %q, want empty", got)
+	}
+	if got := q.Get("missing"); got != "" {
+		t.Errorf("Get(missing) = %q, want empty", got)
 	}
 }
 

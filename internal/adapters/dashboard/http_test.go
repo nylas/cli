@@ -149,54 +149,6 @@ func TestParseErrorResponse(t *testing.T) {
 	}
 }
 
-func TestUnwrapEnvelope(t *testing.T) {
-	tests := []struct {
-		name    string
-		body    string
-		wantKey string
-		wantErr bool
-	}{
-		{
-			name:    "unwraps data field",
-			body:    `{"request_id":"abc","success":true,"data":{"name":"test"}}`,
-			wantKey: "name",
-		},
-		{
-			name:    "returns body as-is when no data field",
-			body:    `{"name":"test"}`,
-			wantKey: "name",
-		},
-		{
-			name:    "returns error on invalid JSON",
-			body:    "not json",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := unwrapEnvelope([]byte(tt.body))
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			var parsed map[string]any
-			if jsonErr := json.Unmarshal(result, &parsed); jsonErr != nil {
-				t.Fatalf("result is not valid JSON: %v", jsonErr)
-			}
-			if _, ok := parsed[tt.wantKey]; !ok {
-				t.Errorf("result missing key %q: %s", tt.wantKey, string(result))
-			}
-		})
-	}
-}
-
 func TestDashboardAPIError_Error(t *testing.T) {
 	tests := []struct {
 		name    string

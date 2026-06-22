@@ -5,6 +5,8 @@ package nylas
 
 import (
 	"testing"
+
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // TestOTPExtractionSecurity tests that OTP extraction is secure.
@@ -116,12 +118,13 @@ func TestOTPExtractionSecurity(t *testing.T) {
 
 // TestHTTPClientSecurity tests HTTP client security.
 func TestHTTPClientSecurity(t *testing.T) {
-	t.Run("client_uses_per_request_timeouts", func(t *testing.T) {
+	t.Run("client_timeout_matches_server_ceiling", func(t *testing.T) {
 		client := NewHTTPClient()
-		// HTTP client should NOT have a global timeout (we use per-request context timeouts)
-		// This allows better control and prevents blocking other requests
-		if client.httpClient.Timeout != 0 {
-			t.Error("HTTP client should not have global timeout (uses per-request context timeouts)")
+		// The HTTP client carries the shared 120s timeout, matching the Nylas
+		// server-side request ceiling. Per-request context deadlines
+		// (requestTimeout) still apply as the tighter bound for normal calls.
+		if client.httpClient.Timeout != httputil.DefaultClientTimeout {
+			t.Errorf("HTTP client timeout = %v, want %v (server ceiling)", client.httpClient.Timeout, httputil.DefaultClientTimeout)
 		}
 		// Verify rate limiter is configured
 		if client.rateLimiter == nil {

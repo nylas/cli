@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 )
 
@@ -37,45 +36,6 @@ func ValidateRequiredFlag(flagName, value string) error {
 		return NewUserError(
 			fmt.Sprintf("%s flag is required", flagName),
 			fmt.Sprintf("Use %s <value>", flagName),
-		)
-	}
-	return nil
-}
-
-// ValidateRequiredArg returns an error if args is empty or first arg is empty.
-// Use for commands that require at least one argument.
-//
-// Example:
-//
-//	if err := common.ValidateRequiredArg(args, "message ID"); err != nil {
-//	    return err
-//	}
-func ValidateRequiredArg(args []string, name string) error {
-	if len(args) == 0 || args[0] == "" {
-		return NewUserError(
-			fmt.Sprintf("%s is required", name),
-			fmt.Sprintf("Provide %s as an argument", name),
-		)
-	}
-	return nil
-}
-
-// ValidateURL returns an error if value is not a valid URL.
-//
-// Example:
-//
-//	if err := common.ValidateURL("webhook URL", webhookURL); err != nil {
-//	    return err
-//	}
-func ValidateURL(name, value string) error {
-	if value == "" {
-		return ValidateRequired(name, value)
-	}
-	u, err := url.Parse(value)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return NewUserError(
-			fmt.Sprintf("invalid %s: %s", name, value),
-			"URL must be a valid HTTP or HTTPS URL",
 		)
 	}
 	return nil

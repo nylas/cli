@@ -19,7 +19,7 @@ import (
 // ErrTemplateNotFound is returned when a template is not found.
 var ErrTemplateNotFound = errors.New("template not found")
 
-// FileStore implements TemplateStore using a JSON file.
+// FileStore stores email templates in a JSON file.
 type FileStore struct {
 	path string
 	mu   sync.RWMutex

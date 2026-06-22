@@ -14,23 +14,6 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-// Builder constructs MIME messages.
-type Builder interface {
-	// BuildSignedMessage builds a PGP/MIME signed message (RFC 3156).
-	BuildSignedMessage(req *SignedMessageRequest) ([]byte, error)
-
-	// PrepareContentToSign prepares the MIME content part that will be signed.
-	// Returns the exact bytes that should be signed with GPG.
-	// This includes the part headers and encoded body with CRLF line endings.
-	PrepareContentToSign(body, contentType string, attachments []domain.Attachment) ([]byte, error)
-
-	// BuildEncryptedMessage builds a PGP/MIME encrypted message (RFC 3156 Section 4).
-	BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, error)
-
-	// PrepareContentToEncrypt prepares the MIME content that will be encrypted.
-	PrepareContentToEncrypt(body, contentType string, attachments []domain.Attachment) ([]byte, error)
-}
-
 // messageRequest is an interface for shared email header fields.
 // Both SignedMessageRequest and EncryptedMessageRequest implement this.
 type messageRequest interface {
@@ -82,16 +65,16 @@ func (r *SignedMessageRequest) getHeaders() map[string]string         { return r
 func (r *SignedMessageRequest) getMessageID() string                  { return r.MessageID }
 func (r *SignedMessageRequest) getDate() time.Time                    { return r.Date }
 
-// builder implements Builder.
-type builder struct{}
+// Builder constructs MIME messages.
+type Builder struct{}
 
 // NewBuilder creates a new MIME builder.
-func NewBuilder() Builder {
-	return &builder{}
+func NewBuilder() *Builder {
+	return &Builder{}
 }
 
 // BuildSignedMessage constructs a PGP/MIME signed message per RFC 3156.
-func (b *builder) BuildSignedMessage(req *SignedMessageRequest) ([]byte, error) {
+func (b *Builder) BuildSignedMessage(req *SignedMessageRequest) ([]byte, error) {
 	if err := validateSignedRequest(req); err != nil {
 		return nil, err
 	}
@@ -187,13 +170,13 @@ func writeCommonHeaders(buf *bytes.Buffer, req messageRequest) {
 }
 
 // writeHeaders writes RFC 822 headers for signed messages.
-func (b *builder) writeHeaders(buf *bytes.Buffer, req *SignedMessageRequest) error {
+func (b *Builder) writeHeaders(buf *bytes.Buffer, req *SignedMessageRequest) error {
 	writeCommonHeaders(buf, req)
 	return nil
 }
 
 // writeContentPart writes the signed content part (body + attachments if any).
-func (b *builder) writeContentPart(buf *bytes.Buffer, req *SignedMessageRequest) error {
+func (b *Builder) writeContentPart(buf *bytes.Buffer, req *SignedMessageRequest) error {
 	if len(req.Attachments) == 0 {
 		// Simple case: just body
 		return b.writeBodyPart(buf, req)
@@ -223,7 +206,7 @@ func (b *builder) writeContentPart(buf *bytes.Buffer, req *SignedMessageRequest)
 }
 
 // writeBodyPart writes the email body.
-func (b *builder) writeBodyPart(buf *bytes.Buffer, req *SignedMessageRequest) error {
+func (b *Builder) writeBodyPart(buf *bytes.Buffer, req *SignedMessageRequest) error {
 	contentType := req.ContentType
 	if contentType == "" {
 		contentType = "text/plain"
@@ -251,7 +234,7 @@ func (b *builder) writeBodyPart(buf *bytes.Buffer, req *SignedMessageRequest) er
 }
 
 // writeAttachmentPart writes an attachment part.
-func (b *builder) writeAttachmentPart(buf *bytes.Buffer, att *domain.Attachment) error {
+func (b *Builder) writeAttachmentPart(buf *bytes.Buffer, att *domain.Attachment) error {
 	contentType := att.ContentType
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -391,7 +374,7 @@ func getMicAlg(hashAlgo string) string {
 
 // PrepareContentToSign prepares the MIME content part for signing.
 // This returns the exact bytes that should be signed with GPG.
-func (b *builder) PrepareContentToSign(body, contentType string, attachments []domain.Attachment) ([]byte, error) {
+func (b *Builder) PrepareContentToSign(body, contentType string, attachments []domain.Attachment) ([]byte, error) {
 	if contentType == "" {
 		contentType = "text/plain"
 	}

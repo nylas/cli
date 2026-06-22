@@ -101,7 +101,6 @@ func WithRetry(ctx context.Context, config RetryConfig, fn RetryFunc) error {
 
 		// Check if we should retry
 		if !IsRetryable(err) {
-			Debug("not retrying non-retryable error", "error", err)
 			return err
 		}
 
@@ -112,13 +111,6 @@ func WithRetry(ctx context.Context, config RetryConfig, fn RetryFunc) error {
 
 		// Calculate delay with exponential backoff and jitter
 		delay := calculateDelay(config, attempt)
-
-		Debug("retrying after error",
-			"attempt", attempt+1,
-			"max_retries", config.MaxRetries,
-			"delay", delay,
-			"error", err,
-		)
 
 		// Wait before retrying
 		select {

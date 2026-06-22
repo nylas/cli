@@ -59,17 +59,6 @@ func (q *QueryParams) GetBool(key string) bool {
 	return q.values.Get(key) == "true"
 }
 
-// GetBoolPtr parses a boolean query parameter and returns a pointer.
-// Returns nil if the parameter is not present, otherwise returns pointer to the bool value.
-func (q *QueryParams) GetBoolPtr(key string) *bool {
-	s := q.values.Get(key)
-	if s == "" {
-		return nil
-	}
-	val := s == "true"
-	return &val
-}
-
 // GetString returns the parameter value, or defaultVal if empty.
 func (q *QueryParams) GetString(key, defaultVal string) string {
 	s := q.values.Get(key)
@@ -77,34 +66,4 @@ func (q *QueryParams) GetString(key, defaultVal string) string {
 		return defaultVal
 	}
 	return s
-}
-
-// Has returns true if the parameter is present (even if empty).
-func (q *QueryParams) Has(key string) bool {
-	_, ok := q.values[key]
-	return ok
-}
-
-// ParseLimit is a standalone helper for parsing limit with standard bounds.
-// Deprecated: Use QueryParams.GetLimit() instead for new code.
-func ParseLimit(query url.Values, defaultVal int) int {
-	return NewQueryParams(query).GetLimit(defaultVal)
-}
-
-// ParseInt is a standalone helper for parsing an integer with bounds.
-// Deprecated: Use QueryParams.GetInt() instead for new code.
-func ParseInt(query url.Values, key string, defaultVal, minVal, maxVal int) int {
-	return NewQueryParams(query).GetInt(key, defaultVal, minVal, maxVal)
-}
-
-// ParseInt64 is a standalone helper for parsing int64 values.
-// Deprecated: Use QueryParams.GetInt64() instead for new code.
-func ParseInt64(query url.Values, key string, defaultVal int64) int64 {
-	return NewQueryParams(query).GetInt64(key, defaultVal)
-}
-
-// ParseBool is a standalone helper for parsing boolean values.
-// Deprecated: Use QueryParams.GetBool() instead for new code.
-func ParseBool(query url.Values, key string) bool {
-	return NewQueryParams(query).GetBool(key)
 }

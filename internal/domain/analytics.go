@@ -119,13 +119,6 @@ type FocusTimeBlock struct {
 	Conflicts int     `json:"conflicts"` // Number of meetings that would conflict
 }
 
-// PatternStore defines the interface for storing learned patterns.
-type PatternStore interface {
-	SavePattern(pattern *MeetingPattern) error
-	LoadPattern(userEmail string) (*MeetingPattern, error)
-	DeletePattern(userEmail string) error
-}
-
 // ============================================================================
 // Conflict Detection & Resolution
 // ============================================================================

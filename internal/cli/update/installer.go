@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 const binaryName = "nylas"
@@ -53,9 +54,7 @@ func downloadFile(ctx context.Context, url string) (string, error) {
 		return "", common.WrapCreateError("request", err)
 	}
 
-	req.Header.Set("User-Agent", "nylas-cli")
-
-	client := &http.Client{Timeout: httpTimeout}
+	client := httputil.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("download: %w", err)
@@ -92,9 +91,7 @@ func downloadChecksums(ctx context.Context, url string) (map[string]string, erro
 		return nil, common.WrapCreateError("request", err)
 	}
 
-	req.Header.Set("User-Agent", "nylas-cli")
-
-	client := &http.Client{Timeout: httpTimeout}
+	client := httputil.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download checksums: %w", err)

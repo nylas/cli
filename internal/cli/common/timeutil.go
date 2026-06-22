@@ -1,7 +1,5 @@
 package common
 
-import "time"
-
 // Standard date/time format constants.
 const (
 	// Machine-readable formats
@@ -37,23 +35,3 @@ const (
 	ShortDateTime = "Jan 2 15:04"
 	ShortDate     = "Jan 2"
 )
-
-// ParseDate parses a date string in YYYY-MM-DD format.
-func ParseDate(s string) (time.Time, error) {
-	return time.Parse(DateFormat, s)
-}
-
-// ParseTime parses a time string in HH:MM format.
-func ParseTime(s string) (time.Time, error) {
-	return time.Parse(TimeFormat, s)
-}
-
-// FormatDate formats a time as a date string (YYYY-MM-DD).
-func FormatDate(t time.Time) string {
-	return t.Format(DateFormat)
-}
-
-// FormatDisplayDate formats a time for user display.
-func FormatDisplayDate(t time.Time) string {
-	return t.Format(DisplayDateTime)
-}

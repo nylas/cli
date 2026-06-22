@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
@@ -171,10 +171,9 @@ func newAttachmentsDownloadCmd() *cobra.Command {
 					return struct{}{}, common.NewInputError(fmt.Sprintf("output path is a directory: %s", finalOutputPath))
 				}
 
-				// Download the attachment with a dedicated long timeout:
-				// the WithClient context carries the default API timeout,
-				// which would cut off large downloads mid-stream.
-				dlCtx, dlCancel := common.CreateContextWithTimeout(domain.TimeoutDownload)
+				// Download the attachment with the standard 120s timeout,
+				// matching the Nylas server-side request ceiling.
+				dlCtx, dlCancel := common.CreateContextWithTimeout(httputil.DefaultClientTimeout)
 				defer dlCancel()
 				reader, err := client.DownloadAttachment(dlCtx, grantID, messageID, attachmentID)
 				if err != nil {

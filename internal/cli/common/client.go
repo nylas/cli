@@ -277,8 +277,49 @@ func WithClient[T any](args []string, fn func(ctx context.Context, client ports.
 	ctx, cancel := CreateContext()
 	defer cancel()
 
+	// When the grant comes from the stored default (no explicit grant arg or
+	// NYLAS_GRANT_ID), verify it still exists. A removed or re-authenticated
+	// default otherwise surfaces as a confusing downstream 404 instead of a
+	// clear "select a grant" message.
+	if grantFromDefault(args) {
+		if verr := validateDefaultGrant(ctx, client, grantID); verr != nil {
+			return zero, verr
+		}
+	}
+
 	// Execute function
 	return fn(ctx, client, grantID)
+}
+
+// grantFromDefault reports whether GetGrantID would resolve the grant from the
+// stored default rather than an explicit argument or NYLAS_GRANT_ID.
+func grantFromDefault(args []string) bool {
+	if len(args) > 0 && args[0] != "" {
+		return false
+	}
+	return os.Getenv("NYLAS_GRANT_ID") == ""
+}
+
+// validateDefaultGrant confirms the resolved default grant still exists. If it
+// was removed, the stale default is cleared and a clear, actionable error is
+// returned. Non-"not found" errors (e.g. transient network failures) are
+// ignored so the real operation can surface them.
+func validateDefaultGrant(ctx context.Context, client ports.NylasClient, grantID string) error {
+	if _, err := client.GetGrant(ctx, grantID); err == nil || !errors.Is(err, domain.ErrGrantNotFound) {
+		return nil
+	}
+
+	// Self-heal: drop the stale pointer so the next run reports "no default".
+	if store, serr := NewDefaultGrantStore(); serr == nil {
+		_ = store.SetDefaultGrant("")
+	}
+
+	return NewUserErrorWithSuggestions(
+		fmt.Sprintf("The default grant (%s) is no longer available — it may have been removed or re-authenticated.", grantID),
+		"List current accounts with: nylas auth list",
+		"Select an active account with: nylas auth switch <grant-id-or-email>",
+		"Or specify one directly: nylas [command] <grant-id>",
+	)
 }
 
 // WithClientNoGrant is a generic helper for commands that don't need a grant ID.

@@ -8,13 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version aliases for backwards compatibility
-var (
-	Version   = version.Version
-	Commit    = version.Commit
-	BuildDate = version.BuildDate
-)
-
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",

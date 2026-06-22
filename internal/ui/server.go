@@ -5,12 +5,12 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
-	"time"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	authapp "github.com/nylas/cli/internal/app/auth"
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/webguard"
 )
@@ -101,11 +101,7 @@ func (s *Server) Start() error {
 		webguard.OriginProtectionMiddleware(
 			webguard.SecurityHeadersMiddleware(mux)))
 
-	server := &http.Server{
-		Addr:              s.addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	server := httputil.NewServer(s.addr, handler, 0)
 
 	return server.ListenAndServe()
 }

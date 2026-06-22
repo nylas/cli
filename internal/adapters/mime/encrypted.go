@@ -57,7 +57,7 @@ func (r *EncryptedMessageRequest) getDate() time.Time                    { retur
 //	[Encrypted content]
 //	-----END PGP MESSAGE-----
 //	--boundary--
-func (b *builder) BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, error) {
+func (b *Builder) BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, error) {
 	if err := validateEncryptedRequest(req); err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (b *builder) BuildEncryptedMessage(req *EncryptedMessageRequest) ([]byte, e
 }
 
 // writeEncryptedHeaders writes RFC 822 headers for encrypted messages.
-func (b *builder) writeEncryptedHeaders(buf *bytes.Buffer, req *EncryptedMessageRequest) error {
+func (b *Builder) writeEncryptedHeaders(buf *bytes.Buffer, req *EncryptedMessageRequest) error {
 	writeCommonHeaders(buf, req)
 	return nil
 }
@@ -116,7 +116,7 @@ func validateEncryptedRequest(req *EncryptedMessageRequest) error {
 
 // PrepareContentToEncrypt prepares the MIME content that will be encrypted.
 // This builds a complete MIME body (with attachments if any) that gets encrypted as a whole.
-func (b *builder) PrepareContentToEncrypt(body, contentType string, attachments []domain.Attachment) ([]byte, error) {
+func (b *Builder) PrepareContentToEncrypt(body, contentType string, attachments []domain.Attachment) ([]byte, error) {
 	// Reuse the PrepareContentToSign logic since the content structure is the same
 	// The only difference is what we do with the result (encrypt vs sign)
 	return b.PrepareContentToSign(body, contentType, attachments)

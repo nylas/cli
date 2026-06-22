@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -24,9 +24,6 @@ const (
 	// NylasMCPEndpointEU is the EU regional MCP endpoint.
 	NylasMCPEndpointEU = "https://mcp.eu.nylas.com"
 )
-
-// DefaultTimeout for HTTP requests - uses centralized domain constant.
-var DefaultTimeout = domain.TimeoutMCP
 
 // GetMCPEndpoint returns the appropriate MCP endpoint for the given region.
 func GetMCPEndpoint(region string) string {
@@ -69,9 +66,7 @@ func NewProxy(apiKey, region string) *Proxy {
 		endpoint:   GetMCPEndpoint(region),
 		apiKey:     apiKey,
 		authHeader: "Bearer " + apiKey, // Cache auth header
-		httpClient: &http.Client{
-			Timeout: DefaultTimeout,
-		},
+		httpClient: httputil.DefaultClient,
 	}
 }
 

@@ -72,6 +72,12 @@ func initAuditHooks(rootCmd *cobra.Command) {
 
 // auditPreRun is called before every command execution.
 func auditPreRun(cmd *cobra.Command, args []string) error {
+	// Apply the global --quiet flag process-wide so decorative output
+	// (success messages, tables, spinners, progress) is suppressed. Structured
+	// data is handled separately by the OutputWriter.
+	quiet, _ := cmd.Flags().GetBool("quiet")
+	common.SetQuiet(quiet)
+
 	// Don't audit help, version, or completion commands
 	if isExcludedCommand(cmd) {
 		return nil

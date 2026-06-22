@@ -18,42 +18,13 @@ import (
 // Logger Tests
 // =============================================================================
 
-func TestLogger_Init(t *testing.T) {
-	ResetLogger()
+func TestQuietMode(t *testing.T) {
+	SetQuiet(false)
+	defer SetQuiet(false)
 
-	InitLogger(false, false)
-	assert.NotNil(t, GetLogger())
-	assert.False(t, IsDebug())
 	assert.False(t, IsQuiet())
-}
-
-func TestLogger_DebugMode(t *testing.T) {
-	ResetLogger()
-
-	InitLogger(true, false)
-	assert.True(t, IsDebug())
-	assert.False(t, IsQuiet())
-}
-
-func TestLogger_QuietMode(t *testing.T) {
-	ResetLogger()
-
-	InitLogger(false, true)
-	assert.False(t, IsDebug())
+	SetQuiet(true)
 	assert.True(t, IsQuiet())
-}
-
-func TestLogger_Functions(t *testing.T) {
-	ResetLogger()
-	InitLogger(true, false)
-
-	// These should not panic
-	Debug("debug message", "key", "value")
-	Info("info message")
-	Warn("warning message")
-	Error("error message")
-	DebugHTTP("GET", "https://api.nylas.com", 200, "100ms")
-	DebugAPI("GetMessages", "grant_id", "test")
 }
 
 // =============================================================================
@@ -115,8 +86,7 @@ func TestRetry_MaxRetriesExceeded(t *testing.T) {
 }
 
 func TestRetry_NonRetryableError(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // quiet mode
+	SetQuiet(true) // quiet mode
 
 	config := DefaultRetryConfig()
 	attempts := 0
@@ -188,8 +158,7 @@ func TestRetry_NoRetryConfig(t *testing.T) {
 // =============================================================================
 
 func TestSpinner_StartStop(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // quiet mode to avoid output
+	SetQuiet(true) // quiet mode to avoid output
 
 	var buf bytes.Buffer
 	spinner := NewSpinner("Loading...").SetWriter(&buf)
@@ -203,8 +172,7 @@ func TestSpinner_StartStop(t *testing.T) {
 }
 
 func TestSpinner_StopWithMessage(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	var buf bytes.Buffer
 	spinner := NewSpinner("Loading...").SetWriter(&buf)
@@ -216,126 +184,12 @@ func TestSpinner_StopWithMessage(t *testing.T) {
 	assert.Contains(t, buf.String(), "Done!")
 }
 
-func TestProgressBar_Increment(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // quiet mode
-
-	var buf bytes.Buffer
-	bar := NewProgressBar(10, "Processing").SetWriter(&buf)
-
-	for i := 0; i < 10; i++ {
-		bar.Increment()
-	}
-
-	// In quiet mode, should not produce output
-	assert.Empty(t, buf.String())
-}
-
-func TestProgressBar_Set(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
-
-	bar := NewProgressBar(100, "Processing")
-	bar.Set(50)
-	bar.Finish()
-}
-
-func TestCounter(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
-
-	counter := NewCounter("Items")
-	counter.Increment()
-	counter.Increment()
-	counter.Increment()
-
-	assert.Equal(t, 3, counter.Count())
-	counter.Finish()
-}
-
 // =============================================================================
 // Format Tests
 // =============================================================================
 
-func TestParseFormat(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected OutputFormat
-		hasError bool
-	}{
-		{"table", FormatTable, false},
-		{"TABLE", FormatTable, false},
-		{"", FormatTable, false},
-		{"json", FormatJSON, false},
-		{"JSON", FormatJSON, false},
-		{"csv", FormatCSV, false},
-		{"yaml", FormatYAML, false},
-		{"yml", FormatYAML, false},
-		{"invalid", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			format, err := ParseFormat(tt.input)
-			if tt.hasError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, format)
-			}
-		})
-	}
-}
-
-func TestFormatter_JSON(t *testing.T) {
-	var buf bytes.Buffer
-	formatter := NewFormatter(FormatJSON).SetWriter(&buf)
-
-	data := map[string]string{"key": "value"}
-	err := formatter.Format(data)
-
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), `"key"`)
-	assert.Contains(t, buf.String(), `"value"`)
-}
-
-func TestFormatter_YAML(t *testing.T) {
-	var buf bytes.Buffer
-	formatter := NewFormatter(FormatYAML).SetWriter(&buf)
-
-	data := map[string]string{"key": "value"}
-	err := formatter.Format(data)
-
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "key:")
-	assert.Contains(t, buf.String(), "value")
-}
-
-func TestFormatter_CSV(t *testing.T) {
-	var buf bytes.Buffer
-	formatter := NewFormatter(FormatCSV).SetWriter(&buf)
-
-	type Item struct {
-		Name  string `json:"name"`
-		Value int    `json:"value"`
-	}
-
-	data := []Item{
-		{Name: "item1", Value: 1},
-		{Name: "item2", Value: 2},
-	}
-
-	err := formatter.Format(data)
-
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "name")
-	assert.Contains(t, buf.String(), "item1")
-	assert.Contains(t, buf.String(), "item2")
-}
-
 func TestTable(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	var buf bytes.Buffer
 	table := NewTable("ID", "NAME", "STATUS").SetWriter(&buf)
@@ -354,8 +208,7 @@ func TestTable(t *testing.T) {
 }
 
 func TestTable_AlignRight(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	var buf bytes.Buffer
 	table := NewTable("NAME", "COUNT").SetWriter(&buf)
@@ -367,8 +220,7 @@ func TestTable_AlignRight(t *testing.T) {
 }
 
 func TestConfirm(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // quiet mode
+	SetQuiet(true) // quiet mode
 
 	// In quiet mode, should return default WITHOUT prompting.
 	// Destructive commands rely on this: default-no confirms cancel in quiet
@@ -399,8 +251,7 @@ func TestConfirm_Interactive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ResetLogger()
-			InitLogger(false, false) // NOT quiet: exercise the stdin-reading path
+			SetQuiet(false) // NOT quiet: exercise the stdin-reading path
 
 			r, w, err := os.Pipe()
 			require.NoError(t, err)
@@ -489,8 +340,7 @@ func TestWrapError_AlreadyCLIError(t *testing.T) {
 }
 
 func TestFormatError(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	err := domain.ErrNotConfigured
 	formatted := FormatError(err)
@@ -500,8 +350,7 @@ func TestFormatError(t *testing.T) {
 }
 
 func TestFormatError_DebugMode(t *testing.T) {
-	ResetLogger()
-	InitLogger(true, false)
+	SetQuiet(false)
 
 	err := errors.New("detailed error message")
 	formatted := FormatError(err)

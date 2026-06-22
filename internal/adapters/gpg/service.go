@@ -46,57 +46,17 @@ func isValidGPGKeyID(keyID string) bool {
 	return false
 }
 
-// Service provides GPG signing, verification, and encryption operations.
-type Service interface {
-	// CheckGPGAvailable verifies GPG is installed and accessible.
-	CheckGPGAvailable(ctx context.Context) error
-
-	// ListSigningKeys lists all available secret keys for signing.
-	ListSigningKeys(ctx context.Context) ([]KeyInfo, error)
-
-	// GetDefaultSigningKey gets the default signing key from git config.
-	GetDefaultSigningKey(ctx context.Context) (*KeyInfo, error)
-
-	// FindKeyByEmail finds a signing key that contains the given email in its UIDs.
-	// Returns the key ID (not the email) for use with --local-user.
-	FindKeyByEmail(ctx context.Context, email string) (*KeyInfo, error)
-
-	// SignData signs data with the specified key and returns a detached signature.
-	// senderEmail is optional - when provided, it embeds that email in the Signer's User ID subpacket.
-	SignData(ctx context.Context, keyID string, data []byte, senderEmail string) (*SignResult, error)
-
-	// VerifyDetachedSignature verifies a detached signature against data.
-	// Returns verification result including signer info and trust level.
-	VerifyDetachedSignature(ctx context.Context, data []byte, signature []byte) (*VerifyResult, error)
-
-	// ListPublicKeys lists all public keys in the keyring.
-	ListPublicKeys(ctx context.Context) ([]KeyInfo, error)
-
-	// FindPublicKeyByEmail finds a public key by email, auto-fetching from key servers if not found locally.
-	FindPublicKeyByEmail(ctx context.Context, email string) (*KeyInfo, error)
-
-	// EncryptData encrypts data for one or more recipients using their public keys.
-	EncryptData(ctx context.Context, recipientKeyIDs []string, data []byte) (*EncryptResult, error)
-
-	// SignAndEncryptData signs data with the sender's private key and encrypts for recipients.
-	// This provides maximum security: only recipients can decrypt, and they can verify the sender.
-	SignAndEncryptData(ctx context.Context, signerKeyID string, recipientKeyIDs []string, data []byte, senderEmail string) (*EncryptResult, error)
-
-	// DecryptData decrypts PGP encrypted data using the user's private key.
-	// Returns the decrypted plaintext along with optional signature verification info.
-	DecryptData(ctx context.Context, ciphertext []byte) (*DecryptResult, error)
-}
-
-// service implements Service using the system GPG command.
-type service struct{}
+// Service provides GPG signing, verification, and encryption operations
+// using the system GPG command.
+type Service struct{}
 
 // NewService creates a new GPG service.
-func NewService() Service {
-	return &service{}
+func NewService() *Service {
+	return &Service{}
 }
 
 // CheckGPGAvailable verifies GPG is installed.
-func (s *service) CheckGPGAvailable(ctx context.Context) error {
+func (s *Service) CheckGPGAvailable(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "gpg", "--version")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("GPG not found. Install with: sudo apt install gnupg (Linux) or brew install gnupg (macOS)")
@@ -105,7 +65,7 @@ func (s *service) CheckGPGAvailable(ctx context.Context) error {
 }
 
 // ListSigningKeys lists all secret keys available for signing.
-func (s *service) ListSigningKeys(ctx context.Context) ([]KeyInfo, error) {
+func (s *Service) ListSigningKeys(ctx context.Context) ([]KeyInfo, error) {
 	// Use --with-colons format for reliable parsing
 	cmd := exec.CommandContext(ctx, "gpg", "--list-secret-keys", "--with-colons", "--with-fingerprint")
 	output, err := cmd.Output()
@@ -120,7 +80,7 @@ func (s *service) ListSigningKeys(ctx context.Context) ([]KeyInfo, error) {
 }
 
 // GetDefaultSigningKey retrieves the default signing key from git config.
-func (s *service) GetDefaultSigningKey(ctx context.Context) (*KeyInfo, error) {
+func (s *Service) GetDefaultSigningKey(ctx context.Context) (*KeyInfo, error) {
 	// Try to get key from git config
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", "user.signingkey")
 	output, err := cmd.Output()
@@ -153,7 +113,7 @@ func (s *service) GetDefaultSigningKey(ctx context.Context) (*KeyInfo, error) {
 // Returns the KeyInfo with the actual key ID for use with --local-user.
 // This is important because GPG's --sender option only works correctly when
 // --local-user is a key ID, not an email address.
-func (s *service) FindKeyByEmail(ctx context.Context, email string) (*KeyInfo, error) {
+func (s *Service) FindKeyByEmail(ctx context.Context, email string) (*KeyInfo, error) {
 	keys, err := s.ListSigningKeys(ctx)
 	if err != nil {
 		return nil, err
@@ -178,7 +138,7 @@ func (s *service) FindKeyByEmail(ctx context.Context, email string) (*KeyInfo, e
 
 // SignData creates a detached signature for the given data.
 // senderEmail is optional - when provided, it embeds that email in the Signer's User ID subpacket.
-func (s *service) SignData(ctx context.Context, keyID string, data []byte, senderEmail string) (*SignResult, error) {
+func (s *Service) SignData(ctx context.Context, keyID string, data []byte, senderEmail string) (*SignResult, error) {
 	// Validate keyID to prevent command injection (SEC-001)
 	if !isValidGPGKeyID(keyID) {
 		return nil, fmt.Errorf("invalid GPG key ID format: %q", keyID)
@@ -253,7 +213,7 @@ var KeyServers = []string{
 }
 
 // VerifyDetachedSignature verifies a detached signature against data.
-func (s *service) VerifyDetachedSignature(ctx context.Context, data []byte, signature []byte) (*VerifyResult, error) {
+func (s *Service) VerifyDetachedSignature(ctx context.Context, data []byte, signature []byte) (*VerifyResult, error) {
 	// Create temporary files for data and signature
 	dataFile, err := createTempFile("gpg-verify-data-", data)
 	if err != nil {
@@ -305,7 +265,7 @@ func (s *service) VerifyDetachedSignature(ctx context.Context, data []byte, sign
 }
 
 // runVerify executes gpg --verify and returns the parsed result.
-func (s *service) runVerify(ctx context.Context, sigFile, dataFile string) (*VerifyResult, string, error) {
+func (s *Service) runVerify(ctx context.Context, sigFile, dataFile string) (*VerifyResult, string, error) {
 	cmd := exec.CommandContext(ctx, "gpg", "--verify", "--status-fd", "1", sigFile, dataFile)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -321,7 +281,7 @@ func (s *service) runVerify(ctx context.Context, sigFile, dataFile string) (*Ver
 
 // fetchKeyFromServer attempts to fetch a public key from multiple key servers.
 // It tries each server in order until one succeeds.
-func (s *service) fetchKeyFromServer(ctx context.Context, keyID string) error {
+func (s *Service) fetchKeyFromServer(ctx context.Context, keyID string) error {
 	var lastErr error
 
 	for _, server := range KeyServers {
