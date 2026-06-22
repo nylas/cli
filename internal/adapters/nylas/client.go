@@ -9,34 +9,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/nylas/cli/internal/adapters/providers"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/version"
 	"golang.org/x/time/rate"
 )
-
-func init() {
-	// Register Nylas provider with the global registry
-	providers.Register("nylas", func(config providers.ProviderConfig) (ports.NylasClient, error) {
-		client := NewHTTPClient()
-
-		if config.BaseURL != "" {
-			client.SetBaseURL(config.BaseURL)
-		} else if config.Region != "" {
-			client.SetRegion(config.Region)
-		}
-
-		client.SetCredentials(config.ClientID, config.ClientSecret, config.APIKey)
-		return client, nil
-	})
-}
 
 const (
 	baseURLUS = domain.BaseURLUS
@@ -115,6 +99,16 @@ func (c *HTTPClient) ApplyConfig(cfg *domain.Config) {
 		return
 	}
 	c.baseURL = cfg.ResolveBaseURL()
+
+	// Apply the configured per-request API timeout. The shared DefaultClient is
+	// fixed at the default; when the install overrides it, give this client a
+	// matching http.Client so the transport-level cap tracks the request
+	// deadline instead of clipping (or out-living) it.
+	timeout := cfg.ResolveAPITimeout()
+	c.requestTimeout = timeout
+	if timeout != httputil.DefaultClientTimeout {
+		c.httpClient = httputil.NewClient(timeout)
+	}
 }
 
 // SetMaxRetries sets the maximum number of retries (for testing purposes).
@@ -498,15 +492,7 @@ func (c *HTTPClient) doJSONRequestInternalWithRetry(
 	}
 
 	// Validate status code
-	statusOK := false
-	for _, status := range acceptedStatuses {
-		if resp.StatusCode == status {
-			statusOK = true
-			break
-		}
-	}
-
-	if !statusOK {
+	if !slices.Contains(acceptedStatuses, resp.StatusCode) {
 		defer func() { _ = resp.Body.Close() }()
 		return nil, c.parseError(resp)
 	}

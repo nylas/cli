@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/version"
 )
 
@@ -170,24 +169,4 @@ func runUpdate(ctx context.Context, checkOnly, force, yes bool) error {
 	fmt.Println("Run 'nylas version' to verify.")
 
 	return nil
-}
-
-// CheckForUpdateAsync checks for updates in the background and prints a message if available.
-// This can be called during CLI startup for non-blocking update notifications.
-func CheckForUpdateAsync(currentVersion string) {
-	go func() {
-		ctx, cancel := common.CreateContextWithTimeout(domain.TimeoutQuickCheck)
-		defer cancel()
-
-		release, err := getLatestRelease(ctx)
-		if err != nil {
-			return // Silently ignore errors in async check
-		}
-
-		latestVersion := parseVersion(release.TagName)
-		if isUpdateAvailable(currentVersion, latestVersion) {
-			fmt.Printf("\nA new version of Nylas CLI is available: %s (current: %s)\n", latestVersion, currentVersion)
-			fmt.Println("Run 'nylas update' to upgrade.")
-		}
-	}()
 }

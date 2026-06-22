@@ -7,15 +7,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-// DialogType defines the type of dialog.
-type DialogType int
-
-const (
-	DialogConfirm DialogType = iota
-	DialogInfo
-	DialogError
-)
-
 // Dialog displays a modal dialog for confirmations or messages.
 type Dialog struct {
 	*tview.Flex

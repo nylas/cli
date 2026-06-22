@@ -148,7 +148,9 @@ func detachRuleFromAgentWorkspaces(ctx context.Context, client interface {
 	updatedWorkspaceIDs := make([]string, 0)
 
 	for _, workspace := range workspaces {
-		if !stringSliceContains(workspace.RulesIDs, ruleID) {
+		if !slices.ContainsFunc(workspace.RulesIDs, func(id string) bool {
+			return strings.TrimSpace(id) == strings.TrimSpace(ruleID)
+		}) {
 			continue
 		}
 
@@ -210,14 +212,4 @@ func rollbackWorkspaceRuleUpdates(ctx context.Context, client interface {
 		return fmt.Errorf("failed to rollback workspace updates: %s", strings.Join(failures, "; "))
 	}
 	return nil
-}
-
-func stringSliceContains(items []string, value string) bool {
-	value = strings.TrimSpace(value)
-	for _, item := range items {
-		if strings.TrimSpace(item) == value {
-			return true
-		}
-	}
-	return false
 }

@@ -5,6 +5,7 @@ package domain
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,34 @@ func TestResolveBaseURL(t *testing.T) {
 			assert.Equal(t, tt.want, tt.cfg.ResolveBaseURL())
 		})
 	}
+}
+
+func TestResolveAPITimeout(t *testing.T) {
+	t.Run("defaults to TimeoutAPI when unset", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "")
+		assert.Equal(t, TimeoutAPI, (&Config{}).ResolveAPITimeout())
+		assert.Equal(t, TimeoutAPI, (&Config{API: &APIConfig{}}).ResolveAPITimeout())
+	})
+
+	t.Run("config api.timeout overrides default", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "")
+		cfg := &Config{API: &APIConfig{Timeout: "45s"}}
+		assert.Equal(t, 45*time.Second, cfg.ResolveAPITimeout())
+	})
+
+	t.Run("env overrides config", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "3m")
+		cfg := &Config{API: &APIConfig{Timeout: "45s"}}
+		assert.Equal(t, 3*time.Minute, cfg.ResolveAPITimeout())
+	})
+
+	t.Run("invalid or non-positive values fall back to default", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "")
+		for _, bad := range []string{"banana", "0s", "-5s"} {
+			cfg := &Config{API: &APIConfig{Timeout: bad}}
+			assert.Equal(t, TimeoutAPI, cfg.ResolveAPITimeout(), "value %q should fall back", bad)
+		}
+	})
 }
 
 func TestDefaultWorkingHours(t *testing.T) {

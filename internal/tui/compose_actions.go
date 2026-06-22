@@ -212,11 +212,6 @@ func parseRecipients(input string) []domain.EmailParticipant {
 	return recipients
 }
 
-// stripHTMLForQuote removes HTML tags for quoting in replies.
-func stripHTMLForQuote(s string) string {
-	return stripHTMLForTUI(s)
-}
-
 // convertToHTML converts plain text to HTML for proper email rendering.
 func convertToHTML(text string) string {
 	// Escape HTML special characters
