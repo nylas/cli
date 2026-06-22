@@ -270,7 +270,7 @@ func (c *ComposeView) prefillForReply() {
 		originalBody = msg.Snippet
 	}
 	// Strip HTML if present
-	originalBody = stripHTMLForQuote(originalBody)
+	originalBody = stripHTMLForTUI(originalBody)
 
 	// Add > prefix to each line
 	lines := strings.Split(originalBody, "\n")
