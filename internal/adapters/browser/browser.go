@@ -38,25 +38,3 @@ func createCommand(url string) *exec.Cmd {
 		return exec.Command("xdg-open", url)
 	}
 }
-
-// MockBrowser is a mock implementation for testing.
-type MockBrowser struct {
-	OpenCalled bool
-	LastURL    string
-	OpenFunc   func(url string) error
-}
-
-// NewMockBrowser creates a new MockBrowser.
-func NewMockBrowser() *MockBrowser {
-	return &MockBrowser{}
-}
-
-// Open records the call and optionally calls the custom function.
-func (m *MockBrowser) Open(url string) error {
-	m.OpenCalled = true
-	m.LastURL = url
-	if m.OpenFunc != nil {
-		return m.OpenFunc(url)
-	}
-	return nil
-}

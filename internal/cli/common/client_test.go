@@ -3,12 +3,15 @@
 package common
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
+	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/stretchr/testify/assert"
@@ -437,4 +440,55 @@ func TestContainsAt_UnicodeSupport(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestGrantFromDefault(t *testing.T) {
+	t.Run("explicit grant arg is not from default", func(t *testing.T) {
+		assert.False(t, grantFromDefault([]string{"grant-123"}))
+	})
+	t.Run("NYLAS_GRANT_ID is not from default", func(t *testing.T) {
+		t.Setenv("NYLAS_GRANT_ID", "grant-env")
+		assert.False(t, grantFromDefault(nil))
+	})
+	t.Run("no arg and no env resolves from default", func(t *testing.T) {
+		t.Setenv("NYLAS_GRANT_ID", "")
+		assert.True(t, grantFromDefault(nil))
+		assert.True(t, grantFromDefault([]string{""}))
+	})
+}
+
+func TestValidateDefaultGrant(t *testing.T) {
+	// Isolate any self-heal write to a throwaway cache location.
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+
+	t.Run("removed default returns a clear, actionable error", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.GetGrantFunc = func(context.Context, string) (*domain.Grant, error) {
+			return nil, domain.ErrGrantNotFound
+		}
+
+		err := validateDefaultGrant(ctx, client, "stale-grant-id")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no longer available")
+		assert.Contains(t, err.Error(), "stale-grant-id")
+	})
+
+	t.Run("valid default passes", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.GetGrantFunc = func(_ context.Context, id string) (*domain.Grant, error) {
+			return &domain.Grant{ID: id}, nil
+		}
+
+		assert.NoError(t, validateDefaultGrant(ctx, client, "good-grant-id"))
+	})
+
+	t.Run("transient error does not block the operation", func(t *testing.T) {
+		client := nylas.NewMockClient()
+		client.GetGrantFunc = func(context.Context, string) (*domain.Grant, error) {
+			return nil, errors.New("network unreachable")
+		}
+
+		assert.NoError(t, validateDefaultGrant(ctx, client, "some-grant-id"))
+	})
 }

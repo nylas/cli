@@ -1,7 +1,6 @@
 package browser
 
 import (
-	"errors"
 	"slices"
 	"testing"
 )
@@ -25,88 +24,6 @@ func TestDefaultBrowser_Open(t *testing.T) {
 	err := browser.Open("https://example.com")
 	// Error is OK (no browser available), we just want to ensure it doesn't panic
 	_ = err
-}
-
-func TestNewMockBrowser(t *testing.T) {
-	mock := NewMockBrowser()
-	if mock == nil {
-		t.Error("NewMockBrowser() returned nil")
-		return
-	}
-	if mock.OpenCalled {
-		t.Error("OpenCalled should be false initially")
-	}
-	if mock.LastURL != "" {
-		t.Error("LastURL should be empty initially")
-	}
-}
-
-func TestMockBrowser_Open(t *testing.T) {
-	tests := []struct {
-		name     string
-		url      string
-		openFunc func(url string) error
-		wantErr  bool
-	}{
-		{
-			name:     "successful open",
-			url:      "https://example.com",
-			openFunc: nil,
-			wantErr:  false,
-		},
-		{
-			name: "open with error",
-			url:  "https://example.com",
-			openFunc: func(url string) error {
-				return errors.New("failed to open")
-			},
-			wantErr: true,
-		},
-		{
-			name: "open with custom func",
-			url:  "https://custom.com",
-			openFunc: func(url string) error {
-				if url != "https://custom.com" {
-					return errors.New("wrong URL")
-				}
-				return nil
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := NewMockBrowser()
-			mock.OpenFunc = tt.openFunc
-
-			err := mock.Open(tt.url)
-
-			if !mock.OpenCalled {
-				t.Error("OpenCalled should be true")
-			}
-			if mock.LastURL != tt.url {
-				t.Errorf("LastURL = %q, want %q", mock.LastURL, tt.url)
-			}
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Open() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestMockBrowser_RecordsMultipleCalls(t *testing.T) {
-	mock := NewMockBrowser()
-
-	_ = mock.Open("https://first.com")
-	if mock.LastURL != "https://first.com" {
-		t.Errorf("First URL = %q, want %q", mock.LastURL, "https://first.com")
-	}
-
-	_ = mock.Open("https://second.com")
-	if mock.LastURL != "https://second.com" {
-		t.Errorf("Second URL = %q, want %q", mock.LastURL, "https://second.com")
-	}
 }
 
 func TestCreateCommand(t *testing.T) {
@@ -147,38 +64,5 @@ func TestCreateCommand_ReturnsNonNil(t *testing.T) {
 	cmd := createCommand("https://example.com")
 	if cmd == nil {
 		t.Fatal("createCommand() should never return nil")
-	}
-}
-
-func TestMockBrowser_DefaultBehavior(t *testing.T) {
-	mock := NewMockBrowser()
-
-	// Should not panic when OpenFunc is nil
-	err := mock.Open("https://example.com")
-	if err != nil {
-		t.Errorf("Open() with nil OpenFunc should return nil, got %v", err)
-	}
-}
-
-func TestMockBrowser_MultipleDifferentURLs(t *testing.T) {
-	mock := NewMockBrowser()
-
-	urls := []string{
-		"https://nylas.com",
-		"http://localhost:8080",
-		"https://example.com/auth/callback",
-	}
-
-	for _, url := range urls {
-		err := mock.Open(url)
-		if err != nil {
-			t.Errorf("Open(%q) returned unexpected error: %v", url, err)
-		}
-		if mock.LastURL != url {
-			t.Errorf("After Open(%q), LastURL = %q", url, mock.LastURL)
-		}
-		if !mock.OpenCalled {
-			t.Error("OpenCalled should remain true")
-		}
 	}
 }

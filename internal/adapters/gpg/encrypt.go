@@ -14,7 +14,7 @@ import (
 const keyserverFetchTimeout = 5 * time.Second
 
 // ListPublicKeys lists all public keys in the keyring.
-func (s *service) ListPublicKeys(ctx context.Context) ([]KeyInfo, error) {
+func (s *Service) ListPublicKeys(ctx context.Context) ([]KeyInfo, error) {
 	cmd := exec.CommandContext(ctx, "gpg", "--list-keys", "--with-colons", "--with-fingerprint")
 	output, err := cmd.Output()
 	if err != nil {
@@ -29,7 +29,7 @@ func (s *service) ListPublicKeys(ctx context.Context) ([]KeyInfo, error) {
 }
 
 // FindPublicKeyByEmail finds a public key by email, auto-fetching from key servers if not found locally.
-func (s *service) FindPublicKeyByEmail(ctx context.Context, email string) (*KeyInfo, error) {
+func (s *Service) FindPublicKeyByEmail(ctx context.Context, email string) (*KeyInfo, error) {
 	// Normalize email for comparison
 	email = strings.ToLower(strings.TrimSpace(email))
 
@@ -77,7 +77,7 @@ func (s *service) FindPublicKeyByEmail(ctx context.Context, email string) (*KeyI
 }
 
 // fetchKeyByEmail tries to fetch a public key by email from key servers.
-func (s *service) fetchKeyByEmail(ctx context.Context, email string) error {
+func (s *Service) fetchKeyByEmail(ctx context.Context, email string) error {
 	// Validate email format
 	parsed, err := mail.ParseAddress(email)
 	if err != nil {
@@ -150,7 +150,7 @@ func keyMatchesEmail(key *KeyInfo, email string) bool {
 }
 
 // EncryptData encrypts data for one or more recipients using their public keys.
-func (s *service) EncryptData(ctx context.Context, recipientKeyIDs []string, data []byte) (*EncryptResult, error) {
+func (s *Service) EncryptData(ctx context.Context, recipientKeyIDs []string, data []byte) (*EncryptResult, error) {
 	if len(recipientKeyIDs) == 0 {
 		return nil, fmt.Errorf("at least one recipient key ID is required")
 	}
@@ -208,7 +208,7 @@ func (s *service) EncryptData(ctx context.Context, recipientKeyIDs []string, dat
 
 // SignAndEncryptData signs data with the sender's private key and encrypts for recipients.
 // This provides maximum security: only recipients can decrypt, and they can verify the sender.
-func (s *service) SignAndEncryptData(ctx context.Context, signerKeyID string, recipientKeyIDs []string, data []byte, senderEmail string) (*EncryptResult, error) {
+func (s *Service) SignAndEncryptData(ctx context.Context, signerKeyID string, recipientKeyIDs []string, data []byte, senderEmail string) (*EncryptResult, error) {
 	if signerKeyID == "" {
 		return nil, fmt.Errorf("signer key ID is required for sign+encrypt")
 	}
@@ -294,7 +294,7 @@ func (s *service) SignAndEncryptData(ctx context.Context, signerKeyID string, re
 
 // DecryptData decrypts PGP encrypted data using the user's private key.
 // It also handles signed+encrypted messages, returning signature verification info.
-func (s *service) DecryptData(ctx context.Context, ciphertext []byte) (*DecryptResult, error) {
+func (s *Service) DecryptData(ctx context.Context, ciphertext []byte) (*DecryptResult, error) {
 	if len(ciphertext) == 0 {
 		return nil, fmt.Errorf("ciphertext is empty")
 	}

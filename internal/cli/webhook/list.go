@@ -11,7 +11,6 @@ import (
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newListCmd() *cobra.Command {
@@ -69,14 +68,6 @@ Shows webhook ID, description, URL, status, and trigger types.`,
 	cmd.Flags().BoolVar(&fullIDs, "full-ids", false, "Show full webhook IDs (useful for copy/paste)")
 
 	return cmd
-}
-
-func outputJSON(webhooks []domain.Webhook) error {
-	return common.PrintJSON(webhooks)
-}
-
-func outputYAML(webhooks []domain.Webhook) error {
-	return yaml.NewEncoder(os.Stdout).Encode(webhooks)
 }
 
 func outputCSV(webhooks []domain.Webhook) error {

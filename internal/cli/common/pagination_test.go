@@ -3,7 +3,6 @@
 package common
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strconv"
@@ -66,8 +65,7 @@ func TestNormalizePageSize(t *testing.T) {
 }
 
 func TestFetchAllPages_SinglePage(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // Quiet mode to avoid progress output
+	SetQuiet(true) // Quiet mode to avoid progress output
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -92,8 +90,7 @@ func TestFetchAllPages_SinglePage(t *testing.T) {
 }
 
 func TestFetchAllPages_MultiplePages(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -131,8 +128,7 @@ func TestFetchAllPages_MultiplePages(t *testing.T) {
 }
 
 func TestFetchAllPages_MaxItems(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -152,8 +148,7 @@ func TestFetchAllPages_MaxItems(t *testing.T) {
 }
 
 func TestFetchAllPages_MaxPages(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -176,8 +171,7 @@ func TestFetchAllPages_MaxPages(t *testing.T) {
 }
 
 func TestFetchAllPages_FetcherError(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -202,8 +196,7 @@ func TestFetchAllPages_FetcherError(t *testing.T) {
 }
 
 func TestFetchAllPages_ContextCancellation(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -230,8 +223,7 @@ func TestFetchAllPages_ContextCancellation(t *testing.T) {
 }
 
 func TestFetchAllPages_EmptyFirstPage(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -249,43 +241,8 @@ func TestFetchAllPages_EmptyFirstPage(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-func TestFetchAllWithProgress(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
-
-	fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
-		return PageResult[string]{
-			Data:       []string{"a", "b", "c"},
-			NextCursor: "",
-		}, nil
-	}
-
-	results, err := FetchAllWithProgress(context.Background(), fetcher, 0)
-
-	require.NoError(t, err)
-	assert.Equal(t, 3, len(results))
-}
-
-func TestFetchAllWithProgress_WithMaxItems(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
-
-	fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
-		return PageResult[string]{
-			Data:       []string{"a", "b", "c", "d", "e"},
-			NextCursor: "more",
-		}, nil
-	}
-
-	results, err := FetchAllWithProgress(context.Background(), fetcher, 2)
-
-	require.NoError(t, err)
-	assert.Equal(t, 2, len(results))
-}
-
 func TestFetchCursorPages(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	t.Run("caps results across multiple pages", func(t *testing.T) {
 		fetcher := func(ctx context.Context, cursor string) (PageResult[string], error) {
@@ -311,77 +268,8 @@ func TestFetchCursorPages(t *testing.T) {
 	})
 }
 
-func TestPaginatedDisplay_Operations(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false) // Not quiet for display output
-
-	t.Run("display page", func(t *testing.T) {
-		var buf bytes.Buffer
-		display := NewPaginatedDisplay(10).SetWriter(&buf)
-
-		display.DisplayPage(5, true)
-
-		assert.Equal(t, 1, display.CurrentPage)
-		assert.Equal(t, 5, display.TotalFetched)
-		assert.Contains(t, buf.String(), "Page 1")
-	})
-
-	t.Run("display multiple pages", func(t *testing.T) {
-		var buf bytes.Buffer
-		display := NewPaginatedDisplay(10).SetWriter(&buf)
-
-		display.DisplayPage(10, true)
-		display.DisplayPage(10, true)
-		display.DisplayPage(5, false) // Last page
-
-		assert.Equal(t, 3, display.CurrentPage)
-		assert.Equal(t, 25, display.TotalFetched)
-	})
-
-	t.Run("display summary", func(t *testing.T) {
-		var buf bytes.Buffer
-		display := NewPaginatedDisplay(10).SetWriter(&buf)
-
-		display.DisplayPage(10, true)
-		display.DisplayPage(5, false)
-		display.DisplaySummary()
-
-		output := buf.String()
-		assert.Contains(t, output, "15 items")
-		assert.Contains(t, output, "2 pages")
-	})
-
-	t.Run("no summary for single page", func(t *testing.T) {
-		var buf bytes.Buffer
-		display := NewPaginatedDisplay(10).SetWriter(&buf)
-
-		display.DisplayPage(5, false) // Single page, no more
-		buf.Reset()
-		display.DisplaySummary()
-
-		// Summary should not be shown for single page
-		assert.Empty(t, buf.String())
-	})
-}
-
-func TestPaginatedDisplay_QuietMode(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // Quiet mode
-
-	var buf bytes.Buffer
-	display := NewPaginatedDisplay(10).SetWriter(&buf)
-
-	display.DisplayPage(10, true)
-	display.DisplayPage(5, false)
-	display.DisplaySummary()
-
-	// In quiet mode, should not produce output
-	assert.Empty(t, buf.String())
-}
-
 func TestFetchAllPages_WithProgress(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false) // Not quiet
+	SetQuiet(false) // Not quiet
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = true
@@ -409,8 +297,7 @@ func TestFetchAllPages_WithProgress(t *testing.T) {
 }
 
 func TestFetchAllPages_ContextDeadline(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -522,8 +409,7 @@ func TestPaginationMode(t *testing.T) {
 }
 
 func TestFetchAllPages_StuckCursor(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false
@@ -548,8 +434,7 @@ func TestFetchAllPages_StuckCursor(t *testing.T) {
 }
 
 func TestFetchAllPages_EmptyPageClaimingMore(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true)
+	SetQuiet(true)
 
 	config := DefaultPaginationConfig()
 	config.ShowProgress = false

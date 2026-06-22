@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
-	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -35,21 +34,4 @@ func ActivateAPIKey(apiKey, clientID, region, orgID string) error {
 // GetActiveOrgID retrieves the active organization ID (exported for setup wizard).
 func GetActiveOrgID() (string, error) {
 	return getActiveOrgID()
-}
-
-// SyncSessionOrg syncs the active org from the server session (exported for setup wizard).
-// Failures are logged as warnings rather than returned, since this is a
-// best-effort step that should not block an otherwise successful login.
-func SyncSessionOrg() {
-	authSvc, _, err := createAuthService()
-	if err != nil {
-		common.PrintWarning("failed to create auth service for org sync: %v", err)
-		return
-	}
-	syncSessionOrgWithWarning(authSvc)
-}
-
-// ReadLine prompts for a line of text input (exported for setup wizard).
-func ReadLine(prompt string) (string, error) {
-	return common.InputPrompt(prompt, "")
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // maxErrorBodyBytes caps how much of an error response body is read into
@@ -28,17 +29,18 @@ type BaseClient struct {
 
 // NewBaseClient creates a new base client with common configuration.
 func NewBaseClient(apiKey, model, baseURL string, timeout time.Duration) *BaseClient {
-	if timeout == 0 {
-		timeout = domain.TimeoutAI
+	// The default (timeout == 0) reuses the shared 120s client; a non-zero
+	// timeout gets its own client.
+	client := httputil.DefaultClient
+	if timeout != 0 {
+		client = httputil.NewClient(timeout)
 	}
 
 	return &BaseClient{
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: baseURL,
-		client: &http.Client{
-			Timeout: timeout,
-		},
+		client:  client,
 	}
 }
 

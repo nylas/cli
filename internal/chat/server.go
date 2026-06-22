@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/webguard"
 )
@@ -130,14 +131,9 @@ func (s *Server) Start() error {
 		webguard.OriginProtectionMiddleware(
 			webguard.SecurityHeadersMiddleware(mux)))
 
-	server := &http.Server{
-		Addr:              s.addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      360 * time.Second, // baseline for SSE streaming; handleChat extends the per-connection write deadline during approval waits
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-	}
+	// 360s WriteTimeout is the baseline for SSE streaming; handleChat extends
+	// the per-connection write deadline during approval waits.
+	server := httputil.NewServer(s.addr, handler, 360*time.Second)
 
 	return server.ListenAndServe()
 }

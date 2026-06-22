@@ -10,8 +10,7 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-// Service implements ports.TimeZoneService.
-// Provides time zone conversion, meeting finder, and DST transition utilities.
+// Service provides time zone conversion, meeting finder, and DST transition utilities.
 type Service struct{}
 
 // NewService creates a new time zone service.

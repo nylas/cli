@@ -49,7 +49,7 @@ func (s *Server) handleGetReplyLaterItems(w http.ResponseWriter, r *http.Request
 	rlStore.mu.RLock()
 	defer rlStore.mu.RUnlock()
 
-	showCompleted := ParseBool(r.URL.Query(), "completed")
+	showCompleted := NewQueryParams(r.URL.Query()).GetBool("completed")
 
 	items := make([]*ReplyLaterItem, 0)
 	for _, item := range rlStore.items {

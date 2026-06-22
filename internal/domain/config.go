@@ -11,14 +11,6 @@ const (
 	// TimeoutAPI is the default timeout for Nylas API calls (90s).
 	TimeoutAPI = 90 * time.Second
 
-	// TimeoutAI is the timeout for AI/LLM operations (120s).
-	// AI providers may take longer due to model inference time.
-	TimeoutAI = 120 * time.Second
-
-	// TimeoutMCP is the timeout for MCP proxy operations (90s).
-	// Allows time for tool execution and response processing.
-	TimeoutMCP = 90 * time.Second
-
 	// TimeoutHealthCheck is the timeout for health/connectivity checks (10s).
 	TimeoutHealthCheck = 10 * time.Second
 
@@ -37,10 +29,8 @@ const (
 	// TimeoutQuickCheck is the timeout for quick checks like version checking (5s).
 	TimeoutQuickCheck = 5 * time.Second
 
-	// HTTP Server timeouts
+	// HTTP server timeouts (used by httputil.NewServer)
 	HTTPReadHeaderTimeout = 10 * time.Second  // Time to read request headers
-	HTTPReadTimeout       = 30 * time.Second  // Time to read entire request
-	HTTPWriteTimeout      = 30 * time.Second  // Time to write response
 	HTTPIdleTimeout       = 120 * time.Second // Keep-alive connection idle timeout
 )
 

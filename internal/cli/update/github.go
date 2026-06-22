@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 const (
@@ -17,9 +17,6 @@ const (
 
 	// GitHub API endpoints
 	releasesAPIURL = "https://api.github.com/repos/%s/%s/releases/latest"
-
-	// HTTP client timeout
-	httpTimeout = 30 * time.Second
 )
 
 // Release represents a GitHub release.
@@ -51,9 +48,8 @@ func getLatestRelease(ctx context.Context) (*Release, error) {
 	}
 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "nylas-cli")
 
-	client := &http.Client{Timeout: httpTimeout}
+	client := httputil.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, common.WrapFetchError("release", err)

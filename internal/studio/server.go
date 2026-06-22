@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/nylas/cli/internal/webguard"
 )
@@ -46,11 +47,7 @@ func (s *Server) Start(ctx context.Context) error {
 		webguard.OriginProtectionMiddleware(
 			webguard.SecurityHeadersMiddleware(mux)))
 
-	s.httpServer = &http.Server{
-		Addr:              s.addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	s.httpServer = httputil.NewServer(s.addr, handler, 0)
 
 	errCh := make(chan error, 1)
 	go func() {

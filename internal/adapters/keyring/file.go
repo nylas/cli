@@ -20,16 +20,6 @@ const (
 	fileStoreSaltSize      = 16
 )
 
-// fileStoreKeyType describes which key(s) can decrypt the on-disk .secrets.enc file.
-type fileStoreKeyType int
-
-const (
-	fileStoreKeyNone           fileStoreKeyType = iota // file does not exist or neither key decrypts it
-	fileStoreKeyLegacyOnly                             // decryptable only with the legacy machine-derived key
-	fileStoreKeyPassphraseOnly                         // decryptable only with the passphrase-derived key
-	fileStoreKeyBoth                                   // decryptable with either key
-)
-
 // EncryptedFileStore implements SecretStore using an encrypted file.
 // This is a fallback for environments where the system keyring is unavailable.
 // Uses AES-256-GCM encryption with an Argon2id key derived from a user-supplied
@@ -177,56 +167,6 @@ func (f *EncryptedFileStore) IsAvailable() bool {
 // Name returns the name of the secret store backend.
 func (f *EncryptedFileStore) Name() string {
 	return "encrypted file"
-}
-
-// detectKeyType returns which key(s) can currently decrypt the on-disk file.
-// It reads the file once and probes each key in order.  If the file does not
-// exist, fileStoreKeyNone is returned with no error.
-func (f *EncryptedFileStore) detectKeyType() (fileStoreKeyType, error) {
-	data, err := os.ReadFile(f.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fileStoreKeyNone, nil
-		}
-		return fileStoreKeyNone, err
-	}
-
-	hasPassphrase := false
-	if key, err := f.passphraseKey(false); err == nil {
-		if _, err := decryptWithKey(key, data); err == nil {
-			hasPassphrase = true
-		}
-		zeroBytes(key)
-	}
-
-	hasLegacy := f.canDecryptWithLegacyKeys(data)
-
-	switch {
-	case hasPassphrase && hasLegacy:
-		return fileStoreKeyBoth, nil
-	case hasPassphrase:
-		return fileStoreKeyPassphraseOnly, nil
-	case hasLegacy:
-		return fileStoreKeyLegacyOnly, nil
-	default:
-		return fileStoreKeyNone, nil
-	}
-}
-
-// canDecryptWithLegacyKeys returns true when the ciphertext can be opened by
-// either the migration master key or the legacy machine-derived key.
-func (f *EncryptedFileStore) canDecryptWithLegacyKeys(data []byte) bool {
-	if len(f.migrationKey) > 0 {
-		if _, err := decryptWithKey(f.migrationKey, data); err == nil {
-			return true
-		}
-	}
-	if len(f.legacyKey) > 0 {
-		if _, err := decryptWithKey(f.legacyKey, data); err == nil {
-			return true
-		}
-	}
-	return false
 }
 
 // loadSecrets loads and decrypts the secrets file.

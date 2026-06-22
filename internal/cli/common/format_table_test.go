@@ -11,8 +11,7 @@ import (
 )
 
 func TestTable_BasicOperations(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	t.Run("create and render table", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -70,8 +69,7 @@ func TestTable_BasicOperations(t *testing.T) {
 }
 
 func TestTable_QuietMode(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // Enable quiet mode
+	SetQuiet(true) // Enable quiet mode
 
 	var buf bytes.Buffer
 	table := NewTable("HEADER").SetWriter(&buf)
@@ -83,8 +81,7 @@ func TestTable_QuietMode(t *testing.T) {
 }
 
 func TestPrintFunctions_QuietMode(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // Enable quiet mode
+	SetQuiet(true) // Enable quiet mode
 
 	// These should not panic in quiet mode
 	PrintSuccess("success: %s", "test")
@@ -93,8 +90,7 @@ func TestPrintFunctions_QuietMode(t *testing.T) {
 }
 
 func TestPrintError_AlwaysPrints(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, true) // Enable quiet mode
+	SetQuiet(true) // Enable quiet mode
 
 	// PrintError should print even in quiet mode (to stderr)
 	// We can't easily capture stderr, so just verify no panic
@@ -102,8 +98,7 @@ func TestPrintError_AlwaysPrints(t *testing.T) {
 }
 
 func TestTable_UTF8Support(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	t.Run("handles UTF-8 characters correctly", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -136,8 +131,7 @@ func TestTable_UTF8Support(t *testing.T) {
 }
 
 func TestTable_MaxWidth(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	t.Run("truncates long text with max width", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -284,8 +278,7 @@ func TestVisualWidth(t *testing.T) {
 }
 
 func TestTable_Alignment(t *testing.T) {
-	ResetLogger()
-	InitLogger(false, false)
+	SetQuiet(false)
 
 	t.Run("columns align properly with varying widths", func(t *testing.T) {
 		var buf bytes.Buffer

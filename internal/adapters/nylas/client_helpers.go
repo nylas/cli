@@ -230,16 +230,6 @@ func (qb *QueryBuilder) AddSlice(key string, values []string) *QueryBuilder {
 	return qb
 }
 
-// Encode returns the encoded query string.
-func (qb *QueryBuilder) Encode() string {
-	return qb.values.Encode()
-}
-
-// Values returns the underlying url.Values.
-func (qb *QueryBuilder) Values() url.Values {
-	return qb.values
-}
-
 // BuildURL appends the query string to the base URL if there are parameters.
 func (qb *QueryBuilder) BuildURL(baseURL string) string {
 	if len(qb.values) == 0 {

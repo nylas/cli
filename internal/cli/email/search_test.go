@@ -50,9 +50,8 @@ func (s *stubMessagesClient) GetMessagesWithCursor(ctx context.Context, grantID 
 }
 
 func TestFetchMessages(t *testing.T) {
-	common.ResetLogger()
-	common.InitLogger(false, true)
-	defer common.ResetLogger()
+	common.SetQuiet(true)
+	defer common.SetQuiet(false)
 
 	t.Run("uses direct fetch when maxItems is negative", func(t *testing.T) {
 		expected := []domain.Message{{ID: "msg-1"}, {ID: "msg-2"}}

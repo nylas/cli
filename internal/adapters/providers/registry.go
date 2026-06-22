@@ -2,7 +2,6 @@
 package providers
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/nylas/cli/internal/ports"
@@ -36,37 +35,4 @@ func Register(name string, factory ProviderFactory) {
 	defaultRegistry.mu.Lock()
 	defer defaultRegistry.mu.Unlock()
 	defaultRegistry.factories[name] = factory
-}
-
-// Get returns a provider factory by name
-func Get(name string) (ProviderFactory, error) {
-	defaultRegistry.mu.RLock()
-	defer defaultRegistry.mu.RUnlock()
-
-	factory, ok := defaultRegistry.factories[name]
-	if !ok {
-		return nil, fmt.Errorf("provider %q not registered", name)
-	}
-	return factory, nil
-}
-
-// List returns all registered provider names
-func List() []string {
-	defaultRegistry.mu.RLock()
-	defer defaultRegistry.mu.RUnlock()
-
-	names := make([]string, 0, len(defaultRegistry.factories))
-	for name := range defaultRegistry.factories {
-		names = append(names, name)
-	}
-	return names
-}
-
-// NewClient creates a new provider client by name
-func NewClient(provider string, config ProviderConfig) (ports.NylasClient, error) {
-	factory, err := Get(provider)
-	if err != nil {
-		return nil, err
-	}
-	return factory(config)
 }

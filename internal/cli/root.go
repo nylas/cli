@@ -8,12 +8,13 @@ import (
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/setup"
+	"github.com/nylas/cli/internal/version"
 )
 
 var rootCmd = &cobra.Command{
 	Use:     "nylas",
 	Short:   "Nylas CLI - Email, calendar, and contacts from your terminal",
-	Version: Version,
+	Version: version.Version,
 	Long: `Quick start:
   nylas init             Guided setup (first time)
   nylas email list       List recent emails

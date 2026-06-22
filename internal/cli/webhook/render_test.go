@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"encoding/json"
 	"io"
 	"os"
 	"testing"
@@ -98,29 +97,6 @@ func TestOutputHelpers(t *testing.T) {
 			TriggerTypes: []string{"message.created", "message.updated"},
 		},
 	}
-
-	t.Run("outputJSON", func(t *testing.T) {
-		output := captureStdout(t, func() {
-			err := outputJSON(webhooks)
-			require.NoError(t, err)
-		})
-
-		var decoded []domain.Webhook
-		err := json.Unmarshal([]byte(output), &decoded)
-		require.NoError(t, err)
-		require.Len(t, decoded, 1)
-		assert.Equal(t, "webhook-123", decoded[0].ID)
-	})
-
-	t.Run("outputYAML", func(t *testing.T) {
-		output := captureStdout(t, func() {
-			err := outputYAML(webhooks)
-			require.NoError(t, err)
-		})
-
-		assert.Contains(t, output, "id: webhook-123")
-		assert.Contains(t, output, "status: active")
-	})
 
 	t.Run("outputCSV", func(t *testing.T) {
 		output := captureStdout(t, func() {

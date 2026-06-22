@@ -48,12 +48,6 @@ func NewSpinner(message string) *Spinner {
 	}
 }
 
-// SetFrames sets the spinner animation frames.
-func (s *Spinner) SetFrames(frames []string) *Spinner {
-	s.frames = frames
-	return s
-}
-
 // SetWriter sets the output writer.
 func (s *Spinner) SetWriter(w io.Writer) *Spinner {
 	s.writer = w
@@ -110,14 +104,6 @@ func (s *Spinner) Stop() {
 	<-s.done
 }
 
-// StopWithMessage stops the spinner and prints a final message.
-func (s *Spinner) StopWithMessage(message string) {
-	s.Stop()
-	if !IsQuiet() {
-		_, _ = fmt.Fprintln(s.writer, message)
-	}
-}
-
 // StopWithSuccess stops the spinner with a success message.
 func (s *Spinner) StopWithSuccess(message string) {
 	s.Stop()
@@ -132,129 +118,6 @@ func (s *Spinner) StopWithError(message string) {
 	if !IsQuiet() {
 		_, _ = fmt.Fprintf(s.writer, "%s %s\n", Red.Sprint("✗"), message)
 	}
-}
-
-// ProgressBar provides a progress bar for determinate operations.
-type ProgressBar struct {
-	total     int
-	current   int
-	width     int
-	message   string
-	writer    io.Writer
-	startTime time.Time
-	mu        sync.Mutex
-}
-
-// NewProgressBar creates a new progress bar.
-func NewProgressBar(total int, message string) *ProgressBar {
-	return &ProgressBar{
-		total:     total,
-		current:   0,
-		width:     40,
-		message:   message,
-		writer:    os.Stderr,
-		startTime: time.Now(),
-	}
-}
-
-// SetWidth sets the progress bar width.
-func (p *ProgressBar) SetWidth(width int) *ProgressBar {
-	p.width = width
-	return p
-}
-
-// SetWriter sets the output writer.
-func (p *ProgressBar) SetWriter(w io.Writer) *ProgressBar {
-	p.writer = w
-	return p
-}
-
-// Increment increments the progress by 1.
-func (p *ProgressBar) Increment() {
-	p.Add(1)
-}
-
-// Add adds n to the current progress.
-func (p *ProgressBar) Add(n int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.current += n
-	if p.current > p.total {
-		p.current = p.total
-	}
-
-	p.render()
-}
-
-// Set sets the current progress.
-func (p *ProgressBar) Set(n int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.current = n
-	if p.current > p.total {
-		p.current = p.total
-	}
-
-	p.render()
-}
-
-// render draws the progress bar.
-func (p *ProgressBar) render() {
-	if IsQuiet() {
-		return
-	}
-
-	percent := float64(p.current) / float64(p.total)
-	filled := int(percent * float64(p.width))
-	empty := p.width - filled
-
-	// Calculate ETA
-	elapsed := time.Since(p.startTime)
-	var eta string
-	if p.current > 0 {
-		remaining := time.Duration(float64(elapsed) / percent * (1 - percent))
-		if remaining > time.Second {
-			eta = fmt.Sprintf(" ETA: %s", formatDuration(remaining))
-		}
-	}
-
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
-
-	_, _ = fmt.Fprintf(p.writer, "\r%s %s %s %d/%d (%.0f%%)%s",
-		p.message,
-		Cyan.Sprint("["),
-		bar,
-		p.current,
-		p.total,
-		percent*100,
-		eta,
-	)
-
-	if p.current >= p.total {
-		_, _ = fmt.Fprintln(p.writer)
-	}
-}
-
-// Finish completes the progress bar.
-func (p *ProgressBar) Finish() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.current = p.total
-	p.render()
-}
-
-// formatDuration formats a duration for display.
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
-	}
-	return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
 // Counter provides a simple counter display.
@@ -290,13 +153,6 @@ func (c *Counter) Finish() {
 	if !IsQuiet() {
 		_, _ = fmt.Fprintln(c.writer)
 	}
-}
-
-// Count returns the current count.
-func (c *Counter) Count() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.count
 }
 
 // RunWithSpinner executes a function while displaying a spinner.

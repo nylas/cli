@@ -12,6 +12,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/nylas"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -204,7 +205,7 @@ func checkNetworkConnectivity() CheckResult {
 		}
 	}
 
-	client := &http.Client{Timeout: domain.TimeoutHealthCheck}
+	client := httputil.DefaultClient
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start)

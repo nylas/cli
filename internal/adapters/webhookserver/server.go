@@ -71,7 +71,7 @@ var rootTemplate = template.Must(template.New("root").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
-// Server implements the WebhookServer interface.
+// Server is a local webhook receiver server.
 type Server struct {
 	config         ports.WebhookServerConfig
 	server         *http.Server

@@ -162,7 +162,7 @@ func sendSecureEmail(ctx context.Context, client ports.NylasClient, grantID stri
 }
 
 // resolveSigningKey determines the signing key to use.
-func resolveSigningKey(ctx context.Context, gpgSvc gpg.Service, explicitKeyID string, req *domain.SendMessageRequest) (keyID, identity string) {
+func resolveSigningKey(ctx context.Context, gpgSvc *gpg.Service, explicitKeyID string, req *domain.SendMessageRequest) (keyID, identity string) {
 	if explicitKeyID != "" {
 		return explicitKeyID, explicitKeyID
 	}
@@ -193,7 +193,7 @@ func resolveSigningKey(ctx context.Context, gpgSvc gpg.Service, explicitKeyID st
 }
 
 // resolveRecipientKeys determines the encryption keys for all recipients.
-func resolveRecipientKeys(ctx context.Context, gpgSvc gpg.Service, explicitKeyID string, to, cc, bcc []domain.EmailParticipant) ([]string, error) {
+func resolveRecipientKeys(ctx context.Context, gpgSvc *gpg.Service, explicitKeyID string, to, cc, bcc []domain.EmailParticipant) ([]string, error) {
 	// If explicit key provided, use it
 	if explicitKeyID != "" {
 		return []string{explicitKeyID}, nil
@@ -237,7 +237,7 @@ func resolveRecipientKeys(ctx context.Context, gpgSvc gpg.Service, explicitKeyID
 }
 
 // buildSignedMessage builds a signed-only PGP/MIME message.
-func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID, signingIdentity string) ([]byte, error) {
+func buildSignedMessage(ctx context.Context, gpgSvc *gpg.Service, mimeBuilder *mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID, signingIdentity string) ([]byte, error) {
 	spinner := common.NewSpinner(fmt.Sprintf("Signing email with GPG identity: %s...", signingIdentity))
 	spinner.Start()
 	defer spinner.Stop()
@@ -285,7 +285,7 @@ func buildSignedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mim
 }
 
 // buildEncryptedMessage builds an encrypted-only PGP/MIME message.
-func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType string, recipientKeyIDs []string) ([]byte, error) {
+func buildEncryptedMessage(ctx context.Context, gpgSvc *gpg.Service, mimeBuilder *mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType string, recipientKeyIDs []string) ([]byte, error) {
 	spinner := common.NewSpinner("Encrypting email...")
 	spinner.Start()
 	defer spinner.Stop()
@@ -323,7 +323,7 @@ func buildEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder 
 
 // buildSignedEncryptedMessage builds a signed AND encrypted PGP/MIME message.
 // Order: Sign first, then encrypt (per OpenPGP best practice).
-func buildSignedEncryptedMessage(ctx context.Context, gpgSvc gpg.Service, mimeBuilder mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID string, recipientKeyIDs []string) ([]byte, error) {
+func buildSignedEncryptedMessage(ctx context.Context, gpgSvc *gpg.Service, mimeBuilder *mime.Builder, req *domain.SendMessageRequest, toContacts []domain.EmailParticipant, subject, body, contentType, signerKeyID string, recipientKeyIDs []string) ([]byte, error) {
 	spinner := common.NewSpinner("Signing and encrypting email...")
 	spinner.Start()
 	defer spinner.Stop()

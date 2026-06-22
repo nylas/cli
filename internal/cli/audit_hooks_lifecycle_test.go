@@ -216,3 +216,31 @@ func TestInitAuditHooks(t *testing.T) {
 		t.Error("initAuditHooks() did not set AuditRequestHook")
 	}
 }
+
+// TestAuditPreRun_AppliesQuietFlag verifies the root PersistentPreRunE wires the
+// --quiet flag into the process-wide quiet mode, so decorative output is
+// actually suppressed (the guards in format/progress read common.IsQuiet()).
+func TestAuditPreRun_AppliesQuietFlag(t *testing.T) {
+	common.SetQuiet(false)
+	defer common.SetQuiet(false)
+
+	cmd := &cobra.Command{Use: "demo"}
+	cmd.Flags().BoolP("quiet", "q", false, "")
+
+	if err := auditPreRun(cmd, nil); err != nil {
+		t.Fatalf("auditPreRun without --quiet: %v", err)
+	}
+	if common.IsQuiet() {
+		t.Error("expected quiet mode off when --quiet is not set")
+	}
+
+	if err := cmd.Flags().Set("quiet", "true"); err != nil {
+		t.Fatalf("set --quiet: %v", err)
+	}
+	if err := auditPreRun(cmd, nil); err != nil {
+		t.Fatalf("auditPreRun with --quiet: %v", err)
+	}
+	if !common.IsQuiet() {
+		t.Error("expected quiet mode on when --quiet is set")
+	}
+}

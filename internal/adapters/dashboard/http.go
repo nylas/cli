@@ -144,18 +144,6 @@ func (c *AccountClient) doPostRaw(ctx context.Context, path string, body any, ex
 	return resp.Data, nil
 }
 
-// unwrapEnvelope extracts the "data" field from the API response envelope.
-// The dashboard-account API wraps all successful responses in:
-//
-//	{"request_id": "...", "success": true, "data": {...}}
-func unwrapEnvelope(body []byte) ([]byte, error) {
-	resp, err := unwrapRawResponse(body)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
-}
-
 func unwrapRawResponse(body []byte) (rawResponse, error) {
 	var envelope struct {
 		Data json.RawMessage `json:"data"`

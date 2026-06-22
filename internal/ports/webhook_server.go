@@ -53,30 +53,6 @@ type WebhookServerStats struct {
 // WebhookEventHandler is called when a webhook event is received.
 type WebhookEventHandler func(event *WebhookEvent)
 
-// WebhookServer defines the interface for a local webhook receiver server.
-type WebhookServer interface {
-	// Start starts the webhook server.
-	Start(ctx context.Context) error
-
-	// Stop stops the webhook server.
-	Stop() error
-
-	// GetLocalURL returns the local server URL.
-	GetLocalURL() string
-
-	// GetPublicURL returns the public URL (from tunnel, if any).
-	GetPublicURL() string
-
-	// GetStats returns server statistics.
-	GetStats() WebhookServerStats
-
-	// OnEvent registers a handler for webhook events.
-	OnEvent(handler WebhookEventHandler)
-
-	// Events returns a channel for receiving webhook events.
-	Events() <-chan *WebhookEvent
-}
-
 // TunnelConfig holds configuration for a tunnel.
 type TunnelConfig struct {
 	Provider string // cloudflared or ngrok
