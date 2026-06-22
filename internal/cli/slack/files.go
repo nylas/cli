@@ -13,6 +13,7 @@ import (
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // newFilesCmd creates the files command group.
@@ -330,10 +331,9 @@ Examples:
 				return common.NewInputError(fmt.Sprintf("output path is a directory: %s", outputPath))
 			}
 
-			// Download the file with a dedicated long timeout: the command
-			// context carries the default API timeout, which would cut off
-			// large downloads mid-stream.
-			dlCtx, dlCancel := common.CreateContextWithTimeout(domain.TimeoutDownload)
+			// Download under the standard 120s client timeout (the Nylas
+			// server-side ceiling), matching email attachment downloads.
+			dlCtx, dlCancel := common.CreateContextWithTimeout(httputil.DefaultClientTimeout)
 			defer dlCancel()
 			reader, err := client.DownloadFile(dlCtx, file.DownloadURL)
 			if err != nil {

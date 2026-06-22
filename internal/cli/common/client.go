@@ -43,6 +43,10 @@ func GetNylasClient() (ports.NylasClient, error) {
 		cfg = &domain.Config{Region: "us"}
 	}
 
+	// Propagate the install's API timeout to CreateContext (the per-command
+	// deadline) so it matches the client this function builds.
+	SetAPITimeout(cfg.ResolveAPITimeout())
+
 	// First, check environment variables (highest priority)
 	apiKey := os.Getenv("NYLAS_API_KEY")
 	clientID := os.Getenv("NYLAS_CLIENT_ID")

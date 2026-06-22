@@ -115,6 +115,16 @@ func (c *HTTPClient) ApplyConfig(cfg *domain.Config) {
 		return
 	}
 	c.baseURL = cfg.ResolveBaseURL()
+
+	// Apply the configured per-request API timeout. The shared DefaultClient is
+	// fixed at the default; when the install overrides it, give this client a
+	// matching http.Client so the transport-level cap tracks the request
+	// deadline instead of clipping (or out-living) it.
+	timeout := cfg.ResolveAPITimeout()
+	c.requestTimeout = timeout
+	if timeout != httputil.DefaultClientTimeout {
+		c.httpClient = httputil.NewClient(timeout)
+	}
 }
 
 // SetMaxRetries sets the maximum number of retries (for testing purposes).

@@ -16,8 +16,10 @@ import (
 // This prevents memory exhaustion attacks via large payloads.
 const MaxRequestBodySize = 1 << 20
 
-// DefaultClientTimeout is the standard timeout for outbound HTTP clients.
-const DefaultClientTimeout = 120 * time.Second
+// DefaultClientTimeout is the standard timeout for outbound HTTP clients. It
+// tracks domain.TimeoutAPI (120s) so the client-level cap and the per-request
+// API timeout share one source of truth.
+const DefaultClientTimeout = domain.TimeoutAPI
 
 // userAgentTransport sets the standard CLI User-Agent on every outbound
 // request that doesn't already specify one, so all clients built via

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"os"
 	"strings"
 	"time"
 )
@@ -8,8 +9,11 @@ import (
 // Timeout constants for consistent behavior across the application.
 // Use these instead of hardcoding timeout values.
 const (
-	// TimeoutAPI is the default timeout for Nylas API calls (90s).
-	TimeoutAPI = 90 * time.Second
+	// TimeoutAPI is the default timeout for Nylas API calls (120s), matching the
+	// Nylas server-side request timeout and httputil.DefaultClientTimeout.
+	// Override per-install via `nylas config set api.timeout` or NYLAS_API_TIMEOUT
+	// (see Config.ResolveAPITimeout).
+	TimeoutAPI = 120 * time.Second
 
 	// TimeoutHealthCheck is the timeout for health/connectivity checks (10s).
 	TimeoutHealthCheck = 10 * time.Second
@@ -21,10 +25,6 @@ const (
 	// TimeoutBulkOperation is the timeout for bulk operations like fetching
 	// all Slack messages or channels (10m).
 	TimeoutBulkOperation = 10 * time.Minute
-
-	// TimeoutDownload is the timeout for streamed file/attachment downloads (15m).
-	// Large or slow downloads would be cut off mid-stream by TimeoutAPI.
-	TimeoutDownload = 15 * time.Minute
 
 	// TimeoutQuickCheck is the timeout for quick checks like version checking (5s).
 	TimeoutQuickCheck = 5 * time.Second
@@ -65,6 +65,7 @@ type Config struct {
 // APIConfig represents API-specific configuration.
 type APIConfig struct {
 	BaseURL string `yaml:"base_url,omitempty"` // API base URL
+	Timeout string `yaml:"timeout,omitempty"`  // API request timeout, e.g. "120s" (default TimeoutAPI)
 }
 
 const (
@@ -81,6 +82,33 @@ func (c *Config) ResolveBaseURL() string {
 		return BaseURLEU
 	}
 	return BaseURLUS
+}
+
+// ResolveAPITimeout returns the effective per-request API timeout. Order of
+// precedence: NYLAS_API_TIMEOUT env var, then config api.timeout, then the
+// TimeoutAPI default. Unparseable or non-positive values are ignored so a bad
+// override degrades to the default rather than disabling the timeout.
+func (c *Config) ResolveAPITimeout() time.Duration {
+	if d, ok := parsePositiveDuration(os.Getenv("NYLAS_API_TIMEOUT")); ok {
+		return d
+	}
+	if c.API != nil {
+		if d, ok := parsePositiveDuration(c.API.Timeout); ok {
+			return d
+		}
+	}
+	return TimeoutAPI
+}
+
+func parsePositiveDuration(s string) (time.Duration, bool) {
+	if s == "" {
+		return 0, false
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0, false
+	}
+	return d, true
 }
 
 // DefaultConfig returns a config with sensible defaults.

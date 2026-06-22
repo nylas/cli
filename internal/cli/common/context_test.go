@@ -4,9 +4,14 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/nylas/cli/internal/domain"
 )
 
 func TestCreateContext(t *testing.T) {
+	SetAPITimeout(0) // default
+	defer SetAPITimeout(0)
+
 	ctx, cancel := CreateContext()
 	defer cancel()
 
@@ -20,11 +25,37 @@ func TestCreateContext(t *testing.T) {
 		t.Error("CreateContext() context has no deadline")
 	}
 
-	// Check that deadline is approximately 90 seconds from now (TimeoutAPI)
-	expectedDeadline := time.Now().Add(90 * time.Second)
+	// Default deadline is TimeoutAPI from now.
+	expectedDeadline := time.Now().Add(domain.TimeoutAPI)
 	diff := expectedDeadline.Sub(deadline)
 	if diff < -1*time.Second || diff > 1*time.Second {
-		t.Errorf("CreateContext() deadline is %v, expected around 90s from now", deadline)
+		t.Errorf("CreateContext() deadline is %v, expected around %v from now", deadline, domain.TimeoutAPI)
+	}
+}
+
+func TestCreateContext_HonorsConfiguredTimeout(t *testing.T) {
+	SetAPITimeout(45 * time.Second)
+	defer SetAPITimeout(0)
+
+	ctx, cancel := CreateContext()
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("CreateContext() context has no deadline")
+	}
+	diff := time.Until(deadline) - 45*time.Second
+	if diff < -1*time.Second || diff > 1*time.Second {
+		t.Errorf("CreateContext() deadline ~%v from now, expected ~45s", time.Until(deadline))
+	}
+
+	// Resetting to default restores TimeoutAPI.
+	SetAPITimeout(0)
+	ctx2, cancel2 := CreateContext()
+	defer cancel2()
+	d2, _ := ctx2.Deadline()
+	if diff := time.Until(d2) - domain.TimeoutAPI; diff < -1*time.Second || diff > 1*time.Second {
+		t.Errorf("after reset, deadline ~%v, expected ~%v", time.Until(d2), domain.TimeoutAPI)
 	}
 }
 

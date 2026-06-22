@@ -5,7 +5,9 @@ package nylas
 
 import (
 	"testing"
+	"time"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/httputil"
 )
 
@@ -112,6 +114,38 @@ func TestOTPExtractionSecurity(t *testing.T) {
 		for _, tc := range unicodeInputs {
 			result := ExtractOTP(tc.subject, tc.body)
 			t.Logf("Unicode input %q -> %q", tc.subject, result)
+		}
+	})
+}
+
+// TestHTTPClient_ApplyConfigTimeout verifies the per-request timeout is wired
+// from config and that a non-default value also swaps in a matching http.Client
+// so the transport-level cap tracks the request deadline.
+func TestHTTPClient_ApplyConfigTimeout(t *testing.T) {
+	t.Run("default config keeps the shared client and default timeout", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "")
+		client := NewHTTPClient()
+		client.ApplyConfig(&domain.Config{Region: "us"})
+		if client.requestTimeout != domain.TimeoutAPI {
+			t.Errorf("requestTimeout = %v, want default %v", client.requestTimeout, domain.TimeoutAPI)
+		}
+		if client.httpClient != httputil.DefaultClient {
+			t.Error("expected the shared DefaultClient for the default timeout")
+		}
+	})
+
+	t.Run("config api.timeout sets request timeout and a matching client", func(t *testing.T) {
+		t.Setenv("NYLAS_API_TIMEOUT", "")
+		client := NewHTTPClient()
+		client.ApplyConfig(&domain.Config{Region: "us", API: &domain.APIConfig{Timeout: "300s"}})
+		if want := 300 * time.Second; client.requestTimeout != want {
+			t.Errorf("requestTimeout = %v, want %v", client.requestTimeout, want)
+		}
+		if client.httpClient == httputil.DefaultClient {
+			t.Error("expected a dedicated client for a non-default timeout")
+		}
+		if want := 300 * time.Second; client.httpClient.Timeout != want {
+			t.Errorf("http client timeout = %v, want %v", client.httpClient.Timeout, want)
 		}
 	})
 }
