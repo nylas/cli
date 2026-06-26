@@ -266,7 +266,7 @@ func validateRuleActions(actions []domain.RuleAction) error {
 			if _, ok := scalarRuleValue(action.Value); !ok {
 				return common.NewUserError(
 					"assign_to_folder requires a folder value",
-					"Use --action assign_to_folder=<folder-id-or-name>",
+					"Use --action assign_to_folder=<folder-name>",
 				)
 			}
 			continue

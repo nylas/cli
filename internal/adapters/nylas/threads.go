@@ -34,6 +34,18 @@ type threadResponse struct {
 
 // GetThreads retrieves threads with query parameters.
 func (c *HTTPClient) GetThreads(ctx context.Context, grantID string, params *domain.ThreadQueryParams) ([]domain.Thread, error) {
+	resp, err := c.GetThreadsWithCursor(ctx, grantID, params)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetThreadsWithCursor retrieves threads with pagination cursor support.
+func (c *HTTPClient) GetThreadsWithCursor(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error) {
+	if err := validateRequired("grant ID", grantID); err != nil {
+		return nil, err
+	}
 	if params == nil {
 		params = &domain.ThreadQueryParams{Limit: 10}
 	}
@@ -45,23 +57,34 @@ func (c *HTTPClient) GetThreads(ctx context.Context, grantID string, params *dom
 	queryURL := NewQueryBuilder().
 		AddInt("limit", params.Limit).
 		AddInt("offset", params.Offset).
+		Add("page_token", params.PageToken).
 		Add("subject", params.Subject).
 		Add("from", params.From).
 		Add("to", params.To).
 		AddBoolPtr("unread", params.Unread).
 		AddBoolPtr("starred", params.Starred).
+		AddInt64("latest_message_before", params.LatestMsgBefore).
+		AddInt64("latest_message_after", params.LatestMsgAfter).
 		Add("q", params.SearchQuery).
 		AddSlice("in", params.In).
 		BuildURL(baseURL)
 
 	var result struct {
-		Data []threadResponse `json:"data"`
+		Data       []threadResponse `json:"data"`
+		NextCursor string           `json:"next_cursor,omitempty"`
+		RequestID  string           `json:"request_id,omitempty"`
 	}
 	if err := c.doGet(ctx, queryURL, &result); err != nil {
 		return nil, err
 	}
 
-	return convertThreads(result.Data), nil
+	return &domain.ThreadListResponse{
+		Data: convertThreads(result.Data),
+		Pagination: domain.Pagination{
+			NextCursor: result.NextCursor,
+			HasMore:    result.NextCursor != "",
+		},
+	}, nil
 }
 
 // GetThread retrieves a single thread by ID.

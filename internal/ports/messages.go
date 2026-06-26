@@ -89,6 +89,9 @@ type MessageClient interface {
 	// GetThreads retrieves threads with query parameters.
 	GetThreads(ctx context.Context, grantID string, params *domain.ThreadQueryParams) ([]domain.Thread, error)
 
+	// GetThreadsWithCursor retrieves threads with cursor-based pagination.
+	GetThreadsWithCursor(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error)
+
 	// GetThread retrieves a specific thread.
 	GetThread(ctx context.Context, grantID, threadID string) (*domain.Thread, error)
 

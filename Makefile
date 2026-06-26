@@ -1,4 +1,4 @@
-.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-studio test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
+.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-integration-rpc test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-studio test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
 
 # Disable parallel Make execution - prevents Go build cache corruption on btrfs (CachyOS)
 .NOTPARALLEL:
@@ -185,6 +185,21 @@ test-integration-agent: build
 	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
 		-run 'TestCLI_Agent.*$$'
 	@echo "✓ Agent integration checks passed"
+
+# RPC WebSocket server integration checks: boots `nylas rpc serve`, verifies token auth
+# (wrong token rejected, correct token connects) and a live email.list over JSON-RPC.
+test-integration-rpc: build
+	@echo "=== Running RPC Server Integration Checks ==="
+	@: "$${NYLAS_API_KEY:?NYLAS_API_KEY is required for rpc integration tests}"
+	@: "$${NYLAS_GRANT_ID:?NYLAS_GRANT_ID is required for rpc integration tests}"
+	@go clean -testcache
+	NYLAS_DISABLE_KEYRING=true \
+	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
+	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
+	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
+	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
+		-run 'TestCLI_RPC.*$$'
+	@echo "✓ RPC server integration checks passed"
 
 # Clean up test resources (virtual calendars, test grants, test events, test emails, etc.)
 test-cleanup:

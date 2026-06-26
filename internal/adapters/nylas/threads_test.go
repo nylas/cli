@@ -213,11 +213,13 @@ func TestHTTPClient_GetThreads_WithFilters(t *testing.T) {
 		// Check query params
 		assert.Equal(t, "20", r.URL.Query().Get("limit"))
 		assert.Equal(t, "5", r.URL.Query().Get("offset"))
+		assert.Equal(t, "cursor-xyz", r.URL.Query().Get("page_token"))
 		assert.Equal(t, "Important", r.URL.Query().Get("subject"))
 		assert.Equal(t, "alice@example.com", r.URL.Query().Get("from"))
 		assert.Equal(t, "bob@example.com", r.URL.Query().Get("to"))
 		assert.Equal(t, "true", r.URL.Query().Get("unread"))
 		assert.Equal(t, "false", r.URL.Query().Get("starred"))
+		assert.Equal(t, "1700000000", r.URL.Query().Get("latest_message_after"))
 		assert.Equal(t, "project X", r.URL.Query().Get("q"))
 
 		response := map[string]any{
@@ -237,19 +239,61 @@ func TestHTTPClient_GetThreads_WithFilters(t *testing.T) {
 	unread := true
 	starred := false
 	params := &domain.ThreadQueryParams{
-		Limit:       20,
-		Offset:      5,
-		Subject:     "Important",
-		From:        "alice@example.com",
-		To:          "bob@example.com",
-		Unread:      &unread,
-		Starred:     &starred,
-		SearchQuery: "project X",
+		Limit:          20,
+		Offset:         5,
+		PageToken:      "cursor-xyz",
+		Subject:        "Important",
+		From:           "alice@example.com",
+		To:             "bob@example.com",
+		Unread:         &unread,
+		Starred:        &starred,
+		LatestMsgAfter: 1700000000,
+		SearchQuery:    "project X",
 	}
 	threads, err := client.GetThreads(ctx, "grant-filter", params)
 
 	require.NoError(t, err)
 	assert.Len(t, threads, 0)
+}
+
+func TestHTTPClient_GetThreadsWithCursor(t *testing.T) {
+	now := time.Now().Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/grants/grant-123/threads", r.URL.Path)
+		assert.Equal(t, "cursor-1", r.URL.Query().Get("page_token"))
+
+		response := map[string]any{
+			"data": []map[string]any{
+				{
+					"id":                           "thread-1",
+					"grant_id":                     "grant-123",
+					"subject":                      "First",
+					"earliest_message_date":        now,
+					"latest_message_received_date": now,
+					"latest_message_sent_date":     now,
+				},
+			},
+			"next_cursor": "cursor-2",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	result, err := client.GetThreadsWithCursor(context.Background(), "grant-123", &domain.ThreadQueryParams{
+		Limit:     1,
+		PageToken: "cursor-1",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "thread-1", result.Data[0].ID)
+	assert.Equal(t, "cursor-2", result.Pagination.NextCursor)
+	assert.True(t, result.Pagination.HasMore)
 }
 
 func TestHTTPClient_GetThread(t *testing.T) {

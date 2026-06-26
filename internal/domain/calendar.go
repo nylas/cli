@@ -217,6 +217,8 @@ type EventQueryParams struct {
 	ShowCancelled   bool   `json:"show_cancelled,omitempty"`
 	Start           int64  `json:"start,omitempty"` // Unix timestamp
 	End             int64  `json:"end,omitempty"`   // Unix timestamp
+	UpdatedAfter    int64  `json:"updated_after,omitempty"`
+	UpdatedBefore   int64  `json:"updated_before,omitempty"`
 	MetadataPair    string `json:"metadata_pair,omitempty"`
 	Busy            *bool  `json:"busy,omitempty"`
 	OrderBy         string `json:"order_by,omitempty"` // start, end

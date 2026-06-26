@@ -70,6 +70,15 @@ nylas agent rule create \
   --action archive
 ```
 
+```bash
+nylas agent rule create \
+  --name "File receipts" \
+  --condition from.domain,is,billing.example.com \
+  --action assign_to_folder=Receipts
+```
+
+The `assign_to_folder` value is a folder **name** — a custom folder's name (use its full path for a nested folder, e.g. `Clients/Acme`) or a system folder name (`Inbox`, `Sent`, `Drafts`, `Trash`, `Junk`, `Archive`). The name is resolved when the rule runs, so a reference to a folder that doesn't exist is skipped.
+
 Available common flags:
 
 - `--name`
