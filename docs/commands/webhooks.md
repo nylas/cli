@@ -36,12 +36,28 @@ nylas webhook server --tunnel cloudflared --secret your-webhook-secret
 
 # Custom port with a tunnel
 nylas webhook server --port 8080 --tunnel cloudflared --secret your-webhook-secret
+
+# Auto-register: create the Nylas webhook for the tunnel URL, fetch its
+# secret automatically, and delete it again on exit (no manual setup)
+nylas webhook server --tunnel cloudflared --register --triggers message.created
 ```
 
 When `--tunnel` is set, `--secret` is required (or pass `--allow-unsigned`
 to opt out explicitly). The interactive preflight will prompt for a
 secret inline when you accept the tunnel; leaving it empty opts into
 unsigned mode.
+
+**Auto-registration (`--register`):** the quick-tunnel URL changes on every
+restart, so registering it by hand is tedious. `--register` does it for you:
+after the tunnel comes up the CLI creates a Nylas webhook pointing at the live
+URL, pulls back the signing secret into memory (so signature verification is
+on without you copying anything), and deletes the webhook when the server
+stops. A stale-webhook sweep on start also removes any auto-registered webhook
+left behind by a previous hard kill. Choose the events with `--triggers`
+(comma-separated or repeated); you'll be prompted if it's omitted on a
+terminal. With `--register` you do **not** pass `--secret` — it's fetched from
+Nylas. `--register` implies `--tunnel cloudflared` and cannot be combined with
+`--secret`, `--allow-unsigned`, or `--no-tunnel`.
 
 **Cloudflared install:**
 

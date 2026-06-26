@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,6 +32,8 @@ func newServerCmd() *cobra.Command {
 		webhookSecret string
 		allowUnsigned bool
 		noTunnel      bool
+		register      bool
+		triggers      []string
 		jsonOutput    bool
 		quiet         bool
 	)
@@ -48,6 +51,12 @@ HMAC signature on each incoming event. Pass --allow-unsigned to opt out
 explicitly (events from anyone who can reach the public tunnel URL will
 be processed).
 
+Pass --register to skip the manual setup entirely: the CLI creates a Nylas
+webhook for the live tunnel URL, fetches the signing secret automatically,
+and deletes the webhook again on exit. Use --triggers to choose the event
+types (you'll be prompted if it's omitted on a terminal). With --register you
+do not pass --secret; it is fetched from Nylas.
+
 If neither --tunnel nor --no-tunnel is set, the command runs an
 interactive preflight that detects cloudflared and offers to enable it.
 Pass --no-tunnel to skip the preflight and run loopback-only (useful
@@ -63,12 +72,15 @@ Examples:
   # Start server with cloudflared tunnel + signature verification
   nylas webhooks server --tunnel cloudflared --secret your-webhook-secret
 
+  # Auto-create the Nylas webhook, fetch its secret, and clean up on exit
+  nylas webhooks server --tunnel cloudflared --register --triggers message.created
+
   # Start server with tunnel and explicitly accept unsigned events
   nylas webhooks server --tunnel cloudflared --allow-unsigned
 
 Press Ctrl+C to stop the server.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runServer(port, path, tunnelType, webhookSecret, allowUnsigned, noTunnel, jsonOutput, quiet)
+			return runServer(port, path, tunnelType, webhookSecret, allowUnsigned, noTunnel, register, triggers, jsonOutput, quiet)
 		},
 	}
 
@@ -78,13 +90,15 @@ Press Ctrl+C to stop the server.`,
 	cmd.Flags().StringVarP(&webhookSecret, "secret", "s", "", "Webhook secret for signature verification")
 	cmd.Flags().BoolVar(&allowUnsigned, "allow-unsigned", false, "Allow unsigned webhook events when --tunnel is set (insecure)")
 	cmd.Flags().BoolVar(&noTunnel, "no-tunnel", false, "Skip the tunnel preflight prompt and run loopback-only")
+	cmd.Flags().BoolVar(&register, "register", false, "Auto-create a Nylas webhook for the tunnel URL, fetch its secret, and delete it on exit")
+	cmd.Flags().StringSliceVar(&triggers, "triggers", nil, "Trigger types for --register (comma-separated or repeated; prompted if omitted)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output events as JSON")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress startup messages, only show events")
 
 	return cmd
 }
 
-func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, noTunnel, jsonOutput, quiet bool) error {
+func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, noTunnel, register bool, triggers []string, jsonOutput, quiet bool) error {
 	// --tunnel and --no-tunnel are mutually exclusive: the user can't both
 	// request a tunnel and opt out of one in the same invocation.
 	if tunnelType != "" && noTunnel {
@@ -94,11 +108,66 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		)
 	}
 
+	interactive := term.IsTerminal(int(os.Stdin.Fd()))
+
+	// --register short-circuits the manual secret workflow: we fetch the secret
+	// from Nylas after the tunnel is up. Validate its prerequisites up front and
+	// resolve the trigger list before we start anything.
+	var registerTriggers []string
+	var registerClient ports.NylasClient
+	if register {
+		if webhookSecret != "" {
+			return common.NewUserError(
+				"--secret cannot be combined with --register",
+				"With --register the signing secret is fetched from Nylas automatically. Drop --secret.",
+			)
+		}
+		if allowUnsigned {
+			return common.NewUserError(
+				"--allow-unsigned cannot be combined with --register",
+				"--register always verifies events with the secret Nylas mints. Drop --allow-unsigned.",
+			)
+		}
+		if noTunnel {
+			return common.NewUserError(
+				"--register requires a public tunnel",
+				"Remove --no-tunnel; --register needs a tunnel URL to register with Nylas.",
+			)
+		}
+		// --register implies a tunnel; default to cloudflared so the bare
+		// `--register` command works without also typing --tunnel.
+		if tunnelType == "" {
+			tunnelType = "cloudflared"
+		}
+
+		// Prompts go to stderr under --json so they never pollute the JSONL
+		// stream on stdout.
+		var prompter preflightPrompter = newStdinPrompter()
+		if jsonOutput {
+			prompter = newStderrPrompter()
+		}
+
+		// Verify cloudflared up front (offering brew install when possible) so
+		// we don't prompt for triggers or hit the API only to fail later.
+		if err := ensureCloudflaredInstalled(interactive, prompter); err != nil {
+			return err
+		}
+
+		var err error
+		registerTriggers, err = resolveRegisterTriggers(triggers, interactive, prompter)
+		if err != nil {
+			return err
+		}
+		registerClient, err = common.GetNylasClient()
+		if err != nil {
+			return err
+		}
+	}
+
 	// Interactive preflight when neither --tunnel nor --no-tunnel was set.
 	// May modify tunnelType/webhookSecret/allowUnsigned, or signal that the
 	// user wants to exit (e.g. cloudflared not installed and they declined
 	// loopback-only).
-	interactive := term.IsTerminal(int(os.Stdin.Fd()))
 	resolvedTunnel, resolvedSecret, resolvedAllowUnsigned, exit, err := preflightTunnelChoice(
 		newStdinPrompter(),
 		interactive,
@@ -117,7 +186,8 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	// When exposing the server via a tunnel and no secret was provided,
 	// prompt interactively if possible. For --json mode the prompt is
 	// written to stderr so it doesn't pollute the JSONL stream on stdout.
-	if tunnelType != "" && webhookSecret == "" && !allowUnsigned && interactive {
+	// Skipped for --register: the secret is fetched from Nylas after start.
+	if !register && tunnelType != "" && webhookSecret == "" && !allowUnsigned && interactive {
 		var p preflightPrompter
 		if jsonOutput {
 			p = newStderrPrompter()
@@ -141,7 +211,8 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 	}
 
 	// Hard gate: non-interactive callers must pass --secret or --allow-unsigned.
-	if tunnelType != "" && webhookSecret == "" && !allowUnsigned {
+	// --register is exempt — it fetches the secret from Nylas automatically.
+	if !register && tunnelType != "" && webhookSecret == "" && !allowUnsigned {
 		return common.NewUserError(
 			"--secret is required when --tunnel is set",
 			"Pass --secret <value> to verify the HMAC signature on each event, "+
@@ -175,13 +246,11 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		}
 	}
 
-	// Set up context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle interrupt signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// Cancel ctx on SIGINT/SIGTERM so long-running steps (tunnel start, webhook
+	// registration retries) abort promptly on Ctrl+C instead of only being
+	// noticed after they return.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	// Suppress human-readable chrome when --json is set so stdout is pure JSONL.
 	showChrome := !quiet && !jsonOutput
@@ -197,10 +266,22 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		spinner.Start()
 	}
 
+	// In --register mode the listener goes live (and the tunnel is public)
+	// before we've fetched the signing secret. Gate POST events until
+	// UpdateSecret installs it so no unsigned event is ever processed.
+	if register {
+		server.AwaitSecret()
+	}
+
 	// Start the server
 	if err := server.Start(ctx); err != nil {
 		if spinner != nil {
 			spinner.Stop()
+		}
+		// Ctrl+C during tunnel startup cancels ctx — treat as a clean exit,
+		// matching the registration and steady-state shutdown paths.
+		if errors.Is(err, context.Canceled) {
+			return nil
 		}
 		return common.WrapError(err)
 	}
@@ -209,12 +290,46 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		spinner.Stop()
 	}
 
+	// Auto-register the webhook now that the tunnel URL is live. This must run
+	// after Start (the listener has to be up to answer Nylas's create-time
+	// challenge) and before we surface the secret, which Nylas only mints on
+	// create. UpdateSecret swaps the verified secret into the running server.
+	var registration *autoRegistration
+	if register {
+		stats := server.GetStats()
+
+		// Register with Nylas. CreateWebhook verifies the URL synchronously and
+		// is retried inside registerWebhook while the fresh tunnel hostname is
+		// still propagating to Nylas's network (error 70005).
+		var regSpinner *common.Spinner
+		if showChrome {
+			regSpinner = common.NewSpinner("Registering webhook with Nylas (waiting for tunnel to propagate)...")
+			regSpinner.Start()
+		}
+		secret, reg, regErr := registerWebhook(ctx, registerClient, stats.PublicURL, registerTriggers)
+		if regSpinner != nil {
+			regSpinner.Stop()
+		}
+		if regErr != nil {
+			_ = server.Stop()
+			// Ctrl+C during registration cancels ctx — treat as a clean exit
+			// rather than surfacing "context canceled" as an error.
+			if errors.Is(regErr, context.Canceled) {
+				return nil
+			}
+			return regErr
+		}
+		server.UpdateSecret(secret, defaultSignedWebhookMaxEventAge)
+		registration = reg
+		defer registration.teardown()
+	}
+
 	// Print server info
 	stats := server.GetStats()
 	if jsonOutput {
-		printStartupJSON(stats, tunnelType)
+		printStartupJSON(stats, tunnelType, registration)
 	} else if !quiet {
-		printServerInfo(stats, tunnelType)
+		printServerInfo(stats, tunnelType, registration, registerTriggers)
 	}
 
 	// Event display loop. Recover from any panic in the formatters so a
@@ -244,8 +359,8 @@ func runServer(port int, path, tunnelType, webhookSecret string, allowUnsigned, 
 		}
 	}()
 
-	// Wait for interrupt
-	<-sigChan
+	// Wait for interrupt (ctx is cancelled by SIGINT/SIGTERM).
+	<-ctx.Done()
 
 	if showChrome {
 		fmt.Println("\n\nShutting down server...")
@@ -446,7 +561,7 @@ func printStartupBanner() {
 	fmt.Println()
 }
 
-func printServerInfo(stats ports.WebhookServerStats, tunnelType string) {
+func printServerInfo(stats ports.WebhookServerStats, tunnelType string, registration *autoRegistration, triggers []string) {
 	_, _ = common.Green.Println("✓ Server started successfully")
 	fmt.Println()
 
@@ -462,10 +577,19 @@ func printServerInfo(stats ports.WebhookServerStats, tunnelType string) {
 	}
 
 	fmt.Println()
-	if stats.PublicURL != "" {
+	switch {
+	case registration != nil:
+		// Auto-registered: nothing for the user to do — the webhook exists,
+		// the secret is loaded, and it'll be deleted on exit.
+		_, _ = common.Green.Println("✓ Webhook registered with Nylas (signature verification on)")
+		fmt.Printf("  ID:       %s\n", registration.webhookID)
+		fmt.Printf("  Triggers: %s\n", strings.Join(triggers, ", "))
+		_, _ = common.Dim.Println("  This webhook is deleted automatically when the server stops.")
+	case stats.PublicURL != "":
 		_, _ = common.Yellow.Println("Register this URL with Nylas:")
 		fmt.Printf("  nylas webhooks create --url %s --triggers message.created\n", stats.PublicURL)
-	} else {
+		_, _ = common.Dim.Println("  Or re-run with --register to do this automatically.")
+	default:
 		_, _ = common.Yellow.Println("⚠ Loopback-only server")
 		fmt.Println("  Nylas cannot deliver webhooks to localhost. To expose this server")
 		fmt.Println("  publicly, re-run with:")
@@ -479,7 +603,7 @@ func printServerInfo(stats ports.WebhookServerStats, tunnelType string) {
 	fmt.Println()
 }
 
-func printStartupJSON(stats ports.WebhookServerStats, tunnelType string) {
+func printStartupJSON(stats ports.WebhookServerStats, tunnelType string, registration *autoRegistration) {
 	obj := map[string]any{
 		"type":      "server.started",
 		"local_url": stats.LocalURL,
@@ -488,6 +612,10 @@ func printStartupJSON(stats ports.WebhookServerStats, tunnelType string) {
 		obj["public_url"] = stats.PublicURL
 		obj["tunnel_provider"] = tunnelType
 		obj["tunnel_status"] = stats.TunnelStatus
+	}
+	if registration != nil {
+		obj["webhook_id"] = registration.webhookID
+		obj["webhook_registered"] = true
 	}
 	data, err := json.Marshal(obj)
 	if err != nil {

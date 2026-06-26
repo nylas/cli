@@ -474,6 +474,7 @@ nylas webhook test payload [trigger-type]             # Generate test payload
 nylas webhook server                                  # Interactive preflight (offers cloudflared tunnel)
 nylas webhook server --no-tunnel                      # Loopback-only (skip preflight)
 nylas webhook server --port 8080 --tunnel cloudflared --secret xxx  # Public tunnel + HMAC verify
+nylas webhook server --tunnel cloudflared --register --triggers message.created  # Auto-create webhook + fetch secret + cleanup on exit
 ```
 
 **Details:** `docs/commands/webhooks.md`

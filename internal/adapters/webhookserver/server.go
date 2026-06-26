@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nylas/cli/internal/ports"
@@ -85,6 +86,12 @@ type Server struct {
 	mu             sync.RWMutex
 	startedAt      time.Time
 	closeOnce      sync.Once
+
+	// awaitingSecret is set while --register has the listener live but hasn't
+	// fetched the signing secret yet. POST events are rejected (503) during
+	// this window so the public tunnel never processes an unsigned event; the
+	// GET challenge stays open so Nylas's create-time verification succeeds.
+	awaitingSecret atomic.Bool
 }
 
 // NewServer creates a new webhook server.
@@ -110,6 +117,37 @@ func NewServer(config ports.WebhookServerConfig) *Server {
 // SetTunnel sets the tunnel to use for exposing the server.
 func (s *Server) SetTunnel(tunnel ports.Tunnel) {
 	s.tunnel = tunnel
+}
+
+// AwaitSecret marks the server as waiting for its signing secret. Call it
+// before Start in --register mode so POST events are rejected until the secret
+// is installed by UpdateSecret.
+func (s *Server) AwaitSecret() {
+	s.awaitingSecret.Store(true)
+}
+
+// UpdateSecret sets the HMAC secret (and replay window) after the server has
+// started, and clears the awaiting-secret gate. Auto-registration needs this:
+// the webhook secret is only minted by Nylas once the public tunnel URL exists
+// and the webhook is created, which can't happen until the listener is already
+// up to answer Nylas's create-time challenge. Safe for concurrent use with
+// in-flight requests.
+func (s *Server) UpdateSecret(secret string, maxEventAge time.Duration) {
+	s.mu.Lock()
+	s.config.WebhookSecret = secret
+	s.config.MaxEventAge = maxEventAge
+	s.mu.Unlock()
+	// Clear the gate last so no request is admitted before the secret is live.
+	s.awaitingSecret.Store(false)
+}
+
+// signingConfig returns the current HMAC secret and replay window under the
+// read lock so a concurrent UpdateSecret can't race the unsynchronised field
+// reads in handleWebhook.
+func (s *Server) signingConfig() (secret string, maxEventAge time.Duration) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config.WebhookSecret, s.config.MaxEventAge
 }
 
 // Start starts the webhook server and optional tunnel.
@@ -259,6 +297,15 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject POST events while --register is still fetching the signing secret.
+	// Without this, the live public tunnel would process unsigned events during
+	// the registration window. The GET challenge above is already handled, so
+	// Nylas's create-time verification still succeeds.
+	if s.awaitingSecret.Load() {
+		http.Error(w, "Webhook registration in progress", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Cap request body size so a malicious sender on a public tunnel can't
 	// drive unbounded RAM allocation. MaxBytesReader closes the body and
 	// returns an error from ReadAll once the limit is exceeded.
@@ -274,13 +321,17 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = r.Body.Close() }()
 
+	// Read the signing posture once under the lock — auto-registration can swap
+	// the secret in via UpdateSecret while requests are in flight.
+	webhookSecret, maxEventAge := s.signingConfig()
+
 	signature := r.Header.Get("X-Nylas-Signature")
-	if s.config.WebhookSecret != "" {
+	if webhookSecret != "" {
 		if signature == "" {
 			http.Error(w, "Missing webhook signature", http.StatusUnauthorized)
 			return
 		}
-		if !s.verifySignature(body, signature) {
+		if !VerifySignature(body, signature, webhookSecret) {
 			http.Error(w, "Invalid webhook signature", http.StatusForbidden)
 			return
 		}
@@ -293,7 +344,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		Headers:    make(map[string]string),
 		RawBody:    body,
 		Signature:  signature,
-		Verified:   s.config.WebhookSecret != "",
+		Verified:   webhookSecret != "",
 	}
 
 	// Copy relevant headers
@@ -332,7 +383,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		// When configured, reject events whose CloudEvents `time` field is
 		// older than the allowed skew. Payloads without `time` are covered
 		// by the signed-body dedupe below.
-		if s.config.WebhookSecret != "" && s.config.MaxEventAge > 0 {
+		if webhookSecret != "" && maxEventAge > 0 {
 			if rawTime, ok := payload["time"].(string); ok {
 				eventTime, terr := time.Parse(time.RFC3339, rawTime)
 				if terr != nil {
@@ -340,7 +391,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				skew := time.Since(eventTime)
-				if skew > s.config.MaxEventAge || skew < -s.config.MaxEventAge {
+				if skew > maxEventAge || skew < -maxEventAge {
 					http.Error(w, "Event timestamp outside allowed skew", http.StatusUnauthorized)
 					return
 				}
@@ -348,7 +399,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if s.shouldSuppressSignedReplay(signature, time.Now()) {
+	if s.shouldSuppressSignedReplay(signature, webhookSecret, maxEventAge, time.Now()) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Duplicate webhook ignored"))
 		return
@@ -451,20 +502,19 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	_ = rootTemplate.Execute(w, data) // best-effort response
 }
 
-// verifySignature verifies the webhook signature using HMAC-SHA256.
-func (s *Server) verifySignature(payload []byte, signature string) bool {
-	return VerifySignature(payload, signature, s.config.WebhookSecret)
-}
-
-func (s *Server) shouldSuppressSignedReplay(signature string, now time.Time) bool {
-	if s.config.WebhookSecret == "" || s.config.MaxEventAge <= 0 || signature == "" {
+// shouldSuppressSignedReplay reports whether a signed event with this signature
+// was already seen inside the replay window. The secret/maxEventAge are passed
+// in (snapshotted under signingConfig in the caller) rather than read from
+// s.config here, so a concurrent UpdateSecret cannot race these reads.
+func (s *Server) shouldSuppressSignedReplay(signature, secret string, maxEventAge time.Duration, now time.Time) bool {
+	if secret == "" || maxEventAge <= 0 || signature == "" {
 		return false
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	cutoff := now.Add(-s.config.MaxEventAge)
+	cutoff := now.Add(-maxEventAge)
 	for key, seenAt := range s.seenSignatures {
 		if seenAt.Before(cutoff) {
 			delete(s.seenSignatures, key)

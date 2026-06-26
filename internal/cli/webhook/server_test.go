@@ -11,8 +11,10 @@ import (
 type mockPrompter struct {
 	confirms   []confirmResp
 	passwords  []passwordResp
+	asks       []askResp
 	tConfirms  int
 	tPasswords int
+	tAsks      int
 }
 
 type confirmResp struct {
@@ -21,6 +23,11 @@ type confirmResp struct {
 }
 
 type passwordResp struct {
+	value string
+	err   error
+}
+
+type askResp struct {
 	value string
 	err   error
 }
@@ -40,6 +47,15 @@ func (m *mockPrompter) Password(message string) (string, error) {
 	}
 	r := m.passwords[m.tPasswords]
 	m.tPasswords++
+	return r.value, r.err
+}
+
+func (m *mockPrompter) Ask(message, defaultValue string) (string, error) {
+	if m.tAsks >= len(m.asks) {
+		return defaultValue, nil
+	}
+	r := m.asks[m.tAsks]
+	m.tAsks++
 	return r.value, r.err
 }
 
@@ -220,7 +236,7 @@ func TestPreflightTunnelChoice_EmptySecretWithExplicitConfirmEnablesUnsigned(t *
 // rejected). Kept here next to the preflight tests so the security gate
 // is visible to anyone reading the file.
 func TestPreflightTunnelChoice_TunnelMutexErrorAtRunServer(t *testing.T) {
-	err := runServer(0, "/webhook", "cloudflared", "", false, true /* noTunnel */, false, true /* quiet */)
+	err := runServer(0, "/webhook", "cloudflared", "", false, true /* noTunnel */, false /* register */, nil /* triggers */, false, true /* quiet */)
 	if err == nil {
 		t.Fatal("expected --tunnel + --no-tunnel to error, got nil")
 	}
