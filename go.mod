@@ -12,6 +12,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/gdamore/tcell/v2 v2.13.4
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/ncruces/go-sqlite3 v0.30.4
 	github.com/rivo/tview v0.42.0
 	github.com/slack-go/slack v0.23.1
@@ -47,7 +48,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/godbus/dbus/v5 v5.2.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect

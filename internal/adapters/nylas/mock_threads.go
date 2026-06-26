@@ -15,6 +15,20 @@ func (m *MockClient) GetThreads(ctx context.Context, grantID string, params *dom
 	return []domain.Thread{}, nil
 }
 
+// GetThreadsWithCursor retrieves threads with pagination cursor support.
+func (m *MockClient) GetThreadsWithCursor(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error) {
+	m.GetThreadsCalled = true
+	m.LastGrantID = grantID
+	if m.GetThreadsWithCursorFunc != nil {
+		return m.GetThreadsWithCursorFunc(ctx, grantID, params)
+	}
+	if m.GetThreadsFunc != nil {
+		threads, err := m.GetThreadsFunc(ctx, grantID, params)
+		return &domain.ThreadListResponse{Data: threads}, err
+	}
+	return &domain.ThreadListResponse{Data: []domain.Thread{}}, nil
+}
+
 // GetThread retrieves a single thread.
 func (m *MockClient) GetThread(ctx context.Context, grantID, threadID string) (*domain.Thread, error) {
 	m.GetThreadCalled = true

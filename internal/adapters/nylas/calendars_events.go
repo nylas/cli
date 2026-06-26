@@ -46,6 +46,8 @@ func (c *HTTPClient) GetEventsWithCursor(ctx context.Context, grantID, calendarI
 		Add("page_token", params.PageToken).
 		AddInt64("start", params.Start).
 		AddInt64("end", params.End).
+		AddInt64("updated_after", params.UpdatedAfter).
+		AddInt64("updated_before", params.UpdatedBefore).
 		Add("title", params.Title).
 		Add("location", params.Location).
 		AddBool("show_cancelled", params.ShowCancelled).

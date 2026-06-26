@@ -181,6 +181,14 @@ func TestHTTPClient_GetEventsWithCursor(t *testing.T) {
 			wantQueryKeys: []string{"page_token"},
 		},
 		{
+			name: "includes updated_after filter",
+			params: &domain.EventQueryParams{
+				Limit:        10,
+				UpdatedAfter: 1710000000,
+			},
+			wantQueryKeys: []string{"updated_after"},
+		},
+		{
 			// ical_uid is the bridge between an emailed invite and a Nylas
 			// event ID; the RSVP handler relies on the upstream filter so
 			// we don't have to scan the whole calendar.

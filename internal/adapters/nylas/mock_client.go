@@ -111,6 +111,7 @@ type MockClient struct {
 	UpdateMessageFunc         func(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
 	DeleteMessageFunc         func(ctx context.Context, grantID, messageID string) error
 	GetThreadsFunc            func(ctx context.Context, grantID string, params *domain.ThreadQueryParams) ([]domain.Thread, error)
+	GetThreadsWithCursorFunc  func(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error)
 	GetThreadFunc             func(ctx context.Context, grantID, threadID string) (*domain.Thread, error)
 	UpdateThreadFunc          func(ctx context.Context, grantID, threadID string, req *domain.UpdateMessageRequest) (*domain.Thread, error)
 	DeleteThreadFunc          func(ctx context.Context, grantID, threadID string) error

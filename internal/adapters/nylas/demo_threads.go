@@ -12,6 +12,13 @@ func (d *DemoClient) GetThreads(ctx context.Context, grantID string, params *dom
 	return d.getDemoThreads(), nil
 }
 
+// GetThreadsWithCursor returns demo threads with pagination.
+func (d *DemoClient) GetThreadsWithCursor(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error) {
+	return &domain.ThreadListResponse{
+		Data: d.getDemoThreads(),
+	}, nil
+}
+
 func (d *DemoClient) getDemoThreads() []domain.Thread {
 	now := time.Now()
 	return []domain.Thread{

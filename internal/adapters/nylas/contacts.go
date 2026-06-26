@@ -27,6 +27,7 @@ type contactResponse struct {
 	Notes             string                    `json:"notes"`
 	PictureURL        string                    `json:"picture_url"`
 	Picture           string                    `json:"picture"`
+	UpdatedAt         int64                     `json:"updated_at"`
 	Emails            []domain.ContactEmail     `json:"emails"`
 	PhoneNumbers      []domain.ContactPhone     `json:"phone_numbers"`
 	WebPages          []domain.ContactWebPage   `json:"web_pages"`
@@ -248,6 +249,7 @@ func convertContact(c contactResponse) domain.Contact {
 		Notes:             c.Notes,
 		PictureURL:        c.PictureURL,
 		Picture:           c.Picture,
+		UpdatedAt:         c.UpdatedAt,
 		Emails:            c.Emails,
 		PhoneNumbers:      c.PhoneNumbers,
 		WebPages:          c.WebPages,

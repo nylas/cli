@@ -17,6 +17,7 @@ type Contact struct {
 	Notes             string             `json:"notes,omitempty"`
 	PictureURL        string             `json:"picture_url,omitempty"`
 	Picture           string             `json:"picture,omitempty"` // Base64-encoded image data (when profile_picture=true)
+	UpdatedAt         int64              `json:"updated_at,omitempty"`
 	Emails            []ContactEmail     `json:"emails,omitempty"`
 	PhoneNumbers      []ContactPhone     `json:"phone_numbers,omitempty"`
 	WebPages          []ContactWebPage   `json:"web_pages,omitempty"`
