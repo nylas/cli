@@ -290,20 +290,6 @@ func TestMessagePoller_PollOnce_ReturnsNotifyError(t *testing.T) {
 	}
 }
 
-func TestMessagePoller_Run_ReturnsContextErrorOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	poller := NewMessagePoller(&fakePollClient{}, "grant-123", 0, func(method string, params any) error {
-		t.Fatal("notify should not be called")
-		return nil
-	})
-
-	if err := poller.Run(ctx, time.Hour, nil); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
-	}
-}
-
 func pollMessages(newest, oldest int64) []domain.Message {
 	var messages []domain.Message
 	for ts := newest; ts >= oldest; ts-- {

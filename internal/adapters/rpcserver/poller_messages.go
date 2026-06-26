@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -92,9 +91,4 @@ func (p *MessagePoller) fetch(ctx context.Context, queryAfter int64) ([]domain.M
 	}
 	// ponytail: cap polling bursts at 20 pages; webhooks are the real fix for larger inbox spikes.
 	return messages, nil
-}
-
-// Run polls until ctx is cancelled.
-func (p *MessagePoller) Run(ctx context.Context, interval time.Duration, onError func(error)) error {
-	return runTicker(ctx, interval, onError, p.PollOnce)
 }

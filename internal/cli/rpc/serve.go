@@ -20,7 +20,22 @@ import (
 const (
 	envWSAddr   = "NYLAS_WS_ADDR"
 	defaultAddr = "127.0.0.1:7368"
+
+	envPollFast     = "NYLAS_WS_POLL_FAST"
+	envPollIdle     = "NYLAS_WS_POLL_IDLE"
+	envPollContacts = "NYLAS_WS_POLL_CONTACTS"
 )
+
+// pollInterval reads a positive Go duration from env (e.g. "2s", "1m"),
+// falling back to def when unset or invalid.
+func pollInterval(getenv func(string) string, key string, def time.Duration) time.Duration {
+	if v := getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return def
+}
 
 func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -127,8 +142,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := rpcserver.NewIntervalController(5*time.Second, 30*time.Second)
+	fast := pollInterval(os.Getenv, envPollFast, 5*time.Second)
+	idle := pollInterval(os.Getenv, envPollIdle, 30*time.Second)
+	contactInterval := pollInterval(os.Getenv, envPollContacts, 60*time.Second)
+
+	ctrl := rpcserver.NewIntervalController(fast, idle)
+	contactCtrl := rpcserver.NewIntervalController(contactInterval, contactInterval)
 	rpcserver.RegisterFocusHandler(d, ctrl)
+	rpcserver.RegisterPollConfigHandler(d, ctrl, contactCtrl)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -186,7 +207,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 		// ponytail: contacts have no server-side time filter — refetch+diff on a slow cadence.
 		cp := rpcserver.NewContactPoller(client, grantID, srv.Broadcast)
-		startPoller("contact", func() error { return cp.Run(ctx, 60*time.Second, onErr) })
+		startPoller("contact", func() error { return rpcserver.RunAdaptive(ctx, contactCtrl, onErr, cp.PollOnce) })
 	}
 
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Nylas RPC WebSocket listening on %s\n", addr)

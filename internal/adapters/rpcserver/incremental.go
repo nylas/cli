@@ -35,25 +35,29 @@ func (c *IntervalController) Current() time.Duration {
 	return c.idle
 }
 
+// SetIntervals updates the focused/idle durations live. Non-positive values are
+// ignored, so a caller can change one bound without touching the other.
+func (c *IntervalController) SetIntervals(fast, idle time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if fast > 0 {
+		c.fast = fast
+	}
+	if idle > 0 {
+		c.idle = idle
+	}
+}
+
+// Intervals returns the current focused and idle durations.
+func (c *IntervalController) Intervals() (fast, idle time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.fast, c.idle
+}
+
 type incrementalState struct {
 	cursor      int64
 	boundaryIDs map[string]struct{}
-}
-
-func runTicker(ctx context.Context, interval time.Duration, onError func(error), pollOnce func(context.Context) error) error {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if err := pollOnce(ctx); err != nil && onError != nil {
-				onError(err)
-			}
-		}
-	}
 }
 
 func RunAdaptive(ctx context.Context, ctrl *IntervalController, onError func(error), pollOnce func(context.Context) error) error {
@@ -88,6 +92,72 @@ func RegisterFocusHandler(d *Dispatcher, ctrl *IntervalController) {
 		ctrl.SetFocused(p.Focused)
 		return nil, nil
 	})
+}
+
+type pollConfigParams struct {
+	Fast     string `json:"fast,omitempty"`
+	Idle     string `json:"idle,omitempty"`
+	Contacts string `json:"contacts,omitempty"`
+}
+
+type pollConfigResult struct {
+	Fast     string `json:"fast"`
+	Idle     string `json:"idle"`
+	Contacts string `json:"contacts"`
+}
+
+// RegisterPollConfigHandler exposes client.pollConfig, which reads and optionally
+// updates the live polling intervals. Durations use Go syntax (e.g. "2s", "1m");
+// omitted or empty fields are left unchanged. The result always reports the
+// effective values. ctrl drives messages/threads/events (focused/idle), and
+// contactCtrl drives contacts (a single interval, so focused == idle).
+func RegisterPollConfigHandler(d *Dispatcher, ctrl, contactCtrl *IntervalController) {
+	d.Register("client.pollConfig", func(_ context.Context, params json.RawMessage) (any, error) {
+		var p pollConfigParams
+		if err := decodeParams(params, &p); err != nil {
+			return nil, err
+		}
+
+		fast, err := parsePollInterval("fast", p.Fast)
+		if err != nil {
+			return nil, err
+		}
+		idle, err := parsePollInterval("idle", p.Idle)
+		if err != nil {
+			return nil, err
+		}
+		contacts, err := parsePollInterval("contacts", p.Contacts)
+		if err != nil {
+			return nil, err
+		}
+
+		ctrl.SetIntervals(fast, idle)
+		contactCtrl.SetIntervals(contacts, contacts)
+
+		effFast, effIdle := ctrl.Intervals()
+		effContacts, _ := contactCtrl.Intervals()
+		return pollConfigResult{
+			Fast:     effFast.String(),
+			Idle:     effIdle.String(),
+			Contacts: effContacts.String(),
+		}, nil
+	})
+}
+
+// parsePollInterval returns 0 for an empty value (meaning "leave unchanged").
+// A non-empty value must parse as a positive Go duration.
+func parsePollInterval(field, value string) (time.Duration, error) {
+	if value == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, NewRPCError(InvalidParams, field+` must be a duration (e.g. "2s", "1m")`, err.Error())
+	}
+	if d <= 0 {
+		return 0, NewRPCError(InvalidParams, field+" must be positive", nil)
+	}
+	return d, nil
 }
 
 func pollIncremental[T any](

@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -108,10 +107,6 @@ func (p *ContactPoller) PollOnce(ctx context.Context) error {
 	p.seen = nextSeen
 	p.seeded = true
 	return nil
-}
-
-func (p *ContactPoller) Run(ctx context.Context, interval time.Duration, onError func(error)) error {
-	return runTicker(ctx, interval, onError, p.PollOnce)
 }
 
 func contactFingerprint(c domain.Contact) string {

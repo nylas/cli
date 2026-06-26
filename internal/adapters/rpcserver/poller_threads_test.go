@@ -209,20 +209,6 @@ func TestThreadPoller_PollOnce_ReturnsClientError(t *testing.T) {
 	}
 }
 
-func TestThreadPoller_Run_ReturnsContextErrorOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	poller := NewThreadPoller(&fakeThreadClient{}, "grant-123", 0, func(method string, params any) error {
-		t.Fatal("notify should not be called")
-		return nil
-	})
-
-	if err := poller.Run(ctx, time.Hour, nil); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
-	}
-}
-
 func pollThread(id string, unix int64) domain.Thread {
 	return domain.Thread{
 		ID:                    id,

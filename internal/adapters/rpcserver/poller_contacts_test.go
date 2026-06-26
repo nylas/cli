@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -372,20 +371,6 @@ func TestContactPoller_PollOnce_ReturnsErrorWithoutCommitWhenPageCapTruncates(t 
 	}
 	if !reflect.DeepEqual(poller.seen, map[string]string{"keep": "fingerprint"}) {
 		t.Fatalf("seen = %#v, want unchanged", poller.seen)
-	}
-}
-
-func TestContactPoller_Run_ReturnsContextErrorOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	poller := NewContactPoller(&fakeContactClient{}, "grant-123", func(method string, params any) error {
-		t.Fatal("notify should not be called")
-		return nil
-	})
-
-	if err := poller.Run(ctx, time.Hour, nil); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
 	}
 }
 

@@ -133,6 +133,12 @@ The server holds live Nylas credentials, so the local socket is a real trust bou
 | `--allow-remote` | permit a non-loopback bind (warns) | `false` |
 | `NYLAS_WS_TOKEN` | inject the session token (headless/CI) | auto-generated, keyring-brokered |
 | `NYLAS_DISABLE_KEYRING` | store token/creds in `~/.config/nylas` instead of the keyring | `false` |
+| `NYLAS_WS_POLL_FAST` | message/thread/event poll interval while focused (Go duration) | `5s` |
+| `NYLAS_WS_POLL_IDLE` | message/thread/event poll interval while idle (Go duration) | `30s` |
+| `NYLAS_WS_POLL_CONTACTS` | contact refetch interval (Go duration) | `60s` |
+
+Invalid or non-positive poll durations fall back to the default. The intervals can also be changed
+at runtime via the [`client.pollConfig`](#adaptive-polling) method — no restart required.
 
 The server resolves the Nylas API credentials and default grant the same way the rest of the
 CLI does (keyring, or env/file when `NYLAS_DISABLE_KEYRING=true`). Live pollers run only when a
@@ -333,8 +339,24 @@ Send a `client.focus` **notification** (no `id`) to scale the poll interval:
 { "jsonrpc": "2.0", "method": "client.focus", "params": { "focused": true } }
 ```
 
-- `focused: true` → fast interval (5s) for message/thread/event pollers.
-- `focused: false` → idle interval (30s). Contacts always poll on a slow 60s cadence.
+- `focused: true` → fast interval (default 5s) for message/thread/event pollers.
+- `focused: false` → idle interval (default 30s). Contacts poll on their own cadence (default 60s).
+
+To change the interval **values** themselves at runtime, call `client.pollConfig` (a request, not a
+notification). All fields are optional Go durations (`"2s"`, `"1m"`); omitted fields are left
+unchanged, and the result reports the effective values. `fast`/`idle` drive the message/thread/event
+pollers; `contacts` drives the contact poller.
+
+```jsonc
+// → request
+{ "jsonrpc": "2.0", "id": 9, "method": "client.pollConfig",
+  "params": { "fast": "2s", "idle": "45s", "contacts": "90s" } }
+// ← result
+{ "jsonrpc": "2.0", "id": 9, "result": { "fast": "2s", "idle": "45s", "contacts": "1m30s" } }
+```
+
+A non-positive or unparseable duration returns `-32602 invalid params`. Startup defaults come from
+the `NYLAS_WS_POLL_*` env vars (see [Configuration](#configuration)).
 
 ---
 
