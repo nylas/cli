@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -266,22 +267,16 @@ func TestServer_EventsChannel(t *testing.T) {
 func TestServer_SignatureVerification(t *testing.T) {
 	// #nosec G101 -- This is a test secret, not a real credential
 	secret := "test-webhook-secret"
-	server := NewServer(ports.WebhookServerConfig{
-		Port:          3006,
-		Path:          "/webhook",
-		WebhookSecret: secret,
-	})
 
 	t.Run("valid_signature", func(t *testing.T) {
 		payload := []byte(`{"type":"message.created"}`)
-		// Generate valid signature (HMAC-SHA256)
-		valid := server.verifySignature(payload, "invalid-signature")
+		valid := VerifySignature(payload, "invalid-signature", secret)
 		assert.False(t, valid) // Invalid signature should fail
 	})
 
 	t.Run("missing_signature", func(t *testing.T) {
 		payload := []byte(`{"type":"message.created"}`)
-		valid := server.verifySignature(payload, "")
+		valid := VerifySignature(payload, "", secret)
 		assert.False(t, valid) // Empty signature should fail
 	})
 }
@@ -331,6 +326,126 @@ func TestServer_GetPublicURL(t *testing.T) {
 	// Without tunnel, public URL equals local URL
 	url := server.GetPublicURL()
 	assert.Equal(t, "http://127.0.0.1:8080/webhook", url)
+}
+
+// TestServer_UpdateSecret_SwapsVerification verifies the auto-registration
+// path: a server started without a secret accepts unsigned events, but once
+// UpdateSecret installs the Nylas-minted secret, unsigned/forged events are
+// rejected and only correctly-signed events pass. This is the behaviour that
+// makes `webhooks server --register` safe — the window before the secret is
+// known is closed the instant UpdateSecret runs.
+func TestServer_UpdateSecret_SwapsVerification(t *testing.T) {
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	handler := http.HandlerFunc(server.handleWebhook)
+	payload := []byte(`{"type":"message.created","id":"event-1"}`)
+
+	// Before a secret is set, unsigned events are accepted (no verification).
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code, "unsigned event should be accepted before UpdateSecret")
+
+	// Swap in the secret, as auto-registration does once Nylas mints it.
+	secret := "minted-by-nylas"
+	server.UpdateSecret(secret, defaultTestMaxEventAge)
+
+	t.Run("unsigned now rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("forged signature rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Nylas-Signature", "deadbeef")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("correctly signed accepted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Nylas-Signature", signWebhookPayload(secret, payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
+const defaultTestMaxEventAge = 5 * time.Minute
+
+// TestServer_AwaitSecret_RejectsPostUntilSecretSet verifies the registration
+// window is closed: while --register has the listener live but no secret yet,
+// POST events are rejected (503) so the public tunnel never processes an
+// unsigned event, while the GET challenge Nylas uses to verify the URL still
+// works. Once UpdateSecret installs the secret, signed POSTs are accepted.
+func TestServer_AwaitSecret_RejectsPostUntilSecretSet(t *testing.T) {
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	server.AwaitSecret()
+	handler := http.HandlerFunc(server.handleWebhook)
+	payload := []byte(`{"type":"message.created"}`)
+
+	t.Run("POST rejected while awaiting secret", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		assert.Equal(t, 0, server.GetStats().EventsReceived)
+	})
+
+	t.Run("GET challenge still answered", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/webhook?challenge=abc123", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "abc123", rec.Body.String())
+	})
+
+	t.Run("signed POST accepted after secret installed", func(t *testing.T) {
+		secret := "minted-by-nylas"
+		server.UpdateSecret(secret, defaultTestMaxEventAge)
+		req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Nylas-Signature", signWebhookPayload(secret, payload))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
+// TestServer_UpdateSecret_ConcurrentRequests drives the handler concurrently
+// with UpdateSecret under `-race` to guard the secret swap. Requests are
+// correctly signed with distinct bodies so each one passes verification and
+// reaches BOTH racy read paths: signingConfig() and the seenSignatures write
+// in shouldSuppressSignedReplay — exercised concurrently with UpdateSecret's
+// config writes. The assertions are loose; the point is the race detector.
+func TestServer_UpdateSecret_ConcurrentRequests(t *testing.T) {
+	const secret = "stable-secret"
+	server := NewServer(ports.WebhookServerConfig{Port: 0, Path: "/webhook"})
+	server.UpdateSecret(secret, defaultTestMaxEventAge)
+	handler := http.HandlerFunc(server.handleWebhook)
+
+	var wg sync.WaitGroup
+	// Writers: re-install the (same) secret to race the config writes.
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			server.UpdateSecret(secret, defaultTestMaxEventAge)
+		}()
+	}
+	// Readers: signed, distinct-body POSTs that reach the replay map write.
+	for i := range 50 {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			payload := fmt.Appendf(nil, `{"type":"message.created","id":"e-%d"}`, i)
+			req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(payload))
+			req.Header.Set("X-Nylas-Signature", signWebhookPayload(secret, payload))
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+		}(i)
+	}
+	wg.Wait()
 }
 
 func signWebhookPayload(secret string, payload []byte) string {

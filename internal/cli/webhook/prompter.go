@@ -22,6 +22,10 @@ import (
 type preflightPrompter interface {
 	Confirm(message string, defaultYes bool) (bool, error)
 	Password(message string) (string, error)
+	// Ask reads a line of plain text, returning defaultValue when the user
+	// submits an empty line. EOF is propagated unchanged so callers can tell
+	// cancellation from an accepted default.
+	Ask(message, defaultValue string) (string, error)
 }
 
 // stdinPrompter is the production preflightPrompter. It reads from
@@ -66,6 +70,30 @@ func (p *stdinPrompter) Confirm(message string, defaultYes bool) (bool, error) {
 		return defaultYes, nil
 	}
 	return response == "y" || response == "yes", nil
+}
+
+// Ask reads a line of plain text, falling back to defaultValue on an empty
+// line. Echo stays on — this is for non-secret input such as trigger lists.
+func (p *stdinPrompter) Ask(message, defaultValue string) (string, error) {
+	prompt := message
+	if defaultValue != "" {
+		prompt = fmt.Sprintf("%s [%s]", message, defaultValue)
+	}
+	if _, err := fmt.Fprint(p.out, prompt+": "); err != nil {
+		return "", err
+	}
+	line, err := p.in.ReadString('\n')
+	if errors.Is(err, io.EOF) && strings.TrimSpace(line) == "" {
+		return "", io.EOF
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	value := strings.TrimSpace(line)
+	if value == "" {
+		return defaultValue, nil
+	}
+	return value, nil
 }
 
 // Password prompts for a secret with terminal echo disabled when stdin
