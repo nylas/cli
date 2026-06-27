@@ -18,6 +18,7 @@ This wizard walks you through:
   2. Selecting or creating an application
   3. Generating and activating an API key
   4. Syncing existing email accounts
+  5. Optionally registering a free <subdomain>.nylas.email domain for Agent Accounts
 
 Already have an API key? Skip the wizard:
   nylas init --api-key <your-key>`,

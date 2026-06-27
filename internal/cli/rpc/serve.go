@@ -19,7 +19,7 @@ import (
 
 const (
 	envWSAddr   = "NYLAS_WS_ADDR"
-	defaultAddr = "127.0.0.1:7368"
+	defaultAddr = "127.0.0.1:7369"
 
 	envPollFast     = "NYLAS_WS_POLL_FAST"
 	envPollIdle     = "NYLAS_WS_POLL_IDLE"

@@ -108,6 +108,7 @@ apikey*
 *token*
 !*_test.go
 !internal/cli/auth/token.go
+!internal/cli/rpc/token.go
 
 # Secret files
 secrets.json

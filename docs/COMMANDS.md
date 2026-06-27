@@ -87,6 +87,7 @@ The `init` command walks you through:
 2. Selecting or creating an application
 3. Generating and activating an API key
 4. Syncing existing email accounts
+5. Optionally registering a free `<subdomain>.nylas.email` domain for Agent Accounts (SSO login required)
 
 Run `nylas init` again after partial setup — it skips completed steps.
 

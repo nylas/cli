@@ -35,3 +35,8 @@ func ActivateAPIKey(apiKey, clientID, region, orgID string) error {
 func GetActiveOrgID() (string, error) {
 	return getActiveOrgID()
 }
+
+// CreateDomainService creates the dashboard domain management service (exported for setup wizard).
+func CreateDomainService() (*dashboardapp.DomainService, error) {
+	return newDomainService()
+}
