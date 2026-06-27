@@ -5,7 +5,7 @@ capability surface to a thin client (for example a desktop app). The CLI binary 
 engine — it holds the credentials, runs the live pollers, and owns all business logic.
 Clients are thin: they send requests and render the streamed results and notifications.
 
-- **Endpoint:** `ws://127.0.0.1:7368/ws`
+- **Endpoint:** `ws://127.0.0.1:7369/ws`
 - **Protocol:** JSON-RPC 2.0 (bidirectional) over WebSocket
 - **Auth:** per-session bearer token, loopback-only bind
 - **Surface:** ~108 methods across 18 domains + live push notifications
@@ -33,18 +33,26 @@ Clients are thin: they send requests and render the streamed results and notific
 Start the server:
 
 ```bash
-nylas rpc serve                      # binds 127.0.0.1:7368
+nylas rpc serve                      # binds 127.0.0.1:7369
 nylas rpc serve --addr 127.0.0.1:9000
 ```
 
 On first run the server generates a session token, stores it in the OS keyring, and
-prints how to authenticate. To use a known token (headless / scripting):
+prints how to authenticate. Print the current token (generates one if none exists):
+
+```bash
+nylas rpc token            # prints the token
+nylas rpc token --json     # {"token":"…"}
+nylas rpc token --copy     # copy to clipboard
+```
+
+To inject a known token instead (headless / scripting):
 
 ```bash
 NYLAS_WS_TOKEN=my-secret nylas rpc serve
 ```
 
-Connect a WebSocket client to `ws://127.0.0.1:7368/ws` with the token, then send a request:
+Connect a WebSocket client to `ws://127.0.0.1:7369/ws` with the token, then send a request:
 
 ```json
 { "jsonrpc": "2.0", "id": 1, "method": "email.list", "params": { "limit": 10 } }
@@ -128,8 +136,8 @@ The server holds live Nylas credentials, so the local socket is a real trust bou
 
 | Flag / Env | Purpose | Default |
 |---|---|---|
-| `--addr` | bind address | `127.0.0.1:7368` |
-| `NYLAS_WS_ADDR` | bind address (env; `--addr` wins) | `127.0.0.1:7368` |
+| `--addr` | bind address | `127.0.0.1:7369` |
+| `NYLAS_WS_ADDR` | bind address (env; `--addr` wins) | `127.0.0.1:7369` |
 | `--allow-remote` | permit a non-loopback bind (warns) | `false` |
 | `NYLAS_WS_TOKEN` | inject the session token (headless/CI) | auto-generated, keyring-brokered |
 | `NYLAS_DISABLE_KEYRING` | store token/creds in `~/.config/nylas` instead of the keyring | `false` |
@@ -365,7 +373,7 @@ the `NYLAS_WS_POLL_*` env vars (see [Configuration](#configuration)).
 Authenticate, list mail, and subscribe to live notifications (pseudocode):
 
 ```js
-const ws = new WebSocket("ws://127.0.0.1:7368/ws", {
+const ws = new WebSocket("ws://127.0.0.1:7369/ws", {
   headers: { Authorization: `Bearer ${token}` },
 });
 

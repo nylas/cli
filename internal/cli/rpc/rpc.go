@@ -11,6 +11,7 @@ func NewRPCCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newServeCmd())
+	cmd.AddCommand(newTokenCmd())
 
 	return cmd
 }
