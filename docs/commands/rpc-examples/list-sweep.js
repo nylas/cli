@@ -40,7 +40,7 @@ ws.addEventListener("message", (ev) => {
   const msg = JSON.parse(ev.data.toString());
   const resolve = pending.get(msg.id);
   pending.delete(msg.id);
-  if (resolve) resolve(msg);
+  if (typeof resolve === "function") resolve(msg);
 });
 
 ws.addEventListener("open", async () => {
