@@ -71,6 +71,13 @@ func createAppService() (*dashboardapp.AppService, error) {
 
 // createDomainService creates the dashboard domain management service.
 func createDomainService() (domainService, error) {
+	return newDomainService()
+}
+
+// newDomainService wires the concrete dashboard domain service. Shared by the
+// unexported factory (which adapts it to the domainService interface for test
+// mocking) and the exported CreateDomainService used by the setup wizard.
+func newDomainService() (*dashboardapp.DomainService, error) {
 	dpopSvc, secretStore, err := createDPoPService()
 	if err != nil {
 		return nil, err

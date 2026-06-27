@@ -35,7 +35,7 @@ const (
 )
 
 const (
-	stepTotal = 4
+	stepTotal = 5
 	divider   = "──────────────────────────────────────────"
 )
 
@@ -94,6 +94,9 @@ func runWizard(opts wizardOpts) error {
 
 	// Step 4: Grants
 	stepGrantSync(&status)
+
+	// Step 5: Agent Account domain (interactive, optional)
+	stepAgentDomain(&status)
 
 	// Done!
 	printComplete(status)
@@ -307,20 +310,37 @@ func stepApplication(status *SetupStatus) error {
 	switch len(apps) {
 	case 0:
 		// Create a new application.
-		app, createErr := createDefaultApp(appSvc, orgID)
+		fmt.Println("  No applications found. Creating one for you...")
+		fmt.Println()
+		newApp, createErr := createNewApp(appSvc, orgID)
 		if createErr != nil {
 			return createErr
 		}
-		selectedApp = domain.GatewayApplication{
-			ApplicationID: app.ApplicationID,
-			Region:        app.Region,
-			Environment:   app.Environment,
-			Branding:      app.Branding,
-		}
+		selectedApp = newApp
 	case 1:
-		selectedApp = apps[0]
-		name := appDisplayName(selectedApp)
+		// One application exists — let the user reuse it or create another.
+		candidate := apps[0]
+		name := appDisplayName(candidate)
 		_, _ = common.Green.Printf("  ✓ Found application: %s\n", name)
+
+		useExisting, selectErr := common.Select("Use this application?", []common.SelectOption[bool]{
+			{Label: "Use " + name, Value: true},
+			{Label: "Create a new application", Value: false},
+		})
+		if selectErr != nil {
+			return selectErr
+		}
+		if useExisting {
+			selectedApp = candidate
+		} else {
+			fmt.Println("  Creating a new application...")
+			fmt.Println()
+			newApp, createErr := createNewApp(appSvc, orgID)
+			if createErr != nil {
+				return createErr
+			}
+			selectedApp = newApp
+		}
 	default:
 		selected, selectErr := selectApp(apps)
 		if selectErr != nil {

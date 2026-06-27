@@ -1,7 +1,9 @@
 package setup
 
 import (
+	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -32,13 +34,18 @@ func printComplete(status SetupStatus) {
 	fmt.Println("    nylas calendar events     Upcoming events")
 	fmt.Println("    nylas auth status         Check configuration")
 	fmt.Println()
-	fmt.Println("  Register a free Agent Account email domain:")
-	for _, cmd := range domainRegistrationCommands(status) {
-		fmt.Printf("    %s\n", cmd)
+	if status.AgentDomain != "" {
+		fmt.Println("  Create an Agent Account on your domain:")
+		fmt.Printf("    nylas agent account create user@%s\n", status.AgentDomain)
+	} else {
+		fmt.Println("  Register a free Agent Account email domain:")
+		for _, cmd := range domainRegistrationCommands(status) {
+			fmt.Printf("    %s\n", cmd)
+		}
+		fmt.Println()
+		fmt.Println("  Create an Agent Account on that domain:")
+		fmt.Println("    nylas agent account create user@<subdomain>.nylas.email")
 	}
-	fmt.Println()
-	fmt.Println("  Create an Agent Account on that domain:")
-	fmt.Println("    nylas agent account create user@<subdomain>.nylas.email")
 	fmt.Println()
 	fmt.Println("  Documentation: https://cli.nylas.com/")
 	fmt.Println()
@@ -56,6 +63,116 @@ func domainRegistrationCommands(status SetupStatus) []string {
 			"nylas dashboard domains create <subdomain>.nylas.email --region eu",
 		}
 	}
+}
+
+// agentSubdomainPattern validates the user-chosen label of <subdomain>.nylas.email.
+var agentSubdomainPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// domainRegistrar is the slice of the dashboard domain service that stepAgentDomain
+// needs. Kept as an interface (with the createDomainServiceFn seam) so the success
+// path can be unit-tested without a live dashboard session.
+type domainRegistrar interface {
+	CreateDomain(ctx context.Context, input domain.DashboardCreateInboxDomainInput) (*domain.DashboardInboxDomain, error)
+}
+
+var createDomainServiceFn = func() (domainRegistrar, error) {
+	return dashboard.CreateDomainService()
+}
+
+// Prompt seams — overridable in tests so stepAgentDomain's success path can be
+// exercised without a TTY (the real prompts return empty/defaults off-TTY).
+var (
+	confirmPromptFn = common.ConfirmPrompt
+	inputPromptFn   = common.InputPrompt
+	selectRegionFn  = func() (string, error) {
+		return common.Select("Region", []common.SelectOption[string]{
+			{Label: "US", Value: "us"},
+			{Label: "EU", Value: "eu"},
+		})
+	}
+)
+
+// stepAgentDomain offers to register a free <subdomain>.nylas.email domain for
+// Agent Accounts. Registering a managed domain requires a dashboard session, so
+// the step is skipped (with a hint) on the API-key-only path. On success it sets
+// status.AgentDomain so printComplete can show the ready-to-run create command.
+func stepAgentDomain(status *SetupStatus) {
+	_, _ = common.Dim.Printf("  %s\n", divider)
+	fmt.Println()
+	_, _ = common.Bold.Printf("  Step %d of %d: Agent Account Domain\n", stepTotal, stepTotal)
+	fmt.Println()
+
+	if !status.HasDashboardAuth {
+		_, _ = common.Dim.Println("  Skipped — log in with 'nylas dashboard login' to register a free domain")
+		return
+	}
+
+	// On a prompt error, fail loud (the manual registration commands still print
+	// from printComplete because status.AgentDomain stays empty) rather than
+	// vanishing silently.
+	yes, err := confirmPromptFn("Register a free <subdomain>.nylas.email domain for Agent Accounts?", true)
+	if err != nil {
+		_, _ = common.Yellow.Printf("  Skipped — could not read your choice: %v\n", err)
+		return
+	}
+	if !yes {
+		return
+	}
+
+	label, err := inputPromptFn("Choose a subdomain", "")
+	if err != nil {
+		_, _ = common.Yellow.Printf("  Skipped — could not read the subdomain: %v\n", err)
+		return
+	}
+	label = strings.ToLower(strings.TrimSpace(label))
+	if !agentSubdomainPattern.MatchString(label) {
+		_, _ = common.Yellow.Println("  Skipped — subdomain must be 1-63 characters, start and end with a letter or number, and use only letters, numbers, and hyphens")
+		return
+	}
+
+	region := status.ActiveAppRegion
+	if region != "us" && region != "eu" {
+		region, err = selectRegionFn()
+		if err != nil {
+			_, _ = common.Yellow.Printf("  Skipped — could not read the region: %v\n", err)
+			return
+		}
+	}
+
+	domainAddress := label + ".nylas.email"
+
+	domainSvc, err := createDomainServiceFn()
+	if err != nil {
+		_, _ = common.Yellow.Printf("  Could not register domain: %v\n", err)
+		return
+	}
+
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+
+	var created *domain.DashboardInboxDomain
+	err = common.RunWithSpinner("Registering domain...", func() error {
+		created, err = domainSvc.CreateDomain(ctx, domain.DashboardCreateInboxDomainInput{
+			Name:          domainAddress,
+			DomainAddress: domainAddress,
+			Region:        region,
+		})
+		return err
+	})
+	if err != nil || created == nil || created.ID == "" ||
+		!strings.EqualFold(strings.TrimSpace(created.Region), region) ||
+		!strings.EqualFold(strings.TrimSuffix(created.DomainAddress, "."), domainAddress) {
+		reason := "dashboard returned an incomplete domain"
+		if err != nil {
+			reason = err.Error()
+		}
+		_, _ = common.Yellow.Printf("  Could not register %s: %s\n", domainAddress, reason)
+		_, _ = common.Dim.Printf("    Try later: nylas dashboard domains create %s --region %s\n", domainAddress, region)
+		return
+	}
+
+	_, _ = common.Green.Printf("  ✓ Registered %s\n", created.DomainAddress)
+	status.AgentDomain = created.DomainAddress
 }
 
 // printStepRecovery prints manual recovery instructions when a step fails.
@@ -106,11 +223,24 @@ func selectApp(apps []domain.GatewayApplication) (domain.GatewayApplication, err
 	return apps[idx], nil
 }
 
-// createDefaultApp creates a new application with defaults.
-func createDefaultApp(appSvc *dashboardapp.AppService, orgID string) (*domain.GatewayCreatedApplication, error) {
-	fmt.Println("  No applications found. Creating one for you...")
-	fmt.Println()
+// createNewApp creates an application and returns it as a GatewayApplication,
+// the shape the wizard tracks as the active app.
+func createNewApp(appSvc *dashboardapp.AppService, orgID string) (domain.GatewayApplication, error) {
+	app, err := createDefaultApp(appSvc, orgID)
+	if err != nil {
+		return domain.GatewayApplication{}, err
+	}
+	return domain.GatewayApplication{
+		ApplicationID: app.ApplicationID,
+		Region:        app.Region,
+		Environment:   app.Environment,
+		Branding:      app.Branding,
+	}, nil
+}
 
+// createDefaultApp creates a new application with defaults. Callers print any
+// context line (e.g. "No applications found") before invoking it.
+func createDefaultApp(appSvc *dashboardapp.AppService, orgID string) (*domain.GatewayCreatedApplication, error) {
 	name, err := common.InputPrompt("App name", "My First App")
 	if err != nil {
 		name = "My First App"

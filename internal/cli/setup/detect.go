@@ -18,6 +18,7 @@ type SetupStatus struct {
 	HasGrants        bool
 	ActiveAppID      string
 	ActiveAppRegion  string
+	AgentDomain      string
 }
 
 // IsFirstRun returns true when the CLI has never been configured.
