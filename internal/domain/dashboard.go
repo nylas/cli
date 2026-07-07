@@ -85,6 +85,7 @@ const (
 	SSOLoginTypeGoogle    = "google_SSO"
 	SSOLoginTypeMicrosoft = "microsoft_SSO"
 	SSOLoginTypeGitHub    = "github_SSO"
+	SSOLoginTypeSAML      = "saml_SSO"
 )
 
 // GatewayApplication is an application as returned by the dashboard API gateway.

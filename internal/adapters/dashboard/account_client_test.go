@@ -197,9 +197,36 @@ func TestAccountClientPublicEndpoints(t *testing.T) {
 				})
 			},
 			run: func(t *testing.T, client *AccountClient) {
-				resp, err := client.SSOStart(context.Background(), domain.SSOLoginTypeGoogle, "register", true)
+				resp, err := client.SSOStart(context.Background(), domain.SSOLoginTypeGoogle, "register", true, "")
 				require.NoError(t, err)
 				assert.Equal(t, "flow-1", resp.FlowID)
+			},
+		},
+		{
+			name: "start SAML SSO flow sends email for home-realm discovery",
+			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request, rawBody []byte, body map[string]any) {
+				assert.Equal(t, http.MethodPost, r.Method)
+				assert.Equal(t, "/auth/cli/sso/start", r.URL.Path)
+				assert.Equal(t, "saml_SSO", body["loginType"])
+				assert.Equal(t, "login", body["mode"])
+				assert.Equal(t, "user@acme.com", body["email"])
+				_, hasPrivacy := body["privacyPolicyAccepted"]
+				assert.False(t, hasPrivacy)
+
+				writeDashboardEnvelope(t, w, map[string]any{
+					"flowId":                  "flow-saml",
+					"verificationUri":         "https://accounts.example.com/pages/cli-saml",
+					"verificationUriComplete": "https://accounts.example.com/pages/cli-saml?code=ABCD2345",
+					"userCode":                "ABCD2345",
+					"expiresIn":               600,
+					"interval":                5,
+				})
+			},
+			run: func(t *testing.T, client *AccountClient) {
+				resp, err := client.SSOStart(context.Background(), domain.SSOLoginTypeSAML, "login", false, "user@acme.com")
+				require.NoError(t, err)
+				assert.Equal(t, "flow-saml", resp.FlowID)
+				assert.Equal(t, "ABCD2345", resp.UserCode)
 			},
 		},
 		{

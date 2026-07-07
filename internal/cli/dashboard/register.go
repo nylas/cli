@@ -59,5 +59,5 @@ func runSSORegister(provider string, acceptedPrivacyPolicy bool) error {
 	if err := acceptPrivacyPolicy(acceptedPrivacyPolicy); err != nil {
 		return err
 	}
-	return runSSO(provider, "register", true)
+	return runSSO(provider, "register", true, "")
 }
