@@ -129,9 +129,10 @@ func (s *AuthService) Logout(ctx context.Context) error {
 	return s.clearTokens()
 }
 
-// SSOStart initiates an SSO device authorization flow.
-func (s *AuthService) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error) {
-	return s.account.SSOStart(ctx, loginType, mode, privacyPolicyAccepted)
+// SSOStart initiates an SSO device authorization flow. email is only used for
+// saml_SSO home-realm discovery.
+func (s *AuthService) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error) {
+	return s.account.SSOStart(ctx, loginType, mode, privacyPolicyAccepted, email)
 }
 
 // SSOPoll polls the SSO device flow. On completion, stores tokens.

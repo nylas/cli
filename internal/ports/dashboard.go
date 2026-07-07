@@ -30,8 +30,9 @@ type DashboardAccountClient interface {
 	// Logout invalidates the session tokens.
 	Logout(ctx context.Context, userToken, orgToken string) error
 
-	// SSOStart initiates an SSO device authorization flow.
-	SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error)
+	// SSOStart initiates an SSO device authorization flow. email is required for
+	// saml_SSO (used for home-realm discovery) and ignored for other providers.
+	SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error)
 
 	// SSOPoll polls the SSO device flow for completion.
 	SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)

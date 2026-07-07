@@ -31,20 +31,25 @@ func newSSOCmd() *cobra.Command {
 }
 
 func newSSOLoginCmd() *cobra.Command {
-	var provider string
+	var (
+		provider string
+		email    string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Log in via SSO",
 		Example: `  nylas dashboard sso login --provider google
   nylas dashboard sso login --provider microsoft
-  nylas dashboard sso login --provider github`,
+  nylas dashboard sso login --provider github
+  nylas dashboard sso login --provider saml --email you@company.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSSO(provider, "login", false)
+			return runSSO(provider, "login", false, email)
 		},
 	}
 
-	cmd.Flags().StringVarP(&provider, "provider", "p", "google", "SSO provider (google, microsoft, github)")
+	cmd.Flags().StringVarP(&provider, "provider", "p", "google", "SSO provider (google, microsoft, github, saml)")
+	cmd.Flags().StringVar(&email, "email", "", "Work email for SAML SSO home-realm discovery (saml provider only)")
 
 	return cmd
 }
@@ -64,7 +69,7 @@ func newSSORegisterCmd() *cobra.Command {
 			if err := acceptPrivacyPolicy(acceptPrivacyPolicyFlag); err != nil {
 				return err
 			}
-			return runSSO(provider, "register", true)
+			return runSSO(provider, "register", true, "")
 		},
 	}
 
@@ -74,7 +79,7 @@ func newSSORegisterCmd() *cobra.Command {
 	return cmd
 }
 
-func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...string) error {
+func runSSO(provider, mode string, privacyPolicyAccepted bool, email string, orgPublicIDs ...string) error {
 	orgPublicID := ""
 	if len(orgPublicIDs) > 0 {
 		orgPublicID = orgPublicIDs[0]
@@ -83,6 +88,29 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...s
 	loginType, err := mapProvider(provider)
 	if err != nil {
 		return err
+	}
+
+	if loginType == domain.SSOLoginTypeSAML {
+		if mode == "register" {
+			return dashboardError(
+				"SAML SSO does not have a separate registration step",
+				"Accounts are provisioned on first login: nylas dashboard sso login --provider saml --email you@company.com",
+			)
+		}
+		if email == "" {
+			// Empty placeholder: InputPrompt echoes the placeholder back in
+			// non-TTY runs and on empty submit, which must not become the email.
+			email, err = common.InputPrompt("Work email (e.g. you@company.com)", "")
+			if err != nil {
+				return err
+			}
+		}
+		if email == "" {
+			return dashboardError(
+				"a work email is required for SAML SSO",
+				"Pass --email you@company.com to discover your organization's SSO",
+			)
+		}
 	}
 
 	authSvc, _, err := createAuthService()
@@ -95,7 +123,7 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, orgPublicIDs ...s
 
 	var resp *domain.DashboardSSOStartResponse
 	err = common.RunWithSpinner("Starting SSO...", func() error {
-		resp, err = authSvc.SSOStart(ctx, loginType, mode, privacyPolicyAccepted)
+		resp, err = authSvc.SSOStart(ctx, loginType, mode, privacyPolicyAccepted, email)
 		return err
 	})
 	if err != nil {
@@ -255,10 +283,12 @@ func mapProvider(provider string) (string, error) {
 		return domain.SSOLoginTypeMicrosoft, nil
 	case "github":
 		return domain.SSOLoginTypeGitHub, nil
+	case "saml":
+		return domain.SSOLoginTypeSAML, nil
 	default:
 		return "", dashboardError(
 			fmt.Sprintf("unsupported SSO provider: %s", provider),
-			"Use one of: google, microsoft, github",
+			"Use one of: google, microsoft, github, saml",
 		)
 	}
 }

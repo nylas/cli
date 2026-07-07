@@ -15,7 +15,7 @@ type MockAccountClient struct {
 	LoginMFAFn                func(ctx context.Context, userPublicID, code, orgPublicID string) (*domain.DashboardAuthResponse, error)
 	RefreshFn                 func(ctx context.Context, userToken, orgToken string) (*domain.DashboardRefreshResponse, error)
 	LogoutFn                  func(ctx context.Context, userToken, orgToken string) error
-	SSOStartFn                func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error)
+	SSOStartFn                func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error)
 	SSOPollFn                 func(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
 	GetCurrentSessionFn       func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
 	SwitchOrgFn               func(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
@@ -50,8 +50,8 @@ func (m *MockAccountClient) Refresh(ctx context.Context, userToken, orgToken str
 func (m *MockAccountClient) Logout(ctx context.Context, userToken, orgToken string) error {
 	return m.LogoutFn(ctx, userToken, orgToken)
 }
-func (m *MockAccountClient) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error) {
-	return m.SSOStartFn(ctx, loginType, mode, privacyPolicyAccepted)
+func (m *MockAccountClient) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error) {
+	return m.SSOStartFn(ctx, loginType, mode, privacyPolicyAccepted, email)
 }
 func (m *MockAccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error) {
 	return m.SSOPollFn(ctx, flowID, orgPublicID)

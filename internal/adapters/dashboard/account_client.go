@@ -143,13 +143,16 @@ func (c *AccountClient) Logout(ctx context.Context, userToken, orgToken string) 
 }
 
 // SSOStart initiates an SSO device authorization flow.
-func (c *AccountClient) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool) (*domain.DashboardSSOStartResponse, error) {
+func (c *AccountClient) SSOStart(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error) {
 	body := map[string]any{
 		"loginType": loginType,
 		"mode":      mode,
 	}
 	if mode == "register" {
 		body["privacyPolicyAccepted"] = privacyPolicyAccepted
+	}
+	if email != "" {
+		body["email"] = email
 	}
 
 	var result domain.DashboardSSOStartResponse
