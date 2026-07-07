@@ -98,7 +98,9 @@ func runSSO(provider, mode string, privacyPolicyAccepted bool, email string, org
 			)
 		}
 		if email == "" {
-			email, err = common.InputPrompt("Work email", "you@company.com")
+			// Empty placeholder: InputPrompt echoes the placeholder back in
+			// non-TTY runs and on empty submit, which must not become the email.
+			email, err = common.InputPrompt("Work email (e.g. you@company.com)", "")
 			if err != nil {
 				return err
 			}
