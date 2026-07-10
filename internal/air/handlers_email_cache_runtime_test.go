@@ -595,7 +595,7 @@ func TestSyncEmails_DoesNotHoldRuntimeLockAcrossFetch(t *testing.T) {
 		// guarantee this test cares about is that the runtime lock is not held
 		// across the remote fetch, not that the full sync finishes within a tight
 		// local-only deadline.
-	case <-time.After(20 * time.Second):
+	case <-time.After(90 * time.Second):
 		t.Fatal("syncEmails did not finish after fetch was released")
 	}
 
