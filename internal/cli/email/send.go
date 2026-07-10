@@ -147,16 +147,7 @@ Supports hosted templates:
 
 				if templateOpts.TemplateID == "" && body == "" {
 					fmt.Println("Body (end with a line containing only '.'):")
-					var bodyLines []string
-					for {
-						line, _ := reader.ReadString('\n')
-						line = strings.TrimSuffix(line, "\n")
-						if line == "." {
-							break
-						}
-						bodyLines = append(bodyLines, line)
-					}
-					body = strings.Join(bodyLines, "\n")
+					body = readBodyLines(reader)
 				}
 			}
 

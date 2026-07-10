@@ -11,6 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Scheduler configuration endpoints are grant-scoped
+// (/v3/grants/{grant_id}/scheduling/configurations), so these commands resolve a
+// grant via WithClient. The grant is taken from an optional trailing [grant-id]
+// positional (or the default grant); leading positionals like
+// <config-id> are sliced off before grant resolution so they are never mistaken
+// for a grant.
 func newConfigurationsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "configurations",
@@ -32,13 +38,14 @@ API reference: https://developer.nylas.com/docs/reference/api/configurations/`,
 
 func newConfigListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "list",
+		Use:     "list [grant-id]",
 		Aliases: []string{"ls"},
 		Short:   "List scheduler configurations",
 		Long:    "List all scheduler configurations (meeting types).",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				configs, err := client.ListSchedulerConfigurations(ctx)
+				configs, err := client.ListSchedulerConfigurations(ctx, grantID)
 				if err != nil {
 					return struct{}{}, common.WrapListError("configurations", err)
 				}
@@ -72,14 +79,14 @@ func newConfigListCmd() *cobra.Command {
 
 func newConfigShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <config-id>",
+		Use:   "show <config-id> [grant-id]",
 		Short: "Show scheduler configuration details",
 		Long:  "Show detailed information about a specific scheduler configuration.",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				config, err := client.GetSchedulerConfiguration(ctx, configID)
+			_, err := common.WithClient(args[1:], func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				config, err := client.GetSchedulerConfiguration(ctx, grantID, configID)
 				if err != nil {
 					return struct{}{}, common.WrapGetError("configuration", err)
 				}
@@ -111,7 +118,8 @@ func newConfigCreateCmd() *cobra.Command {
 	flags := &configFlags{}
 
 	cmd := &cobra.Command{
-		Use:   "create",
+		Use:   "create [grant-id]",
+		Args:  cobra.MaximumNArgs(1),
 		Short: "Create a scheduler configuration",
 		Long: `Create a new scheduler configuration (meeting type).
 
@@ -158,7 +166,7 @@ When both are provided, flags override file values.`,
 			}
 
 			_, err = common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				config, err := client.CreateSchedulerConfiguration(ctx, req)
+				config, err := client.CreateSchedulerConfiguration(ctx, grantID, req)
 				if err != nil {
 					return struct{}{}, common.WrapCreateError("configuration", err)
 				}
@@ -201,7 +209,7 @@ func newConfigUpdateCmd() *cobra.Command {
 	flags := &configFlags{}
 
 	cmd := &cobra.Command{
-		Use:   "update <config-id>",
+		Use:   "update <config-id> [grant-id]",
 		Short: "Update a scheduler configuration",
 		Long: `Update an existing scheduler configuration.
 
@@ -218,7 +226,7 @@ When both are provided, flags override file values.`,
 
   # File as base, override specific values
   nylas scheduler configs update abc123 --file update.json --duration 45`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateConfigFlags(flags); err != nil {
 				return err
@@ -233,8 +241,8 @@ When both are provided, flags override file values.`,
 				return err
 			}
 
-			_, err = common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				config, err := client.UpdateSchedulerConfiguration(ctx, configID, req)
+			_, err = common.WithClient(args[1:], func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				config, err := client.UpdateSchedulerConfiguration(ctx, grantID, configID, req)
 				if err != nil {
 					return struct{}{}, common.WrapUpdateError("configuration", err)
 				}
@@ -265,10 +273,10 @@ func newConfigDeleteCmd() *cobra.Command {
 	var yes bool
 
 	cmd := &cobra.Command{
-		Use:   "delete <config-id>",
+		Use:   "delete <config-id> [grant-id]",
 		Short: "Delete a scheduler configuration",
 		Long:  "Delete a scheduler configuration permanently.",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
 				if !common.Confirm(fmt.Sprintf("Are you sure you want to delete configuration %s?", args[0]), false) {
@@ -278,8 +286,8 @@ func newConfigDeleteCmd() *cobra.Command {
 			}
 
 			configID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				if err := client.DeleteSchedulerConfiguration(ctx, configID); err != nil {
+			_, err := common.WithClient(args[1:], func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+				if err := client.DeleteSchedulerConfiguration(ctx, grantID, configID); err != nil {
 					return struct{}{}, common.WrapDeleteError("configuration", err)
 				}
 

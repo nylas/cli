@@ -87,17 +87,17 @@ type AdminClient interface {
 	// ListCredentials retrieves all credentials for a connector.
 	ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error)
 
-	// GetCredential retrieves a specific credential.
-	GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error)
+	// GetCredential retrieves a specific credential for a connector.
+	GetCredential(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error)
 
 	// CreateCredential creates a new credential.
 	CreateCredential(ctx context.Context, connectorID string, req *domain.CreateCredentialRequest) (*domain.ConnectorCredential, error)
 
-	// UpdateCredential updates an existing credential.
-	UpdateCredential(ctx context.Context, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error)
+	// UpdateCredential updates an existing credential for a connector.
+	UpdateCredential(ctx context.Context, connectorID, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error)
 
-	// DeleteCredential deletes a credential.
-	DeleteCredential(ctx context.Context, credentialID string) error
+	// DeleteCredential deletes a credential for a connector.
+	DeleteCredential(ctx context.Context, connectorID, credentialID string) error
 
 	// ================================
 	// ADMIN GRANT OPERATIONS

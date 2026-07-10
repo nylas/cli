@@ -14,11 +14,17 @@ Nylas Scheduler enables you to create customizable booking workflows for schedul
 
 Manage scheduling configurations (meeting types):
 
+> Configurations are grant-scoped (`/v3/grants/{grant_id}/scheduling/configurations`).
+> The grant is taken from your default grant, or pass it as an optional trailing
+> `[grant-id]` positional. Leading positionals like `<config-id>` are not mistaken
+> for a grant.
+
 ```bash
-# List all scheduler configurations
+# List all scheduler configurations (uses default grant)
 nylas scheduler configurations list
 nylas scheduler configs list              # Alias
 nylas scheduler configurations list --json
+nylas scheduler configurations list <grant-id>   # Explicit grant
 
 # Show configuration details
 nylas scheduler configurations show <config-id>
@@ -140,19 +146,27 @@ Manage scheduled appointments:
 nylas scheduler bookings list
 nylas scheduler bookings list --json
 
-# Show booking details
-nylas scheduler bookings show <booking-id>
+# Booking commands are authorized by a Scheduler session token that the CLI
+# mints from the booking's configuration, so --configuration-id is required on
+# every booking command (the API key is not accepted on booking endpoints).
 
-# Confirm a booking
-nylas scheduler bookings confirm <booking-id>
+# Show booking details
+nylas scheduler bookings show <booking-id> --configuration-id <config-id>
+
+# Confirm a booking. --salt is required and comes from the booking reference
+# (in the organizer confirmation link, the cancel/reschedule URL, or a Scheduler
+# webhook). It cannot be looked up from the booking ID.
+nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>
 
 # Reschedule a booking
 nylas scheduler bookings reschedule <booking-id> \\
-  --start-time "2024-03-20T10:00:00Z"
+  --configuration-id <config-id> \\
+  --start-time 1710930600 --end-time 1710934200
 
 # Cancel a booking
-nylas scheduler bookings cancel <booking-id>
+nylas scheduler bookings cancel <booking-id> --configuration-id <config-id>
 nylas scheduler bookings cancel <booking-id> \\
+  --configuration-id <config-id> \\
   --reason "Meeting no longer needed"
 ```
 
@@ -213,9 +227,9 @@ nylas scheduler pages create \\
 # 4. View bookings
 nylas scheduler bookings list
 
-# 5. Manage bookings
-nylas scheduler bookings confirm <booking-id>
-nylas scheduler bookings reschedule <booking-id> --start-time "..."
+# 5. Manage bookings (--configuration-id is required on booking commands)
+nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>
+nylas scheduler bookings reschedule <booking-id> --configuration-id <config-id> --start-time <unix> --end-time <unix>
 ```
 
 **Note:** Some scheduler features may not be available in all Nylas API versions or require specific subscription tiers.

@@ -313,24 +313,54 @@ func (c *HTTPClient) ListCredentials(ctx context.Context, connectorID string) ([
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, url.PathEscape(connectorID))
+	// The v3 creds list is offset-paginated (default page size 10), so follow
+	// the pages until a short page rather than silently truncating.
+	baseURL := fmt.Sprintf("%s/v3/connectors/%s/creds", c.baseURL, url.PathEscape(connectorID))
+	const pageSize = 200
+	// Safety ceiling (mirrors ListAllGrants' maxGrantPages) so a misbehaving
+	// endpoint that never returns a short page can't loop forever.
+	const maxCredentialPages = 1000
 
-	var result struct {
-		Data []domain.ConnectorCredential `json:"data"`
+	// Non-nil so an empty result marshals to `[]`, not `null`.
+	all := make([]domain.ConnectorCredential, 0)
+	offset := 0
+	for range maxCredentialPages {
+		queryURL := NewQueryBuilder().AddInt("limit", pageSize).AddInt("offset", offset).BuildURL(baseURL)
+
+		var result struct {
+			Data  []domain.ConnectorCredential `json:"data"`
+			Limit int                          `json:"limit"`
+		}
+		if err := c.doGet(ctx, queryURL, &result); err != nil {
+			return nil, err
+		}
+		all = append(all, result.Data...)
+
+		// The API echoes the effective page size; a page shorter than that (or
+		// empty) is the last one. Falling back to the requested size handles a
+		// response that omits `limit`.
+		effective := result.Limit
+		if effective <= 0 {
+			effective = pageSize
+		}
+		if len(result.Data) < effective {
+			return all, nil
+		}
+		offset += len(result.Data)
 	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+	return nil, fmt.Errorf("failed to paginate credentials: exceeded max page count (%d)", maxCredentialPages)
 }
 
-// GetCredential retrieves a specific credential.
-func (c *HTTPClient) GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
+// GetCredential retrieves a specific credential for a connector.
+func (c *HTTPClient) GetCredential(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error) {
+	if err := validateRequired("connector ID", connectorID); err != nil {
+		return nil, err
+	}
 	if err := validateRequired("credential ID", credentialID); err != nil {
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/creds/%s", c.baseURL, url.PathEscape(connectorID), url.PathEscape(credentialID))
 
 	var result struct {
 		Data domain.ConnectorCredential `json:"data"`
@@ -347,7 +377,7 @@ func (c *HTTPClient) CreateCredential(ctx context.Context, connectorID string, r
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/connectors/%s/credentials", c.baseURL, url.PathEscape(connectorID))
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/creds", c.baseURL, url.PathEscape(connectorID))
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
 	if err != nil {
@@ -363,13 +393,16 @@ func (c *HTTPClient) CreateCredential(ctx context.Context, connectorID string, r
 	return &result.Data, nil
 }
 
-// UpdateCredential updates an existing credential.
-func (c *HTTPClient) UpdateCredential(ctx context.Context, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
+// UpdateCredential updates an existing credential for a connector.
+func (c *HTTPClient) UpdateCredential(ctx context.Context, connectorID, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
+	if err := validateRequired("connector ID", connectorID); err != nil {
+		return nil, err
+	}
 	if err := validateRequired("credential ID", credentialID); err != nil {
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/creds/%s", c.baseURL, url.PathEscape(connectorID), url.PathEscape(credentialID))
 
 	resp, err := c.doJSONRequest(ctx, "PATCH", queryURL, req)
 	if err != nil {
@@ -385,12 +418,15 @@ func (c *HTTPClient) UpdateCredential(ctx context.Context, credentialID string, 
 	return &result.Data, nil
 }
 
-// DeleteCredential deletes a credential.
-func (c *HTTPClient) DeleteCredential(ctx context.Context, credentialID string) error {
+// DeleteCredential deletes a credential for a connector.
+func (c *HTTPClient) DeleteCredential(ctx context.Context, connectorID, credentialID string) error {
+	if err := validateRequired("connector ID", connectorID); err != nil {
+		return err
+	}
 	if err := validateRequired("credential ID", credentialID); err != nil {
 		return err
 	}
-	queryURL := fmt.Sprintf("%s/v3/credentials/%s", c.baseURL, url.PathEscape(credentialID))
+	queryURL := fmt.Sprintf("%s/v3/connectors/%s/creds/%s", c.baseURL, url.PathEscape(connectorID), url.PathEscape(credentialID))
 	return c.doDelete(ctx, queryURL)
 }
 

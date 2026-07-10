@@ -12,20 +12,23 @@ type SchedulerClient interface {
 	// CONFIGURATION OPERATIONS
 	// ================================
 
-	// ListSchedulerConfigurations retrieves all scheduler configurations.
-	ListSchedulerConfigurations(ctx context.Context) ([]domain.SchedulerConfiguration, error)
+	// Configuration operations are grant-scoped
+	// (/v3/grants/{grant_id}/scheduling/configurations).
 
-	// GetSchedulerConfiguration retrieves a specific scheduler configuration.
-	GetSchedulerConfiguration(ctx context.Context, configID string) (*domain.SchedulerConfiguration, error)
+	// ListSchedulerConfigurations retrieves all scheduler configurations for a grant.
+	ListSchedulerConfigurations(ctx context.Context, grantID string) ([]domain.SchedulerConfiguration, error)
 
-	// CreateSchedulerConfiguration creates a new scheduler configuration.
-	CreateSchedulerConfiguration(ctx context.Context, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error)
+	// GetSchedulerConfiguration retrieves a specific scheduler configuration for a grant.
+	GetSchedulerConfiguration(ctx context.Context, grantID, configID string) (*domain.SchedulerConfiguration, error)
 
-	// UpdateSchedulerConfiguration updates an existing scheduler configuration.
-	UpdateSchedulerConfiguration(ctx context.Context, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error)
+	// CreateSchedulerConfiguration creates a new scheduler configuration for a grant.
+	CreateSchedulerConfiguration(ctx context.Context, grantID string, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error)
 
-	// DeleteSchedulerConfiguration deletes a scheduler configuration.
-	DeleteSchedulerConfiguration(ctx context.Context, configID string) error
+	// UpdateSchedulerConfiguration updates an existing scheduler configuration for a grant.
+	UpdateSchedulerConfiguration(ctx context.Context, grantID, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error)
+
+	// DeleteSchedulerConfiguration deletes a scheduler configuration for a grant.
+	DeleteSchedulerConfiguration(ctx context.Context, grantID, configID string) error
 
 	// ================================
 	// SESSION OPERATIONS
@@ -41,17 +44,21 @@ type SchedulerClient interface {
 	// BOOKING OPERATIONS
 	// ================================
 
+	// Booking operations authenticate with a Scheduler session token minted from
+	// the configuration ID (booking endpoints reject the application API key), so
+	// each takes the booking's configurationID.
+
 	// GetBooking retrieves a specific booking.
-	GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error)
+	GetBooking(ctx context.Context, configurationID, bookingID string) (*domain.Booking, error)
 
 	// ConfirmBooking confirms a booking.
-	ConfirmBooking(ctx context.Context, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error)
+	ConfirmBooking(ctx context.Context, configurationID, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error)
 
 	// RescheduleBooking reschedules an existing booking.
-	RescheduleBooking(ctx context.Context, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error)
+	RescheduleBooking(ctx context.Context, configurationID, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error)
 
 	// CancelBooking cancels a booking.
-	CancelBooking(ctx context.Context, bookingID string, reason string) error
+	CancelBooking(ctx context.Context, configurationID, bookingID string, reason string) error
 
 	// ================================
 	// GROUP EVENT OPERATIONS

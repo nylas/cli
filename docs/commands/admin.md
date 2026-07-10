@@ -186,58 +186,60 @@ Settings:
 
 Manage authentication credentials for connectors.
 
+The connector provider (e.g. `google`) is auto-detected when the application
+has exactly one connector. Pass it explicitly — positionally for `list`, or
+with `--connector` for show/create/update/delete — when there are several.
+
 ```bash
-# List credentials
+# List credentials (connector auto-detected, or pass the provider)
 nylas admin credentials list
-nylas admin creds list             # Alias
-nylas admin credentials list --json
+nylas admin creds list google                # Alias, explicit provider
+nylas admin credentials list google --json
 
 # Show credential details
 nylas admin credentials show <credential-id>
-nylas admin cred show <credential-id> --json
+nylas admin cred show <credential-id> --connector google --json
 
-# Create credential
-nylas admin credentials create --connector-id <connector-id> \
+# Create a connector credential. --client-id/--client-secret are the PROVIDER's
+# OAuth app credentials (e.g. your own Google Cloud / Azure app), NOT your Nylas
+# app's — Nylas uses them to broker auth through that provider application.
+nylas admin credentials create --connector google \
   --name "Production Credentials" \
-  --credential-type oauth
-
-# Create credential with data
-nylas admin cred create --connector-id <connector-id> \
-  --name "Service Account" \
-  --credential-type service_account \
-  --credential-data '{"private_key":"..."}'
+  --type connector \
+  --client-id "<google-oauth-app-client-id>" \
+  --client-secret "<google-oauth-app-client-secret>"
 
 # Update credential
-nylas admin credentials update <credential-id> --name "Updated Name"
+nylas admin credentials update <credential-id> --connector google --name "Updated Name"
 
 # Delete credential
-nylas admin credentials delete <credential-id>
+nylas admin credentials delete <credential-id> --connector google
 nylas admin cred delete <credential-id> --yes
 ```
 
 **Example: List credentials**
 ```bash
-$ nylas admin credentials list
+$ nylas admin credentials list google
 
 Found 2 credential(s):
 
-NAME                    ID                    CONNECTOR          TYPE
-Production OAuth        cred_oauth_123        conn_google_123    oauth
-Service Account         cred_sa_456           conn_google_123    service_account
+NAME                    ID                    CREATED AT
+Production Creds        cred_conn_123         Dec 1, 2024 10:00 AM
+Service Account         cred_sa_456           Dec 3, 2024 9:15 AM
 ```
+
+> The Nylas v3 credential object returns only `id`, `name`, `created_at`, and
+> `updated_at`; `credential_type`/`credential_data` are create-time inputs and are
+> never echoed back.
 
 **Example: Show credential details**
 ```bash
-$ nylas admin credentials show cred_oauth_123
+$ nylas admin credentials show cred_conn_123 --connector google
 
-Credential: Production OAuth
-  ID: cred_oauth_123
-  Connector ID: conn_google_123
-  Name: Production OAuth
-  Type: oauth
-
-Created: Dec 1, 2024 10:00 AM
-Updated: Dec 15, 2024 2:30 PM
+Credential: Production Creds
+  ID: cred_conn_123
+  Created At: Dec 1, 2024 10:00 AM
+  Updated At: Dec 15, 2024 2:30 PM
 ```
 
 ### Grants

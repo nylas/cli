@@ -908,12 +908,12 @@ nylas scheduler pages create                          # Create booking page
 nylas scheduler pages update <page-id>                # Update page
 nylas scheduler pages delete <page-id>                # Delete page
 
-# Bookings
+# Bookings (--configuration-id required: booking endpoints use a Scheduler session token, not the API key)
 nylas scheduler bookings list                         # List bookings
-nylas scheduler bookings show <booking-id>            # Show booking details
-nylas scheduler bookings confirm <booking-id>         # Confirm booking
-nylas scheduler bookings reschedule <booking-id>      # Reschedule booking
-nylas scheduler bookings cancel <booking-id>          # Cancel booking
+nylas scheduler bookings show <booking-id> --configuration-id <config-id>          # Show booking details
+nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>  # Confirm booking
+nylas scheduler bookings reschedule <booking-id> --configuration-id <config-id>    # Reschedule booking
+nylas scheduler bookings cancel <booking-id> --configuration-id <config-id>        # Cancel booking
 
 # Configurations
 nylas scheduler configurations list                   # List configurations
@@ -966,11 +966,11 @@ nylas admin connectors update <connector-id>          # Update connector
 nylas admin connectors delete <connector-id>          # Delete connector
 
 # Credentials
-nylas admin credentials list <connector-id>           # List credentials
-nylas admin credentials show <credential-id>          # Show credential
-nylas admin credentials create                        # Create credential
-nylas admin credentials update <credential-id>        # Update credential
-nylas admin credentials delete <credential-id>        # Delete credential
+nylas admin credentials list [connector]              # List credentials (provider auto-detected)
+nylas admin credentials show <credential-id> --connector <provider>    # Show credential
+nylas admin credentials create --connector <provider>  # Create credential
+nylas admin credentials update <credential-id> --connector <provider>  # Update credential
+nylas admin credentials delete <credential-id> --connector <provider>  # Delete credential
 
 # Grants
 nylas admin grants list                               # List all grants

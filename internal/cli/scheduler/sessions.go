@@ -38,7 +38,7 @@ func newSessionCreateCmd() *cobra.Command {
 		Short: "Create a scheduler session",
 		Long:  "Create a new scheduler session for a configuration.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.CreateSchedulerSessionRequest{
 					ConfigurationID: configID,
 					TimeToLive:      ttl,
@@ -79,7 +79,7 @@ func newSessionShowCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				session, err := client.GetSchedulerSession(ctx, sessionID)
 				if err != nil {
 					return struct{}{}, common.WrapGetError("session", err)

@@ -192,8 +192,8 @@ func TestConfirmBookingRequest_Creation(t *testing.T) {
 		{
 			name: "cancel booking with reason",
 			req: ConfirmBookingRequest{
-				Status: "cancelled",
-				Reason: "Schedule conflict",
+				Status:             "cancelled",
+				CancellationReason: "Schedule conflict",
 			},
 		},
 	}
@@ -216,8 +216,6 @@ func TestRescheduleBookingRequest_Creation(t *testing.T) {
 	req := RescheduleBookingRequest{
 		StartTime: now.Add(48 * time.Hour).Unix(),
 		EndTime:   now.Add(49 * time.Hour).Unix(),
-		Timezone:  "America/Chicago",
-		Reason:    "Guest requested different time",
 	}
 
 	if req.StartTime == 0 {
@@ -225,9 +223,6 @@ func TestRescheduleBookingRequest_Creation(t *testing.T) {
 	}
 	if req.EndTime == 0 {
 		t.Error("RescheduleBookingRequest.EndTime should not be zero")
-	}
-	if req.Timezone != "America/Chicago" {
-		t.Errorf("RescheduleBookingRequest.Timezone = %q, want %q", req.Timezone, "America/Chicago")
 	}
 }
 

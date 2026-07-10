@@ -128,6 +128,17 @@ func (c *HTTPClient) setAuthHeader(req *http.Request) {
 	}
 }
 
+// setAuth sets the authorization header, preferring an explicit bearer token
+// (e.g. a Scheduler session token) over the application API key. Scheduler
+// booking endpoints are authorized by a session token, not the API key.
+func (c *HTTPClient) setAuth(req *http.Request, token string) {
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+		return
+	}
+	c.setAuthHeader(req)
+}
+
 // parseError parses an error response from the API.
 // Uses streaming decoder with size limit to avoid large allocations.
 func (c *HTTPClient) parseError(resp *http.Response) error {
@@ -435,15 +446,19 @@ func (c *HTTPClient) doJSONRequestInternal(
 	withAuth bool,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
-	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, withAuth, true, acceptedStatuses...)
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, withAuth, true, "", acceptedStatuses...)
 }
 
+// doJSONRequestInternalWithRetry performs a JSON request. When withAuth is true,
+// authToken (if non-empty) is used as the bearer token in place of the API key;
+// otherwise the API key is used.
 func (c *HTTPClient) doJSONRequestInternalWithRetry(
 	ctx context.Context,
 	method, url string,
 	body any,
 	withAuth bool,
 	retry bool,
+	authToken string,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
 	// Default accepted statuses
@@ -472,7 +487,7 @@ func (c *HTTPClient) doJSONRequestInternalWithRetry(
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if withAuth {
-		c.setAuthHeader(req)
+		c.setAuth(req, authToken)
 	}
 
 	// Execute request with the configured retry policy.
@@ -531,7 +546,18 @@ func (c *HTTPClient) doJSONRequestNoRetry(
 	body any,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
-	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, true, false, acceptedStatuses...)
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, true, false, "", acceptedStatuses...)
+}
+
+// doJSONRequestWithToken performs a JSON request authenticated with an explicit
+// bearer token (a Scheduler session token) instead of the API key.
+func (c *HTTPClient) doJSONRequestWithToken(
+	ctx context.Context,
+	method, url, token string,
+	body any,
+	acceptedStatuses ...int,
+) (*http.Response, error) {
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, true, true, token, acceptedStatuses...)
 }
 
 // decodeJSONResponse decodes a JSON response body into the provided struct.
@@ -563,7 +589,7 @@ func (c *HTTPClient) doJSONRequestNoAuth(
 	body any,
 	acceptedStatuses ...int,
 ) (*http.Response, error) {
-	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, false, true, acceptedStatuses...)
+	return c.doJSONRequestInternalWithRetry(ctx, method, url, body, false, true, "", acceptedStatuses...)
 }
 
 // validateRequired validates that a required field is not empty.

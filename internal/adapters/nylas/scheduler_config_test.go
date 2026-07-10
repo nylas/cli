@@ -17,7 +17,7 @@ import (
 
 func TestHTTPClient_ListSchedulerConfigurations(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v3/scheduling/configurations", r.URL.Path)
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
 		response := map[string]any{
@@ -45,7 +45,7 @@ func TestHTTPClient_ListSchedulerConfigurations(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	configs, err := client.ListSchedulerConfigurations(ctx)
+	configs, err := client.ListSchedulerConfigurations(ctx, "grant-123")
 
 	require.NoError(t, err)
 	assert.Len(t, configs, 2)
@@ -54,9 +54,59 @@ func TestHTTPClient_ListSchedulerConfigurations(t *testing.T) {
 	assert.Equal(t, "30min", configs[0].Slug)
 }
 
+func TestHTTPClient_ListSchedulerConfigurations_EmptyReturnsNonNilSlice(t *testing.T) {
+	// An empty result must be a non-nil slice so JSON output is `[]`, not `null`.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	configs, err := client.ListSchedulerConfigurations(context.Background(), "grant-123")
+
+	require.NoError(t, err)
+	assert.NotNil(t, configs, "empty result must be a non-nil slice (marshals to [] not null)")
+	assert.Empty(t, configs)
+}
+
+func TestHTTPClient_ListSchedulerConfigurations_FollowsCursor(t *testing.T) {
+	// The endpoint is cursor-paginated; the adapter must follow next_cursor and
+	// aggregate rather than truncating at the first page.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("page_token") == "" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data":        []map[string]any{{"id": "config-1"}},
+				"next_cursor": "cursor-2",
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "config-2"}},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	configs, err := client.ListSchedulerConfigurations(context.Background(), "grant-123")
+
+	require.NoError(t, err)
+	require.Len(t, configs, 2)
+	assert.Equal(t, "config-1", configs[0].ID)
+	assert.Equal(t, "config-2", configs[1].ID)
+}
+
 func TestHTTPClient_GetSchedulerConfiguration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v3/scheduling/configurations/config-123", r.URL.Path)
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations/config-123", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
 		response := map[string]any{
@@ -84,7 +134,7 @@ func TestHTTPClient_GetSchedulerConfiguration(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	config, err := client.GetSchedulerConfiguration(ctx, "config-123")
+	config, err := client.GetSchedulerConfiguration(ctx, "grant-123", "config-123")
 
 	require.NoError(t, err)
 	assert.Equal(t, "config-123", config.ID)
@@ -95,7 +145,7 @@ func TestHTTPClient_GetSchedulerConfiguration(t *testing.T) {
 
 func TestHTTPClient_CreateSchedulerConfiguration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v3/scheduling/configurations", r.URL.Path)
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -125,7 +175,7 @@ func TestHTTPClient_CreateSchedulerConfiguration(t *testing.T) {
 	req := &domain.CreateSchedulerConfigurationRequest{
 		Name: "New Meeting Type",
 	}
-	config, err := client.CreateSchedulerConfiguration(ctx, req)
+	config, err := client.CreateSchedulerConfiguration(ctx, "grant-123", req)
 
 	require.NoError(t, err)
 	assert.Equal(t, "config-new", config.ID)
@@ -134,7 +184,7 @@ func TestHTTPClient_CreateSchedulerConfiguration(t *testing.T) {
 
 func TestHTTPClient_UpdateSchedulerConfiguration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v3/scheduling/configurations/config-456", r.URL.Path)
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations/config-456", r.URL.Path)
 		assert.Equal(t, "PUT", r.Method)
 
 		var body map[string]any
@@ -162,7 +212,7 @@ func TestHTTPClient_UpdateSchedulerConfiguration(t *testing.T) {
 	req := &domain.UpdateSchedulerConfigurationRequest{
 		Name: strPtr("Updated Meeting"),
 	}
-	config, err := client.UpdateSchedulerConfiguration(ctx, "config-456", req)
+	config, err := client.UpdateSchedulerConfiguration(ctx, "grant-123", "config-456", req)
 
 	require.NoError(t, err)
 	assert.Equal(t, "config-456", config.ID)
@@ -171,7 +221,7 @@ func TestHTTPClient_UpdateSchedulerConfiguration(t *testing.T) {
 
 func TestHTTPClient_DeleteSchedulerConfiguration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v3/scheduling/configurations/config-delete", r.URL.Path)
+		assert.Equal(t, "/v3/grants/grant-123/scheduling/configurations/config-delete", r.URL.Path)
 		assert.Equal(t, "DELETE", r.Method)
 
 		w.WriteHeader(http.StatusOK)
@@ -183,7 +233,7 @@ func TestHTTPClient_DeleteSchedulerConfiguration(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	err := client.DeleteSchedulerConfiguration(ctx, "config-delete")
+	err := client.DeleteSchedulerConfiguration(ctx, "grant-123", "config-delete")
 
 	require.NoError(t, err)
 }

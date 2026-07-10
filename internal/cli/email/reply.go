@@ -230,7 +230,13 @@ func promptReplyBody() string {
 // readReplyBody reads a multi-line body terminated by a line containing only
 // "." or by EOF, so a closed/piped stdin cannot loop forever.
 func readReplyBody(r io.Reader) string {
-	reader := bufio.NewReader(r)
+	return readBodyLines(bufio.NewReader(r))
+}
+
+// readBodyLines reads a multi-line body from reader, terminated by a line
+// containing only "." or by EOF, so a closed/piped stdin cannot loop forever.
+// It returns the collected lines joined by "\n".
+func readBodyLines(reader *bufio.Reader) string {
 	var lines []string
 	for {
 		line, err := reader.ReadString('\n')

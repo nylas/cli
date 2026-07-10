@@ -174,38 +174,35 @@ func (m *MockClient) DeleteWorkspace(ctx context.Context, workspaceID string) er
 
 func (m *MockClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
 	return []domain.ConnectorCredential{
-		{ID: "cred-1", Name: "OAuth Credential", CredentialType: "oauth"},
+		{ID: "cred-1", Name: "Connector Credential"},
 	}, nil
 }
 
-func (m *MockClient) GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
+func (m *MockClient) GetCredential(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error) {
 	return &domain.ConnectorCredential{
-		ID:             credentialID,
-		Name:           "OAuth Credential",
-		CredentialType: "oauth",
+		ID:   credentialID,
+		Name: "Connector Credential",
 	}, nil
 }
 
 func (m *MockClient) CreateCredential(ctx context.Context, connectorID string, req *domain.CreateCredentialRequest) (*domain.ConnectorCredential, error) {
 	return &domain.ConnectorCredential{
-		ID:             "new-cred",
-		Name:           req.Name,
-		CredentialType: req.CredentialType,
+		ID:   "new-cred",
+		Name: req.Name,
 	}, nil
 }
 
-func (m *MockClient) UpdateCredential(ctx context.Context, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
+func (m *MockClient) UpdateCredential(ctx context.Context, connectorID, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
 	name := "Updated Credential"
 	if req.Name != nil {
 		name = *req.Name
 	}
 	return &domain.ConnectorCredential{
-		ID:             credentialID,
-		Name:           name,
-		CredentialType: "oauth",
+		ID:   credentialID,
+		Name: name,
 	}, nil
 }
 
-func (m *MockClient) DeleteCredential(ctx context.Context, credentialID string) error {
+func (m *MockClient) DeleteCredential(ctx context.Context, connectorID, credentialID string) error {
 	return nil
 }

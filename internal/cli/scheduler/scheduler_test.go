@@ -3,7 +3,10 @@ package scheduler
 import (
 	"testing"
 
+	"github.com/nylas/cli/internal/cli/testutil"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewSchedulerCmd(t *testing.T) {
@@ -75,7 +78,7 @@ func TestConfigListCmd(t *testing.T) {
 	cmd := newConfigListCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "list", cmd.Use)
+		assert.Equal(t, "list [grant-id]", cmd.Use)
 	})
 
 	t.Run("has_ls_alias", func(t *testing.T) {
@@ -88,7 +91,7 @@ func TestConfigShowCmd(t *testing.T) {
 	cmd := newConfigShowCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "show <config-id>", cmd.Use)
+		assert.Equal(t, "show <config-id> [grant-id]", cmd.Use)
 	})
 
 }
@@ -97,7 +100,7 @@ func TestConfigCreateCmd(t *testing.T) {
 	cmd := newConfigCreateCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "create", cmd.Use)
+		assert.Equal(t, "create [grant-id]", cmd.Use)
 	})
 
 	t.Run("has_base_flags", func(t *testing.T) {
@@ -151,7 +154,7 @@ func TestConfigUpdateCmd(t *testing.T) {
 	cmd := newConfigUpdateCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "update <config-id>", cmd.Use)
+		assert.Equal(t, "update <config-id> [grant-id]", cmd.Use)
 	})
 
 	t.Run("has_base_flags", func(t *testing.T) {
@@ -198,7 +201,7 @@ func TestConfigDeleteCmd(t *testing.T) {
 	cmd := newConfigDeleteCmd()
 
 	t.Run("command_name", func(t *testing.T) {
-		assert.Equal(t, "delete <config-id>", cmd.Use)
+		assert.Equal(t, "delete <config-id> [grant-id]", cmd.Use)
 	})
 
 	t.Run("has_yes_flag", func(t *testing.T) {
@@ -306,6 +309,20 @@ func TestBookingShowCmd(t *testing.T) {
 
 }
 
+// Booking endpoints authenticate with a session token minted from the
+// configuration, so every booking command must require --configuration-id.
+func TestBookingCommands_RequireConfigurationID(t *testing.T) {
+	for _, newCmd := range []func() *cobra.Command{
+		newBookingShowCmd, newBookingConfirmCmd, newBookingRescheduleCmd, newBookingCancelCmd,
+	} {
+		cmd := newCmd()
+		flag := cmd.Flags().Lookup("configuration-id")
+		require.NotNil(t, flag, "%s must expose --configuration-id", cmd.Name())
+		annotations := flag.Annotations[cobra.BashCompOneRequiredFlag]
+		assert.Contains(t, annotations, "true", "%s must mark --configuration-id required", cmd.Name())
+	}
+}
+
 func TestBookingConfirmCmd(t *testing.T) {
 	cmd := newBookingConfirmCmd()
 
@@ -315,6 +332,35 @@ func TestBookingConfirmCmd(t *testing.T) {
 
 	t.Run("requires_exactly_one_arg", func(t *testing.T) {
 		assert.NotNil(t, cmd.Args)
+	})
+
+	// Salt is a server-issued token that cannot be looked up from the booking
+	// ID, so a missing --salt must fail locally with guidance on where to find
+	// it — never reach the API.
+	t.Run("missing_salt_returns_actionable_error", func(t *testing.T) {
+		_, _, err := testutil.ExecuteCommand(newBookingConfirmCmd(), "booking-1", "--configuration-id", "config-1")
+		require.Error(t, err)
+		// The custom message (not cobra's generic "required flag" error)
+		// confirms the salt guard fired locally before any API call.
+		assert.Contains(t, err.Error(), "salt is required to confirm a booking")
+	})
+
+	// --reason was dropped from the v3 confirm payload. It is kept as a
+	// deprecated no-op so existing `confirm <id> --reason ...` scripts degrade
+	// gracefully instead of hitting cobra's "unknown flag" error on upgrade.
+	t.Run("reason_flag_is_deprecated_not_removed", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("reason")
+		require.NotNil(t, flag, "--reason must remain as a compatibility shim")
+		assert.NotEmpty(t, flag.Deprecated, "--reason must be marked deprecated")
+	})
+
+	// Passing the deprecated --reason must not crash with "unknown flag"; it
+	// still falls through to the salt guard (reason alone can't confirm).
+	t.Run("deprecated_reason_flag_is_accepted", func(t *testing.T) {
+		_, _, err := testutil.ExecuteCommand(newBookingConfirmCmd(), "booking-1", "--configuration-id", "config-1", "--reason", "obsolete")
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown flag")
+		assert.Contains(t, err.Error(), "salt is required to confirm a booking")
 	})
 }
 
@@ -400,7 +446,7 @@ func TestBookingRescheduleCmd_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := newBookingRescheduleCmd()
-			cmd.SetArgs([]string{"test-booking-id", "--start-time", tt.startTime, "--end-time", tt.endTime})
+			cmd.SetArgs([]string{"test-booking-id", "--configuration-id", "config-1", "--start-time", tt.startTime, "--end-time", tt.endTime})
 
 			err := cmd.Execute()
 

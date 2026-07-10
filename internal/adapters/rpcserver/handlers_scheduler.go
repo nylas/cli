@@ -13,15 +13,22 @@ type schedulerConfigListResult struct {
 	Configurations []domain.SchedulerConfiguration `json:"configurations"`
 }
 
+type schedulerConfigListParams struct {
+	GrantID string `json:"grant_id,omitempty"`
+}
+
 type schedulerConfigGetParams struct {
+	GrantID  string `json:"grant_id,omitempty"`
 	ConfigID string `json:"config_id"`
 }
 
 type schedulerConfigCreateParams struct {
+	GrantID string `json:"grant_id,omitempty"`
 	domain.CreateSchedulerConfigurationRequest
 }
 
 type schedulerConfigUpdateParams struct {
+	GrantID  string `json:"grant_id,omitempty"`
 	ConfigID string `json:"config_id"`
 	domain.UpdateSchedulerConfigurationRequest
 }
@@ -34,23 +41,40 @@ type schedulerSessionGetParams struct {
 	SessionID string `json:"session_id"`
 }
 
+// Booking endpoints authenticate with a Scheduler session token minted from the
+// configuration, so every booking RPC requires configuration_id.
 type schedulerBookingGetParams struct {
-	BookingID string `json:"booking_id"`
+	ConfigurationID string `json:"configuration_id"`
+	BookingID       string `json:"booking_id"`
 }
 
 type schedulerBookingConfirmParams struct {
-	BookingID string `json:"booking_id"`
+	ConfigurationID string `json:"configuration_id"`
+	BookingID       string `json:"booking_id"`
 	domain.ConfirmBookingRequest
 }
 
 type schedulerBookingRescheduleParams struct {
-	BookingID string `json:"booking_id"`
+	ConfigurationID string `json:"configuration_id"`
+	BookingID       string `json:"booking_id"`
 	domain.RescheduleBookingRequest
 }
 
 type schedulerBookingCancelParams struct {
-	BookingID string `json:"booking_id"`
-	Reason    string `json:"reason,omitempty"`
+	ConfigurationID    string `json:"configuration_id"`
+	BookingID          string `json:"booking_id"`
+	CancellationReason string `json:"cancellation_reason,omitempty"`
+	// Reason is the legacy field name; accepted so older clients keep working.
+	Reason string `json:"reason,omitempty"`
+}
+
+// cancellationReason returns the cancellation reason, preferring the spec field
+// over the legacy "reason" alias.
+func (p schedulerBookingCancelParams) cancellationReason() string {
+	if p.CancellationReason != "" {
+		return p.CancellationReason
+	}
+	return p.Reason
 }
 
 type schedulerBookingCancelResult struct {
@@ -95,12 +119,16 @@ type schedulerGroupEventResult struct {
 
 func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defaultGrant string) {
 	d.Register("scheduler.config.list", func(ctx context.Context, params json.RawMessage) (any, error) {
-		var p struct{}
+		var p schedulerConfigListParams
 		if err := decodeParams(params, &p); err != nil {
 			return nil, err
 		}
+		grantID, err := resolveGrant(p.GrantID, defaultGrant)
+		if err != nil {
+			return nil, err
+		}
 
-		configurations, err := client.ListSchedulerConfigurations(ctx)
+		configurations, err := client.ListSchedulerConfigurations(ctx, grantID)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.config.list: %w", err)
 		}
@@ -115,8 +143,12 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.ConfigID == "" {
 			return nil, NewRPCError(InvalidParams, "config_id required", nil)
 		}
+		grantID, err := resolveGrant(p.GrantID, defaultGrant)
+		if err != nil {
+			return nil, err
+		}
 
-		config, err := client.GetSchedulerConfiguration(ctx, p.ConfigID)
+		config, err := client.GetSchedulerConfiguration(ctx, grantID, p.ConfigID)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.config.get: %w", err)
 		}
@@ -128,8 +160,12 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if err := decodeParams(params, &p); err != nil {
 			return nil, err
 		}
+		grantID, err := resolveGrant(p.GrantID, defaultGrant)
+		if err != nil {
+			return nil, err
+		}
 
-		config, err := client.CreateSchedulerConfiguration(ctx, &p.CreateSchedulerConfigurationRequest)
+		config, err := client.CreateSchedulerConfiguration(ctx, grantID, &p.CreateSchedulerConfigurationRequest)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.config.create: %w", err)
 		}
@@ -144,8 +180,12 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.ConfigID == "" {
 			return nil, NewRPCError(InvalidParams, "config_id required", nil)
 		}
+		grantID, err := resolveGrant(p.GrantID, defaultGrant)
+		if err != nil {
+			return nil, err
+		}
 
-		config, err := client.UpdateSchedulerConfiguration(ctx, p.ConfigID, &p.UpdateSchedulerConfigurationRequest)
+		config, err := client.UpdateSchedulerConfiguration(ctx, grantID, p.ConfigID, &p.UpdateSchedulerConfigurationRequest)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.config.update: %w", err)
 		}
@@ -160,8 +200,12 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.ConfigID == "" {
 			return nil, NewRPCError(InvalidParams, "config_id required", nil)
 		}
+		grantID, err := resolveGrant(p.GrantID, defaultGrant)
+		if err != nil {
+			return nil, err
+		}
 
-		if err := client.DeleteSchedulerConfiguration(ctx, p.ConfigID); err != nil {
+		if err := client.DeleteSchedulerConfiguration(ctx, grantID, p.ConfigID); err != nil {
 			return nil, fmt.Errorf("scheduler.config.delete: %w", err)
 		}
 		return deletedResult{Deleted: true}, nil
@@ -204,8 +248,11 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.BookingID == "" {
 			return nil, NewRPCError(InvalidParams, "booking_id required", nil)
 		}
+		if p.ConfigurationID == "" {
+			return nil, NewRPCError(InvalidParams, "configuration_id required", nil)
+		}
 
-		booking, err := client.GetBooking(ctx, p.BookingID)
+		booking, err := client.GetBooking(ctx, p.ConfigurationID, p.BookingID)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.booking.get: %w", err)
 		}
@@ -220,8 +267,15 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.BookingID == "" {
 			return nil, NewRPCError(InvalidParams, "booking_id required", nil)
 		}
+		if p.ConfigurationID == "" {
+			return nil, NewRPCError(InvalidParams, "configuration_id required", nil)
+		}
+		// The Nylas v3 spec requires salt + status on the confirm payload.
+		if err := p.Validate(); err != nil {
+			return nil, NewRPCError(InvalidParams, err.Error(), nil)
+		}
 
-		booking, err := client.ConfirmBooking(ctx, p.BookingID, &p.ConfirmBookingRequest)
+		booking, err := client.ConfirmBooking(ctx, p.ConfigurationID, p.BookingID, &p.ConfirmBookingRequest)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.booking.confirm: %w", err)
 		}
@@ -236,8 +290,18 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.BookingID == "" {
 			return nil, NewRPCError(InvalidParams, "booking_id required", nil)
 		}
+		if p.ConfigurationID == "" {
+			return nil, NewRPCError(InvalidParams, "configuration_id required", nil)
+		}
+		// Mirror the CLI's guard: reschedule requires valid new start/end times.
+		if p.StartTime == 0 || p.EndTime == 0 {
+			return nil, NewRPCError(InvalidParams, "start_time and end_time are required", nil)
+		}
+		if p.EndTime <= p.StartTime {
+			return nil, NewRPCError(InvalidParams, "end_time must be after start_time", nil)
+		}
 
-		booking, err := client.RescheduleBooking(ctx, p.BookingID, &p.RescheduleBookingRequest)
+		booking, err := client.RescheduleBooking(ctx, p.ConfigurationID, p.BookingID, &p.RescheduleBookingRequest)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler.booking.reschedule: %w", err)
 		}
@@ -252,8 +316,11 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.BookingID == "" {
 			return nil, NewRPCError(InvalidParams, "booking_id required", nil)
 		}
+		if p.ConfigurationID == "" {
+			return nil, NewRPCError(InvalidParams, "configuration_id required", nil)
+		}
 
-		if err := client.CancelBooking(ctx, p.BookingID, p.Reason); err != nil {
+		if err := client.CancelBooking(ctx, p.ConfigurationID, p.BookingID, p.cancellationReason()); err != nil {
 			return nil, fmt.Errorf("scheduler.booking.cancel: %w", err)
 		}
 		return schedulerBookingCancelResult{Cancelled: true}, nil

@@ -46,7 +46,7 @@ func TestGroupEvents_Integration(t *testing.T) {
 	defer cancel()
 
 	acquireRateLimit(t)
-	configs, err := client.ListSchedulerConfigurations(ctx)
+	configs, err := client.ListSchedulerConfigurations(ctx, testGrantID)
 	if err != nil {
 		if isUnavailableErr(err) {
 			t.Skipf("scheduler not available for this account: %v", err)

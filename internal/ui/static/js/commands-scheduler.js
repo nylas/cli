@@ -58,9 +58,9 @@ const schedulerCommandSections = [
         title: 'Bookings',
         commands: {
             'booking-list': { title: 'List', cmd: 'scheduler bookings list', desc: 'List scheduler bookings' },
-            'booking-show': { title: 'Show', cmd: 'scheduler bookings show', desc: 'Show booking details', param: { name: 'booking-id', placeholder: 'Enter booking ID...' } },
-            'booking-confirm': { title: 'Confirm', cmd: 'scheduler bookings confirm', desc: 'Confirm a booking', param: { name: 'booking-id', placeholder: 'Enter booking ID...' } },
-            'booking-cancel': { title: 'Cancel', cmd: 'scheduler bookings cancel', desc: 'Cancel a booking', param: { name: 'booking-id', placeholder: 'Enter booking ID...' } }
+            'booking-show': { title: 'Show', cmd: 'scheduler bookings show', desc: 'Show booking details', flags: [{ name: 'configuration-id', label: 'Configuration ID', type: 'text', placeholder: 'Enter configuration ID...', required: true }], param: { name: 'booking-id', placeholder: 'Enter booking ID...' } },
+            'booking-confirm': { title: 'Confirm', cmd: 'scheduler bookings confirm', desc: 'Confirm a booking', flags: [{ name: 'configuration-id', label: 'Configuration ID', type: 'text', placeholder: 'Enter configuration ID...', required: true }, { name: 'salt', label: 'Salt (from confirmation link)', type: 'text', placeholder: 'Enter salt...', required: true }], param: { name: 'booking-id', placeholder: 'Enter booking ID...' } },
+            'booking-cancel': { title: 'Cancel', cmd: 'scheduler bookings cancel', desc: 'Cancel a booking', flags: [{ name: 'configuration-id', label: 'Configuration ID', type: 'text', placeholder: 'Enter configuration ID...', required: true }], param: { name: 'booking-id', placeholder: 'Enter booking ID...' } }
         }
     }
 ];

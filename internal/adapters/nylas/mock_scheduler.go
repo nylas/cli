@@ -8,14 +8,14 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-func (m *MockClient) ListSchedulerConfigurations(ctx context.Context) ([]domain.SchedulerConfiguration, error) {
+func (m *MockClient) ListSchedulerConfigurations(ctx context.Context, grantID string) ([]domain.SchedulerConfiguration, error) {
 	return []domain.SchedulerConfiguration{
 		{ID: "config-1", Name: "30 Minute Meeting", Slug: "30min"},
 		{ID: "config-2", Name: "1 Hour Meeting", Slug: "1hour"},
 	}, nil
 }
 
-func (m *MockClient) GetSchedulerConfiguration(ctx context.Context, configID string) (*domain.SchedulerConfiguration, error) {
+func (m *MockClient) GetSchedulerConfiguration(ctx context.Context, grantID, configID string) (*domain.SchedulerConfiguration, error) {
 	return &domain.SchedulerConfiguration{
 		ID:   configID,
 		Name: "30 Minute Meeting",
@@ -23,7 +23,7 @@ func (m *MockClient) GetSchedulerConfiguration(ctx context.Context, configID str
 	}, nil
 }
 
-func (m *MockClient) CreateSchedulerConfiguration(ctx context.Context, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
+func (m *MockClient) CreateSchedulerConfiguration(ctx context.Context, grantID string, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
 	return &domain.SchedulerConfiguration{
 		ID:   "new-config",
 		Name: req.Name,
@@ -31,7 +31,7 @@ func (m *MockClient) CreateSchedulerConfiguration(ctx context.Context, req *doma
 	}, nil
 }
 
-func (m *MockClient) UpdateSchedulerConfiguration(ctx context.Context, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
+func (m *MockClient) UpdateSchedulerConfiguration(ctx context.Context, grantID, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
 	name := "Updated Configuration"
 	if req.Name != nil {
 		name = *req.Name
@@ -42,7 +42,7 @@ func (m *MockClient) UpdateSchedulerConfiguration(ctx context.Context, configID 
 	}, nil
 }
 
-func (m *MockClient) DeleteSchedulerConfiguration(ctx context.Context, configID string) error {
+func (m *MockClient) DeleteSchedulerConfiguration(ctx context.Context, grantID, configID string) error {
 	return nil
 }
 
@@ -62,7 +62,7 @@ func (m *MockClient) GetSchedulerSession(ctx context.Context, sessionID string) 
 	}, nil
 }
 
-func (m *MockClient) GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error) {
+func (m *MockClient) GetBooking(ctx context.Context, configurationID, bookingID string) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Title:     "Meeting with John",
@@ -70,14 +70,14 @@ func (m *MockClient) GetBooking(ctx context.Context, bookingID string) (*domain.
 	}, nil
 }
 
-func (m *MockClient) ConfirmBooking(ctx context.Context, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error) {
+func (m *MockClient) ConfirmBooking(ctx context.Context, configurationID, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Status:    "confirmed",
 	}, nil
 }
 
-func (m *MockClient) RescheduleBooking(ctx context.Context, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error) {
+func (m *MockClient) RescheduleBooking(ctx context.Context, configurationID, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Status:    "confirmed",
@@ -86,7 +86,7 @@ func (m *MockClient) RescheduleBooking(ctx context.Context, bookingID string, re
 	}, nil
 }
 
-func (m *MockClient) CancelBooking(ctx context.Context, bookingID string, reason string) error {
+func (m *MockClient) CancelBooking(ctx context.Context, configurationID, bookingID string, reason string) error {
 	return nil
 }
 

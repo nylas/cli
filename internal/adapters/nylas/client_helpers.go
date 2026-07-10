@@ -94,11 +94,17 @@ func (c *HTTPClient) doGet(ctx context.Context, url string, result any) error {
 //	    return nil, err
 //	}
 func (c *HTTPClient) doGetWithNotFound(ctx context.Context, url string, result any, notFoundErr error) error {
+	return c.doGetWithNotFoundAuth(ctx, url, "", result, notFoundErr)
+}
+
+// doGetWithNotFoundAuth is doGetWithNotFound with an explicit bearer token
+// (e.g. a Scheduler session token); an empty token falls back to the API key.
+func (c *HTTPClient) doGetWithNotFoundAuth(ctx context.Context, url, token string, result any, notFoundErr error) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
-	c.setAuthHeader(req)
+	c.setAuth(req, token)
 
 	resp, err := c.doRequest(ctx, req)
 	if err != nil {
