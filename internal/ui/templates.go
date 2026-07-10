@@ -179,7 +179,6 @@ func GetDefaultCommands() Commands {
 			{Key: "config-show", Title: "Show Config", Cmd: "scheduler configurations show", Desc: "Show configuration details", ParamName: "config-id", Placeholder: "Enter configuration ID..."},
 			{Key: "session-create", Title: "Create Session", Cmd: "scheduler sessions create", Desc: "Create a scheduling session"},
 			{Key: "session-show", Title: "Show Session", Cmd: "scheduler sessions show", Desc: "Show session details", ParamName: "session-id", Placeholder: "Enter session ID..."},
-			{Key: "booking-list", Title: "List Bookings", Cmd: "scheduler bookings list", Desc: "List scheduler bookings"},
 			{Key: "booking-show", Title: "Show Booking", Cmd: "scheduler bookings show", Desc: "Show booking details", ParamName: "booking-id", Placeholder: "Enter booking ID..."},
 			{Key: "page-list", Title: "List Pages", Cmd: "scheduler pages list", Desc: "List scheduler pages"},
 			{Key: "page-create", Title: "Create Page", Cmd: "scheduler pages create", Desc: "Create a scheduler page"},

@@ -285,3 +285,35 @@ func TestUpdateSchedulerConfigurationRequest_Creation(t *testing.T) {
 		t.Errorf("AvailabilityRules.DurationMinutes = %d, want 45", req.Availability.DurationMinutes)
 	}
 }
+
+// =============================================================================
+// CreateSchedulerSessionRequest Validation Tests
+// =============================================================================
+
+func TestCreateSchedulerSessionRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     *CreateSchedulerSessionRequest
+		wantErr bool
+	}{
+		// Per the v3 spec the configuration is identified by configuration_id
+		// OR slug, and time_to_live is capped at 30 minutes.
+		{name: "configuration_id only", req: &CreateSchedulerSessionRequest{ConfigurationID: "config-1"}, wantErr: false},
+		{name: "slug only", req: &CreateSchedulerSessionRequest{Slug: "my-page"}, wantErr: false},
+		{name: "ttl at max", req: &CreateSchedulerSessionRequest{ConfigurationID: "config-1", TimeToLive: 30}, wantErr: false},
+		{name: "ttl unset defaults server-side", req: &CreateSchedulerSessionRequest{ConfigurationID: "config-1", TimeToLive: 0}, wantErr: false},
+		{name: "nil request", req: nil, wantErr: true},
+		{name: "missing configuration_id and slug", req: &CreateSchedulerSessionRequest{TimeToLive: 10}, wantErr: true},
+		{name: "ttl above max", req: &CreateSchedulerSessionRequest{ConfigurationID: "config-1", TimeToLive: 31}, wantErr: true},
+		{name: "negative ttl", req: &CreateSchedulerSessionRequest{ConfigurationID: "config-1", TimeToLive: -1}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

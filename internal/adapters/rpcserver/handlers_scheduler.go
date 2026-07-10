@@ -3,6 +3,7 @@ package rpcserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/nylas/cli/internal/domain"
@@ -35,6 +36,9 @@ type schedulerConfigUpdateParams struct {
 
 type schedulerSessionCreateParams struct {
 	domain.CreateSchedulerSessionRequest
+	// TTL is the legacy field name for time_to_live; accepted so older
+	// clients keep working.
+	TTL int `json:"ttl,omitempty"`
 }
 
 type schedulerSessionGetParams struct {
@@ -52,6 +56,9 @@ type schedulerBookingConfirmParams struct {
 	ConfigurationID string `json:"configuration_id"`
 	BookingID       string `json:"booking_id"`
 	domain.ConfirmBookingRequest
+	// Reason is the legacy field name for cancellation_reason; accepted so
+	// older clients keep working (mirrors scheduler.booking.cancel).
+	Reason string `json:"reason,omitempty"`
 }
 
 type schedulerBookingRescheduleParams struct {
@@ -79,6 +86,15 @@ func (p schedulerBookingCancelParams) cancellationReason() string {
 
 type schedulerBookingCancelResult struct {
 	Cancelled bool `json:"cancelled"`
+}
+
+// schedulerBookingRescheduleResult is a booking plus an optional warning set
+// when the reschedule was applied but the record could not be read back
+// (domain.ErrBookingReadBackFailed) — a partial success must stay
+// distinguishable from a verified one.
+type schedulerBookingRescheduleResult struct {
+	domain.Booking
+	Warning string `json:"warning,omitempty"`
 }
 
 type schedulerGroupEventListParams struct {
@@ -216,6 +232,13 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if err := decodeParams(params, &p); err != nil {
 			return nil, err
 		}
+		if p.TimeToLive == 0 {
+			p.TimeToLive = p.TTL
+		}
+		// The v3 spec requires configuration_id or slug, and caps time_to_live.
+		if err := p.Validate(); err != nil {
+			return nil, NewRPCError(InvalidParams, err.Error(), nil)
+		}
 
 		session, err := client.CreateSchedulerSession(ctx, &p.CreateSchedulerSessionRequest)
 		if err != nil {
@@ -270,6 +293,11 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 		if p.ConfigurationID == "" {
 			return nil, NewRPCError(InvalidParams, "configuration_id required", nil)
 		}
+		// Only a decline carries a reason; a stray legacy "reason" on a
+		// confirmation was ignored before the alias existed and must stay so.
+		if p.CancellationReason == "" && p.Status == "cancelled" {
+			p.CancellationReason = p.Reason
+		}
 		// The Nylas v3 spec requires salt + status on the confirm payload.
 		if err := p.Validate(); err != nil {
 			return nil, NewRPCError(InvalidParams, err.Error(), nil)
@@ -303,9 +331,15 @@ func RegisterSchedulerHandlers(d *Dispatcher, client ports.SchedulerClient, defa
 
 		booking, err := client.RescheduleBooking(ctx, p.ConfigurationID, p.BookingID, &p.RescheduleBookingRequest)
 		if err != nil {
+			// Typed partial success: the reschedule was applied but the record
+			// could not be read back — return the port's partial booking with
+			// an explicit warning instead of failing an applied change.
+			if errors.Is(err, domain.ErrBookingReadBackFailed) && booking != nil {
+				return schedulerBookingRescheduleResult{Booking: *booking, Warning: err.Error()}, nil
+			}
 			return nil, fmt.Errorf("scheduler.booking.reschedule: %w", err)
 		}
-		return booking, nil
+		return schedulerBookingRescheduleResult{Booking: *booking}, nil
 	})
 
 	d.Register("scheduler.booking.cancel", func(ctx context.Context, params json.RawMessage) (any, error) {

@@ -147,3 +147,25 @@ func TestCredentialCommands_Structure(t *testing.T) {
 		assert.Contains(t, f.Annotations[cobra.BashCompOneRequiredFlag], "true", "--%s must be required", name)
 	}
 }
+
+func TestCredentialCreateRejectsUnsupportedType(t *testing.T) {
+	// The v3 API accepts connector/serviceaccount/adminconsent, but this
+	// command only builds connector-shaped credential_data — any other --type
+	// must fail fast with a clear message instead of an opaque provider 400.
+	// "" covers --type "" — cobra's required-flag check is satisfied by an
+	// explicitly set empty value, so the guard must reject it too.
+	for _, unsupported := range []string{"oauth", "serviceaccount", "adminconsent", "bogus", ""} {
+		t.Run(unsupported, func(t *testing.T) {
+			cmd := newCredentialCreateCmd()
+			require.NoError(t, cmd.Flags().Set("name", "test"))
+			require.NoError(t, cmd.Flags().Set("type", unsupported))
+			require.NoError(t, cmd.Flags().Set("client-id", "cid"))
+			require.NoError(t, cmd.Flags().Set("client-secret", "secret"))
+
+			err := cmd.RunE(cmd, nil)
+			require.Error(t, err)
+			// Validation must fire before any client/API work.
+			assert.Contains(t, err.Error(), "invalid type")
+		})
+	}
+}

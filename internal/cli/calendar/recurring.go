@@ -33,13 +33,23 @@ API reference: https://developer.nylas.com/docs/v3/calendar/recurring-events/`,
 }
 
 // recurringGrantArgs resolves the grant-resolution args for recurring commands.
-// An explicit positional grant wins; otherwise the --grant flag is used as a
-// fallback.
-func recurringGrantArgs(positional []string, grantFlag string) []string {
-	if len(positional) == 0 && grantFlag != "" {
-		return []string{grantFlag}
+// The positional [grant-id] and --grant flag are both accepted; two different
+// grants at once is ambiguous and rejected rather than silently picking one
+// (the wrong pick would mutate another account's events).
+func recurringGrantArgs(positional []string, grantFlag string) ([]string, error) {
+	if len(positional) > 0 && grantFlag != "" && positional[0] != grantFlag {
+		// Compared as raw strings: an email alias and its grant ID for the
+		// same account read as a conflict too — erring loud beats guessing
+		// and mutating another account's events.
+		return nil, common.NewUserError(
+			fmt.Sprintf("conflicting grants: positional %q and --grant %q", positional[0], grantFlag),
+			"Pass the grant either as the positional argument or via --grant, not both (if they identify the same account, drop one)",
+		)
 	}
-	return positional
+	if len(positional) == 0 && grantFlag != "" {
+		return []string{grantFlag}, nil
+	}
+	return positional, nil
 }
 
 // newRecurringListCmd creates the list recurring event instances command.
@@ -68,7 +78,10 @@ The master event ID is the ID of the parent recurring event.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			masterEventID := args[0]
-			grantArgs := recurringGrantArgs(args[1:], grantID)
+			grantArgs, gerr := recurringGrantArgs(args[1:], grantID)
+			if gerr != nil {
+				return gerr
+			}
 
 			if calendarID == "" {
 				return common.NewUserError("calendar ID is required", "Use --calendar to specify the calendar")
@@ -151,7 +164,10 @@ This creates an exception for that particular instance.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			instanceID := args[0]
-			grantArgs := recurringGrantArgs(args[1:], grantID)
+			grantArgs, gerr := recurringGrantArgs(args[1:], grantID)
+			if gerr != nil {
+				return gerr
+			}
 
 			if calendarID == "" {
 				return common.NewUserError("calendar ID is required", "Use --calendar to specify the calendar")
@@ -247,7 +263,10 @@ This adds an exception to the recurrence rule.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			instanceID := args[0]
-			grantArgs := recurringGrantArgs(args[1:], grantID)
+			grantArgs, gerr := recurringGrantArgs(args[1:], grantID)
+			if gerr != nil {
+				return gerr
+			}
 
 			if calendarID == "" {
 				return common.NewUserError("calendar ID is required", "Use --calendar to specify the calendar")

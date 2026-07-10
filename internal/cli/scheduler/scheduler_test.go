@@ -1,9 +1,13 @@
 package scheduler
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/nylas/cli/internal/cli/testutil"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -473,5 +477,67 @@ func TestBookingCancelCmd(t *testing.T) {
 	t.Run("has_yes_flag", func(t *testing.T) {
 		flag := cmd.Flags().Lookup("yes")
 		assert.NotNil(t, flag)
+	})
+}
+
+func TestResolveRescheduleResult(t *testing.T) {
+	applied := &domain.Booking{BookingID: "booking-1"}
+
+	t.Run("verified success passes through without warning", func(t *testing.T) {
+		booking, warning, err := resolveRescheduleResult(applied, nil)
+		require.NoError(t, err)
+		assert.Equal(t, applied, booking)
+		assert.Empty(t, warning)
+	})
+
+	t.Run("read-back failure becomes success with warning", func(t *testing.T) {
+		// The reschedule was applied; failing the command would make scripts
+		// retry or alert on a change that took effect.
+		sentinelErr := fmt.Errorf("%w: transient failure", domain.ErrBookingReadBackFailed)
+		booking, warning, err := resolveRescheduleResult(applied, sentinelErr)
+		require.NoError(t, err)
+		assert.Equal(t, applied, booking)
+		assert.Contains(t, warning, "unverified")
+	})
+
+	t.Run("other errors stay errors", func(t *testing.T) {
+		booking, warning, err := resolveRescheduleResult(nil, errors.New("PATCH failed"))
+		require.Error(t, err)
+		assert.Nil(t, booking)
+		assert.Empty(t, warning)
+	})
+
+	t.Run("sentinel without booking stays an error", func(t *testing.T) {
+		// Defensive: an implementer violating the port contract must not cause
+		// a nil-booking success.
+		sentinelErr := fmt.Errorf("%w: transient failure", domain.ErrBookingReadBackFailed)
+		booking, warning, err := resolveRescheduleResult(nil, sentinelErr)
+		require.Error(t, err)
+		assert.Nil(t, booking)
+		assert.Empty(t, warning)
+	})
+}
+
+func TestRescheduleJSONPayload(t *testing.T) {
+	booking := &domain.Booking{BookingID: "booking-1"}
+
+	t.Run("verified success omits warning key", func(t *testing.T) {
+		data, err := json.Marshal(rescheduleJSONPayload(booking, ""))
+		require.NoError(t, err)
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(data, &raw))
+		_, ok := raw["warning"]
+		assert.False(t, ok, "warning key must be absent on verified success")
+	})
+
+	t.Run("partial success carries warning key", func(t *testing.T) {
+		// --json consumers must be able to tell an unverified reschedule from a
+		// verified one without parsing stderr.
+		data, err := json.Marshal(rescheduleJSONPayload(booking, "record unverified"))
+		require.NoError(t, err)
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(data, &raw))
+		assert.Contains(t, raw, "warning")
+		assert.Contains(t, raw, "booking_id")
 	})
 }

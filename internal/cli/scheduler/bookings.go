@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -198,13 +199,16 @@ You must provide the new start and end times as Unix timestamps.`,
 					EndTime:   endTime,
 				}
 
-				booking, err := client.RescheduleBooking(ctx, configurationID, bookingID, req)
+				booking, warning, err := resolveRescheduleResult(client.RescheduleBooking(ctx, configurationID, bookingID, req))
 				if err != nil {
 					return struct{}{}, common.WrapUpdateError("booking", err)
 				}
+				if warning != "" {
+					common.PrintWarningStderr("%s", warning)
+				}
 
 				if common.IsJSON(cmd) {
-					return struct{}{}, common.PrintJSON(booking)
+					return struct{}{}, common.PrintJSON(rescheduleJSONPayload(booking, warning))
 				}
 
 				_, _ = common.Green.Printf("✓ Rescheduled booking: %s\n", booking.BookingID)
@@ -229,6 +233,33 @@ You must provide the new start and end times as Unix timestamps.`,
 	_ = cmd.Flags().MarkDeprecated("reason", "reschedule does not accept a reason; the flag is ignored")
 
 	return cmd
+}
+
+// rescheduleJSONPayload mirrors the RPC result shape so --json consumers can
+// distinguish a verified reschedule from an applied-but-unverified one: the
+// booking gains a "warning" field on the partial-success path.
+func rescheduleJSONPayload(booking *domain.Booking, warning string) any {
+	if warning == "" {
+		return booking
+	}
+	return struct {
+		domain.Booking
+		Warning string `json:"warning"`
+	}{Booking: *booking, Warning: warning}
+}
+
+// resolveRescheduleResult maps the port's typed partial success onto the CLI
+// outcome: on domain.ErrBookingReadBackFailed the reschedule was applied, so
+// the partial booking is reported as success with a warning instead of failing
+// an operation that took effect.
+func resolveRescheduleResult(booking *domain.Booking, err error) (*domain.Booking, string, error) {
+	if err == nil {
+		return booking, "", nil
+	}
+	if errors.Is(err, domain.ErrBookingReadBackFailed) && booking != nil {
+		return booking, fmt.Sprintf("%v; the booking's current server-side record is unverified", err), nil
+	}
+	return nil, "", err
 }
 
 func newBookingCancelCmd() *cobra.Command {

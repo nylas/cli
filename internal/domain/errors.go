@@ -80,6 +80,11 @@ var (
 	ErrBookingNotFound       = errors.New("booking not found")
 	ErrSessionNotFound       = errors.New("session not found")
 	ErrConfigurationNotFound = errors.New("configuration not found")
+	// ErrBookingReadBackFailed is a typed partial success: the reschedule PATCH
+	// was applied, but reading the booking back failed, so the server-side
+	// record could not be verified. Callers should report the change as applied
+	// while surfacing the verification failure.
+	ErrBookingReadBackFailed = errors.New("booking was rescheduled but reading it back failed")
 )
 
 // APIError carries structured details from an HTTP error response while still

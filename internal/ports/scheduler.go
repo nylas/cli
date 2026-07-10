@@ -54,7 +54,10 @@ type SchedulerClient interface {
 	// ConfirmBooking confirms a booking.
 	ConfirmBooking(ctx context.Context, configurationID, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error)
 
-	// RescheduleBooking reschedules an existing booking.
+	// RescheduleBooking reschedules an existing booking. If the returned error
+	// wraps domain.ErrBookingReadBackFailed the reschedule was applied but the
+	// record could not be verified; the returned booking is then a non-nil
+	// partial record carrying the applied times.
 	RescheduleBooking(ctx context.Context, configurationID, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error)
 
 	// CancelBooking cancels a booking.

@@ -909,7 +909,6 @@ nylas scheduler pages update <page-id>                # Update page
 nylas scheduler pages delete <page-id>                # Delete page
 
 # Bookings (--configuration-id required: booking endpoints use a Scheduler session token, not the API key)
-nylas scheduler bookings list                         # List bookings
 nylas scheduler bookings show <booking-id> --configuration-id <config-id>          # Show booking details
 nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>  # Confirm booking
 nylas scheduler bookings reschedule <booking-id> --configuration-id <config-id>    # Reschedule booking

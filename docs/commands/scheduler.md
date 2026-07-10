@@ -125,8 +125,9 @@ When both `--file` and flags are provided, flags take precedence over file value
 Create temporary booking sessions for configurations:
 
 ```bash
-# Create a session for a configuration
-nylas scheduler sessions create <config-id>
+# Create a session for a configuration (TTL is in minutes, max 30)
+nylas scheduler sessions create --config-id <config-id>
+nylas scheduler sessions create --config-id <config-id> --ttl 10
 
 # Show session details
 nylas scheduler sessions show <session-id>
@@ -142,10 +143,6 @@ nylas scheduler sessions show <session-id>
 Manage scheduled appointments:
 
 ```bash
-# List all bookings
-nylas scheduler bookings list
-nylas scheduler bookings list --json
-
 # Booking commands are authorized by a Scheduler session token that the CLI
 # mints from the booking's configuration, so --configuration-id is required on
 # every booking command (the API key is not accepted on booking endpoints).
@@ -162,6 +159,10 @@ nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --s
 nylas scheduler bookings reschedule <booking-id> \\
   --configuration-id <config-id> \\
   --start-time 1710930600 --end-time 1710934200
+# If the reschedule is applied but the booking cannot be read back afterwards,
+# the command still succeeds and prints a warning on stderr (in --json mode the
+# output additionally carries a "warning" field); re-run `bookings show` to
+# verify the booking's current server-side record.
 
 # Cancel a booking
 nylas scheduler bookings cancel <booking-id> --configuration-id <config-id>
@@ -224,8 +225,8 @@ nylas scheduler pages create \\
 # 3. Share the booking URL with prospects
 # URL format: https://schedule.nylas.com/product-demo
 
-# 4. View bookings
-nylas scheduler bookings list
+# 4. Show a booking (booking IDs arrive via Scheduler webhooks or confirmation links)
+nylas scheduler bookings show <booking-id> --configuration-id <config-id>
 
 # 5. Manage bookings (--configuration-id is required on booking commands)
 nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>

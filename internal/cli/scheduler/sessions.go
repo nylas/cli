@@ -64,7 +64,7 @@ func newSessionCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&configID, "config-id", "", "Configuration ID (required)")
-	cmd.Flags().IntVar(&ttl, "ttl", 30, "Time to live in minutes")
+	cmd.Flags().IntVar(&ttl, "ttl", 30, "Time to live in minutes, max 30")
 
 	_ = cmd.MarkFlagRequired("config-id")
 

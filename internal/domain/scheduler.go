@@ -147,6 +147,23 @@ type CreateSchedulerSessionRequest struct {
 	AdditionalFields map[string]any `json:"additional_fields,omitempty"`
 }
 
+// Validate checks the fields the Nylas v3 spec requires on session creation:
+// the configuration is identified by configuration_id OR slug, and
+// time_to_live is capped at 30 minutes (0 means unset; the API defaults to 5).
+// It is the single source of truth shared by the adapter and RPC entrypoints.
+func (r *CreateSchedulerSessionRequest) Validate() error {
+	if r == nil {
+		return errors.New("session request is required")
+	}
+	if r.ConfigurationID == "" && r.Slug == "" {
+		return errors.New("configuration_id or slug is required")
+	}
+	if r.TimeToLive < 0 || r.TimeToLive > 30 {
+		return fmt.Errorf("time_to_live must be between 0 and 30 minutes (0 uses the server default), got %d", r.TimeToLive)
+	}
+	return nil
+}
+
 // Booking represents a scheduled booking
 type Booking struct {
 	BookingID        string               `json:"booking_id"`

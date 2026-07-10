@@ -186,6 +186,17 @@ uses them to broker authentication through that provider app (for example, to
 authenticate enterprise customers who own their provider application, or to run
 your own app alongside the Nylas Shared GCP App).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// The v3 API also accepts serviceaccount/adminconsent, but those
+			// flows need credential_data this command doesn't collect — reject
+			// unsupported types here instead of sending a payload the API 400s.
+			// Direct comparison, not ValidateOneOf: that helper treats an
+			// explicitly empty value as OK, which would slip past this guard.
+			if credentialType != "connector" {
+				return common.NewUserError(
+					fmt.Sprintf("invalid type: %q", credentialType),
+					"This command only supports --type connector; serviceaccount/adminconsent need credential data it doesn't collect",
+				)
+			}
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				connectorProvider, rerr := resolveConnectorID(ctx, client, connectorID)
 				if rerr != nil {

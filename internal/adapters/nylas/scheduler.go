@@ -2,6 +2,7 @@ package nylas
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -130,6 +131,10 @@ func (c *HTTPClient) DeleteSchedulerConfiguration(ctx context.Context, grantID, 
 
 // CreateSchedulerSession creates a new scheduler session.
 func (c *HTTPClient) CreateSchedulerSession(ctx context.Context, req *domain.CreateSchedulerSessionRequest) (*domain.SchedulerSession, error) {
+	// The v3 spec requires configuration_id or slug, and caps time_to_live.
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
 	queryURL := fmt.Sprintf("%s/v3/scheduling/sessions", c.baseURL)
 
 	resp, err := c.doJSONRequest(ctx, "POST", queryURL, req)
@@ -274,9 +279,9 @@ func (c *HTTPClient) RescheduleBooking(ctx context.Context, configurationID, boo
 	queryURL := fmt.Sprintf("%s/v3/scheduling/bookings/%s", c.baseURL, url.PathEscape(bookingID))
 
 	// The PATCH response carries only a request_id (no booking body). Read the
-	// updated booking back for the full record; if that read races ahead of
-	// propagation (404) or otherwise fails, fall back to reflecting the requested
-	// times so a successful reschedule never surfaces as an error or blank record.
+	// updated booking back for the full record; only a 404 (read racing ahead of
+	// propagation) may fall back to the requested times — any other failure is
+	// surfaced so a possibly-diverged server state is never reported as success.
 	resp, err := c.doJSONRequestWithToken(ctx, "PATCH", queryURL, token, req)
 	if err != nil {
 		return nil, err
@@ -284,14 +289,21 @@ func (c *HTTPClient) RescheduleBooking(ctx context.Context, configurationID, boo
 	_ = resp.Body.Close()
 
 	start, end := time.Unix(req.StartTime, 0), time.Unix(req.EndTime, 0)
-	if booking, err := c.getBookingWithToken(ctx, token, bookingID); err == nil {
-		// The Nylas booking data model carries no start/end times (they exist only
-		// on the update request), so reflect the just-applied times onto the
-		// read-back record instead of leaving them zero.
-		booking.StartTime, booking.EndTime = start, end
-		return booking, nil
+	booking, err := c.getBookingWithToken(ctx, token, bookingID)
+	if err != nil {
+		// Single construction site for the partial-success record: callers on
+		// the ErrBookingReadBackFailed path reuse this booking as-is.
+		fallback := &domain.Booking{BookingID: bookingID, StartTime: start, EndTime: end}
+		if errors.Is(err, domain.ErrBookingNotFound) {
+			return fallback, nil
+		}
+		return fallback, fmt.Errorf("%w: %w", domain.ErrBookingReadBackFailed, err)
 	}
-	return &domain.Booking{BookingID: bookingID, StartTime: start, EndTime: end}, nil
+	// The Nylas booking data model carries no start/end times (they exist only
+	// on the update request), so reflect the just-applied times onto the
+	// read-back record instead of leaving them zero.
+	booking.StartTime, booking.EndTime = start, end
+	return booking, nil
 }
 
 // CancelBooking cancels a booking.

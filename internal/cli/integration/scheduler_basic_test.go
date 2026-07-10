@@ -152,6 +152,11 @@ func TestCLI_SchedulerBookingsShowHelp(t *testing.T) {
 	if !strings.Contains(stdout, "--json") {
 		t.Errorf("Expected '--json' flag in help, got: %s", stdout)
 	}
+	// Booking endpoints authenticate with a session token minted from the
+	// configuration, so the flag must be surfaced in help.
+	if !strings.Contains(stdout, "--configuration-id") {
+		t.Errorf("Expected '--configuration-id' flag in help, got: %s", stdout)
+	}
 
 	t.Logf("scheduler bookings show --help output:\n%s", stdout)
 }
@@ -171,6 +176,13 @@ func TestCLI_SchedulerBookingsConfirmHelp(t *testing.T) {
 	if !strings.Contains(stdout, "booking-id") && !strings.Contains(stdout, "<booking-id>") {
 		t.Errorf("Expected booking-id in help, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, "--configuration-id") {
+		t.Errorf("Expected '--configuration-id' flag in help, got: %s", stdout)
+	}
+	// The salt from the booking reference is required by the v3 confirm spec.
+	if !strings.Contains(stdout, "--salt") {
+		t.Errorf("Expected '--salt' flag in help, got: %s", stdout)
+	}
 
 	t.Logf("scheduler bookings confirm --help output:\n%s", stdout)
 }
@@ -189,6 +201,9 @@ func TestCLI_SchedulerBookingsRescheduleHelp(t *testing.T) {
 	// Should show usage with booking-id
 	if !strings.Contains(stdout, "booking-id") && !strings.Contains(stdout, "<booking-id>") {
 		t.Errorf("Expected booking-id in help, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "--configuration-id") {
+		t.Errorf("Expected '--configuration-id' flag in help, got: %s", stdout)
 	}
 
 	t.Logf("scheduler bookings reschedule --help output:\n%s", stdout)
@@ -217,6 +232,9 @@ func TestCLI_SchedulerBookingsCancelHelp(t *testing.T) {
 	if !strings.Contains(stdout, "--reason") {
 		t.Errorf("Expected '--reason' flag in help, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, "--configuration-id") {
+		t.Errorf("Expected '--configuration-id' flag in help, got: %s", stdout)
+	}
 
 	t.Logf("scheduler bookings cancel --help output:\n%s", stdout)
 }
@@ -237,10 +255,10 @@ func TestCLI_SchedulerBookingsLifecycle(t *testing.T) {
 		"Manual testing:\n" +
 		"  (1) Create a scheduler configuration via Dashboard\n" +
 		"  (2) Create a booking via the public booking page or sessions API\n" +
-		"  (3) Get booking ID from 'scheduler bookings list'\n" +
-		"  (4) Test show command: nylas scheduler bookings show <booking-id>\n" +
-		"  (5) Test show JSON: nylas scheduler bookings show <booking-id> --json\n" +
-		"  (6) Test confirm (if pending): nylas scheduler bookings confirm <booking-id>\n" +
-		"  (7) Test reschedule: nylas scheduler bookings reschedule <booking-id>\n" +
-		"  (8) Test cancel: nylas scheduler bookings cancel <booking-id> --yes --reason 'Testing'\n")
+		"  (3) Get the booking ID from a Scheduler webhook or the confirmation link\n" +
+		"  (4) Test show command: nylas scheduler bookings show <booking-id> --configuration-id <config-id>\n" +
+		"  (5) Test show JSON: nylas scheduler bookings show <booking-id> --configuration-id <config-id> --json\n" +
+		"  (6) Test confirm (if pending): nylas scheduler bookings confirm <booking-id> --configuration-id <config-id> --salt <salt>\n" +
+		"  (7) Test reschedule: nylas scheduler bookings reschedule <booking-id> --configuration-id <config-id>\n" +
+		"  (8) Test cancel: nylas scheduler bookings cancel <booking-id> --configuration-id <config-id> --yes --reason 'Testing'\n")
 }

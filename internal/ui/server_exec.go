@@ -165,7 +165,6 @@ var allowedCommands = map[string]bool{
 	"scheduler sessions create": true,
 	"scheduler sessions delete": true,
 	// Scheduler bookings subcommands
-	"scheduler bookings list":    true,
 	"scheduler bookings show":    true,
 	"scheduler bookings create":  true,
 	"scheduler bookings confirm": true,

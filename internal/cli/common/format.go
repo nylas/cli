@@ -150,6 +150,15 @@ func PrintWarning(format string, args ...any) {
 	_, _ = Yellow.Printf("⚠ "+format+"\n", args...)
 }
 
+// PrintWarningStderr prints a warning message to stderr, keeping stdout clean
+// for structured output (e.g. --json).
+func PrintWarningStderr(format string, args ...any) {
+	if IsQuiet() {
+		return
+	}
+	_, _ = Yellow.Fprintf(os.Stderr, "⚠ "+format+"\n", args...)
+}
+
 // PrintInfo prints an info message.
 func PrintInfo(format string, args ...any) {
 	if IsQuiet() {
