@@ -294,7 +294,7 @@ func TestMockClient_AdminOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, credentials)
 
-	credential, err := mock.GetCredential(ctx, "cred-456")
+	credential, err := mock.GetCredential(ctx, "conn-123", "cred-456")
 	require.NoError(t, err)
 	assert.Equal(t, "cred-456", credential.ID)
 
@@ -305,11 +305,11 @@ func TestMockClient_AdminOperations(t *testing.T) {
 
 	credName := "Updated Cred"
 	updateCredReq := &domain.UpdateCredentialRequest{Name: &credName}
-	updatedCred, err := mock.UpdateCredential(ctx, "cred-789", updateCredReq)
+	updatedCred, err := mock.UpdateCredential(ctx, "conn-123", "cred-789", updateCredReq)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Cred", updatedCred.Name)
 
-	err = mock.DeleteCredential(ctx, "cred-delete")
+	err = mock.DeleteCredential(ctx, "conn-123", "cred-delete")
 	require.NoError(t, err)
 
 	// Grant tests

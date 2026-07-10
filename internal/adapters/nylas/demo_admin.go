@@ -10,14 +10,14 @@ import (
 
 // Scheduler Demo Implementations
 
-func (d *DemoClient) ListSchedulerConfigurations(ctx context.Context) ([]domain.SchedulerConfiguration, error) {
+func (d *DemoClient) ListSchedulerConfigurations(ctx context.Context, grantID string) ([]domain.SchedulerConfiguration, error) {
 	return []domain.SchedulerConfiguration{
 		{ID: "config-demo-1", Name: "30 Minute Meeting", Slug: "30min-demo"},
 		{ID: "config-demo-2", Name: "1 Hour Meeting", Slug: "1hour-demo"},
 	}, nil
 }
 
-func (d *DemoClient) GetSchedulerConfiguration(ctx context.Context, configID string) (*domain.SchedulerConfiguration, error) {
+func (d *DemoClient) GetSchedulerConfiguration(ctx context.Context, grantID, configID string) (*domain.SchedulerConfiguration, error) {
 	return &domain.SchedulerConfiguration{
 		ID:   configID,
 		Name: "30 Minute Meeting",
@@ -25,7 +25,7 @@ func (d *DemoClient) GetSchedulerConfiguration(ctx context.Context, configID str
 	}, nil
 }
 
-func (d *DemoClient) CreateSchedulerConfiguration(ctx context.Context, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
+func (d *DemoClient) CreateSchedulerConfiguration(ctx context.Context, grantID string, req *domain.CreateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
 	return &domain.SchedulerConfiguration{
 		ID:   "config-demo-new",
 		Name: req.Name,
@@ -33,7 +33,7 @@ func (d *DemoClient) CreateSchedulerConfiguration(ctx context.Context, req *doma
 	}, nil
 }
 
-func (d *DemoClient) UpdateSchedulerConfiguration(ctx context.Context, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
+func (d *DemoClient) UpdateSchedulerConfiguration(ctx context.Context, grantID, configID string, req *domain.UpdateSchedulerConfigurationRequest) (*domain.SchedulerConfiguration, error) {
 	name := "Updated Configuration"
 	if req.Name != nil {
 		name = *req.Name
@@ -44,7 +44,7 @@ func (d *DemoClient) UpdateSchedulerConfiguration(ctx context.Context, configID 
 	}, nil
 }
 
-func (d *DemoClient) DeleteSchedulerConfiguration(ctx context.Context, configID string) error {
+func (d *DemoClient) DeleteSchedulerConfiguration(ctx context.Context, grantID, configID string) error {
 	return nil
 }
 
@@ -64,7 +64,7 @@ func (d *DemoClient) GetSchedulerSession(ctx context.Context, sessionID string) 
 	}, nil
 }
 
-func (d *DemoClient) GetBooking(ctx context.Context, bookingID string) (*domain.Booking, error) {
+func (d *DemoClient) GetBooking(ctx context.Context, configurationID, bookingID string) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Title:     "Demo Meeting",
@@ -72,14 +72,14 @@ func (d *DemoClient) GetBooking(ctx context.Context, bookingID string) (*domain.
 	}, nil
 }
 
-func (d *DemoClient) ConfirmBooking(ctx context.Context, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error) {
+func (d *DemoClient) ConfirmBooking(ctx context.Context, configurationID, bookingID string, req *domain.ConfirmBookingRequest) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Status:    req.Status,
 	}, nil
 }
 
-func (d *DemoClient) RescheduleBooking(ctx context.Context, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error) {
+func (d *DemoClient) RescheduleBooking(ctx context.Context, configurationID, bookingID string, req *domain.RescheduleBookingRequest) (*domain.Booking, error) {
 	return &domain.Booking{
 		BookingID: bookingID,
 		Status:    "confirmed",
@@ -88,7 +88,7 @@ func (d *DemoClient) RescheduleBooking(ctx context.Context, bookingID string, re
 	}, nil
 }
 
-func (d *DemoClient) CancelBooking(ctx context.Context, bookingID string, reason string) error {
+func (d *DemoClient) CancelBooking(ctx context.Context, configurationID, bookingID string, reason string) error {
 	return nil
 }
 
@@ -293,38 +293,35 @@ func (d *DemoClient) DeleteWorkspace(ctx context.Context, workspaceID string) er
 
 func (d *DemoClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
 	return []domain.ConnectorCredential{
-		{ID: "cred-demo-1", Name: "OAuth Demo Credential", CredentialType: "oauth"},
+		{ID: "cred-demo-1", Name: "Connector Demo Credential"},
 	}, nil
 }
 
-func (d *DemoClient) GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
+func (d *DemoClient) GetCredential(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error) {
 	return &domain.ConnectorCredential{
-		ID:             credentialID,
-		Name:           "OAuth Demo Credential",
-		CredentialType: "oauth",
+		ID:   credentialID,
+		Name: "Connector Demo Credential",
 	}, nil
 }
 
 func (d *DemoClient) CreateCredential(ctx context.Context, connectorID string, req *domain.CreateCredentialRequest) (*domain.ConnectorCredential, error) {
 	return &domain.ConnectorCredential{
-		ID:             "cred-demo-new",
-		Name:           req.Name,
-		CredentialType: req.CredentialType,
+		ID:   "cred-demo-new",
+		Name: req.Name,
 	}, nil
 }
 
-func (d *DemoClient) UpdateCredential(ctx context.Context, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
+func (d *DemoClient) UpdateCredential(ctx context.Context, connectorID, credentialID string, req *domain.UpdateCredentialRequest) (*domain.ConnectorCredential, error) {
 	name := "Updated Credential"
 	if req.Name != nil {
 		name = *req.Name
 	}
 	return &domain.ConnectorCredential{
-		ID:             credentialID,
-		Name:           name,
-		CredentialType: "oauth",
+		ID:   credentialID,
+		Name: name,
 	}, nil
 }
 
-func (d *DemoClient) DeleteCredential(ctx context.Context, credentialID string) error {
+func (d *DemoClient) DeleteCredential(ctx context.Context, connectorID, credentialID string) error {
 	return nil
 }

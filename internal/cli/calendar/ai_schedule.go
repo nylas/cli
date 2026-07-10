@@ -22,6 +22,7 @@ func newAIScheduleCmd() *cobra.Command {
 		privacyMode  bool
 		autoConfirm  bool
 		userTimezone string
+		grantFlag    string
 	)
 
 	cmd := &cobra.Command{
@@ -89,7 +90,10 @@ Examples:
 			// Create AI router
 			router := ai.NewRouter(cfg.AI)
 
-			_, err = common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			// Resolve the grant from --grant (or the stored default). The
+			// positional args are the natural-language query, not a grant ID,
+			// so they must not be passed to grant resolution.
+			_, err = common.WithClient(scheduleGrantArgs(grantFlag), func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
 				// Create AI scheduler
 				scheduler := ai.NewAIScheduler(router, client, selectedProvider)
 
@@ -123,21 +127,15 @@ Examples:
 					fmt.Println("\n🔒 Privacy: All processing done locally, no data sent to cloud.")
 				}
 
-				// Handle confirmation
+				// Handle confirmation. With --yes the first option is created
+				// without prompting; otherwise the user picks.
+				choice := ""
 				if !autoConfirm && len(response.Options) > 0 {
 					fmt.Print("\nCreate meeting with option #1? [y/N/2/3]: ")
-					var choice string
-					_, _ = fmt.Scanln(&choice) // User input, validation handled below
-
-					choice = strings.ToLower(strings.TrimSpace(choice))
-					if choice == "y" || choice == "yes" {
-						// Create with first option
-						return struct{}{}, createMeetingFromOption(cmd, response.Options[0], grantID, client)
-					} else if choice == "2" && len(response.Options) > 1 {
-						return struct{}{}, createMeetingFromOption(cmd, response.Options[1], grantID, client)
-					} else if choice == "3" && len(response.Options) > 2 {
-						return struct{}{}, createMeetingFromOption(cmd, response.Options[2], grantID, client)
-					}
+					_, _ = fmt.Scanln(&choice) // User input, validated by selectScheduleOption
+				}
+				if idx := selectScheduleOption(autoConfirm, len(response.Options), choice); idx >= 0 {
+					return struct{}{}, createMeetingFromOption(cmd, response.Options[idx], grantID, client)
 				}
 
 				return struct{}{}, nil
@@ -151,8 +149,45 @@ Examples:
 	cmd.Flags().BoolVar(&privacyMode, "privacy", false, "Use local LLM (Ollama) for privacy")
 	cmd.Flags().BoolVar(&autoConfirm, "yes", false, "Automatically create the first suggested option")
 	cmd.Flags().StringVar(&userTimezone, "timezone", "", "Your timezone (auto-detected if not specified)")
+	cmd.Flags().StringVarP(&grantFlag, "grant", "g", "", "Grant ID (uses default if not specified)")
 
 	return cmd
+}
+
+// scheduleGrantArgs builds the grant-resolution args for the AI scheduler.
+// The positional args hold the natural-language query, so the grant comes only
+// from --grant; an empty result makes common.WithClient fall back to the
+// stored default grant.
+func scheduleGrantArgs(grantFlag string) []string {
+	if grantFlag != "" {
+		return []string{grantFlag}
+	}
+	return nil
+}
+
+// selectScheduleOption returns the index of the option to create, or -1 for
+// none. With autoConfirm (--yes) the first option is always chosen; otherwise
+// the user's choice ("y"/"yes"/"2"/"3") selects an option when it exists.
+func selectScheduleOption(autoConfirm bool, optionCount int, choice string) int {
+	if optionCount == 0 {
+		return -1
+	}
+	if autoConfirm {
+		return 0
+	}
+	switch strings.ToLower(strings.TrimSpace(choice)) {
+	case "y", "yes":
+		return 0
+	case "2":
+		if optionCount > 1 {
+			return 1
+		}
+	case "3":
+		if optionCount > 2 {
+			return 2
+		}
+	}
+	return -1
 }
 
 // displayScheduleOptions displays the AI-suggested meeting options.

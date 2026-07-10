@@ -15,29 +15,29 @@ func TestMockClient_SchedulerOperations(t *testing.T) {
 	mock := nylas.NewMockClient()
 
 	// Test ListSchedulerConfigurations
-	configs, err := mock.ListSchedulerConfigurations(ctx)
+	configs, err := mock.ListSchedulerConfigurations(ctx, "grant-123")
 	require.NoError(t, err)
 	assert.NotEmpty(t, configs)
 
 	// Test GetSchedulerConfiguration
-	config, err := mock.GetSchedulerConfiguration(ctx, "config-123")
+	config, err := mock.GetSchedulerConfiguration(ctx, "grant-123", "config-123")
 	require.NoError(t, err)
 	assert.Equal(t, "config-123", config.ID)
 
 	// Test CreateSchedulerConfiguration
 	createReq := &domain.CreateSchedulerConfigurationRequest{Name: "Test Config"}
-	created, err := mock.CreateSchedulerConfiguration(ctx, createReq)
+	created, err := mock.CreateSchedulerConfiguration(ctx, "grant-123", createReq)
 	require.NoError(t, err)
 	assert.NotEmpty(t, created.ID)
 
 	// Test UpdateSchedulerConfiguration
 	updateReq := &domain.UpdateSchedulerConfigurationRequest{Name: strPtr("Updated")}
-	updated, err := mock.UpdateSchedulerConfiguration(ctx, "config-456", updateReq)
+	updated, err := mock.UpdateSchedulerConfiguration(ctx, "grant-123", "config-456", updateReq)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated", updated.Name)
 
 	// Test DeleteSchedulerConfiguration
-	err = mock.DeleteSchedulerConfiguration(ctx, "config-789")
+	err = mock.DeleteSchedulerConfiguration(ctx, "grant-123", "config-789")
 	require.NoError(t, err)
 
 	// Test CreateSchedulerSession
@@ -52,13 +52,13 @@ func TestMockClient_SchedulerOperations(t *testing.T) {
 	assert.Equal(t, "session-123", getSession.SessionID)
 
 	// Test GetBooking
-	booking, err := mock.GetBooking(ctx, "booking-123")
+	booking, err := mock.GetBooking(ctx, "config-1", "booking-123")
 	require.NoError(t, err)
 	assert.Equal(t, "booking-123", booking.BookingID)
 
 	// Test ConfirmBooking
 	confirmReq := &domain.ConfirmBookingRequest{}
-	confirmed, err := mock.ConfirmBooking(ctx, "booking-123", confirmReq)
+	confirmed, err := mock.ConfirmBooking(ctx, "config-1", "booking-123", confirmReq)
 	require.NoError(t, err)
 	assert.Equal(t, "confirmed", confirmed.Status)
 
@@ -67,12 +67,12 @@ func TestMockClient_SchedulerOperations(t *testing.T) {
 		StartTime: 1704067200,
 		EndTime:   1704070800,
 	}
-	rescheduled, err := mock.RescheduleBooking(ctx, "booking-456", rescheduleReq)
+	rescheduled, err := mock.RescheduleBooking(ctx, "config-1", "booking-456", rescheduleReq)
 	require.NoError(t, err)
 	assert.NotEmpty(t, rescheduled.BookingID)
 
 	// Test CancelBooking
-	err = mock.CancelBooking(ctx, "booking-789", "User cancelled")
+	err = mock.CancelBooking(ctx, "config-1", "booking-789", "User cancelled")
 	require.NoError(t, err)
 
 }
@@ -84,29 +84,29 @@ func TestDemoClient_SchedulerOperations(t *testing.T) {
 	demo := nylas.NewDemoClient()
 
 	// Test ListSchedulerConfigurations
-	configs, err := demo.ListSchedulerConfigurations(ctx)
+	configs, err := demo.ListSchedulerConfigurations(ctx, "grant-123")
 	require.NoError(t, err)
 	assert.NotEmpty(t, configs)
 
 	// Test GetSchedulerConfiguration
-	config, err := demo.GetSchedulerConfiguration(ctx, "demo-config")
+	config, err := demo.GetSchedulerConfiguration(ctx, "grant-123", "demo-config")
 	require.NoError(t, err)
 	assert.NotEmpty(t, config.ID)
 
 	// Test CreateSchedulerConfiguration
 	createReq := &domain.CreateSchedulerConfigurationRequest{Name: "Demo Config"}
-	created, err := demo.CreateSchedulerConfiguration(ctx, createReq)
+	created, err := demo.CreateSchedulerConfiguration(ctx, "grant-123", createReq)
 	require.NoError(t, err)
 	assert.Equal(t, "Demo Config", created.Name)
 
 	// Test UpdateSchedulerConfiguration
 	updateReq := &domain.UpdateSchedulerConfigurationRequest{Name: strPtr("Demo Updated")}
-	updated, err := demo.UpdateSchedulerConfiguration(ctx, "demo-config", updateReq)
+	updated, err := demo.UpdateSchedulerConfiguration(ctx, "grant-123", "demo-config", updateReq)
 	require.NoError(t, err)
 	assert.Equal(t, "Demo Updated", updated.Name)
 
 	// Test DeleteSchedulerConfiguration
-	err = demo.DeleteSchedulerConfiguration(ctx, "demo-config")
+	err = demo.DeleteSchedulerConfiguration(ctx, "grant-123", "demo-config")
 	require.NoError(t, err)
 
 	// Test sessions, bookings, and pages

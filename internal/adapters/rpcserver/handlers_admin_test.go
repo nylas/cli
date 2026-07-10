@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nylas/cli/internal/domain"
@@ -16,8 +17,9 @@ type fakeAdminClient struct {
 	listApplications      func(context.Context) ([]domain.Application, error)
 	createCallbackURI     func(context.Context, *domain.CreateCallbackURIRequest) (*domain.CallbackURI, error)
 	updateConnector       func(context.Context, string, *domain.UpdateConnectorRequest) (*domain.Connector, error)
+	listConnectors        func(context.Context) ([]domain.Connector, error)
 	listCredentials       func(context.Context, string) ([]domain.ConnectorCredential, error)
-	getCredential         func(context.Context, string) (*domain.ConnectorCredential, error)
+	getCredential         func(context.Context, string, string) (*domain.ConnectorCredential, error)
 	getWorkspace          func(context.Context, string) (*domain.Workspace, error)
 	assignWorkspaceGrants func(context.Context, string, *domain.WorkspaceAssignRequest) (*domain.WorkspaceAssignResult, error)
 	listAllGrants         func(context.Context, *domain.GrantsQueryParams) ([]domain.Grant, error)
@@ -45,6 +47,13 @@ func (f *fakeAdminClient) UpdateConnector(ctx context.Context, connectorID strin
 	return f.updateConnector(ctx, connectorID, req)
 }
 
+func (f *fakeAdminClient) ListConnectors(ctx context.Context) ([]domain.Connector, error) {
+	if f.listConnectors == nil {
+		return nil, errors.New("unexpected ListConnectors")
+	}
+	return f.listConnectors(ctx)
+}
+
 func (f *fakeAdminClient) ListCredentials(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
 	if f.listCredentials == nil {
 		return nil, errors.New("unexpected ListCredentials")
@@ -52,11 +61,11 @@ func (f *fakeAdminClient) ListCredentials(ctx context.Context, connectorID strin
 	return f.listCredentials(ctx, connectorID)
 }
 
-func (f *fakeAdminClient) GetCredential(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
+func (f *fakeAdminClient) GetCredential(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error) {
 	if f.getCredential == nil {
 		return nil, errors.New("unexpected GetCredential")
 	}
-	return f.getCredential(ctx, credentialID)
+	return f.getCredential(ctx, connectorID, credentialID)
 }
 
 func (f *fakeAdminClient) GetWorkspace(ctx context.Context, workspaceID string) (*domain.Workspace, error) {
@@ -277,15 +286,18 @@ func TestRegisterAdminHandlers(t *testing.T) {
 			},
 		},
 		{
-			name:   "admin.credential.list returns credentials",
+			name:   "admin.credential.list maps legacy connector_id to provider",
 			method: "admin.credential.list",
 			params: `{"connector_id":"connector-1"}`,
 			client: &fakeAdminClient{
+				listConnectors: func(ctx context.Context) ([]domain.Connector, error) {
+					return []domain.Connector{{ID: "connector-1", Provider: "google"}}, nil
+				},
 				listCredentials: func(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
-					if connectorID != "connector-1" {
-						t.Fatalf("connectorID = %q, want connector-1", connectorID)
+					if connectorID != "google" {
+						t.Fatalf("connectorID = %q, want provider google", connectorID)
 					}
-					return []domain.ConnectorCredential{{ID: "credential-1", Name: "OAuth", CredentialType: "oauth"}}, nil
+					return []domain.ConnectorCredential{{ID: "credential-1", Name: "Google Credential"}}, nil
 				},
 			},
 			assert: func(t *testing.T, resp rpcTestResponse) {
@@ -301,9 +313,61 @@ func TestRegisterAdminHandlers(t *testing.T) {
 			},
 		},
 		{
-			name:   "admin.credential.list missing connector_id returns invalid params",
+			name:   "admin.credential.list missing connector_id with no unique connector returns invalid params",
 			method: "admin.credential.list",
 			params: `{}`,
+			client: &fakeAdminClient{
+				listConnectors: func(ctx context.Context) ([]domain.Connector, error) {
+					// Zero (or multiple) connectors → cannot auto-detect.
+					return nil, nil
+				},
+			},
+			assert: func(t *testing.T, resp rpcTestResponse) {
+				requireRPCErrorCode(t, resp, InvalidParams)
+			},
+		},
+		{
+			name:   "admin.credential.list auto-detects the sole connector when connector_id omitted",
+			method: "admin.credential.list",
+			params: `{}`,
+			client: &fakeAdminClient{
+				listConnectors: func(ctx context.Context) ([]domain.Connector, error) {
+					return []domain.Connector{{ID: "connector-1", Provider: "google"}}, nil
+				},
+				listCredentials: func(ctx context.Context, connectorID string) ([]domain.ConnectorCredential, error) {
+					if connectorID != "google" {
+						t.Fatalf("connectorID = %q, want auto-detected provider google", connectorID)
+					}
+					return []domain.ConnectorCredential{{ID: "credential-1"}}, nil
+				},
+			},
+			assert: func(t *testing.T, resp rpcTestResponse) {
+				requireNoRPCError(t, resp)
+			},
+		},
+		{
+			name:   "admin.credential.list omitted connector_id with multiple connectors names them",
+			method: "admin.credential.list",
+			params: `{}`,
+			client: &fakeAdminClient{
+				listConnectors: func(ctx context.Context) ([]domain.Connector, error) {
+					return []domain.Connector{
+						{ID: "c1", Provider: "google"},
+						{ID: "c2", Provider: "microsoft"},
+					}, nil
+				},
+			},
+			assert: func(t *testing.T, resp rpcTestResponse) {
+				requireRPCErrorCode(t, resp, InvalidParams)
+				if !strings.Contains(resp.Error.Message, "google") || !strings.Contains(resp.Error.Message, "microsoft") {
+					t.Fatalf("error %q should name the candidate providers google and microsoft", resp.Error.Message)
+				}
+			},
+		},
+		{
+			name:   "admin.credential.get missing credential_id returns invalid params",
+			method: "admin.credential.get",
+			params: `{"connector_id":"connector-1"}`,
 			client: &fakeAdminClient{},
 			assert: func(t *testing.T, resp rpcTestResponse) {
 				requireRPCErrorCode(t, resp, InvalidParams)
@@ -312,9 +376,9 @@ func TestRegisterAdminHandlers(t *testing.T) {
 		{
 			name:   "admin.credential.get client error maps to internal error",
 			method: "admin.credential.get",
-			params: `{"credential_id":"credential-1"}`,
+			params: `{"connector_id":"google","credential_id":"credential-1"}`,
 			client: &fakeAdminClient{
-				getCredential: func(ctx context.Context, credentialID string) (*domain.ConnectorCredential, error) {
+				getCredential: func(ctx context.Context, connectorID, credentialID string) (*domain.ConnectorCredential, error) {
 					return nil, clientErr
 				},
 			},

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,15 +32,19 @@ API reference: https://developer.nylas.com/docs/reference/api/bookings/`,
 }
 
 func newBookingShowCmd() *cobra.Command {
+	var configurationID string
 	cmd := &cobra.Command{
 		Use:   "show <booking-id>",
 		Short: "Show booking details",
-		Long:  "Show detailed information about a specific booking.",
-		Args:  cobra.ExactArgs(1),
+		Long: `Show detailed information about a specific booking.
+
+Booking endpoints are authorized by a Scheduler session token minted from the
+configuration, so --configuration-id is required.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			bookingID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				booking, err := client.GetBooking(ctx, bookingID)
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				booking, err := client.GetBooking(ctx, configurationID, bookingID)
 				if err != nil {
 					return struct{}{}, common.WrapGetError("booking", err)
 				}
@@ -83,28 +88,55 @@ func newBookingShowCmd() *cobra.Command {
 		},
 	}
 
+	addConfigurationIDFlag(cmd, &configurationID)
+
 	return cmd
+}
+
+// addConfigurationIDFlag registers the required --configuration-id flag shared by
+// all booking commands. Booking endpoints authenticate with a Scheduler session
+// token minted from the configuration, so the configuration ID is mandatory.
+func addConfigurationIDFlag(cmd *cobra.Command, target *string) {
+	cmd.Flags().StringVar(target, "configuration-id", "", "Scheduler configuration ID that owns the booking (required)")
+	_ = cmd.MarkFlagRequired("configuration-id")
 }
 
 func newBookingConfirmCmd() *cobra.Command {
 	var (
-		reason string
+		configurationID string
+		salt            string
+		reason          string // deprecated: the v3 confirm payload has no reason field
 	)
 
 	cmd := &cobra.Command{
 		Use:   "confirm <booking-id>",
 		Short: "Confirm a booking",
-		Long:  "Confirm a pending booking.",
-		Args:  cobra.ExactArgs(1),
+		Long: `Confirm a pending booking.
+
+Confirming a booking requires the --salt from that booking's reference. Nylas
+does not expose the salt through any read API, so it cannot be looked up from
+the booking ID alone; you must take it from the booking reference, which appears
+in the organizer confirmation link, the cancel/reschedule page URL, or a
+Scheduler webhook payload.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			bookingID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			if salt == "" {
+				return common.NewUserErrorWithSuggestions(
+					"the --salt is required to confirm a booking",
+					"Find it in the booking reference (it is not retrievable from the booking ID).",
+					"The reference appears in the organizer confirmation link and the cancel/reschedule page URL.",
+					"You can also read it from a Scheduler webhook payload.",
+					"Then pass it: nylas scheduler bookings confirm <booking-id> --salt <salt>",
+				)
+			}
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.ConfirmBookingRequest{
+					Salt:   salt,
 					Status: "confirmed",
-					Reason: reason,
 				}
 
-				booking, err := client.ConfirmBooking(ctx, bookingID, req)
+				booking, err := client.ConfirmBooking(ctx, configurationID, bookingID, req)
 				if err != nil {
 					return struct{}{}, common.WrapUpdateError("booking", err)
 				}
@@ -122,17 +154,24 @@ func newBookingConfirmCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&reason, "reason", "", "Reason for confirmation")
+	addConfigurationIDFlag(cmd, &configurationID)
+	cmd.Flags().StringVar(&salt, "salt", "", "Salt from the booking reference, required (found in the confirmation link, cancel/reschedule URL, or a Scheduler webhook)")
+	// --reason was removed from the v3 confirm payload; keep it as a deprecated
+	// no-op so existing scripts degrade gracefully instead of hitting cobra's
+	// "unknown flag" error on upgrade.
+	cmd.Flags().StringVar(&reason, "reason", "", "")
+	_ = cmd.Flags().MarkDeprecated("reason", "confirm no longer takes a reason; the flag is ignored")
 
 	return cmd
 }
 
 func newBookingRescheduleCmd() *cobra.Command {
 	var (
-		startTime int64
-		endTime   int64
-		timezone  string
-		reason    string
+		configurationID string
+		startTime       int64
+		endTime         int64
+		timezone        string
+		reason          string
 	)
 
 	cmd := &cobra.Command{
@@ -141,11 +180,8 @@ func newBookingRescheduleCmd() *cobra.Command {
 		Long: `Reschedule an existing booking to a new time.
 
 You must provide the new start and end times as Unix timestamps.`,
-		Example: `  # Reschedule to a new time
-  nylas scheduler bookings reschedule abc123 --start-time 1704067200 --end-time 1704070800
-
-  # Reschedule with timezone
-  nylas scheduler bookings reschedule abc123 --start-time 1704067200 --end-time 1704070800 --timezone "America/New_York"`,
+		Example: `  # Reschedule to a new time (Unix timestamps)
+  nylas scheduler bookings reschedule abc123 --configuration-id cfg123 --start-time 1704067200 --end-time 1704070800`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if startTime == 0 || endTime == 0 {
@@ -157,21 +193,22 @@ You must provide the new start and end times as Unix timestamps.`,
 			}
 
 			bookingID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				req := &domain.RescheduleBookingRequest{
 					StartTime: startTime,
 					EndTime:   endTime,
-					Timezone:  timezone,
-					Reason:    reason,
 				}
 
-				booking, err := client.RescheduleBooking(ctx, bookingID, req)
+				booking, warning, err := resolveRescheduleResult(client.RescheduleBooking(ctx, configurationID, bookingID, req))
 				if err != nil {
 					return struct{}{}, common.WrapUpdateError("booking", err)
 				}
+				if warning != "" {
+					common.PrintWarningStderr("%s", warning)
+				}
 
 				if common.IsJSON(cmd) {
-					return struct{}{}, common.PrintJSON(booking)
+					return struct{}{}, common.PrintJSON(rescheduleJSONPayload(booking, warning))
 				}
 
 				_, _ = common.Green.Printf("✓ Rescheduled booking: %s\n", booking.BookingID)
@@ -184,18 +221,52 @@ You must provide the new start and end times as Unix timestamps.`,
 		},
 	}
 
+	addConfigurationIDFlag(cmd, &configurationID)
 	cmd.Flags().Int64Var(&startTime, "start-time", 0, "New start time (Unix timestamp, required)")
 	cmd.Flags().Int64Var(&endTime, "end-time", 0, "New end time (Unix timestamp, required)")
-	cmd.Flags().StringVar(&timezone, "timezone", "", "Timezone for the booking (e.g., America/New_York)")
-	cmd.Flags().StringVar(&reason, "reason", "", "Reason for rescheduling")
+	// The v3 reschedule payload (booking_update) has only start/end times.
+	// --timezone and --reason are kept as deprecated no-ops so existing scripts
+	// don't break on upgrade.
+	cmd.Flags().StringVar(&timezone, "timezone", "", "")
+	cmd.Flags().StringVar(&reason, "reason", "", "")
+	_ = cmd.Flags().MarkDeprecated("timezone", "reschedule does not accept a timezone; the flag is ignored")
+	_ = cmd.Flags().MarkDeprecated("reason", "reschedule does not accept a reason; the flag is ignored")
 
 	return cmd
 }
 
+// rescheduleJSONPayload mirrors the RPC result shape so --json consumers can
+// distinguish a verified reschedule from an applied-but-unverified one: the
+// booking gains a "warning" field on the partial-success path.
+func rescheduleJSONPayload(booking *domain.Booking, warning string) any {
+	if warning == "" {
+		return booking
+	}
+	return struct {
+		domain.Booking
+		Warning string `json:"warning"`
+	}{Booking: *booking, Warning: warning}
+}
+
+// resolveRescheduleResult maps the port's typed partial success onto the CLI
+// outcome: on domain.ErrBookingReadBackFailed the reschedule was applied, so
+// the partial booking is reported as success with a warning instead of failing
+// an operation that took effect.
+func resolveRescheduleResult(booking *domain.Booking, err error) (*domain.Booking, string, error) {
+	if err == nil {
+		return booking, "", nil
+	}
+	if errors.Is(err, domain.ErrBookingReadBackFailed) && booking != nil {
+		return booking, fmt.Sprintf("%v; the booking's current server-side record is unverified", err), nil
+	}
+	return nil, "", err
+}
+
 func newBookingCancelCmd() *cobra.Command {
 	var (
-		reason string
-		yes    bool
+		configurationID string
+		reason          string
+		yes             bool
 	)
 
 	cmd := &cobra.Command{
@@ -212,8 +283,8 @@ func newBookingCancelCmd() *cobra.Command {
 			}
 
 			bookingID := args[0]
-			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {
-				if err := client.CancelBooking(ctx, bookingID, reason); err != nil {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				if err := client.CancelBooking(ctx, configurationID, bookingID, reason); err != nil {
 					return struct{}{}, common.WrapCancelError("booking", err)
 				}
 
@@ -225,6 +296,7 @@ func newBookingCancelCmd() *cobra.Command {
 		},
 	}
 
+	addConfigurationIDFlag(cmd, &configurationID)
 	cmd.Flags().StringVar(&reason, "reason", "", "Cancellation reason")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
 

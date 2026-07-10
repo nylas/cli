@@ -172,7 +172,8 @@ Standard JSON-RPC 2.0 codes:
 
 Conventions:
 - `grant_id` is **optional** on per-grant methods — it falls back to the server's default grant.
-  App-level methods (admin, scheduler configs, etc.) take **no** grant.
+  App-level methods (admin, etc.) take **no** grant. Scheduler configs are **per-grant** (the
+  Nylas v3 configuration endpoints are grant-scoped).
 - Required ids return `-32602` when missing.
 - Create/update params **embed the corresponding `domain.*Request` struct** at the top level — i.e.
   the request fields sit alongside `grant_id`/ids (see `internal/domain` for exact fields).
@@ -277,9 +278,15 @@ Conventions:
 (all per-grant; `notetaker_id` required where applicable).
 
 ### Scheduler
-- Configs: `scheduler.config.list` / `.get` / `.create` / `.update` / `.delete`
-- Sessions: `scheduler.session.create` / `.get`
-- Bookings: `scheduler.booking.get` / `.confirm` / `.reschedule` / `.cancel` (`{ cancelled }`)
+- Configs (per-grant): `scheduler.config.list` / `.get` / `.create` / `.update` / `.delete`
+- Sessions: `scheduler.session.create` (requires `configuration_id` or `slug`; `time_to_live` in
+  minutes, max 30, legacy alias `ttl`) / `.get`
+- Bookings (all require `configuration_id` — booking endpoints authenticate with a Scheduler
+  session token minted from the configuration):
+  `scheduler.booking.get` / `.confirm` (`salt` + `status` required; `cancellation_reason`, legacy
+  alias `reason`, applies when declining) / `.reschedule` (returns the booking; adds `warning`
+  when the reschedule was applied but the record could not be read back) / `.cancel`
+  (`{ cancelled }`; `cancellation_reason`, legacy alias `reason`)
 - Group events (per-grant): `scheduler.groupEvent.list` (requires `config_id`, `calendar_id`,
   `start_time`, `end_time`) / `.create` / `.update` / `.delete` / `.import`
 

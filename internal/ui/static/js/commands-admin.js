@@ -57,8 +57,8 @@ const adminCommandSections = [
     {
         title: 'Credentials',
         commands: {
-            'credentials-list': { title: 'List', cmd: 'admin credentials list', desc: 'List credentials' },
-            'credentials-show': { title: 'Show', cmd: 'admin credentials show', desc: 'Show credential details', param: { name: 'credential-id', placeholder: 'Enter credential ID...' } }
+            'credentials-list': { title: 'List', cmd: 'admin credentials list', desc: 'List credentials (connector auto-detected if only one)', param: { name: 'connector', placeholder: 'Connector provider, optional (e.g. google)...' } },
+            'credentials-show': { title: 'Show', cmd: 'admin credentials show', desc: 'Show credential details', param: { name: 'credential-id', placeholder: 'Enter credential ID...' }, flags: [{ name: 'connector', label: 'Connector', type: 'text', placeholder: 'Provider, optional (e.g. google)' }] }
         }
     },
     {

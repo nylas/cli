@@ -139,16 +139,7 @@ func newDraftsCreateCmd() *cobra.Command {
 				subject = strings.TrimSpace(subject)
 
 				fmt.Println("Body (end with a line containing only '.'):")
-				var bodyLines []string
-				for {
-					line, _ := reader.ReadString('\n')
-					line = strings.TrimSuffix(line, "\n")
-					if line == "." {
-						break
-					}
-					bodyLines = append(bodyLines, line)
-				}
-				body = strings.Join(bodyLines, "\n")
+				body = readBodyLines(reader)
 			}
 
 			_, err := common.WithClient(args, func(ctx context.Context, client ports.NylasClient, grantID string) (struct{}, error) {

@@ -3,7 +3,9 @@ package rpcserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -81,6 +83,7 @@ type credentialListResult struct {
 }
 
 type credentialGetParams struct {
+	ConnectorID  string `json:"connector_id"`
 	CredentialID string `json:"credential_id"`
 }
 
@@ -90,11 +93,13 @@ type credentialCreateParams struct {
 }
 
 type credentialUpdateParams struct {
+	ConnectorID  string `json:"connector_id"`
 	CredentialID string `json:"credential_id"`
 	domain.UpdateCredentialRequest
 }
 
 type credentialDeleteParams struct {
+	ConnectorID  string `json:"connector_id"`
 	CredentialID string `json:"credential_id"`
 }
 
@@ -130,6 +135,49 @@ type grantsListAllParams struct {
 
 type grantsListAllResult struct {
 	Grants []domain.Grant `json:"grants"`
+}
+
+// resolveConnectorID returns the explicit connector provider (rejecting
+// deprecated ones), or auto-detects it when the application has exactly one
+// connector — mirroring the CLI's `credentials` commands. Credentials live under
+// /v3/connectors/{provider}/creds, so a provider is always required. The
+// resolution policy is shared via domain.ResolveConnectorProvider so this RPC
+// surface and the CLI cannot diverge; this wrapper only supplies the connector
+// list and maps errors to RPC errors.
+func resolveConnectorID(ctx context.Context, client ports.AdminClient, explicit string) (string, error) {
+	connectors, listErr := client.ListConnectors(ctx)
+
+	provider, err := domain.ResolveConnectorProvider(connectors, explicit)
+	if err == nil {
+		return provider, nil
+	}
+
+	// Discovery failed and nothing was named to fall back on: surface the real
+	// listing error rather than a misleading "no connectors found".
+	if listErr != nil && explicit == "" {
+		return "", fmt.Errorf("resolve connector: %w", listErr)
+	}
+	// Same masking guard as the CLI: a discovery failure must not surface as a
+	// misleading "unknown connector" when an explicit legacy ID couldn't be
+	// mapped only because the connector list was unavailable.
+	if listErr != nil && errors.Is(err, domain.ErrUnknownConnector) {
+		return "", fmt.Errorf("resolve connector: %w", listErr)
+	}
+
+	var multi *domain.MultipleConnectorsError
+	switch {
+	case errors.As(err, &multi):
+		return "", NewRPCError(InvalidParams,
+			fmt.Sprintf("connector_id required: multiple connectors (%s)", strings.Join(multi.Providers, ", ")), nil)
+	case errors.Is(err, domain.ErrDeprecatedConnector):
+		return "", NewRPCError(InvalidParams,
+			fmt.Sprintf("connector provider %q is no longer supported", explicit), nil)
+	case errors.Is(err, domain.ErrUnknownConnector):
+		return "", NewRPCError(InvalidParams,
+			fmt.Sprintf("unknown connector provider %q", explicit), nil)
+	default: // domain.ErrNoConnectors
+		return "", NewRPCError(InvalidParams, "connector_id required: no connectors found", nil)
+	}
 }
 
 func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
@@ -342,11 +390,12 @@ func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
 		if err := decodeParams(params, &p); err != nil {
 			return nil, err
 		}
-		if p.ConnectorID == "" {
-			return nil, NewRPCError(InvalidParams, "connector_id required", nil)
+		connectorID, err := resolveConnectorID(ctx, client, p.ConnectorID)
+		if err != nil {
+			return nil, err
 		}
 
-		credentials, err := client.ListCredentials(ctx, p.ConnectorID)
+		credentials, err := client.ListCredentials(ctx, connectorID)
 		if err != nil {
 			return nil, fmt.Errorf("admin.credential.list: %w", err)
 		}
@@ -361,8 +410,12 @@ func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
 		if p.CredentialID == "" {
 			return nil, NewRPCError(InvalidParams, "credential_id required", nil)
 		}
+		connectorID, err := resolveConnectorID(ctx, client, p.ConnectorID)
+		if err != nil {
+			return nil, err
+		}
 
-		credential, err := client.GetCredential(ctx, p.CredentialID)
+		credential, err := client.GetCredential(ctx, connectorID, p.CredentialID)
 		if err != nil {
 			return nil, fmt.Errorf("admin.credential.get: %w", err)
 		}
@@ -374,11 +427,12 @@ func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
 		if err := decodeParams(params, &p); err != nil {
 			return nil, err
 		}
-		if p.ConnectorID == "" {
-			return nil, NewRPCError(InvalidParams, "connector_id required", nil)
+		connectorID, err := resolveConnectorID(ctx, client, p.ConnectorID)
+		if err != nil {
+			return nil, err
 		}
 
-		credential, err := client.CreateCredential(ctx, p.ConnectorID, &p.CreateCredentialRequest)
+		credential, err := client.CreateCredential(ctx, connectorID, &p.CreateCredentialRequest)
 		if err != nil {
 			return nil, fmt.Errorf("admin.credential.create: %w", err)
 		}
@@ -393,8 +447,12 @@ func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
 		if p.CredentialID == "" {
 			return nil, NewRPCError(InvalidParams, "credential_id required", nil)
 		}
+		connectorID, err := resolveConnectorID(ctx, client, p.ConnectorID)
+		if err != nil {
+			return nil, err
+		}
 
-		credential, err := client.UpdateCredential(ctx, p.CredentialID, &p.UpdateCredentialRequest)
+		credential, err := client.UpdateCredential(ctx, connectorID, p.CredentialID, &p.UpdateCredentialRequest)
 		if err != nil {
 			return nil, fmt.Errorf("admin.credential.update: %w", err)
 		}
@@ -409,8 +467,12 @@ func RegisterAdminHandlers(d *Dispatcher, client ports.AdminClient) {
 		if p.CredentialID == "" {
 			return nil, NewRPCError(InvalidParams, "credential_id required", nil)
 		}
+		connectorID, err := resolveConnectorID(ctx, client, p.ConnectorID)
+		if err != nil {
+			return nil, err
+		}
 
-		if err := client.DeleteCredential(ctx, p.CredentialID); err != nil {
+		if err := client.DeleteCredential(ctx, connectorID, p.CredentialID); err != nil {
 			return nil, fmt.Errorf("admin.credential.delete: %w", err)
 		}
 		return deletedResult{Deleted: true}, nil

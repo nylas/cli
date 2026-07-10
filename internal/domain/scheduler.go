@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"time"
+)
 
 // SchedulerConfiguration represents a scheduling configuration (meeting type)
 type SchedulerConfiguration struct {
@@ -138,9 +142,26 @@ type SchedulerSession struct {
 // CreateSchedulerSessionRequest represents a request to create a scheduler session
 type CreateSchedulerSessionRequest struct {
 	ConfigurationID  string         `json:"configuration_id"`
-	TimeToLive       int            `json:"ttl,omitempty"` // Session TTL in minutes
+	TimeToLive       int            `json:"time_to_live,omitempty"` // Session TTL in minutes (max 30)
 	Slug             string         `json:"slug,omitempty"`
 	AdditionalFields map[string]any `json:"additional_fields,omitempty"`
+}
+
+// Validate checks the fields the Nylas v3 spec requires on session creation:
+// the configuration is identified by configuration_id OR slug, and
+// time_to_live is capped at 30 minutes (0 means unset; the API defaults to 5).
+// It is the single source of truth shared by the adapter and RPC entrypoints.
+func (r *CreateSchedulerSessionRequest) Validate() error {
+	if r == nil {
+		return errors.New("session request is required")
+	}
+	if r.ConfigurationID == "" && r.Slug == "" {
+		return errors.New("configuration_id or slug is required")
+	}
+	if r.TimeToLive < 0 || r.TimeToLive > 30 {
+		return fmt.Errorf("time_to_live must be between 0 and 30 minutes (0 uses the server default), got %d", r.TimeToLive)
+	}
+	return nil
 }
 
 // Booking represents a scheduled booking
@@ -163,17 +184,32 @@ type Booking struct {
 	UpdatedAt        time.Time            `json:"updated_at,omitempty"`
 }
 
-// ConfirmBookingRequest represents a request to confirm a booking
+// ConfirmBookingRequest represents a request to confirm or cancel a pending
+// booking. Per the Nylas v3 spec, salt and status are required; the salt is
+// extracted from the booking reference in the organizer confirmation link.
 type ConfirmBookingRequest struct {
-	Status         string         `json:"status"` // "confirmed" or "cancelled"
-	Reason         string         `json:"reason,omitempty"`
-	AdditionalData map[string]any `json:"additional_data,omitempty"`
+	Salt               string `json:"salt"`
+	Status             string `json:"status"` // "confirmed" or "cancelled"
+	CancellationReason string `json:"cancellation_reason,omitempty"`
 }
 
-// RescheduleBookingRequest represents a request to reschedule a booking
+// Validate checks the fields the Nylas v3 spec requires on a confirm/cancel
+// request: a salt and a "confirmed" or "cancelled" status. It is the single
+// source of truth shared by the adapter and RPC entrypoints.
+func (r *ConfirmBookingRequest) Validate() error {
+	if r.Salt == "" {
+		return errors.New("salt is required")
+	}
+	if r.Status != "confirmed" && r.Status != "cancelled" {
+		return fmt.Errorf("status must be 'confirmed' or 'cancelled', got %q", r.Status)
+	}
+	return nil
+}
+
+// RescheduleBookingRequest is the Nylas v3 reschedule payload. Per the spec
+// (booking_update.yaml) it carries only the new start and end times; timezone
+// and reason are not part of the request model.
 type RescheduleBookingRequest struct {
-	StartTime int64  `json:"start_time"`         // Unix timestamp for new start time
-	EndTime   int64  `json:"end_time"`           // Unix timestamp for new end time
-	Timezone  string `json:"timezone,omitempty"` // Timezone for the booking (e.g., "America/New_York")
-	Reason    string `json:"reason,omitempty"`   // Reason for rescheduling
+	StartTime int64 `json:"start_time"` // Unix timestamp for new start time
+	EndTime   int64 `json:"end_time"`   // Unix timestamp for new end time
 }

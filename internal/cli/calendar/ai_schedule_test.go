@@ -59,3 +59,53 @@ func TestCreateMeetingFromOptionCreatesRealEvent(t *testing.T) {
 		t.Fatalf("participants = %d, want 2", len(created.Participants))
 	}
 }
+
+func TestScheduleGrantArgs(t *testing.T) {
+	t.Parallel()
+
+	// The NL query must never be used as the grant. With no --grant the
+	// result is empty (so WithClient uses the default grant); with --grant the
+	// flag value is the only grant arg.
+	if got := scheduleGrantArgs(""); got != nil {
+		t.Fatalf("scheduleGrantArgs(\"\") = %v, want nil", got)
+	}
+	got := scheduleGrantArgs("grant-abc")
+	if len(got) != 1 || got[0] != "grant-abc" {
+		t.Fatalf("scheduleGrantArgs(\"grant-abc\") = %v, want [grant-abc]", got)
+	}
+}
+
+func TestSelectScheduleOption(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		autoConfirm bool
+		optionCount int
+		choice      string
+		want        int
+	}{
+		// --yes must create the first option, not silently skip creation.
+		{name: "autoConfirm picks first", autoConfirm: true, optionCount: 3, want: 0},
+		{name: "autoConfirm with no options", autoConfirm: true, optionCount: 0, want: -1},
+		{name: "no options never creates", optionCount: 0, choice: "y", want: -1},
+		{name: "yes picks first", optionCount: 3, choice: "y", want: 0},
+		{name: "YES uppercase picks first", optionCount: 3, choice: "YES", want: 0},
+		{name: "empty declines", optionCount: 3, choice: "", want: -1},
+		{name: "n declines", optionCount: 3, choice: "n", want: -1},
+		{name: "2 picks second", optionCount: 3, choice: "2", want: 1},
+		{name: "3 picks third", optionCount: 3, choice: "3", want: 2},
+		{name: "2 out of range declines", optionCount: 1, choice: "2", want: -1},
+		{name: "3 out of range declines", optionCount: 2, choice: "3", want: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := selectScheduleOption(tt.autoConfirm, tt.optionCount, tt.choice); got != tt.want {
+				t.Fatalf("selectScheduleOption(%v, %d, %q) = %d, want %d",
+					tt.autoConfirm, tt.optionCount, tt.choice, got, tt.want)
+			}
+		})
+	}
+}

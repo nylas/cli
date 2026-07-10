@@ -203,7 +203,7 @@ func TestCLI_AdminCredentialsList(t *testing.T) {
 		t.Skip("No valid connector provider found")
 	}
 
-	stdout, stderr, err := runCLI("admin", "credentials", "list", "--connector-id", connectorProvider)
+	stdout, stderr, err := runCLI("admin", "credentials", "list", connectorProvider)
 	skipIfProviderNotSupported(t, stderr)
 
 	// Skip if credentials endpoint isn't available (404 - endpoint may not exist for all providers)
@@ -246,7 +246,7 @@ func TestCLI_AdminCredentialsListJSON(t *testing.T) {
 		t.Skip("No valid connector provider found")
 	}
 
-	stdout, stderr, err := runCLI("admin", "credentials", "list", "--connector-id", connectorProvider, "--json")
+	stdout, stderr, err := runCLI("admin", "credentials", "list", connectorProvider, "--json")
 	skipIfProviderNotSupported(t, stderr)
 
 	// Skip if credentials endpoint isn't available (404 - endpoint may not exist for all providers)

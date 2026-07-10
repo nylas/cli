@@ -59,7 +59,7 @@ func newDemoConfigListCmd() *cobra.Command {
 			client := nylas.NewDemoClient()
 			ctx := context.Background()
 
-			configs, err := client.ListSchedulerConfigurations(ctx)
+			configs, err := client.ListSchedulerConfigurations(ctx, "demo-grant")
 			if err != nil {
 				return common.WrapListError("scheduler configs", err)
 			}

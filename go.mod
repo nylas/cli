@@ -2,7 +2,7 @@ module github.com/nylas/cli
 
 go 1.26.0
 
-toolchain go1.26.3
+toolchain go1.26.5
 
 require (
 	charm.land/huh/v2 v2.0.3
