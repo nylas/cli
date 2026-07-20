@@ -20,7 +20,7 @@ import (
 func TestServerStart_SecurityHeaders(t *testing.T) {
 	memory := setupMemoryStore(t)
 	agent := Agent{Type: AgentClaude, Version: "1.0"}
-	server := NewServer(freeLoopbackAddr(t), &agent, []Agent{agent}, nil, "grant-id", memory, nil)
+	server := NewServer(freeLoopbackAddr(t), &agent, []Agent{agent}, nil, "grant-id", memory)
 
 	// Start blocks on ListenAndServe and the server has no shutdown seam, so
 	// it runs until the test binary exits.
@@ -78,7 +78,7 @@ func TestServer_ConcurrentSetAgentAndHandlers(t *testing.T) {
 		{Type: AgentClaude, Version: "1.0"},
 		{Type: AgentOllama, Version: "1.0"},
 	}
-	server := NewServer("127.0.0.1:0", &agents[0], agents, nil, "grant-id", memory, nil)
+	server := NewServer("127.0.0.1:0", &agents[0], agents, nil, "grant-id", memory)
 
 	var wg sync.WaitGroup
 	for i := range 50 {

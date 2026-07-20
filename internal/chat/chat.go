@@ -9,35 +9,8 @@ import (
 
 	browserpkg "github.com/nylas/cli/internal/adapters/browser"
 	"github.com/nylas/cli/internal/adapters/config"
-	"github.com/nylas/cli/internal/adapters/keyring"
-	slackadapter "github.com/nylas/cli/internal/adapters/slack"
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/ports"
 )
-
-// trySlackClient attempts to create a Slack client from stored credentials.
-// Returns nil if Slack is not configured (not an error).
-func trySlackClient() ports.SlackClient {
-	token := os.Getenv("SLACK_USER_TOKEN")
-	if token == "" {
-		store, err := keyring.NewSecretStore(config.DefaultConfigDir())
-		if err != nil {
-			return nil
-		}
-		token, err = store.Get("slack_user_token")
-		if err != nil || token == "" {
-			return nil
-		}
-	}
-
-	cfg := slackadapter.DefaultConfig()
-	cfg.UserToken = token
-	client, err := slackadapter.NewClient(cfg)
-	if err != nil {
-		return nil
-	}
-	return client
-}
 
 // NewChatCmd creates the chat command.
 func NewChatCmd() *cobra.Command {
@@ -100,8 +73,6 @@ and perform actions on your behalf through a web-based chat interface.`,
 				return err
 			}
 
-			slackClient := trySlackClient()
-
 			// Set up conversation storage
 			chatDir := filepath.Join(config.DefaultConfigDir(), "chat", "conversations")
 			memory, err := NewMemoryStore(chatDir)
@@ -114,9 +85,6 @@ and perform actions on your behalf through a web-based chat interface.`,
 
 			fmt.Printf("Starting Nylas Chat at %s\n", url)
 			fmt.Printf("Agent: %s\n", agent)
-			if slackClient != nil {
-				fmt.Println("Slack: connected")
-			}
 			fmt.Println("Press Ctrl+C to stop")
 			fmt.Println()
 
@@ -128,7 +96,7 @@ and perform actions on your behalf through a web-based chat interface.`,
 				}
 			}
 
-			server := NewServer(addr, agent, agents, nylasClient, grantID, memory, slackClient)
+			server := NewServer(addr, agent, agents, nylasClient, grantID, memory)
 			return server.Start()
 		},
 	}

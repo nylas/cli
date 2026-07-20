@@ -34,7 +34,6 @@ nylas agent list add <list-id> junk.net
 nylas agent list remove <list-id> junk.net
 nylas agent list delete <list-id> --yes
 nylas agent overview
-nylas agent studio
 nylas agent status
 ```
 
@@ -175,9 +174,7 @@ Moves the account to another workspace; the target workspace's policy and
 rules govern it immediately. Moves use the workspace manual-assign API
 (`POST /v3/workspaces/{id}/manual-assign`), which reassigns the grant even
 when it currently belongs to another workspace. Use `nylas workspace list`
-to find workspace IDs. The same move is available visually in
-[Agent Studio](agent-studio.md) by dragging an account chip onto a
-workspace card.
+to find workspace IDs.
 
 ## Delete Agent Account
 
@@ -291,5 +288,4 @@ When the active grant is an agent account (`provider=nylas`):
 - [Agent policies](agent-policy.md)
 - [Agent rules](agent-rule.md)
 - [Agent lists](agent-list.md)
-- [Agent Studio](agent-studio.md)
 - [Email commands](email.md)

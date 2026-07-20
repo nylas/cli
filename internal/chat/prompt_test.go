@@ -56,7 +56,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BuildSystemPrompt(tt.grantID, tt.agentType, false)
+			got := BuildSystemPrompt(tt.grantID, tt.agentType)
 
 			// Verify the output is non-empty
 			if got == "" {
@@ -76,7 +76,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 func TestBuildSystemPrompt_Structure(t *testing.T) {
 	grantID := "test-grant"
 	agentType := AgentClaude
-	prompt := BuildSystemPrompt(grantID, agentType, false)
+	prompt := BuildSystemPrompt(grantID, agentType)
 
 	// Verify key sections are present in order
 	sections := []string{
@@ -101,35 +101,18 @@ func TestBuildSystemPrompt_Structure(t *testing.T) {
 	}
 }
 
-func TestBuildSystemPrompt_WithSlack(t *testing.T) {
-	prompt := BuildSystemPrompt("grant-123", AgentClaude, true)
+func TestBuildSystemPrompt_OmitsRemovedSlackTools(t *testing.T) {
+	prompt := BuildSystemPrompt("grant-123", AgentClaude)
 
-	// Check for Slack-specific content
-	if !strings.Contains(prompt, "Slack") {
-		t.Error("prompt with hasSlack=true should mention Slack")
+	if strings.Contains(prompt, "Slack") {
+		t.Error("prompt should not mention Slack")
 	}
-	if !strings.Contains(prompt, "list_slack_channels") {
-		t.Error("prompt with hasSlack=true should include list_slack_channels")
-	}
-	if !strings.Contains(prompt, "send_slack_message") {
-		t.Error("prompt with hasSlack=true should include send_slack_message")
-	}
-	if !strings.Contains(prompt, "Slack messages with username") {
-		t.Error("prompt with hasSlack=true should include Slack message formatting instructions")
-	}
-}
-
-func TestBuildSystemPrompt_WithoutSlack(t *testing.T) {
-	prompt := BuildSystemPrompt("grant-123", AgentClaude, false)
-
-	// Check that Slack tools are not included
 	if strings.Contains(prompt, "list_slack_channels") {
-		t.Error("prompt with hasSlack=false should not include list_slack_channels")
+		t.Error("prompt should not include list_slack_channels")
 	}
 	if strings.Contains(prompt, "send_slack_message") {
-		t.Error("prompt with hasSlack=false should not include send_slack_message")
+		t.Error("prompt should not include send_slack_message")
 	}
-	// Should still have email tools
 	if !strings.Contains(prompt, "list_emails") {
 		t.Error("prompt should always include email tools")
 	}

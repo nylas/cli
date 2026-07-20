@@ -18,7 +18,7 @@ func setupTestServer(t *testing.T) *Server {
 	memory := setupMemoryStore(t)
 	mockClient := nylas.NewMockClient()
 	agent := &Agent{Type: AgentClaude, Version: "1.0"}
-	executor := NewToolExecutor(mockClient, "test-grant", nil)
+	executor := NewToolExecutor(mockClient, "test-grant")
 
 	return &Server{
 		agent:    agent,

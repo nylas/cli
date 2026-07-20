@@ -11,8 +11,8 @@ Hexagonal (ports and adapters) architecture for clean separation of concerns.
 ```
 cmd/nylas/                    # Entry point (main.go)
 internal/
-  domain/                     # Business entities (28 files)
-  ports/                      # Interface contracts (7 files)
+  domain/                     # Business entities (27 files)
+  ports/                      # Interface contracts (6 files)
   adapters/                   # Implementations
     nylas/                    # Nylas API client (94 files)
     ai/                       # AI providers (Claude, OpenAI, Groq, Ollama)
@@ -21,7 +21,6 @@ internal/
     grantcache/               # Non-secret local grant metadata/default cache
     config/                   # Configuration validation
     mcp/                      # MCP proxy server
-    slack/                    # Slack API client
     utilities/                # Timezone, scheduling, contacts services
     oauth/                    # OAuth callback server
     browser/                  # Browser automation
@@ -42,7 +41,6 @@ internal/
     otp/                      # OTP extraction
     scheduler/                # Booking pages
     setup/                    # First-time setup wizard (nylas init)
-    slack/                    # Slack integration
     timezone/                 # Timezone utilities
     update/                   # Self-update
     webhook/                  # Webhook management
@@ -77,7 +75,6 @@ docs/                         # Documentation
 | Nylas HTTP client | `internal/adapters/nylas/client.go` |
 | AI providers | `internal/adapters/ai/` |
 | MCP server | `internal/adapters/mcp/` |
-| Slack adapter | `internal/adapters/slack/` |
 | Timezone service | `internal/adapters/utilities/timezone/` |
 | **User Interfaces** | |
 | Air web client (port 7365) | `internal/air/` |
@@ -163,10 +160,10 @@ url := qb.BuildURL(baseURL)
 
 **Three layers:**
 
-1. **Domain** (`internal/domain/`) - 29 files
+1. **Domain** (`internal/domain/`) - 28 files
    - Pure business logic, no external dependencies
    - Core types: Message, Email, Calendar, Event, Contact, Grant, Webhook
-   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Slack, Agent
+   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Agent
    - Support types: Config, Errors, Provider, Utilities
    - Shared interfaces: `interfaces.go` (Paginated, QueryParams, Resource, Timestamped, Validator)
 
@@ -175,16 +172,15 @@ url := qb.BuildURL(baseURL)
    - `EmailParticipant` - Type alias for `Person` (in `email.go`)
    - `Participant` - Embeds `Person`, adds Status/Comment for calendar events
 
-2. **Ports** (`internal/ports/`) - 7 interface files
+2. **Ports** (`internal/ports/`) - 6 interface files
    - `nylas.go` - NylasClient interface (main API operations)
    - `secrets.go` - SecretStore interface (credential storage)
    - `llm.go` - LLM interface (AI providers)
-   - `slack.go` - Slack interface
    - `config.go` - Config interface
    - `utilities.go` - Utilities interface
    - `webhook_server.go` - Webhook server interface
 
-3. **Adapters** (`internal/adapters/`) - 13 adapter directories
+3. **Adapters** (`internal/adapters/`) - 12 adapter directories
 
    | Adapter | Files | Purpose |
    |---------|-------|---------|
@@ -194,7 +190,6 @@ url := qb.BuildURL(baseURL)
    | `keyring/` | 8 | Secret storage (system keyring, encrypted file fallback) |
    | `grantcache/` | 2 | Non-secret local grant metadata/default cache |
    | `mcp/` | 8 | MCP proxy server for AI assistants |
-   | `slack/` | 21 | Slack API client (channels, messages, users) |
    | `config/` | 5 | Configuration validation |
    | `oauth/` | 3 | OAuth callback server |
    | `utilities/` | 12 | Services (contacts, email, scheduling, timezone, webhook) |

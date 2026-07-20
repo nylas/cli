@@ -26,8 +26,6 @@ type Server struct {
 	agents    []Agent
 	agentMu   sync.RWMutex // protects agent switching
 	nylas     ports.NylasClient
-	slack     ports.SlackClient // nil if not configured
-	hasSlack  bool
 	grantID   string
 	memory    *MemoryStore
 	executor  *ToolExecutor
@@ -64,16 +62,15 @@ func (s *Server) SetAgent(agentType AgentType) bool {
 	}
 	s.agentMu.Lock()
 	s.agent = agent
-	s.context = NewContextBuilder(agent, s.memory, s.grantID, s.hasSlack)
+	s.context = NewContextBuilder(agent, s.memory, s.grantID)
 	s.agentMu.Unlock()
 	return true
 }
 
 // NewServer creates a new chat Server.
-func NewServer(addr string, agent *Agent, agents []Agent, nylas ports.NylasClient, grantID string, memory *MemoryStore, slack ports.SlackClient) *Server {
-	hasSlack := slack != nil
-	executor := NewToolExecutor(nylas, grantID, slack)
-	ctx := NewContextBuilder(agent, memory, grantID, hasSlack)
+func NewServer(addr string, agent *Agent, agents []Agent, nylas ports.NylasClient, grantID string, memory *MemoryStore) *Server {
+	executor := NewToolExecutor(nylas, grantID)
+	ctx := NewContextBuilder(agent, memory, grantID)
 
 	tmpl, _ := template.New("").ParseFS(templateFiles, "templates/*.gohtml")
 
@@ -82,8 +79,6 @@ func NewServer(addr string, agent *Agent, agents []Agent, nylas ports.NylasClien
 		agent:      agent,
 		agents:     agents,
 		nylas:      nylas,
-		slack:      slack,
-		hasSlack:   hasSlack,
 		grantID:    grantID,
 		memory:     memory,
 		executor:   executor,

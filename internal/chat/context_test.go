@@ -12,7 +12,7 @@ func TestContextBuilder_BuildPrompt(t *testing.T) {
 	agent := &Agent{Type: AgentClaude, Path: "/usr/bin/claude"}
 	store := setupMemoryStore(t)
 	grantID := "test-grant-123"
-	builder := NewContextBuilder(agent, store, grantID, false)
+	builder := NewContextBuilder(agent, store, grantID)
 
 	tests := []struct {
 		name       string
@@ -124,7 +124,7 @@ func TestContextBuilder_BuildPrompt(t *testing.T) {
 func TestContextBuilder_NeedsCompaction(t *testing.T) {
 	agent := &Agent{Type: AgentClaude, Path: "/usr/bin/claude"}
 	store := setupMemoryStore(t)
-	builder := NewContextBuilder(agent, store, "test-grant", false)
+	builder := NewContextBuilder(agent, store, "test-grant")
 
 	tests := []struct {
 		name        string
@@ -246,7 +246,7 @@ func TestContextBuilder_NeedsCompaction(t *testing.T) {
 func TestContextBuilder_findSplitIndex(t *testing.T) {
 	agent := &Agent{Type: AgentClaude, Path: "/usr/bin/claude"}
 	store := setupMemoryStore(t)
-	builder := NewContextBuilder(agent, store, "test-grant", false)
+	builder := NewContextBuilder(agent, store, "test-grant")
 
 	tests := []struct {
 		name        string
@@ -372,7 +372,7 @@ func TestContextBuilder_findSplitIndex(t *testing.T) {
 func TestContextBuilder_BuildPrompt_Structure(t *testing.T) {
 	agent := &Agent{Type: AgentClaude, Path: "/usr/bin/claude"}
 	store := setupMemoryStore(t)
-	builder := NewContextBuilder(agent, store, "test-grant", false)
+	builder := NewContextBuilder(agent, store, "test-grant")
 
 	conv := &Conversation{
 		ID:      "conv_test",

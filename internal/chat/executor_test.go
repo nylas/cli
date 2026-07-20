@@ -18,18 +18,16 @@ func TestNewToolExecutor(t *testing.T) {
 	client := nylas.NewMockClient()
 	grantID := "test-grant"
 
-	executor := NewToolExecutor(client, grantID, nil)
+	executor := NewToolExecutor(client, grantID)
 
 	require.NotNil(t, executor)
 	assert.Equal(t, grantID, executor.grantID)
 	assert.Equal(t, client, executor.client)
-	assert.Nil(t, executor.slack)
-	assert.False(t, executor.HasSlack())
 }
 
 func TestExecute_UnknownTool(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant", nil)
+	executor := NewToolExecutor(client, "test-grant")
 
 	result := executor.Execute(context.Background(), ToolCall{
 		Name: "unknown_tool",
@@ -55,13 +53,14 @@ func TestExecute_Dispatcher(t *testing.T) {
 		{"create_event", "create_event", true},
 		{"list_contacts", "list_contacts", true},
 		{"list_folders", "list_folders", true},
+		{"removed_slack_tool", "send_slack_message", false},
 		{"invalid_tool", "invalid_tool", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			// Set up mock to avoid nil errors
 			client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
@@ -148,7 +147,7 @@ func TestListEmails_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
 				return tt.messages, nil
@@ -207,7 +206,7 @@ func TestListEmails_FromFormatting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
 				return []domain.Message{{ID: "msg1", Subject: "Test", Date: now, From: tt.from}}, nil
@@ -232,7 +231,7 @@ func TestListEmails_FromFormatting(t *testing.T) {
 
 func TestListEmails_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant", nil)
+	executor := NewToolExecutor(client, "test-grant")
 
 	client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
 		return nil, errors.New("API error")
@@ -294,7 +293,7 @@ func TestReadEmail_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			client.GetMessageFunc = func(ctx context.Context, grantID, messageID string) (*domain.Message, error) {
 				return tt.message, nil
@@ -339,7 +338,7 @@ func TestReadEmail_MissingID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			result := executor.Execute(context.Background(), ToolCall{
 				Name: "read_email",
@@ -355,7 +354,7 @@ func TestReadEmail_MissingID(t *testing.T) {
 
 func TestReadEmail_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant", nil)
+	executor := NewToolExecutor(client, "test-grant")
 
 	client.GetMessageFunc = func(ctx context.Context, grantID, messageID string) (*domain.Message, error) {
 		return nil, errors.New("message not found")
@@ -372,7 +371,7 @@ func TestReadEmail_Error(t *testing.T) {
 func TestSearchEmails_Success(t *testing.T) {
 	now := time.Now()
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant", nil)
+	executor := NewToolExecutor(client, "test-grant")
 
 	client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
 		assert.Equal(t, "budget report", params.Subject)
@@ -411,7 +410,7 @@ func TestSearchEmails_MissingQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := nylas.NewMockClient()
-			executor := NewToolExecutor(client, "test-grant", nil)
+			executor := NewToolExecutor(client, "test-grant")
 
 			result := executor.Execute(context.Background(), ToolCall{
 				Name: "search_emails",
@@ -425,7 +424,7 @@ func TestSearchEmails_MissingQuery(t *testing.T) {
 
 func TestSearchEmails_Error(t *testing.T) {
 	client := nylas.NewMockClient()
-	executor := NewToolExecutor(client, "test-grant", nil)
+	executor := NewToolExecutor(client, "test-grant")
 
 	client.GetMessagesWithParamsFunc = func(ctx context.Context, grantID string, params *domain.MessageQueryParams) ([]domain.Message, error) {
 		return nil, errors.New("search failed")

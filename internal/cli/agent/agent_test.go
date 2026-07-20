@@ -19,7 +19,7 @@ func TestNewAgentCmd(t *testing.T) {
 	assert.Contains(t, cmd.Short, "agent")
 	assert.Contains(t, cmd.Long, "account subcommand")
 
-	expected := []string{"account", "policy", "rule", "list", "overview", "studio", "status"}
+	expected := []string{"account", "policy", "rule", "list", "overview", "status"}
 	cmdMap := make(map[string]bool)
 	for _, sub := range cmd.Commands() {
 		cmdMap[sub.Name()] = true
@@ -27,6 +27,7 @@ func TestNewAgentCmd(t *testing.T) {
 	for _, name := range expected {
 		assert.True(t, cmdMap[name], "missing subcommand %s", name)
 	}
+	assert.False(t, cmdMap["studio"], "removed studio subcommand should not be registered")
 }
 
 func TestCreateCmd(t *testing.T) {

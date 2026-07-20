@@ -201,7 +201,7 @@ func TestFormatToolResult(t *testing.T) {
 }
 
 func TestAvailableTools(t *testing.T) {
-	tools := AvailableTools(false)
+	tools := AvailableTools()
 
 	t.Run("returns correct tool count", func(t *testing.T) {
 		// Expecting: list_emails, read_email, search_emails, send_email,
@@ -222,6 +222,22 @@ func TestAvailableTools(t *testing.T) {
 
 		for _, expected := range expectedTools {
 			assert.True(t, toolNames[expected], "tool %s should be available", expected)
+		}
+	})
+
+	t.Run("omits removed Slack tools", func(t *testing.T) {
+		removedTools := []string{
+			"list_slack_channels", "read_slack_messages", "read_slack_thread",
+			"search_slack", "send_slack_message", "list_slack_users",
+		}
+
+		toolNames := make(map[string]bool)
+		for _, tool := range tools {
+			toolNames[tool.Name] = true
+		}
+
+		for _, removed := range removedTools {
+			assert.False(t, toolNames[removed], "removed tool %s should not be available", removed)
 		}
 	})
 

@@ -521,7 +521,6 @@ nylas agent list add <list-id> <item>...       # Add items to a list
 nylas agent list remove <list-id> <item>...    # Remove items from a list
 nylas agent list delete <list-id> --yes        # Delete a list
 nylas agent overview                           # Tree of accounts → workspace → policy/rules → lists
-nylas agent studio                             # Visual management UI (drag-drop board, localhost:7368)
 nylas agent status                             # Check connector + account status
 ```
 
@@ -722,95 +721,6 @@ nylas mcp serve                            # Start MCP server (used by assistant
 - Local grant lookup (no email required for `get_grant`)
 
 **Available MCP tools:** `list_messages`, `list_threads`, `list_calendars`, `list_events`, `create_event`, `update_event`, `send_message`, `create_draft`, `availability`, `get_grant`, `epoch_to_datetime`, `current_time`
-
----
-
-## Slack Integration
-
-Interact with Slack workspaces directly from the CLI.
-
-### Authentication
-
-```bash
-nylas slack auth set --token xoxp-...      # Store Slack user token
-nylas slack auth status                     # Check authentication status
-nylas slack auth remove                     # Remove stored token
-```
-
-**Token sources (checked in order):**
-1. `SLACK_USER_TOKEN` environment variable
-2. System keyring (set via `nylas slack auth set`)
-
-**Get your token:** [api.slack.com/apps](https://api.slack.com/apps) → Your App → OAuth & Permissions → User OAuth Token
-
-### Channels
-
-```bash
-# List channels you're a member of
-nylas slack channels list                   # List your channels
-nylas slack channels list --type public_channel  # List public channels only
-nylas slack channels list --type private_channel # List private channels
-nylas slack channels list --exclude-archived     # Exclude archived channels
-nylas slack channels list --limit 20             # Limit results
-nylas slack channels list --id                   # Show channel IDs
-
-# Filter by creation date
-nylas slack channels list --created-after 24h    # Channels created in last 24 hours
-nylas slack channels list --created-after 7d     # Channels created in last 7 days
-nylas slack channels list --created-after 2w     # Channels created in last 2 weeks
-
-# Workspace-wide listing (slower, may hit rate limits)
-nylas slack channels list --all-workspace        # List all workspace channels
-nylas slack channels list --all                  # Fetch all pages
-
-# Get channel info
-nylas slack channels info C01234567890           # Get detailed channel info
-```
-
-### Messages
-
-```bash
-nylas slack messages list --channel general       # List messages from channel
-nylas slack messages list --channel-id C01234567  # Use channel ID
-nylas slack messages list --channel general --limit 10  # Limit results
-nylas slack messages list --channel general --id  # Show message timestamps
-nylas slack messages list --channel general --thread 1234567890.123456  # Show thread replies
-```
-
-### Send & Reply
-
-```bash
-# Send a message
-nylas slack send --channel general --text "Hello team!"
-nylas slack send --channel general --text "Message" --yes  # Skip confirmation
-
-# Reply to a thread
-nylas slack reply --channel general --thread 1234567890.123456 --text "Reply"
-```
-
-### Users
-
-```bash
-nylas slack users list                      # List all users
-nylas slack users list --limit 50           # Limit results
-nylas slack users list --id                 # Show user IDs
-```
-
-### Search
-
-```bash
-nylas slack search --query "project update" # Search messages
-nylas slack search --query "from:@john"     # Search with Slack modifiers
-nylas slack search --query "in:#general"    # Search in specific channel
-nylas slack search --query "meeting" --limit 20
-```
-
-**Required OAuth Scopes:**
-- `channels:read`, `groups:read`, `im:read`, `mpim:read` - List channels
-- `channels:history`, `groups:history`, `im:history`, `mpim:history` - Read messages
-- `chat:write` - Send messages
-- `users:read` - List users
-- `search:read` - Search messages
 
 ---
 

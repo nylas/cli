@@ -26,7 +26,6 @@ import (
 	"github.com/nylas/cli/internal/cli/rpc"
 	"github.com/nylas/cli/internal/cli/scheduler"
 	"github.com/nylas/cli/internal/cli/setup"
-	"github.com/nylas/cli/internal/cli/slack"
 	templatecmd "github.com/nylas/cli/internal/cli/templatecmd"
 	"github.com/nylas/cli/internal/cli/timezone"
 	"github.com/nylas/cli/internal/cli/update"
@@ -60,7 +59,6 @@ func main() {
 	rootCmd.AddCommand(timezone.NewTimezoneCmd())
 	rootCmd.AddCommand(mcp.NewMCPCmd())
 	rootCmd.AddCommand(rpc.NewRPCCmd())
-	rootCmd.AddCommand(slack.NewSlackCmd())
 	rootCmd.AddCommand(templatecmd.NewTemplateCmd())
 	rootCmd.AddCommand(demo.NewDemoCmd())
 	rootCmd.AddCommand(cli.NewTUICmd())

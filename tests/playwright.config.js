@@ -17,7 +17,6 @@ const isCI = !!process.env.CI;
 const airPort = parseInt(process.env.AIR_PORT || '7365', 10);
 const uiPort = parseInt(process.env.UI_PORT || '7363', 10);
 const chatPort = parseInt(process.env.CHAT_PORT || '7367', 10);
-const studioPort = parseInt(process.env.STUDIO_PORT || '7368', 10);
 const uiE2EDemo = process.env.UI_E2E_DEMO === 'true';
 const uiCommand = uiE2EDemo
   ? 'cd .. && go run cmd/nylas/main.go demo ui --no-browser --port ' + uiPort
@@ -109,24 +108,6 @@ module.exports = defineConfig({
         navigationTimeout: 30000,
       },
     },
-
-    // =========================================================================
-    // Agent Studio (Visual Agent Management)
-    // =========================================================================
-    {
-      name: 'studio-chromium',
-      testDir: './studio/e2e',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${studioPort}`,
-        viewport: { width: 1280, height: 720 },
-        trace: 'on-first-retry',
-        screenshot: 'only-on-failure',
-        video: 'on-first-retry',
-        actionTimeout: 10000,
-        navigationTimeout: 30000,
-      },
-    },
   ],
 
   // Web server configurations
@@ -152,13 +133,6 @@ module.exports = defineConfig({
     {
       command: 'cd .. && go run cmd/nylas/main.go chat --no-browser --port ' + chatPort,
       port: chatPort,
-      timeout: 60000,
-      reuseExistingServer: !isCI,
-    },
-    // Agent Studio server (port 7368)
-    {
-      command: 'cd .. && go run cmd/nylas/main.go agent studio --no-browser --port ' + studioPort,
-      port: studioPort,
       timeout: 60000,
       reuseExistingServer: !isCI,
     },
