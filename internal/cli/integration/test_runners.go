@@ -89,3 +89,14 @@ func runCLIWithInputAndRateLimit(t *testing.T, input string, args ...string) (st
 	acquireRateLimit(t)
 	return runCLIWithInput(input, args...)
 }
+
+// requireCommandList asserts that help output actually rendered its command
+// list. The "removed command is absent from help" tests assert absence, which
+// an empty stdout satisfies trivially - so without this positive control they
+// would pass while verifying nothing (e.g. if help moved to stderr).
+func requireCommandList(t *testing.T, stdout string) {
+	t.Helper()
+	if !strings.Contains(stdout, "Available Commands") {
+		t.Fatalf("help output missing command list, absence checks would pass vacuously: %q", stdout)
+	}
+}

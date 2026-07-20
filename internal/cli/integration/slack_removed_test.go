@@ -49,7 +49,9 @@ func TestCLI_HelpOmitsSlack(t *testing.T) {
 		t.Fatalf("--help failed: %v\nstderr: %s", err, stderr)
 	}
 
-	if strings.Contains(stdout, "\nslack") || strings.Contains(stdout, "\n  slack") {
+	requireCommandList(t, stdout)
+
+	if strings.Contains(stdout, "\n  slack") {
 		t.Fatalf("expected root help to omit slack command, got: %s", stdout)
 	}
 }

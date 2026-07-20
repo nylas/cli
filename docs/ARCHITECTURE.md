@@ -11,10 +11,10 @@ Hexagonal (ports and adapters) architecture for clean separation of concerns.
 ```
 cmd/nylas/                    # Entry point (main.go)
 internal/
-  domain/                     # Business entities (27 files)
-  ports/                      # Interface contracts (6 files)
+  domain/                     # Business entities
+  ports/                      # Interface contracts
   adapters/                   # Implementations
-    nylas/                    # Nylas API client (94 files)
+    nylas/                    # Nylas API client
     ai/                       # AI providers (Claude, OpenAI, Groq, Ollama)
     analytics/                # Focus optimizer, meeting scorer
     keyring/                  # Secret storage
@@ -51,11 +51,11 @@ internal/
   testutil/                   # Test utilities
   util/                       # General utilities
 docs/                         # Documentation
-  commands/                   # Command guides (12 files)
-  ai/                         # AI docs (8 files)
-  security/                   # Security docs (2 files)
-  troubleshooting/            # Troubleshooting (5 files)
-  development/                # Dev guides (4 files)
+  commands/                   # Command guides
+  ai/                         # AI docs
+  security/                   # Security docs
+  troubleshooting/            # Troubleshooting
+  development/                # Dev guides
 .claude/                      # Claude configuration
   commands/                   # Skills/commands
   agents/                     # Agent definitions
@@ -160,7 +160,7 @@ url := qb.BuildURL(baseURL)
 
 **Three layers:**
 
-1. **Domain** (`internal/domain/`) - 28 files
+1. **Domain** (`internal/domain/`)
    - Pure business logic, no external dependencies
    - Core types: Message, Email, Calendar, Event, Contact, Grant, Webhook
    - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Agent
@@ -172,30 +172,31 @@ url := qb.BuildURL(baseURL)
    - `EmailParticipant` - Type alias for `Person` (in `email.go`)
    - `Participant` - Embeds `Person`, adds Status/Comment for calendar events
 
-2. **Ports** (`internal/ports/`) - 6 interface files
+2. **Ports** (`internal/ports/`)
+
+   One file per interface; the main ones:
    - `nylas.go` - NylasClient interface (main API operations)
    - `secrets.go` - SecretStore interface (credential storage)
    - `llm.go` - LLM interface (AI providers)
    - `config.go` - Config interface
-   - `utilities.go` - Utilities interface
    - `webhook_server.go` - Webhook server interface
 
-3. **Adapters** (`internal/adapters/`) - 12 adapter directories
+3. **Adapters** (`internal/adapters/`)
 
-   | Adapter | Files | Purpose |
-   |---------|-------|---------|
-   | `nylas/` | 94 | Nylas API client (messages, calendars, contacts, events) |
-   | `ai/` | 24 | AI clients (Claude, OpenAI, Groq, Ollama), email analyzer |
-   | `analytics/` | 14 | Focus optimizer, conflict resolver, meeting scorer |
-   | `keyring/` | 8 | Secret storage (system keyring, encrypted file fallback) |
-   | `grantcache/` | 2 | Non-secret local grant metadata/default cache |
-   | `mcp/` | 8 | MCP proxy server for AI assistants |
-   | `config/` | 5 | Configuration validation |
-   | `oauth/` | 3 | OAuth callback server |
-   | `utilities/` | 12 | Services (contacts, email, scheduling, timezone, webhook) |
-   | `browser/` | 2 | Browser automation |
-   | `tunnel/` | 2 | Cloudflare tunnel |
-   | `webhookserver/` | 2 | Webhook server |
+   | Adapter | Purpose |
+   |---------|---------|
+   | `nylas/` | Nylas API client (messages, calendars, contacts, events) |
+   | `ai/` | AI clients (Claude, OpenAI, Groq, Ollama), email analyzer |
+   | `analytics/` | Focus optimizer, conflict resolver, meeting scorer |
+   | `keyring/` | Secret storage (system keyring, encrypted file fallback) |
+   | `grantcache/` | Non-secret local grant metadata/default cache |
+   | `mcp/` | MCP proxy server for AI assistants |
+   | `config/` | Configuration validation |
+   | `oauth/` | OAuth callback server |
+   | `utilities/` | Services (contacts, email, scheduling, timezone, webhook) |
+   | `browser/` | Browser automation |
+   | `tunnel/` | Cloudflare tunnel |
+   | `webhookserver/` | Webhook server |
 
 **Benefits:**
 - Testability (mock adapters)

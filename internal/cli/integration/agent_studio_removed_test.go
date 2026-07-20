@@ -49,6 +49,8 @@ func TestCLI_AgentHelpOmitsStudio(t *testing.T) {
 		t.Fatalf("agent --help failed: %v\nstderr: %s", err, stderr)
 	}
 
+	requireCommandList(t, stdout)
+
 	output := strings.ToLower(stdout)
 	if strings.Contains(output, "\n  studio ") || strings.Contains(output, "agent studio") {
 		t.Fatalf("expected agent help to omit studio command, got: %s", stdout)
