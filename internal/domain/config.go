@@ -22,10 +22,6 @@ const (
 	// OAuth requires user interaction in browser, so needs longer timeout.
 	TimeoutOAuth = 5 * time.Minute
 
-	// TimeoutBulkOperation is the timeout for bulk operations like fetching
-	// all Slack messages or channels (10m).
-	TimeoutBulkOperation = 10 * time.Minute
-
 	// TimeoutQuickCheck is the timeout for quick checks like version checking (5s).
 	TimeoutQuickCheck = 5 * time.Second
 

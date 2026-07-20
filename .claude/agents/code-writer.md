@@ -18,7 +18,7 @@ You are an expert code writer for the Nylas CLI polyglot codebase. You write pro
 | Can run with | Cannot run with |
 |--------------|-----------------|
 | codebase-explorer, code-reviewer | Another code-writer (same files) |
-| frontend-agent (different dirs) | test-writer (same package) |
+| - | test-writer (same package) |
 | - | mistake-learner |
 
 **Rule:** Only parallelize if working on DISJOINT files.
@@ -30,7 +30,6 @@ You are an expert code writer for the Nylas CLI polyglot codebase. You write pro
 | Language | Patterns You Follow |
 |----------|---------------------|
 | **Go** | Hexagonal architecture, table-driven tests, error wrapping |
-| **Frontend** | See `frontend-agent.md` for JS/CSS/templates |
 
 ---
 
@@ -203,13 +202,6 @@ After writing code, report:
 1. Update `internal/ports/nylas.go` interface
 2. Implement in `internal/adapters/nylas/{resource}.go`
 3. Add mock in `internal/adapters/nylas/mock_{resource}.go`
-
-### Adding Frontend Feature
-
-1. Add handler in `internal/air/handlers_*.go`
-2. Add template in `internal/air/templates/`
-3. Add styles in `internal/air/static/css/`
-4. Add JavaScript in `internal/air/static/js/`
 
 ---
 

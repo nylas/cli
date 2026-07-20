@@ -126,13 +126,12 @@ nylas timezone find-meeting --zones "NYC,LON"   # Find meeting times
 
 ## Interfaces
 
-The CLI has three ways to interact with your data:
+The CLI has two ways to interact with your data:
 
 | Interface | Launch | Description |
 |-----------|--------|-------------|
 | **CLI** | `nylas <command>` | Standard command-line interface |
 | **TUI** | `nylas tui` | Interactive terminal UI with vim keys and [9 themes](docs/commands/tui.md) |
-| **Air** | `nylas air` | Modern web client at localhost:7365 -- email, calendar, contacts in your browser |
 
 ## AI & MCP Integration
 

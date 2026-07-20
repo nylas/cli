@@ -33,7 +33,6 @@ Build and test the Nylas CLI.
 | `make test-unit` | Run unit tests |
 | `make test-race` | Run tests with race detector |
 | `make test-integration` | Run CLI integration tests |
-| `make test-air-integration` | Run Air web UI integration tests |
 | `make test-coverage` | Generate coverage report |
 | `make test-cleanup` | Clean up test resources |
 
@@ -67,7 +66,7 @@ export NYLAS_GRANT_ID="your-grant-id"
 make test-integration
 ```
 
-**CRITICAL:** Air tests create real resources. Always use `make ci-full` for automatic cleanup.
+**CRITICAL:** Integration tests create real resources. Always use `make ci-full` for automatic cleanup.
 
 ---
 

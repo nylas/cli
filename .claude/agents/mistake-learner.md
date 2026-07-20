@@ -18,7 +18,7 @@ You analyze mistakes caught during development and update CLAUDE.md with abstrac
 | Can run with | Cannot run with |
 |--------------|-----------------|
 | codebase-explorer, code-reviewer | code-writer, test-writer |
-| - | frontend-agent, another mistake-learner |
+| - | another mistake-learner |
 
 **Rule:** Run this agent LAST after all other write operations complete.
 
@@ -65,7 +65,7 @@ Transform specific incidents into general principles:
 
 | Specific | Abstracted |
 |----------|-----------|
-| "Forgot to return after http.Error in handleGetEmail" | "Air handlers: ALWAYS return after error responses" |
+| "Forgot to return after http.Error in a webhook handler" | "HTTP handlers: ALWAYS return after error responses" |
 | "Test failed because mock wasn't set up" | "Go tests: ALWAYS verify mock functions are set before asserting" |
 | "Calendar showed wrong time in March" | "Calendar: ALWAYS handle DST transitions in time comparisons" |
 
@@ -86,8 +86,7 @@ Choose the right LEARNINGS subsection:
 Examples:
 ```
 - Go tests: ALWAYS use t.Cleanup() for resource teardown (prevents leaks)
-- Air handlers: NEVER write response body after WriteHeader() (causes superfluous warning)
-- Playwright: ALWAYS waitForSelector before click (Air lazy-loads content)
+- HTTP handlers: NEVER write response body after WriteHeader() (causes superfluous warning)
 ```
 
 ### 5. Update CLAUDE.md

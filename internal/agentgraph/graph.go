@@ -1,7 +1,7 @@
 // Package agentgraph joins the five agent resource collections (accounts,
 // workspaces, policies, rules, lists) into one account-rooted graph with
-// referential-health flags. It is the shared engine behind both the
-// `nylas agent overview` command and the Agent Studio board.
+// referential-health flags. It is the engine behind the
+// `nylas agent overview` command.
 package agentgraph
 
 import (

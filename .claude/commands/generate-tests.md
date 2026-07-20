@@ -1,17 +1,16 @@
 ---
 name: generate-tests
-description: Generate unit, integration, or E2E tests for Go code following project patterns and coverage targets
+description: Generate unit or integration tests for Go code following project patterns and coverage targets
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash(go test:*), Bash(go build:*)
 ---
 
 # Generate Tests
 
-Generate unit, integration, or E2E tests for Go code.
+Generate unit or integration tests for Go code.
 
 **Patterns:** See `.claude/shared/patterns/` for templates:
 - `go-test-patterns.md` - Unit test patterns
 - `integration-test-patterns.md` - CLI integration tests + rate limiting
-- `playwright-patterns.md` - E2E browser tests
 
 **Agent:** See `.claude/agents/test-writer.md` for autonomous test generation.
 
@@ -19,7 +18,7 @@ Generate unit, integration, or E2E tests for Go code.
 
 1. Ask me for:
    - Which file/function to test
-   - Test type: unit, integration, or E2E
+   - Test type: unit or integration
    - Specific scenarios to cover (optional)
 
 2. Read the appropriate pattern file for templates.

@@ -74,8 +74,6 @@ Go 1.24+ · Hexagonal architecture (CLI → Port → Adapter) · Cobra CLI · **
 | `make test-coverage` | Coverage report |
 | `make help` | List all available targets |
 | `nylas init` | First-time setup wizard |
-| `nylas air` | Start Air web UI (localhost:7365) |
-| `nylas chat` | Start AI chat interface (localhost:7367) |
 
 **Debugging path:** `ports/nylas.go` → `adapters/nylas/client.go` → `cli/<feature>/helpers.go`
 
@@ -96,10 +94,7 @@ Go 1.24+ · Hexagonal architecture (CLI → Port → Adapter) · Cobra CLI · **
 - AI: shared helpers in `adapters/ai/base_client.go`
 
 ### Framework Gotchas
-- Playwright: semantic selectors ONLY (getByRole > getByText > getByLabel > getByTestId)
 - Go integration tests: `acquireRateLimit(t)` before API calls in parallel tests — omitting causes flaky 429s
-- Air handlers: ALWAYS return after error responses
-- Frontend JS: textContent for user data, NEVER innerHTML (XSS)
 
 ### Environment Fixes
 - Go build cache corruption: `sudo rm -rf ~/.cache/go-build ~/go/pkg/mod && go clean -cache`

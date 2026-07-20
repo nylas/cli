@@ -11,7 +11,6 @@ Consolidated testing rules for the Nylas CLI project.
 **Detailed Patterns:**
 - Go unit tests: `.claude/shared/patterns/go-test-patterns.md`
 - Integration tests: `.claude/shared/patterns/integration-test-patterns.md`
-- Playwright E2E: `.claude/shared/patterns/playwright-patterns.md`
 
 ---
 
@@ -26,11 +25,6 @@ Consolidated testing rules for the Nylas CLI project.
 - **Location:** `internal/cli/integration/`
 - **Build tags:** `//go:build integration` and `// +build integration`
 - **Function:** `TestCLI_CommandName`
-
-### Air Integration Tests
-- **Location:** `internal/air/integration_*.go`
-- **Build tags:** `//go:build integration` and `// +build integration`
-- **Function:** `TestIntegration_FeatureName`
 
 ---
 

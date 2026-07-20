@@ -11,23 +11,21 @@ Hexagonal (ports and adapters) architecture for clean separation of concerns.
 ```
 cmd/nylas/                    # Entry point (main.go)
 internal/
-  domain/                     # Business entities (28 files)
-  ports/                      # Interface contracts (7 files)
+  domain/                     # Business entities
+  ports/                      # Interface contracts
   adapters/                   # Implementations
-    nylas/                    # Nylas API client (94 files)
+    nylas/                    # Nylas API client
     ai/                       # AI providers (Claude, OpenAI, Groq, Ollama)
     analytics/                # Focus optimizer, meeting scorer
     keyring/                  # Secret storage
     grantcache/               # Non-secret local grant metadata/default cache
     config/                   # Configuration validation
     mcp/                      # MCP proxy server
-    slack/                    # Slack API client
     utilities/                # Timezone, scheduling, contacts services
     oauth/                    # OAuth callback server
     browser/                  # Browser automation
     tunnel/                   # Cloudflare tunnel
     webhookserver/            # Webhook server
-  webguard/                   # Shared localhost web UI request guards
   cli/                        # CLI commands
     common/                   # Shared helpers (client, context, errors, flags, format, html, timeutil)
     admin/                    # API key management
@@ -42,22 +40,19 @@ internal/
     otp/                      # OTP extraction
     scheduler/                # Booking pages
     setup/                    # First-time setup wizard (nylas init)
-    slack/                    # Slack integration
     timezone/                 # Timezone utilities
     update/                   # Self-update
     webhook/                  # Webhook management
-  ui/                         # Web UI (port 7363)
-  air/                        # Web email client (port 7365)
   tui/                        # Terminal UI
   app/                        # Shared app logic (auth, otp)
   testutil/                   # Test utilities
   util/                       # General utilities
 docs/                         # Documentation
-  commands/                   # Command guides (12 files)
-  ai/                         # AI docs (8 files)
-  security/                   # Security docs (2 files)
-  troubleshooting/            # Troubleshooting (5 files)
-  development/                # Dev guides (4 files)
+  commands/                   # Command guides
+  ai/                         # AI docs
+  security/                   # Security docs
+  troubleshooting/            # Troubleshooting
+  development/                # Dev guides
 .claude/                      # Claude configuration
   commands/                   # Skills/commands
   agents/                     # Agent definitions
@@ -77,15 +72,11 @@ docs/                         # Documentation
 | Nylas HTTP client | `internal/adapters/nylas/client.go` |
 | AI providers | `internal/adapters/ai/` |
 | MCP server | `internal/adapters/mcp/` |
-| Slack adapter | `internal/adapters/slack/` |
 | Timezone service | `internal/adapters/utilities/timezone/` |
 | **User Interfaces** | |
-| Air web client (port 7365) | `internal/air/` |
-| UI config tool (port 7363) | `internal/ui/` |
 | TUI terminal client | `internal/tui/` |
 | **Tests** | |
 | CLI integration tests | `internal/cli/integration/*_test.go` |
-| Air integration tests | `internal/air/integration_*_test.go` |
 | Test utilities | `internal/testutil/` |
 | **Docs** | |
 | Documentation index | `docs/INDEX.md` |
@@ -99,7 +90,6 @@ docs/                         # Documentation
 | **App Services** | `internal/app/` | Orchestrates adapters for workflows (auth login, OTP extraction) |
 | **CLI Helpers** | `internal/cli/common/` | Reusable utilities (context, format, colors, pagination) |
 | **Adapter Helpers** | `internal/adapters/nylas/client_helpers.go` | HTTP helpers, request building, response handling |
-| **Air Helpers** | `internal/air/handlers_helpers.go` | Handler utilities (config checks, JSON parsing, demo mode) |
 
 > **Key difference:** App services coordinate multiple adapters. CLI helpers are stateless utilities. Adapter helpers handle API specifics.
 
@@ -163,10 +153,10 @@ url := qb.BuildURL(baseURL)
 
 **Three layers:**
 
-1. **Domain** (`internal/domain/`) - 29 files
+1. **Domain** (`internal/domain/`)
    - Pure business logic, no external dependencies
    - Core types: Message, Email, Calendar, Event, Contact, Grant, Webhook
-   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Slack, Agent
+   - Feature types: AI, Analytics, Admin, Scheduler, Notetaker, Agent
    - Support types: Config, Errors, Provider, Utilities
    - Shared interfaces: `interfaces.go` (Paginated, QueryParams, Resource, Timestamped, Validator)
 
@@ -175,32 +165,31 @@ url := qb.BuildURL(baseURL)
    - `EmailParticipant` - Type alias for `Person` (in `email.go`)
    - `Participant` - Embeds `Person`, adds Status/Comment for calendar events
 
-2. **Ports** (`internal/ports/`) - 7 interface files
+2. **Ports** (`internal/ports/`)
+
+   One file per interface; the main ones:
    - `nylas.go` - NylasClient interface (main API operations)
    - `secrets.go` - SecretStore interface (credential storage)
    - `llm.go` - LLM interface (AI providers)
-   - `slack.go` - Slack interface
    - `config.go` - Config interface
-   - `utilities.go` - Utilities interface
    - `webhook_server.go` - Webhook server interface
 
-3. **Adapters** (`internal/adapters/`) - 13 adapter directories
+3. **Adapters** (`internal/adapters/`)
 
-   | Adapter | Files | Purpose |
-   |---------|-------|---------|
-   | `nylas/` | 94 | Nylas API client (messages, calendars, contacts, events) |
-   | `ai/` | 24 | AI clients (Claude, OpenAI, Groq, Ollama), email analyzer |
-   | `analytics/` | 14 | Focus optimizer, conflict resolver, meeting scorer |
-   | `keyring/` | 8 | Secret storage (system keyring, encrypted file fallback) |
-   | `grantcache/` | 2 | Non-secret local grant metadata/default cache |
-   | `mcp/` | 8 | MCP proxy server for AI assistants |
-   | `slack/` | 21 | Slack API client (channels, messages, users) |
-   | `config/` | 5 | Configuration validation |
-   | `oauth/` | 3 | OAuth callback server |
-   | `utilities/` | 12 | Services (contacts, email, scheduling, timezone, webhook) |
-   | `browser/` | 2 | Browser automation |
-   | `tunnel/` | 2 | Cloudflare tunnel |
-   | `webhookserver/` | 2 | Webhook server |
+   | Adapter | Purpose |
+   |---------|---------|
+   | `nylas/` | Nylas API client (messages, calendars, contacts, events) |
+   | `ai/` | AI clients (Claude, OpenAI, Groq, Ollama), email analyzer |
+   | `analytics/` | Focus optimizer, conflict resolver, meeting scorer |
+   | `keyring/` | Secret storage (system keyring, encrypted file fallback) |
+   | `grantcache/` | Non-secret local grant metadata/default cache |
+   | `mcp/` | MCP proxy server for AI assistants |
+   | `config/` | Configuration validation |
+   | `oauth/` | OAuth callback server |
+   | `utilities/` | Services (contacts, email, scheduling, timezone, webhook) |
+   | `browser/` | Browser automation |
+   | `tunnel/` | Cloudflare tunnel |
+   | `webhookserver/` | Webhook server |
 
 **Benefits:**
 - Testability (mock adapters)
@@ -277,132 +266,11 @@ internal/cli/<feature>/
 
 ## User Interfaces
 
-The CLI provides three different interfaces:
+The CLI provides a terminal-based interface:
 
 | Interface | Command | Port | Purpose | Location |
 |-----------|---------|------|---------|----------|
 | **TUI** | `nylas tui` | N/A | Terminal-based email/calendar client | `internal/tui/` |
-| **UI** | `nylas ui` | 7363 | Web-based CLI configuration tool | `internal/ui/` |
-| **Air** | `nylas air` | 7365 | Full web-based email/calendar client | `internal/air/` |
-
-> **Which to use?** TUI for terminal lovers, Air for browser-based email client, UI for API credential setup.
-
----
-
-## Air (Web Email Client)
-
-**Air** is a full-featured web-based email client for Nylas CLI, providing browser interface for email, calendar, and productivity features.
-
-### Architecture
-
-- **Location:** `internal/air/`
-- **Server:** HTTP server with middleware stack (CORS, compression, security, caching)
-- **Handlers:** Feature-specific HTTP handlers (email, calendar, contacts, AI)
-- **Templates:** Go templates with Tailwind CSS
-- **Port:** Default `:7365` (configurable)
-
-### File Organization
-
-**All files are ≤500 lines for maintainability.** Large files have been refactored into focused modules:
-
-**Server Core** (refactored from server.go):
-- `server.go` - Server struct definition
-- `server_lifecycle.go` - Initialization, routing, lifecycle
-- `server_stores.go` - Cache store accessors
-- `server_sync.go` - Background sync logic
-- `server_offline.go` - Offline queue processing
-- `server_converters.go` - Domain to cache conversions
-- `server_template.go` - Template handling
-- `server_modules_test.go` - Unit tests
-
-**Handler Helpers:**
-- `handlers_helpers.go` - Common handler utilities (see pattern below)
-
-**Handlers** (organized by feature):
-- Email: `handlers_email.go`, `handlers_drafts.go`, `handlers_bundles.go`
-- Calendar: `handlers_calendars.go`, `handlers_events.go`, `handlers_calendar_helpers.go`
-- Contacts: `handlers_contacts.go`, `handlers_contacts_crud.go`, `handlers_contacts_search.go`, `handlers_contacts_helpers.go`
-- AI: `handlers_ai_types.go`, `handlers_ai_summarize.go`, `handlers_ai_smart.go`, `handlers_ai_thread.go`, `handlers_ai_complete.go`, `handlers_ai_config.go`
-- Productivity: `handlers_scheduled_send.go`, `handlers_undo_send.go`, `handlers_templates.go`, `handlers_snooze_*.go`, `handlers_splitinbox_*.go`
-
-**Other:**
-- `middleware.go` - Middleware stack
-- `data.go` - Data models
-- `templates/` - HTML templates
-- `integration_*.go` - Integration tests (organized by feature)
-
-### Handler Helper Pattern
-
-All HTTP handlers use common helpers for consistency and reduced boilerplate:
-
-| Helper | Location | Purpose |
-|--------|----------|---------|
-| `withTimeout(r)` | `handlers_helpers.go` | Creates context with 30s default timeout |
-| `requireConfig(w)` | `handlers_helpers.go` | Checks Nylas client is configured, writes error if not |
-| `parseJSONBody[T](w, r, &dest)` | `handlers_helpers.go` | Generic JSON body parsing with error handling |
-| `handleDemoMode(w, data)` | `handlers_helpers.go` | Returns demo response if in demo mode |
-| `requireMethod(w, r, method)` | `handlers_helpers.go` | Validates HTTP method |
-| `writeError(w, status, msg)` | `handlers_helpers.go` | Writes JSON error response |
-| `requireDefaultGrant(w)` | `server_stores.go` | Gets default grant ID, writes error if not set |
-| `getEmailStore(email)` | `server_stores.go` | Gets email cache store for account |
-| `getEventStore(email)` | `server_stores.go` | Gets event cache store for account |
-| `getContactStore(email)` | `server_stores.go` | Gets contact cache store for account |
-| `getFolderStore(email)` | `server_stores.go` | Gets folder cache store for account |
-| `getSyncStore(email)` | `server_stores.go` | Gets sync cache store for account |
-
-**Standard handler pattern:**
-```go
-func (s *Server) handleX(w http.ResponseWriter, r *http.Request) {
-    if s.handleDemoMode(w, demoData) { return }
-    if !s.requireConfig(w) { return }
-    grantID, ok := s.requireDefaultGrant(w)
-    if !ok { return }
-    ctx, cancel := s.withTimeout(r)
-    defer cancel()
-    // ... handler logic
-}
-```
-
-**Complete file listing:** See `CLAUDE.md` for detailed file structure with line counts
-
-### Integration Tests
-
-Air integration tests are **split by feature** for better maintainability:
-
-| File | Tests | Purpose |
-|------|-------|---------|
-| `integration_base_test.go` | 0 | Shared `testServer()` helper, utilities, rate limiting |
-| `integration_core_test.go` | 5 | Config, Grants, Folders, Index page |
-| `integration_email_test.go` | 4 | Email listing, filtering, drafts |
-| `integration_calendar_test.go` | 11 | Calendars, events, availability, conflicts |
-| `integration_contacts_test.go` | 4 | Contact CRUD operations |
-| `integration_cache_test.go` | 4 | Cache store operations, invalidation |
-| `integration_ai_test.go` | 15 | AI summarization, smart compose, thread analysis, config |
-| `integration_middleware_test.go` | 6 | Compression, security headers, CORS |
-| `integration_bundles_test.go` | 8 | Email bundles, categorization, bundle operations |
-| `integration_productivity_test.go` | 8 | Scheduled send, undo send, snooze, reply later |
-
-**Total:** 65 integration tests across 10 organized files
-
-**Running tests:**
-```bash
-make ci-full                     # RECOMMENDED: Complete CI with automatic cleanup
-make test-air-integration        # Run Air integration tests only
-make test-cleanup                # Manual cleanup if needed
-```
-
-**Why cleanup?** Air tests create real resources (drafts, events, contacts) in the connected Nylas account. The `make ci-full` target automatically runs cleanup after all tests.
-
-**Pattern:** Air tests use `httptest` to test HTTP handlers directly:
-```go
-func TestIntegration_Feature(t *testing.T) {
-    server := testServer(t)  // Shared helper
-    req := httptest.NewRequest(http.MethodGet, "/api/endpoint", nil)
-    w := httptest.NewRecorder()
-    server.handleEndpoint(w, req)
-    // Assertions...
-}
-```
 
 ---
 

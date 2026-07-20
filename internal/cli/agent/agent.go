@@ -8,6 +8,7 @@ func NewAgentCmd() *cobra.Command {
 		Use:     "agent",
 		Aliases: []string{"agents"},
 		Short:   "Manage Nylas agent resources",
+		Args:    cobra.NoArgs,
 		Long: `Manage Nylas agent resources.
 
 Agent account operations live under the account subcommand. Top-level status
@@ -37,6 +38,9 @@ API reference: https://developer.nylas.com/docs/v3/agent-accounts/
 
   # Show an agent account
   nylas agent account get <agent-id|email>`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
 	}
 
 	cmd.AddCommand(newAccountCmd())
@@ -44,7 +48,6 @@ API reference: https://developer.nylas.com/docs/v3/agent-accounts/
 	cmd.AddCommand(newRuleCmd())
 	cmd.AddCommand(newAgentListCmd())
 	cmd.AddCommand(newOverviewCmd())
-	cmd.AddCommand(newStudioCmd())
 	cmd.AddCommand(newStatusCmd())
 
 	return cmd

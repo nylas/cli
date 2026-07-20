@@ -322,14 +322,6 @@ exists and shows managed accounts.
 account's workspace, policy, rules, and referenced lists — and flags dangling
 references, shared auto-group workspaces, and unattached resources.
 
-**Visual inspection**: `nylas air` exposes a Policy & Rules page (Email →
-Policy & Rules) showing the active agent account's workspace, policy, rules,
-and lists in one view.
-
-**Visual management**: `nylas agent studio` opens [Agent Studio](agent-studio.md)
-— a drag-and-drop board for creating and wiring accounts, workspaces,
-policies, rules, and lists.
-
 ## See Also
 
 - [Agent command reference](agent.md)

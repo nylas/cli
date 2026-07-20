@@ -15,7 +15,6 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/ncruces/go-sqlite3 v0.30.4
 	github.com/rivo/tview v0.42.0
-	github.com/slack-go/slack v0.23.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.11.1

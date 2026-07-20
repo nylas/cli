@@ -11,6 +11,7 @@ func NewDemoCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "demo",
 		Short: "Explore CLI features with sample data (no credentials required)",
+		Args:  cobra.NoArgs,
 		Long: `Demo mode lets you try out the Nylas CLI without any account or credentials.
 
 All commands use realistic sample data so you can explore:
@@ -20,7 +21,6 @@ All commands use realistic sample data so you can explore:
   - Scheduling capabilities
   - AI notetaker features
   - Interactive TUI
-  - Web-based UI
 
 This is perfect for:
   - Evaluating the CLI before signing up
@@ -45,15 +45,14 @@ To connect your real email account, run: nylas auth login`,
   nylas demo scheduler list
 
   # Try the notetaker
-  nylas demo notetaker list
-
-  # Launch the web UI with sample data
-  nylas demo ui`,
+  nylas demo notetaker list`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
 	}
 
 	// Add demo subcommands
 	cmd.AddCommand(newDemoTUICmd())
-	cmd.AddCommand(newDemoUICmd())
 	cmd.AddCommand(newDemoEmailCmd())
 	cmd.AddCommand(newDemoCalendarCmd())
 	cmd.AddCommand(newDemoContactsCmd())

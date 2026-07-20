@@ -35,14 +35,6 @@ var (
 	ErrAccountNotFound = errors.New("account not found")
 	ErrNoMessages      = errors.New("no messages found")
 
-	// Slack errors
-	ErrSlackNotConfigured    = errors.New("slack not configured")
-	ErrSlackAuthFailed       = errors.New("slack authentication failed")
-	ErrSlackRateLimited      = errors.New("slack rate limited")
-	ErrSlackChannelNotFound  = errors.New("slack channel not found")
-	ErrSlackMessageNotFound  = errors.New("slack message not found")
-	ErrSlackPermissionDenied = errors.New("slack permission denied")
-
 	// Resource not found errors - use these instead of creating ad-hoc errors.
 	// Wrap with additional context: fmt.Errorf("%w: %s", domain.ErrContactNotFound, id)
 	ErrContactNotFound       = errors.New("contact not found")

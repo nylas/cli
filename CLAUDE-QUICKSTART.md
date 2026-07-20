@@ -121,10 +121,9 @@ Your AI-powered development assistant with self-learning capabilities.
 # Basic usage - searches all layers
 /parallel-explore "email sending functionality"
 
-# Spawns 4-5 codebase-explorer agents across:
+# Spawns up to 4 codebase-explorer agents across:
 # - internal/cli/      (commands, flags)
 # - internal/adapters/ (API integrations)
-# - internal/air/      (web UI handlers)
 # - internal/tui/      (terminal UI)
 # - internal/domain/   (core types)
 ```
@@ -165,24 +164,12 @@ Use for:
 ```
 
 ### test-writer (Sonnet)
-**Best for:** All test generation (Go + Playwright)
+**Best for:** Go unit and integration test generation
 
 ```
 Go Tests: Table-driven with t.Run(), testify assertions, rate-limited
-Playwright: Semantic selectors only (getByRole > getByText > getByTestId)
 
 Patterns: .claude/shared/patterns/go-test-patterns.md
-          .claude/shared/patterns/playwright-patterns.md
-```
-
-### frontend-agent (Sonnet)
-**Best for:** JavaScript, CSS, Go templates
-
-```
-Tech stack:
-- Vanilla ES6+ JavaScript (no npm in browser)
-- CSS custom properties, BEM naming
-- Go html/template (.gohtml)
 ```
 
 ### mistake-learner (Sonnet)
@@ -246,7 +233,6 @@ Triggers:
 - "test" → Testing patterns reminder
 - "security" → Security scan reminder
 - "api" → Nylas v3 API reminder
-- "playwright" → Semantic selector reminder
 - "css" → BEM naming reminder
 - "commit" → Git rules reminder
 ```
@@ -286,7 +272,6 @@ CLAUDE.md has a self-updating LEARNINGS section:
 
 ### Project-Specific Gotchas
 Things unique to this codebase:
-- Playwright selectors: ALWAYS use semantic selectors (getByRole > getByText > getByLabel > getByTestId)
 - Go tests: ALWAYS use table-driven tests with t.Run()
 - Integration tests: ALWAYS use acquireRateLimit(t) before API calls
 - Directory permissions: Use 0750, not 0755 (gosec G301)
@@ -317,8 +302,7 @@ Hard-won knowledge:
 /diary
 
 # Use specialized agents for their domain
-# - test-writer for tests (Go + Playwright)
-# - frontend-agent for CSS/JS
+# - test-writer for tests (Go)
 # - codebase-explorer for finding code
 ```
 
@@ -328,7 +312,6 @@ Hard-won knowledge:
 # Don't skip session start - you lose context
 # Don't ignore mistakes - they'll repeat
 # Don't skip /diary - learnings are lost
-# Don't use CSS selectors in Playwright - use semantic selectors
 ```
 
 ---

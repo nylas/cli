@@ -86,7 +86,7 @@ Add to the `"hooks"` section in `.claude/settings.json`:
 - Never blocks
 
 **context-injector.sh** (UserPromptSubmit)
-- Injects reminders based on prompt keywords (test, security, api, playwright, commit)
+- Injects reminders based on prompt keywords (test, security, api, commit)
 - Never blocks
 
 ---

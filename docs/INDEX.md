@@ -73,7 +73,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **Calendar** → [commands/calendar.md](commands/calendar.md)
 - **Contacts** → [commands/contacts.md](commands/contacts.md)
 - **Webhooks** → [commands/webhooks.md](commands/webhooks.md)
-- **Agent accounts** → [commands/agent-getting-started.md](commands/agent-getting-started.md) (guide), [commands/agent.md](commands/agent.md) (reference), [commands/agent-studio.md](commands/agent-studio.md) (visual UI)
+- **Agent accounts** → [commands/agent-getting-started.md](commands/agent-getting-started.md) (guide), [commands/agent.md](commands/agent.md) (reference)
 - **Scheduler** → [commands/scheduler.md](commands/scheduler.md)
 - **Admin** → [commands/admin.md](commands/admin.md)
 - **Timezone** → [commands/timezone.md](commands/timezone.md)
@@ -81,7 +81,6 @@ Quick navigation guide to find the right documentation for your needs.
 - **TUI** → [commands/tui.md](commands/tui.md)
 - **Workflows (OTP)** → [commands/workflows.md](commands/workflows.md)
 - **Templates** → [commands/templates.md](commands/templates.md)
-- **Slack** → [COMMANDS.md#slack-integration](COMMANDS.md#slack-integration)
 
 ### AI & MCP
 
