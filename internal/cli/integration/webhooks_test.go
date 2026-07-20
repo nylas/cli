@@ -537,27 +537,51 @@ func TestCLI_WebhookLifecycle(t *testing.T) {
 	})
 }
 
+// tunnelDNSPublicationDelay is how long to wait after cloudflared prints the
+// tunnel URL before resolving that hostname for the first time.
+//
+// Cloudflare publishes the quick-tunnel DNS record a few seconds AFTER
+// cloudflared prints the URL (measured: URL at ~6s, record live at ~10s).
+// There is no wildcard on *.trycloudflare.com, so a lookup inside that window
+// returns NXDOMAIN - and the system resolver caches that negative answer for
+// longer than the retry loop below runs. Every subsequent attempt then reads
+// the poisoned cache entry and fails too, so retrying harder cannot help; the
+// only fix is not to ask before the record exists.
+const tunnelDNSPublicationDelay = 15 * time.Second
+
 func waitForWebhookChallengeReady(t *testing.T, webhookURL string) {
 	t.Helper()
+
+	// Must precede the first lookup - see tunnelDNSPublicationDelay.
+	time.Sleep(tunnelDNSPublicationDelay)
 
 	challengeURL := webhookURL + "?challenge=codex-webhook-ready"
 	client := &http.Client{Timeout: 5 * time.Second}
 	deadline := time.Now().Add(60 * time.Second)
 
+	// Record why the last attempt failed; without it a DNS failure and an HTTP
+	// error are indistinguishable in the skip message.
+	var lastErr error
+
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(challengeURL)
-		if err == nil {
-			body, readErr := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-			if readErr == nil && resp.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "codex-webhook-ready" {
-				return
-			}
+		if err != nil {
+			lastErr = err
+			time.Sleep(2 * time.Second)
+			continue
 		}
 
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr == nil && resp.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "codex-webhook-ready" {
+			return
+		}
+
+		lastErr = fmt.Errorf("status %d, body %q", resp.StatusCode, strings.TrimSpace(string(body)))
 		time.Sleep(2 * time.Second)
 	}
 
-	t.Skipf("cloudflared tunnel did not become externally reachable within 60s: %s", challengeURL)
+	t.Skipf("cloudflared tunnel did not become externally reachable within 60s: %s (last attempt: %v)", challengeURL, lastErr)
 }
 
 func waitForWebhookChallengeStability(webhookURL string, requiredSuccesses int, interval, timeout time.Duration) error {
