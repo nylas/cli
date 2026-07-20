@@ -14,7 +14,6 @@ This directory contains specialized agents for the Nylas CLI codebase.
 | `security-auditor` | opus | Security vulnerability analysis | Safe |
 | `documentation-writer` | sonnet | Documentation updates | Limited |
 | `codebase-explorer` | haiku | Exploration | Safe |
-| `frontend-agent` | sonnet | UI/CSS/JS | Limited |
 | `mistake-learner` | sonnet | Learning capture | Serial only |
 
 ---
@@ -27,23 +26,22 @@ Use parallel agents to explore or review the 745-file codebase without exhaustin
 
 | Task | Agents | Why |
 |------|--------|-----|
-| Full codebase exploration | 5 | One per major directory |
-| Feature search | 4 | Search cli, adapters, air, tui simultaneously |
+| Full codebase exploration | 4 | One per major directory |
+| Feature search | 3 | Search cli, adapters, tui simultaneously |
 | Multi-file PR review | 4 | Review different files in parallel |
 | Test coverage analysis | 4 | Analyze different packages |
 
 ### Invocation Patterns
 
 ```
-# Full exploration (4 agents)
-"Explore using 4 parallel agents:
+# Full exploration (3 agents)
+"Explore using 3 parallel agents:
  - Agent 1: internal/cli/
  - Agent 2: internal/adapters/
- - Agent 3: internal/air/
- - Agent 4: internal/domain/ + ports/ + tui/"
+ - Agent 3: internal/domain/ + ports/ + tui/"
 
-# Feature search (4 agents)
-"Find all email-related code using 4 agents across cli, adapters, air, tui"
+# Feature search (3 agents)
+"Find all email-related code using 3 agents across cli, adapters, tui"
 
 # PR review (4 agents)
 "Review these 8 files using 4 parallel code-reviewer agents"
@@ -55,7 +53,6 @@ Use parallel agents to explore or review the 745-file codebase without exhaustin
 |-----------|-------|----------------|
 | `internal/cli/` | 268 | HIGH |
 | `internal/adapters/` | 158 | HIGH |
-| `internal/air/` | 117 | HIGH |
 | `internal/tui/` | 77 | MEDIUM |
 | `internal/domain/` | 21 | LOW (shared) |
 
@@ -81,7 +78,6 @@ Use parallel agents to explore or review the 745-file codebase without exhaustin
 | `documentation-writer` | Different file writers | Another doc-writer |
 | `code-writer` | Different directory writers | Same-file writers |
 | `test-writer` | Different package writers | Same-package writers |
-| `frontend-agent` | code-writer (Go only) | Another frontend-agent |
 | `mistake-learner` | None (serial only) | All write agents |
 
 ### Key Benefit
@@ -118,7 +114,7 @@ Parallel agents have **isolated context windows** - prevents "dumb Claude mid-se
 | Model | Cost | Use For |
 |-------|------|---------|
 | **opus** | $$$ | Quality/security validation (code-reviewer, security-auditor) |
-| **sonnet** | $$ | Implementation (code-writer, test-writer, documentation-writer, frontend-agent) |
+| **sonnet** | $$ | Implementation (code-writer, test-writer, documentation-writer) |
 | **haiku** | $ | Exploration (codebase-explorer) |
 
 **Principle:** Use the cheapest model that delivers acceptable quality for the task.

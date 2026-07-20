@@ -72,12 +72,6 @@ Then reuse the volumes for later commands without passing env vars each time.
 
 ---
 
-## Web Interfaces
-
-`nylas air`, `nylas ui`, and `nylas chat` bind to `localhost` inside the container, so published ports won't expose them to the host. Use Docker for CLI commands only.
-
----
-
 ## Release Images
 
 Tagged releases publish multi-platform images to GitHub Container Registry:

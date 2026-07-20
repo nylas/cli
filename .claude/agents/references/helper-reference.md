@@ -83,15 +83,6 @@ Complete reference for reusable helper functions. **ALWAYS check these before wr
 
 ---
 
-## Air Web Helpers (`internal/air/`)
-
-| Helper | Purpose | Location |
-|--------|---------|----------|
-| `s.requireDefaultGrant(w)` | Validate grant exists | `server_stores.go` |
-| `ParseBool(r, param)` | Parse bool query param | `query_helpers.go` |
-
----
-
 ## Common Duplicates to Avoid
 
 These patterns have been duplicated before - ALWAYS check first:
@@ -106,7 +97,6 @@ These patterns have been duplicated before - ALWAYS check first:
 | Field validation | `common.ValidateRequired()`, `ValidateRequiredFlag()` |
 | URL validation | `common.ValidateURL(name, value)` |
 | Email validation | `common.ValidateEmail(name, value)` |
-| Grant validation in Air | `s.requireDefaultGrant(w)` |
 | Pagination handling | `common.FetchAllPages[T]()` |
 | Error formatting for CLI | `common.WrapError(err)` or wrap with `fmt.Errorf` |
 | Retry with backoff | `common.WithRetry(ctx, config, fn)` |
@@ -126,7 +116,6 @@ These patterns have been duplicated before - ALWAYS check first:
 | CLI-wide utilities | `internal/cli/common/` |
 | HTTP/API helpers | `internal/adapters/nylas/client.go` |
 | Feature-specific | `internal/cli/{feature}/helpers.go` |
-| Air web UI | `internal/air/server_helpers.go` |
 | Secret storage | `internal/adapters/keyring/keyring.go` |
 | Secret constants | `internal/ports/secrets.go` |
 

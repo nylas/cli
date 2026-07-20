@@ -26,7 +26,6 @@ internal/
     browser/                  # Browser automation
     tunnel/                   # Cloudflare tunnel
     webhookserver/            # Webhook server
-  webguard/                   # Shared localhost web UI request guards
   cli/                        # CLI commands
     common/                   # Shared helpers (client, context, errors, flags, format, html, timeutil)
     admin/                    # API key management
@@ -44,8 +43,6 @@ internal/
     timezone/                 # Timezone utilities
     update/                   # Self-update
     webhook/                  # Webhook management
-  ui/                         # Web UI (port 7363)
-  air/                        # Web email client (port 7365)
   tui/                        # Terminal UI
   app/                        # Shared app logic (auth, otp)
   testutil/                   # Test utilities
@@ -77,12 +74,9 @@ docs/                         # Documentation
 | MCP server | `internal/adapters/mcp/` |
 | Timezone service | `internal/adapters/utilities/timezone/` |
 | **User Interfaces** | |
-| Air web client (port 7365) | `internal/air/` |
-| UI config tool (port 7363) | `internal/ui/` |
 | TUI terminal client | `internal/tui/` |
 | **Tests** | |
 | CLI integration tests | `internal/cli/integration/*_test.go` |
-| Air integration tests | `internal/air/integration_*_test.go` |
 | Test utilities | `internal/testutil/` |
 | **Docs** | |
 | Documentation index | `docs/INDEX.md` |
@@ -96,7 +90,6 @@ docs/                         # Documentation
 | **App Services** | `internal/app/` | Orchestrates adapters for workflows (auth login, OTP extraction) |
 | **CLI Helpers** | `internal/cli/common/` | Reusable utilities (context, format, colors, pagination) |
 | **Adapter Helpers** | `internal/adapters/nylas/client_helpers.go` | HTTP helpers, request building, response handling |
-| **Air Helpers** | `internal/air/handlers_helpers.go` | Handler utilities (config checks, JSON parsing, demo mode) |
 
 > **Key difference:** App services coordinate multiple adapters. CLI helpers are stateless utilities. Adapter helpers handle API specifics.
 
@@ -273,132 +266,11 @@ internal/cli/<feature>/
 
 ## User Interfaces
 
-The CLI provides three different interfaces:
+The CLI provides a terminal-based interface:
 
 | Interface | Command | Port | Purpose | Location |
 |-----------|---------|------|---------|----------|
 | **TUI** | `nylas tui` | N/A | Terminal-based email/calendar client | `internal/tui/` |
-| **UI** | `nylas ui` | 7363 | Web-based CLI configuration tool | `internal/ui/` |
-| **Air** | `nylas air` | 7365 | Full web-based email/calendar client | `internal/air/` |
-
-> **Which to use?** TUI for terminal lovers, Air for browser-based email client, UI for API credential setup.
-
----
-
-## Air (Web Email Client)
-
-**Air** is a full-featured web-based email client for Nylas CLI, providing browser interface for email, calendar, and productivity features.
-
-### Architecture
-
-- **Location:** `internal/air/`
-- **Server:** HTTP server with middleware stack (CORS, compression, security, caching)
-- **Handlers:** Feature-specific HTTP handlers (email, calendar, contacts, AI)
-- **Templates:** Go templates with Tailwind CSS
-- **Port:** Default `:7365` (configurable)
-
-### File Organization
-
-**All files are ≤500 lines for maintainability.** Large files have been refactored into focused modules:
-
-**Server Core** (refactored from server.go):
-- `server.go` - Server struct definition
-- `server_lifecycle.go` - Initialization, routing, lifecycle
-- `server_stores.go` - Cache store accessors
-- `server_sync.go` - Background sync logic
-- `server_offline.go` - Offline queue processing
-- `server_converters.go` - Domain to cache conversions
-- `server_template.go` - Template handling
-- `server_modules_test.go` - Unit tests
-
-**Handler Helpers:**
-- `handlers_helpers.go` - Common handler utilities (see pattern below)
-
-**Handlers** (organized by feature):
-- Email: `handlers_email.go`, `handlers_drafts.go`, `handlers_bundles.go`
-- Calendar: `handlers_calendars.go`, `handlers_events.go`, `handlers_calendar_helpers.go`
-- Contacts: `handlers_contacts.go`, `handlers_contacts_crud.go`, `handlers_contacts_search.go`, `handlers_contacts_helpers.go`
-- AI: `handlers_ai_types.go`, `handlers_ai_summarize.go`, `handlers_ai_smart.go`, `handlers_ai_thread.go`, `handlers_ai_complete.go`, `handlers_ai_config.go`
-- Productivity: `handlers_scheduled_send.go`, `handlers_undo_send.go`, `handlers_templates.go`, `handlers_snooze_*.go`, `handlers_splitinbox_*.go`
-
-**Other:**
-- `middleware.go` - Middleware stack
-- `data.go` - Data models
-- `templates/` - HTML templates
-- `integration_*.go` - Integration tests (organized by feature)
-
-### Handler Helper Pattern
-
-All HTTP handlers use common helpers for consistency and reduced boilerplate:
-
-| Helper | Location | Purpose |
-|--------|----------|---------|
-| `withTimeout(r)` | `handlers_helpers.go` | Creates context with 30s default timeout |
-| `requireConfig(w)` | `handlers_helpers.go` | Checks Nylas client is configured, writes error if not |
-| `parseJSONBody[T](w, r, &dest)` | `handlers_helpers.go` | Generic JSON body parsing with error handling |
-| `handleDemoMode(w, data)` | `handlers_helpers.go` | Returns demo response if in demo mode |
-| `requireMethod(w, r, method)` | `handlers_helpers.go` | Validates HTTP method |
-| `writeError(w, status, msg)` | `handlers_helpers.go` | Writes JSON error response |
-| `requireDefaultGrant(w)` | `server_stores.go` | Gets default grant ID, writes error if not set |
-| `getEmailStore(email)` | `server_stores.go` | Gets email cache store for account |
-| `getEventStore(email)` | `server_stores.go` | Gets event cache store for account |
-| `getContactStore(email)` | `server_stores.go` | Gets contact cache store for account |
-| `getFolderStore(email)` | `server_stores.go` | Gets folder cache store for account |
-| `getSyncStore(email)` | `server_stores.go` | Gets sync cache store for account |
-
-**Standard handler pattern:**
-```go
-func (s *Server) handleX(w http.ResponseWriter, r *http.Request) {
-    if s.handleDemoMode(w, demoData) { return }
-    if !s.requireConfig(w) { return }
-    grantID, ok := s.requireDefaultGrant(w)
-    if !ok { return }
-    ctx, cancel := s.withTimeout(r)
-    defer cancel()
-    // ... handler logic
-}
-```
-
-**Complete file listing:** See `CLAUDE.md` for detailed file structure with line counts
-
-### Integration Tests
-
-Air integration tests are **split by feature** for better maintainability:
-
-| File | Tests | Purpose |
-|------|-------|---------|
-| `integration_base_test.go` | 0 | Shared `testServer()` helper, utilities, rate limiting |
-| `integration_core_test.go` | 5 | Config, Grants, Folders, Index page |
-| `integration_email_test.go` | 4 | Email listing, filtering, drafts |
-| `integration_calendar_test.go` | 11 | Calendars, events, availability, conflicts |
-| `integration_contacts_test.go` | 4 | Contact CRUD operations |
-| `integration_cache_test.go` | 4 | Cache store operations, invalidation |
-| `integration_ai_test.go` | 15 | AI summarization, smart compose, thread analysis, config |
-| `integration_middleware_test.go` | 6 | Compression, security headers, CORS |
-| `integration_bundles_test.go` | 8 | Email bundles, categorization, bundle operations |
-| `integration_productivity_test.go` | 8 | Scheduled send, undo send, snooze, reply later |
-
-**Total:** 65 integration tests across 10 organized files
-
-**Running tests:**
-```bash
-make ci-full                     # RECOMMENDED: Complete CI with automatic cleanup
-make test-air-integration        # Run Air integration tests only
-make test-cleanup                # Manual cleanup if needed
-```
-
-**Why cleanup?** Air tests create real resources (drafts, events, contacts) in the connected Nylas account. The `make ci-full` target automatically runs cleanup after all tests.
-
-**Pattern:** Air tests use `httptest` to test HTTP handlers directly:
-```go
-func TestIntegration_Feature(t *testing.T) {
-    server := testServer(t)  // Shared helper
-    req := httptest.NewRequest(http.MethodGet, "/api/endpoint", nil)
-    w := httptest.NewRecorder()
-    server.handleEndpoint(w, req)
-    // Assertions...
-}
-```
 
 ---
 

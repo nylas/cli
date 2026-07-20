@@ -51,59 +51,6 @@ func TestCLI_FeatureName(t *testing.T) {
 
 ---
 
-## Air Integration Tests (Web UI)
-
-### Location & Build Tags
-
-```go
-//go:build integration
-// +build integration
-
-package air
-```
-
-Location: `internal/air/integration_*.go`
-
-### Files (10 total):
-- `integration_base_test.go` - Shared helpers (`testServer()`, utilities)
-- `integration_core_test.go` - Config, Grants, Folders, Index
-- `integration_email_test.go` - Email and draft operations
-- `integration_calendar_test.go` - Calendar, events, availability
-- `integration_contacts_test.go` - Contact operations
-- `integration_cache_test.go` - Cache operations
-- `integration_ai_test.go` - AI features (summarize, smart compose, thread analysis)
-- `integration_middleware_test.go` - Middleware tests
-- `integration_bundles_test.go` - Email bundles, categorization
-- `integration_productivity_test.go` - Scheduled send, undo send, snooze
-
----
-
-## Air Integration Test Template
-
-```go
-func TestIntegration_Feature(t *testing.T) {
-    server := testServer(t)  // Uses shared helper
-
-    req := httptest.NewRequest(http.MethodGet, "/api/endpoint", nil)
-    w := httptest.NewRecorder()
-
-    server.handleEndpoint(w, req)
-
-    if w.Code != http.StatusOK {
-        t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
-    }
-
-    var resp ResponseType
-    if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-        t.Fatalf("failed to decode response: %v", err)
-    }
-
-    // Assertions here
-}
-```
-
----
-
 ## Rate Limiting (CRITICAL)
 
 ALWAYS use rate limiting for API calls in parallel tests:
@@ -151,7 +98,7 @@ t.Cleanup(func() {
 })
 ```
 
-**CRITICAL:** Air tests create real resources. Always use:
+**CRITICAL:** Integration tests create real resources. Always use:
 ```bash
 make ci-full         # RECOMMENDED: Complete CI with automatic cleanup
 make test-cleanup    # Manual cleanup if needed
@@ -166,5 +113,4 @@ make test-cleanup    # Manual cleanup if needed
 ```bash
 make ci-full              # Complete CI pipeline (RECOMMENDED)
 make test-integration     # CLI integration tests
-make test-air-integration # Air web UI integration tests
 ```

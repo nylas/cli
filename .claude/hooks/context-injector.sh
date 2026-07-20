@@ -21,16 +21,6 @@ if echo "$PROMPT" | grep -qi "api\|endpoint\|nylas"; then
     echo "API Note: Use Nylas v3 ONLY. Reference: https://developer.nylas.com/docs/api/v3/"
 fi
 
-# If prompt mentions Playwright or E2E, remind about selectors
-if echo "$PROMPT" | grep -qi "playwright\|e2e\|browser\|selector"; then
-    echo "Playwright reminder: Use semantic selectors (getByRole > getByText > getByLabel). Never CSS/XPath."
-fi
-
-# If prompt mentions CSS or styling, remind about patterns
-if echo "$PROMPT" | grep -qi "css\|style\|frontend\|ui"; then
-    echo "CSS reminder: Use BEM naming, CSS custom properties. See .claude/rules/file-size-limits.md"
-fi
-
 # If prompt mentions commit or PR, remind about rules
 if echo "$PROMPT" | grep -qi "commit\|push\|pr\|pull request"; then
     echo "Git reminder: Run 'make ci-full' before committing. Never commit secrets."

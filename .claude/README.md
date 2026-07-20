@@ -10,9 +10,9 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 .claude/
 ├── commands/              # 19 actionable skills (invokable workflows)
 ├── rules/                 # 4 development rules (auto-applied)
-├── agents/                # 9 specialized agents
+├── agents/                # 7 specialized agents
 ├── hooks/                 # 6 hook scripts (2 wired, 4 available)
-├── shared/patterns/       # 3 reusable pattern files
+├── shared/patterns/       # 2 reusable pattern files
 ├── settings.json          # Security hooks & permissions
 ├── HOOKS-CONFIG.md        # Hook configuration guide
 └── README.md              # This file
@@ -84,7 +84,7 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 
 ---
 
-## Agents (8 Specialized)
+## Agents (7 Specialized)
 
 | Agent | Purpose |
 |-------|---------|
@@ -94,7 +94,6 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 | `security-auditor` | Security vulnerability analysis |
 | `documentation-writer` | Documentation updates |
 | `codebase-explorer` | Fast codebase exploration |
-| `frontend-agent` | JS/CSS/Go templates |
 | `mistake-learner` | Abstract mistakes to learnings |
 
 **References:** `agents/references/` contains helper-reference, security-checklist, doc-standards.
@@ -116,13 +115,12 @@ This directory contains skills, workflows, rules, agents, and shared patterns fo
 
 ---
 
-## Shared Patterns (3 Files)
+## Shared Patterns (2 Files)
 
 | Pattern | Purpose |
 |---------|---------|
 | `go-test-patterns.md` | Table-driven tests, mocks, testify |
-| `integration-test-patterns.md` | CLI + Air integration tests |
-| `playwright-patterns.md` | Selectors, templates, commands |
+| `integration-test-patterns.md` | CLI integration tests |
 
 ---
 

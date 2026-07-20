@@ -1,4 +1,4 @@
-.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-integration-rpc test-cleanup test-coverage test-air test-air-integration test-e2e test-e2e-air test-e2e-ui test-playwright test-playwright-air test-playwright-ui test-playwright-interactive test-playwright-headed clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
+.PHONY: build test-unit test-race test-integration test-integration-fast test-cli-regressions test-integration-agent test-integration-rpc test-cleanup test-coverage clean clean-cache install fmt vet lint vuln deps security check-context ci ci-full help
 
 # Disable parallel Make execution - prevents Go build cache corruption on btrfs (CachyOS)
 .NOTPARALLEL:
@@ -91,30 +91,6 @@ test-coverage:
 	@echo "✓ Coverage report generated: coverage.html"
 
 # ============================================================================
-# Air Web UI Tests
-# ============================================================================
-test-air:
-	@echo "=== Running Nylas Air Tests ==="
-	@go clean -testcache
-	go test ./internal/air/... -v
-	@echo "✓ All Air tests passed"
-
-# Nylas Air integration tests (requires Google account as default)
-# Skips automatically if no Google account is configured as default
-# Rate limiting: 1 RPS with burst of 3 to stay well under Nylas API limits
-# -p 1: Run test packages sequentially to prevent rate limit issues
-test-air-integration:
-	@echo "=== Running Nylas Air Integration Tests ==="
-	@echo "Note: Requires a Google account configured as default"
-	@echo ""
-	@go clean -testcache
-	NYLAS_TEST_RATE_LIMIT_RPS=$(NYLAS_TEST_RATE_LIMIT_RPS) \
-	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
-	go test -tags=integration ./internal/air/... -v -timeout 5m -p 1
-	@echo "✓ All Air integration tests passed"
-
-
-# ============================================================================
 # Integration Tests
 # ============================================================================
 # Integration tests (requires NYLAS_API_KEY and NYLAS_GRANT_ID env vars)
@@ -168,7 +144,7 @@ test-cli-regressions: build
 	NYLAS_TEST_RATE_LIMIT_BURST=$(NYLAS_TEST_RATE_LIMIT_BURST) \
 	NYLAS_TEST_BINARY=$(CURDIR)/bin/nylas \
 	go test ./internal/cli/integration/... -tags=integration -v -timeout 10m -p 1 \
-		-run 'TestCLI_(InboundRemoved|InboxAliasRemoved|HelpOmitsInbound|SlackRemoved|SlackAliasRemoved|HelpOmitsSlack|AgentStudioRemoved|AgentsStudioRemoved|AgentHelpOmitsStudio|AuthLoginRejectsInboxProvider|ConnectorSurfaces_HideInboxProvider|AdminConnectorsCreate_RejectsInboxProvider|AdminConnectorsShow_HidesInboxProvider|EmailSendValidationShowsFormattedSuggestion)$$'
+		-run 'TestCLI_(InboundRemoved|InboxAliasRemoved|HelpOmitsInbound|SlackRemoved|SlackAliasRemoved|HelpOmitsSlack|AgentStudioRemoved|AgentsStudioRemoved|AgentHelpOmitsStudio|WebUIsRemoved|HelpOmitsWebUIs|DemoHelpOmitsUI|AuthLoginRejectsInboxProvider|ConnectorSurfaces_HideInboxProvider|AdminConnectorsCreate_RejectsInboxProvider|AdminConnectorsShow_HidesInboxProvider|EmailSendValidationShowsFormattedSuggestion)$$'
 	@echo "✓ CLI regression checks passed"
 
 # Agent integration checks require explicit credentials plus an agent domain so the lifecycle suites do not self-skip.
@@ -207,7 +183,6 @@ test-cleanup:
 	@echo ""
 	@echo "0. Killing any leftover test processes and freeing ports..."
 	@-pkill -f "nylas.*webhook.*server" 2>/dev/null || true
-	@-pkill -f "nylas.*ui" 2>/dev/null || true
 	@-pkill -f "cloudflared.*tunnel" 2>/dev/null || true
 	@-pkill -f "cloudflared" 2>/dev/null || true
 	@-lsof -ti :3099 | xargs kill -9 2>/dev/null || true
@@ -268,78 +243,6 @@ test-cleanup:
 	@echo "✓ Test cleanup complete"
 
 # ============================================================================
-# Playwright E2E Tests (Air + UI Web Interfaces)
-# ============================================================================
-# E2E tests using Playwright for:
-# - Nylas Air: Modern web email client (http://localhost:7365)
-# - Nylas UI: Web-based CLI admin interface (http://localhost:7363)
-# Requires: npm (in tests/ directory)
-
-# Run all E2E tests (Air + UI)
-test-e2e: test-playwright
-
-# Run only Air (web email client) tests
-test-e2e-air: test-playwright-air
-
-# Run only UI (CLI admin interface) tests
-test-e2e-ui: test-playwright-ui
-
-test-playwright:
-	@echo "=== Running All Playwright E2E Tests (Air + UI) ==="
-	@command -v npm >/dev/null 2>&1 || { \
-		echo "ERROR: npm not installed"; \
-		echo "Install Node.js and npm first"; \
-		exit 1; \
-	}
-	@echo "Building latest binary..."
-	@$(MAKE) --no-print-directory build
-	@echo ""
-	@echo "Installing Playwright dependencies..."
-	@cd tests && npm install
-	@cd tests && npm run test:config
-	@echo ""
-	@echo "Running E2E tests..."
-	@cd tests && UI_E2E_DEMO=true npx playwright test
-	@echo ""
-	@echo "✓ Playwright E2E tests complete!"
-	@echo "  Report: tests/playwright-report/index.html"
-
-test-playwright-air:
-	@echo "=== Running Playwright Air (Web Email Client) Tests ==="
-	@command -v npm >/dev/null 2>&1 || { \
-		echo "ERROR: npm not installed"; \
-		exit 1; \
-	}
-	@$(MAKE) --no-print-directory build
-	@cd tests && npm install
-	@cd tests && npx playwright test --project=air-chromium
-	@echo "✓ Air E2E tests complete!"
-
-test-playwright-ui:
-	@echo "=== Running Playwright UI (CLI Admin Interface) Tests ==="
-	@command -v npm >/dev/null 2>&1 || { \
-		echo "ERROR: npm not installed"; \
-		exit 1; \
-	}
-	@$(MAKE) --no-print-directory build
-	@cd tests && npm install
-	@cd tests && npm run test:config
-	@cd tests && UI_E2E_DEMO=true npx playwright test --project=ui-chromium
-	@echo "✓ UI E2E tests complete!"
-
-test-playwright-interactive:
-	@echo "=== Running Playwright E2E Tests (Interactive Mode) ==="
-	@$(MAKE) --no-print-directory build
-	@cd tests && npm install
-	@cd tests && npx playwright test --ui
-
-test-playwright-headed:
-	@echo "=== Running Playwright E2E Tests (Headed Browser) ==="
-	@$(MAKE) --no-print-directory build
-	@cd tests && npm install
-	@cd tests && npx playwright test --headed
-
-# ============================================================================
 # Security Targets
 # ============================================================================
 security:
@@ -398,7 +301,6 @@ ci-full:
 		echo "Running Integration Tests..."; \
 		echo "================================="; \
 		NYLAS_TEST_SKIP_AGENT=true $(MAKE) --no-print-directory test-integration; \
-		$(MAKE) --no-print-directory test-air-integration; \
 		run_cleanup; \
 		echo ""; \
 		echo "================================="; \
@@ -500,14 +402,11 @@ help:
 	@echo "  test-unit                  - Run unit tests (-short)"
 	@echo "  test-race                  - Run tests with race detector"
 	@echo "  test-coverage              - Generate coverage report"
-	@echo "  test-air                   - Run Air web UI tests"
 	@echo ""
 	@echo "INTEGRATION TESTS (auto-loads .env file):"
 	@echo "  test-integration           - Run all integration tests"
 	@echo "                               (rate limited: 1 RPS, sequential)"
 	@echo "  test-integration-fast      - Run fast tests (skip LLM)"
-	@echo "                               (rate limited: 1 RPS, sequential)"
-	@echo "  test-air-integration       - Run Air integration tests"
 	@echo "                               (rate limited: 1 RPS, sequential)"
 	@echo "  test-cleanup               - Clean up test resources"
 	@echo ""

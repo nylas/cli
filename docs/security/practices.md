@@ -175,59 +175,6 @@ export NYLAS_API_URI="https://..."     # Custom API endpoint
 
 ---
 
-## Web UI Security
-
-When running `nylas ui`:
-
-### Localhost Binding
-
-- Server binds to `127.0.0.1` only
-- Not accessible from other machines on the network
-- No external network exposure
-
-### Command Whitelist
-
-Only allowed commands can be executed:
-- `auth`, `email`, `calendar`, `contacts`, `webhook`
-- No arbitrary shell command execution
-- Arguments validated before execution
-
-### XSS Prevention
-
-- All output HTML-escaped before display
-- Content-Security-Policy headers set
-- No inline JavaScript execution
-
----
-
-## Air Client Security
-
-When running `nylas air`:
-
-### Local Data Storage
-
-- Email cache stored locally only
-- Optional encryption using system keyring
-- Clear cache with `--clear-cache`
-
-### Encryption Options
-
-```bash
-# Enable encrypted cache
-nylas air --encrypted
-
-# Clear all cached data
-nylas air --clear-cache
-```
-
-### Session Security
-
-- Session tokens stored in memory only
-- Automatic logout on exit
-- No persistent authentication tokens
-
----
-
 ## Security Scanning
 
 ### Pre-Commit Checks

@@ -118,7 +118,9 @@ fi
 
 echo ""
 echo "Checking staged files..."
-matches=$(git diff --cached --name-only 2>/dev/null | grep -E '(^|/)\.env([^/]*|$)|\.(key|pem|json)$|(^|/)secrets/' || true)
+# --diff-filter=d excludes deletions: removing a file cannot leak its contents,
+# and staged deletions of e.g. test fixtures would otherwise trip this check.
+matches=$(git diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '(^|/)\.env([^/]*|$)|\.(key|pem|json)$|(^|/)secrets/' || true)
 if [ -n "$matches" ]; then
 	printf '%s\n' "$matches"
 	echo "WARNING: Sensitive file staged!"
