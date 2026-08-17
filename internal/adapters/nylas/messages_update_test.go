@@ -275,6 +275,7 @@ func TestHTTPClient_DeleteMessage(t *testing.T) {
 		name       string
 		grantID    string
 		messageID  string
+		permanent  bool
 		statusCode int
 		wantErr    bool
 	}{
@@ -293,6 +294,14 @@ func TestHTTPClient_DeleteMessage(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:       "permanently deletes with hard_delete",
+			grantID:    "grant-123",
+			messageID:  "msg-hard-delete",
+			permanent:  true,
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
 			name:       "returns error for not found",
 			grantID:    "grant-123",
 			messageID:  "nonexistent",
@@ -307,6 +316,11 @@ func TestHTTPClient_DeleteMessage(t *testing.T) {
 				assert.Equal(t, "DELETE", r.Method)
 				expectedPath := "/v3/grants/" + tt.grantID + "/messages/" + tt.messageID
 				assert.Equal(t, expectedPath, r.URL.Path)
+				if tt.permanent {
+					assert.Equal(t, "true", r.URL.Query().Get("hard_delete"))
+				} else {
+					assert.Empty(t, r.URL.Query().Get("hard_delete"))
+				}
 
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode >= 400 {
@@ -322,7 +336,12 @@ func TestHTTPClient_DeleteMessage(t *testing.T) {
 			client.SetBaseURL(server.URL)
 
 			ctx := context.Background()
-			err := client.DeleteMessage(ctx, tt.grantID, tt.messageID)
+			var err error
+			if tt.permanent {
+				err = client.DeleteMessagePermanently(ctx, tt.grantID, tt.messageID)
+			} else {
+				err = client.DeleteMessage(ctx, tt.grantID, tt.messageID)
+			}
 
 			if tt.wantErr {
 				assert.Error(t, err)

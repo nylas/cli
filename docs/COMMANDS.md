@@ -199,6 +199,13 @@ All demo commands mirror real CLI structure: `nylas demo <feature> <command>`
 
 ```bash
 nylas email list [grant-id]                                    # List emails
+nylas email subscriptions list                                # Discover subscriptions for the active account
+nylas email subscriptions list --since 180d --all-folders     # Scan older and archived mail
+nylas email subscriptions unsubscribe news@example.com --dry-run  # Preview unsubscribe
+nylas email subscriptions unsubscribe news@example.com        # Open unsubscribe action; finish externally
+nylas email subscriptions cleanup news@example.com --all-folders  # Move matching messages to Trash
+nylas email subscriptions cleanup news@example.com --permanent # Permanently remove matching messages from Trash
+nylas email subscriptions cleanup news@example.com --permanent --all-folders  # Permanently remove matches everywhere
 nylas email read <message-id>                                  # Read email
 nylas email read <message-id> --raw                            # Show raw body without HTML
 nylas email read <message-id> --mime                           # Show raw RFC822/MIME format

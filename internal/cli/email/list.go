@@ -184,8 +184,10 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 
 	// Find matching aliases for the search name
 	var searchAliases []string
+	systemName := searchName
 	for key, aliases := range nameAliases {
 		if key == searchName || slices.Contains(aliases, searchName) {
+			systemName = key
 			searchAliases = aliases
 			break
 		}
@@ -194,7 +196,21 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 		searchAliases = []string{searchName}
 	}
 
-	// Search for matching folder
+	// Prefer provider metadata so localized folders win over custom folders
+	// whose display name happens to be an English system-folder alias.
+	for _, f := range folders {
+		if strings.EqualFold(strings.TrimSpace(f.SystemFolder), systemName) {
+			return f.ID, nil
+		}
+		for _, attribute := range f.Attributes {
+			attribute = strings.ToLower(strings.TrimLeft(strings.TrimSpace(attribute), "\\"))
+			if attribute == systemName || slices.Contains(searchAliases, attribute) {
+				return f.ID, nil
+			}
+		}
+	}
+
+	// Fall back to display names for providers that omit system metadata.
 	for _, f := range folders {
 		folderNameLower := strings.ToLower(f.Name)
 		for _, alias := range searchAliases {

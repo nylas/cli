@@ -196,7 +196,19 @@ func (c *HTTPClient) UpdateMessage(ctx context.Context, grantID, messageID strin
 
 // DeleteMessage deletes a message (moves to trash).
 func (c *HTTPClient) DeleteMessage(ctx context.Context, grantID, messageID string) error {
+	return c.deleteMessage(ctx, grantID, messageID, false)
+}
+
+// DeleteMessagePermanently irreversibly deletes a message.
+func (c *HTTPClient) DeleteMessagePermanently(ctx context.Context, grantID, messageID string) error {
+	return c.deleteMessage(ctx, grantID, messageID, true)
+}
+
+func (c *HTTPClient) deleteMessage(ctx context.Context, grantID, messageID string, hardDelete bool) error {
 	queryURL := fmt.Sprintf("%s/v3/grants/%s/messages/%s", c.baseURL, url.PathEscape(grantID), url.PathEscape(messageID))
+	if hardDelete {
+		queryURL += "?hard_delete=true"
+	}
 	return c.doDelete(ctx, queryURL)
 }
 

@@ -92,6 +92,12 @@ func TestMockClient_Messages(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, mock.DeleteMessageCalled)
 	})
+
+	t.Run("DeleteMessagePermanently", func(t *testing.T) {
+		err := mock.DeleteMessagePermanently(ctx, "grant-123", "msg-789")
+		require.NoError(t, err)
+		assert.True(t, mock.DeleteMessagePermanentlyCalled)
+	})
 }
 
 func TestMockClient_Threads(t *testing.T) {

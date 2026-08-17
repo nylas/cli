@@ -31,6 +31,9 @@ type MockClient struct {
 	DeleteSignatureCalled       bool
 	UpdateMessageCalled         bool
 	DeleteMessageCalled         bool
+
+	DeleteMessagePermanentlyCalled bool
+
 	GetThreadsCalled            bool
 	GetThreadCalled             bool
 	UpdateThreadCalled          bool
@@ -110,6 +113,9 @@ type MockClient struct {
 	DeleteSignatureFunc       func(ctx context.Context, grantID, signatureID string) error
 	UpdateMessageFunc         func(ctx context.Context, grantID, messageID string, req *domain.UpdateMessageRequest) (*domain.Message, error)
 	DeleteMessageFunc         func(ctx context.Context, grantID, messageID string) error
+
+	DeleteMessagePermanentlyFunc func(ctx context.Context, grantID, messageID string) error
+
 	GetThreadsFunc            func(ctx context.Context, grantID string, params *domain.ThreadQueryParams) ([]domain.Thread, error)
 	GetThreadsWithCursorFunc  func(ctx context.Context, grantID string, params *domain.ThreadQueryParams) (*domain.ThreadListResponse, error)
 	GetThreadFunc             func(ctx context.Context, grantID, threadID string) (*domain.Thread, error)

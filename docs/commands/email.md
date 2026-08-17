@@ -37,6 +37,65 @@ Recent Emails
 Found 5 emails
 ```
 
+### List Email Subscriptions
+
+Discover mailing-list subscriptions from standard email headers. These
+commands use the active account, omit postable discussion lists, and never
+print unsubscribe links. Discovery currently supports Google and Microsoft
+grants. Nylas does not expose the required original headers for EWS or IMAP
+messages; see [Headers and MIME data](https://developer.nylas.com/docs/v3/email/headers-mime-data/).
+
+```bash
+nylas email subscriptions list                       # Scan 90 days of inbox mail
+nylas email subscriptions list --since 180d          # Scan a longer period
+nylas email subscriptions list --all-folders         # Include archived and filed mail
+nylas email subscriptions list --limit 2000 --json   # Machine-readable output
+```
+
+### Unsubscribe
+
+Select subscriptions by the email or List-ID shown by `subscriptions list`.
+The command shows the sanitized destination in its review and asks for
+confirmation. It never deletes existing mail.
+
+```bash
+nylas email subscriptions unsubscribe noreply@medium.com --dry-run
+nylas email subscriptions unsubscribe noreply@medium.com
+nylas email subscriptions unsubscribe news@example.com updates.example.com
+nylas email subscriptions unsubscribe news@example.com --yes --json
+```
+
+Use `--since`, `--limit`, and `--all-folders` to control subscription matching.
+HTTPS actions open the unsubscribe page for review; the CLI does not submit
+one-click POST requests from untrusted message headers. Email actions open the
+header's unsubscribe message in the OS mail composer for review; the CLI never
+sends header-supplied content itself. Conflicting destinations are rejected.
+`--yes` skips only the CLI confirmation; users must still finish each opened
+action. `--dry-run` performs no unsubscribe, browser, or mail-composer action.
+
+### Clean Up Subscription Email
+
+Cleanup is a separate action, so it works after an earlier unsubscribe and
+never repeats an unsubscribe request or opens a browser. By default it
+moves matching inbox mail to Trash. `--permanent` scans Trash by default and
+deletes matches irreversibly; add `--all-folders` only to delete matching mail
+everywhere.
+
+```bash
+nylas email subscriptions cleanup news@example.com --dry-run
+nylas email subscriptions cleanup news@example.com --all-folders
+nylas email subscriptions cleanup news@example.com --permanent --dry-run
+nylas email subscriptions cleanup news@example.com --permanent
+nylas email subscriptions cleanup news@example.com --permanent --all-folders
+```
+
+Permanent deletion requires **Enable hard delete** under **Customizations >
+API** in the Nylas Dashboard. Gmail grants also require
+`https://mail.google.com/`; Microsoft grants require `Mail.ReadWrite`.
+Re-authenticate a grant after adding scopes. Cleanup stops on the first API
+error and reports the completed count. Retrying the same selectors skips ones
+that are no longer present, and already-removed messages count as complete.
+
 ### Read Email
 
 ```bash

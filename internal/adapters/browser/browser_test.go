@@ -1,7 +1,9 @@
 package browser
 
 import (
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +66,19 @@ func TestCreateCommand_ReturnsNonNil(t *testing.T) {
 	cmd := createCommand("https://example.com")
 	if cmd == nil {
 		t.Fatal("createCommand() should never return nil")
+	}
+}
+
+func TestCreateCommandForOS_WindowsDoesNotUseShell(t *testing.T) {
+	url := "https://example.com/u?x=1&calc.exe|whoami^%PATH%"
+	cmd := createCommandForOS("windows", url)
+
+	name := strings.ToLower(filepath.Base(cmd.Path))
+	if name == "cmd" || name == "cmd.exe" {
+		t.Fatalf("Windows browser command uses a shell: %v", cmd.Args)
+	}
+	want := []string{"rundll32.exe", "url.dll,FileProtocolHandler", url}
+	if !slices.Equal(cmd.Args, want) {
+		t.Fatalf("createCommandForOS() args = %v, want %v", cmd.Args, want)
 	}
 }

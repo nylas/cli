@@ -3,13 +3,12 @@ package notetaker
 import (
 	"context"
 	"fmt"
+	"unicode"
 
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 func newListCmd() *cobra.Command {
@@ -68,8 +67,9 @@ func newListCmd() *cobra.Command {
 						fmt.Printf("  Link:    %s\n", common.Truncate(n.MeetingLink, 60))
 					}
 					if n.MeetingInfo != nil && n.MeetingInfo.Provider != "" {
-						caser := cases.Title(language.English)
-						_, _ = common.Green.Printf("  Provider: %s\n", caser.String(n.MeetingInfo.Provider))
+						provider := []rune(n.MeetingInfo.Provider)
+						provider[0] = unicode.ToUpper(provider[0])
+						_, _ = common.Green.Printf("  Provider: %s\n", string(provider))
 					}
 					if !n.JoinTime.IsZero() {
 						_, _ = common.Yellow.Printf("  Join:    %s\n", n.JoinTime.Local().Format(common.DisplayWeekdayFull))

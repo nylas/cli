@@ -23,7 +23,11 @@ func (b *DefaultBrowser) Open(url string) error {
 
 // createCommand creates the appropriate command to open a URL based on the OS.
 func createCommand(url string) *exec.Cmd {
-	switch runtime.GOOS {
+	return createCommandForOS(runtime.GOOS, url)
+}
+
+func createCommandForOS(goos, url string) *exec.Cmd {
+	switch goos {
 	case "linux":
 		// Use xdg-open on Linux
 		return exec.Command("xdg-open", url)
@@ -31,8 +35,8 @@ func createCommand(url string) *exec.Cmd {
 		// Use open on macOS
 		return exec.Command("open", url)
 	case "windows":
-		// Use start on Windows
-		return exec.Command("cmd", "/c", "start", url)
+		// Invoke the URL handler directly so shell metacharacters remain inert.
+		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url)
 	default:
 		// Fallback to xdg-open
 		return exec.Command("xdg-open", url)

@@ -192,6 +192,11 @@ func (d *DemoClient) DeleteMessage(ctx context.Context, grantID, messageID strin
 	return nil
 }
 
+// DeleteMessagePermanently simulates permanently deleting a message.
+func (d *DemoClient) DeleteMessagePermanently(ctx context.Context, grantID, messageID string) error {
+	return nil
+}
+
 // CleanMessages simulates cleaning messages into display-ready text.
 func (d *DemoClient) CleanMessages(ctx context.Context, grantID string, req *domain.CleanMessagesRequest) ([]domain.CleanedMessage, error) {
 	result := make([]domain.CleanedMessage, 0, len(req.MessageIDs))
