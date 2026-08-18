@@ -213,10 +213,7 @@ func selectEmailSubscriptions(subscriptions []emailSubscription, selectors []sub
 				continue
 			}
 			matched = true
-			key := strings.ToLower(subscription.ListID)
-			if key == "" {
-				key = "sender:" + strings.ToLower(subscription.Email)
-			}
+			key := subscriptionIdentityKey(subscription.ListID, subscription.Email)
 			if !seen[key] {
 				selected = append(selected, subscription)
 				seen[key] = true

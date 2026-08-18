@@ -40,7 +40,7 @@ func TestSummarizeEmailSubscriptions(t *testing.T) {
 		{
 			ID:   "old-message",
 			Date: older,
-			From: []domain.EmailParticipant{{Name: "Old sender", Email: "old@example.com"}},
+			From: []domain.EmailParticipant{{Name: "Old sender", Email: "latest@example.com"}},
 			Headers: []domain.Header{
 				{Name: "List-ID", Value: "news.example.com"},
 				{Name: "List-Unsubscribe", Value: "<https://example.com/old>"},
@@ -91,6 +91,35 @@ func TestSummarizeEmailSubscriptions(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(encoded), "token=secret")
 	assert.NotContains(t, string(encoded), "unsubscribe@example.com")
+}
+
+func TestSummarizeEmailSubscriptionsSeparatesSendersSharingListID(t *testing.T) {
+	got := summarizeEmailSubscriptions([]domain.Message{
+		{
+			ID: "marketing", Date: time.Now(),
+			From: []domain.EmailParticipant{{Email: "marketing@example.com"}},
+			Headers: []domain.Header{
+				{Name: "List-ID", Value: "shared.example.com"},
+				{Name: "List-Unsubscribe", Value: "<https://example.com/marketing>"},
+			},
+		},
+		{
+			ID: "alerts", Date: time.Now().Add(-time.Hour),
+			From: []domain.EmailParticipant{{Email: "alerts@example.com"}},
+			Headers: []domain.Header{
+				{Name: "List-ID", Value: "shared.example.com"},
+				{Name: "List-Unsubscribe", Value: "<https://example.com/alerts>"},
+			},
+		},
+	})
+
+	require.Len(t, got, 2)
+	byEmail := make(map[string]emailSubscription, len(got))
+	for _, subscription := range got {
+		byEmail[subscription.Email] = subscription
+	}
+	assert.Equal(t, []string{"marketing"}, byEmail["marketing@example.com"].messageIDs)
+	assert.Equal(t, []string{"alerts"}, byEmail["alerts@example.com"].messageIDs)
 }
 
 func TestIsPostableDiscussionList(t *testing.T) {
@@ -179,6 +208,22 @@ func TestParseAndSelectSubscriptions(t *testing.T) {
 	assert.Len(t, selected, 3)
 	assert.Empty(t, missing)
 
+	sharedList := []emailSubscription{
+		{Email: "marketing@example.com", ListID: "shared.example.com", messageIDs: []string{"marketing"}},
+		{Email: "alerts@example.com", ListID: "shared.example.com", messageIDs: []string{"alerts"}},
+	}
+	selected, missing, err = selectEmailSubscriptions(sharedList, []subscriptionSelector{{email: "marketing@example.com"}}, true)
+	require.NoError(t, err)
+	require.Len(t, selected, 1)
+	assert.Equal(t, []string{"marketing"}, selected[0].messageIDs)
+	assert.Empty(t, missing)
+
+	selected, missing, err = selectEmailSubscriptions(sharedList, []subscriptionSelector{{list: "shared.example.com"}}, true)
+	require.NoError(t, err)
+	require.Len(t, selected, 2)
+	assert.ElementsMatch(t, []string{"marketing", "alerts"}, []string{selected[0].messageIDs[0], selected[1].messageIDs[0]})
+	assert.Empty(t, missing)
+
 	for _, args := range [][]string{
 		nil,
 		{"bad selector"},
@@ -253,8 +298,6 @@ func TestValidateHTTPSUnsubscribeTarget(t *testing.T) {
 }
 
 func TestExecuteSubscriptionActions(t *testing.T) {
-	client := nylas.NewMockClient()
-
 	subscriptions := []emailSubscription{
 		{Sender: "Web", Email: "web@example.com", Method: "Web", Messages: 1, actionTarget: "https://example.com/web", messageIDs: []string{"m2"}},
 		{Sender: "Email", Email: "email@example.com", Method: "Email", Messages: 1, actionTarget: "mailto:leave@example.com?subject=unsubscribe", messageIDs: []string{"m3"}},
@@ -270,9 +313,6 @@ func TestExecuteSubscriptionActions(t *testing.T) {
 	assert.Zero(t, failures)
 	assert.Len(t, results, 2)
 	assert.Equal(t, []string{"https://example.com/web", "mailto:leave@example.com?subject=unsubscribe"}, opened)
-	assert.False(t, client.SendMessageCalled)
-	assert.False(t, client.DeleteMessageCalled)
-	assert.False(t, client.DeleteMessagePermanentlyCalled)
 }
 
 func TestExecuteSubscriptionCleanupPermanentlyDeletes(t *testing.T) {
@@ -294,7 +334,6 @@ func TestExecuteSubscriptionCleanupPermanentlyDeletes(t *testing.T) {
 }
 
 func TestExecuteSubscriptionActionsFailureDoesNotDelete(t *testing.T) {
-	client := nylas.NewMockClient()
 	results, failures := executeSubscriptionActions([]emailSubscription{{
 		Email: "one@example.com", Method: "Web", actionTarget: "https://example.com/one", messageIDs: []string{"m1"},
 	}}, unsubscribeActions{openURL: func(string) error { return fmt.Errorf("failed") }})
@@ -302,8 +341,6 @@ func TestExecuteSubscriptionActionsFailureDoesNotDelete(t *testing.T) {
 	assert.Equal(t, 1, failures)
 	require.Len(t, results, 1)
 	assert.Equal(t, "opening unsubscribe page failed", results[0].Status)
-	assert.False(t, client.SendMessageCalled)
-	assert.False(t, client.DeleteMessageCalled)
 }
 
 func TestExecuteSubscriptionCleanupStopsAndReportsFirstError(t *testing.T) {
@@ -469,7 +506,7 @@ func TestFetchEmailSubscriptionsRejectsUnsupportedProvider(t *testing.T) {
 	}, time.Now())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unavailable for this provider")
-	assert.False(t, client.GetMessagesCalled)
+	assert.False(t, client.GetMessagesWithParamsCalled)
 }
 
 func TestSubscriptionsCommand(t *testing.T) {
@@ -507,15 +544,24 @@ func TestSubscriptionsCommand(t *testing.T) {
 }
 
 func TestSubscriptionsCleanupCommandPermanentlyDeletesWithoutUnsubscribing(t *testing.T) {
-	var messageGets, deletes int
+	var folderGets, messageGets, deletes int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v3/grants/grant-test":
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "grant-test", "provider": "google"}})
 		case r.Method == http.MethodGet && r.URL.Path == "/v3/grants/grant-test/folders":
+			folderGets++
+			if folderGets == 1 {
+				assert.Empty(t, r.URL.Query().Get("page_token"))
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data":        []map[string]any{{"id": "custom-trash", "name": "Trash"}},
+					"next_cursor": "cursor-2",
+				})
+				return
+			}
+			assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
-				{"id": "custom-trash", "name": "Trash"},
 				{"id": "trash-id", "name": "Papierkorb", "attributes": []string{"\\Trash"}},
 			}})
 		case r.Method == http.MethodGet && r.URL.Path == "/v3/grants/grant-test/messages":
@@ -551,6 +597,7 @@ func TestSubscriptionsCleanupCommandPermanentlyDeletesWithoutUnsubscribing(t *te
 	root.SetArgs([]string{"subscriptions", "cleanup", "news@example.com", "missing@example.com", "--permanent", "--yes", "--json"})
 
 	require.NoError(t, root.Execute(), stderr.String())
+	assert.Equal(t, 2, folderGets)
 	assert.Equal(t, 1, messageGets)
 	assert.Equal(t, 1, deletes)
 	assert.Contains(t, stdout.String(), "Permanently deleted 1/1")

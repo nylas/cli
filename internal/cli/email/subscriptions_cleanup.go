@@ -50,6 +50,7 @@ you intend to delete matching mail everywhere. This command never unsubscribes.`
 			}
 			if permanent && !allFolders {
 				opts.folder = "TRASH"
+				opts.folderRequired = true
 			}
 			selectors, err := parseSubscriptionSelectors(args)
 			if err != nil {

@@ -22,10 +22,11 @@ const (
 )
 
 type subscriptionListOptions struct {
-	limit      int
-	since      time.Duration
-	allFolders bool
-	folder     string
+	limit          int
+	since          time.Duration
+	allFolders     bool
+	folder         string
+	folderRequired bool
 }
 
 type emailSubscription struct {
@@ -154,7 +155,9 @@ func fetchEmailSubscriptions(ctx context.Context, cmd *cobra.Command, client por
 		ReceivedAfter: now.Add(-opts.since).Unix(),
 		Fields:        "include_headers",
 	}
-	applyListFolderFilter(ctx, cmd.ErrOrStderr(), client, grantID, params, opts.folder, opts.allFolders)
+	if err := applyListFolderFilter(ctx, cmd.ErrOrStderr(), client, grantID, params, opts.folder, opts.allFolders, opts.folderRequired); err != nil {
+		return nil, err
+	}
 
 	messages, err := fetchMessages(ctx, client, grantID, params, opts.limit)
 	if err != nil {
@@ -181,10 +184,7 @@ func summarizeEmailSubscriptions(messages []domain.Message) []emailSubscription 
 			email = safeSubscriptionText(message.From[0].Email, 254)
 		}
 
-		key := "list:" + strings.ToLower(listID)
-		if listID == "" {
-			key = "sender:" + strings.ToLower(email)
-		}
+		key := subscriptionIdentityKey(listID, email)
 		if key == "sender:" {
 			continue
 		}
@@ -253,6 +253,14 @@ func summarizeEmailSubscriptions(messages []domain.Message) []emailSubscription 
 		return subscriptions[i].Sender < subscriptions[j].Sender
 	})
 	return subscriptions
+}
+
+func subscriptionIdentityKey(listID, email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if listID == "" {
+		return "sender:" + email
+	}
+	return "list:" + strings.ToLower(strings.TrimSpace(listID)) + "\x00sender:" + email
 }
 
 func isPostableDiscussionList(headers []domain.Header) bool {

@@ -153,7 +153,9 @@ func fetchListMessages(ctx context.Context, cmd *cobra.Command, client ports.Nyl
 		params.MetadataPair = opts.metadataPair
 	}
 
-	applyListFolderFilter(ctx, cmd.ErrOrStderr(), client, grantID, params, opts.folder, opts.allFolders)
+	if err := applyListFolderFilter(ctx, cmd.ErrOrStderr(), client, grantID, params, opts.folder, opts.allFolders, false); err != nil {
+		return nil, err
+	}
 
 	return fetchMessages(ctx, client, grantID, params, maxItems)
 }
@@ -224,28 +226,34 @@ func resolveFolderName(ctx context.Context, client ports.NylasClient, grantID, f
 	return "", nil
 }
 
-func applyListFolderFilter(ctx context.Context, stderr io.Writer, client ports.NylasClient, grantID string, params *domain.MessageQueryParams, folder string, allFolders bool) {
+func applyListFolderFilter(ctx context.Context, stderr io.Writer, client ports.NylasClient, grantID string, params *domain.MessageQueryParams, folder string, allFolders, folderRequired bool) error {
 	if folder != "" {
 		// Resolve folder name to ID if needed (for Microsoft accounts)
 		resolvedFolder, err := resolveFolderName(ctx, client, grantID, folder)
 		if err != nil {
+			if folderRequired {
+				return common.NewUserError("Could not resolve the required folder", "Verify the folder exists and try again")
+			}
 			// API error - warn user but continue with literal name
 			_, _ = fmt.Fprintf(stderr, "Warning: could not resolve folder '%s': %v\n", folder, err)
 			params.In = []string{folder}
-			return
+			return nil
 		}
 		if resolvedFolder != "" {
 			params.In = []string{resolvedFolder}
-			return
+			return nil
+		}
+		if folderRequired {
+			return common.NewUserError("Could not resolve the required folder", "Verify the folder exists and try again")
 		}
 
 		// Folder not found by name, use literal
 		params.In = []string{folder}
-		return
+		return nil
 	}
 
 	if allFolders {
-		return
+		return nil
 	}
 
 	// Try to find inbox folder ID (works for both Google and Microsoft)
@@ -254,15 +262,16 @@ func applyListFolderFilter(ctx context.Context, stderr io.Writer, client ports.N
 		// API error - warn but fallback to literal INBOX
 		_, _ = fmt.Fprintf(stderr, "Warning: could not resolve INBOX folder: %v\n", err)
 		params.In = []string{"INBOX"}
-		return
+		return nil
 	}
 	if inboxID != "" {
 		params.In = []string{inboxID}
-		return
+		return nil
 	}
 
 	// Fallback to INBOX (works for Google)
 	params.In = []string{"INBOX"}
+	return nil
 }
 
 // runListStructured handles structured output (JSON/YAML/quiet) for the list command.

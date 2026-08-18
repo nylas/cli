@@ -24,22 +24,43 @@ type folderResponse struct {
 	Attributes      []string `json:"attributes"`
 }
 
+type folderListResponse struct {
+	Data       []folderResponse `json:"data"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+}
+
 // GetFolders retrieves all folders for a grant.
 func (c *HTTPClient) GetFolders(ctx context.Context, grantID string) ([]domain.Folder, error) {
 	if err := validateRequired("grant ID", grantID); err != nil {
 		return nil, err
 	}
 
-	queryURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, url.PathEscape(grantID))
+	baseURL := fmt.Sprintf("%s/v3/grants/%s/folders", c.baseURL, url.PathEscape(grantID))
+	pageToken := ""
+	folders := make([]domain.Folder, 0)
 
-	var result struct {
-		Data []folderResponse `json:"data"`
-	}
-	if err := c.doGet(ctx, queryURL, &result); err != nil {
-		return nil, err
-	}
+	for {
+		queryBuilder := NewQueryBuilder()
+		if pageToken != "" {
+			queryBuilder.Add("page_token", pageToken)
+		}
+		queryURL := queryBuilder.BuildURL(baseURL)
 
-	return convertFolders(result.Data), nil
+		var result folderListResponse
+		if err := c.doGet(ctx, queryURL, &result); err != nil {
+			return nil, err
+		}
+
+		folders = append(folders, convertFolders(result.Data)...)
+
+		if result.NextCursor == "" {
+			return folders, nil
+		}
+		if result.NextCursor == pageToken {
+			return nil, fmt.Errorf("failed to paginate folders: repeated cursor %q", result.NextCursor)
+		}
+		pageToken = result.NextCursor
+	}
 }
 
 // GetFolder retrieves a single folder by ID.
