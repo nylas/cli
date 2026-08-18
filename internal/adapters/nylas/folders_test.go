@@ -64,6 +64,66 @@ func TestHTTPClient_GetFolders(t *testing.T) {
 	assert.Equal(t, "Projects", folders[2].Name)
 }
 
+func TestHTTPClient_GetFolders_Pagination(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		assert.Equal(t, "/v3/grants/grant-123/folders", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+
+		if calls == 1 {
+			assert.Empty(t, r.URL.Query().Get("page_token"))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data":        []map[string]any{{"id": "custom-trash", "name": "Trash"}},
+				"next_cursor": "cursor-2",
+			})
+			return
+		}
+
+		assert.Equal(t, "cursor-2", r.URL.Query().Get("page_token"))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "system-trash", "name": "Deleted Items", "attributes": []string{"\\Trash"}}},
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	folders, err := client.GetFolders(context.Background(), "grant-123")
+
+	require.NoError(t, err)
+	require.Len(t, folders, 2)
+	assert.Equal(t, "custom-trash", folders[0].ID)
+	assert.Equal(t, "system-trash", folders[1].ID)
+	assert.Equal(t, 2, calls)
+}
+
+func TestHTTPClient_GetFolders_RepeatedCursorFails(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":        []map[string]any{{"id": "folder-1"}},
+			"next_cursor": "stuck-cursor",
+		})
+	}))
+	defer server.Close()
+
+	client := nylas.NewHTTPClient()
+	client.SetCredentials("client-id", "secret", "api-key")
+	client.SetBaseURL(server.URL)
+
+	_, err := client.GetFolders(context.Background(), "grant-123")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "repeated cursor")
+	assert.Equal(t, 2, calls)
+}
+
 func TestHTTPClient_GetFolder(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v3/grants/grant-123/folders/folder-456", r.URL.Path)

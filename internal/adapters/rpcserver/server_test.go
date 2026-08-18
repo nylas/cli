@@ -128,6 +128,19 @@ func TestServer_ConcurrentClientWritesAndBroadcast(t *testing.T) {
 	t.Cleanup(func() {
 		_ = conn.Close()
 	})
+
+	// Complete one request before broadcasting so the server has registered the connection.
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc":"2.0","id":-1,"method":"echo","params":{}}`)); err != nil {
+		t.Fatalf("write readiness request: %v", err)
+	}
+	var ready struct {
+		ID int `json:"id"`
+	}
+	readJSON(t, conn, &ready)
+	if ready.ID != -1 {
+		t.Fatalf("readiness response ID = %d, want -1", ready.ID)
+	}
+
 	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatalf("SetReadDeadline() error = %v", err)
 	}

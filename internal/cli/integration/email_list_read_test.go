@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -70,6 +71,168 @@ func TestCLI_EmailList_Filters(t *testing.T) {
 			}
 			t.Logf("email list %s output:\n%s", tt.name, stdout)
 		})
+	}
+}
+
+func TestCLI_EmailSubscriptionsList(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	stdout, stderr, err := runCLIWithRateLimit(t, "email", "subscriptions", "list", "--limit", "20", "--since", "30d", "--all-folders", "--json")
+	if err != nil {
+		t.Fatalf("email subscriptions list failed: %v\nstderr: %s", err, stderr)
+	}
+
+	var subscriptions []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &subscriptions); err != nil {
+		t.Fatalf("email subscriptions list returned invalid JSON: %v\nstdout: %s", err, stdout)
+	}
+	for _, subscription := range subscriptions {
+		email, _ := subscription["email"].(string)
+		listID, _ := subscription["list_id"].(string)
+		if email == "" && listID == "" {
+			t.Fatalf("subscription must have an email or list ID: %#v", subscription)
+		}
+		if messages, ok := subscription["messages"].(float64); !ok || messages < 1 {
+			t.Fatalf("subscription must have a positive message count: %#v", subscription)
+		}
+		switch subscription["method"] {
+		case "Web", "Email", "Unsupported":
+		default:
+			t.Fatalf("subscription has invalid method: %#v", subscription)
+		}
+		lastSeen, ok := subscription["last_seen"].(string)
+		if !ok {
+			t.Fatalf("subscription must have last_seen: %#v", subscription)
+		}
+		if _, err := time.Parse(time.RFC3339, lastSeen); err != nil {
+			t.Fatalf("subscription last_seen is not RFC3339: %q", lastSeen)
+		}
+		for key := range subscription {
+			if strings.Contains(strings.ToLower(key), "unsubscribe") || strings.Contains(strings.ToLower(key), "url") {
+				t.Fatalf("subscription output exposes an action target in field %q", key)
+			}
+		}
+	}
+}
+
+func TestCLI_EmailSubscriptionsList_Table(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	stdout, stderr, err := runCLIWithRateLimit(t, "email", "subscriptions", "list", "--limit", "20", "--since", "30d", "--all-folders")
+	if err != nil {
+		t.Fatalf("email subscriptions table failed: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "SENDER") && !strings.Contains(stdout, "No subscriptions found") {
+		t.Fatalf("email subscriptions table returned unexpected output: %s", stdout)
+	}
+}
+
+func TestCLI_EmailSubscriptionsList_RejectsInvalidInput(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	for _, args := range [][]string{
+		{"email", "subscriptions", "list", "--limit", "0"},
+		{"email", "subscriptions", "list", "--since", "0d"},
+		{"email", "subscriptions", "list", testGrantID},
+	} {
+		if _, _, err := runCLI(args...); err == nil {
+			t.Fatalf("email subscriptions list unexpectedly accepted args: %v", args)
+		}
+	}
+}
+
+func TestCLI_EmailSubscriptionsUnsubscribe_DryRun(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	stdout, stderr, err := runCLIWithRateLimit(t, "email", "subscriptions", "list", "--limit", "200", "--since", "90d", "--all-folders", "--json")
+	if err != nil {
+		t.Fatalf("email subscriptions list for dry run failed: %v\nstderr: %s", err, stderr)
+	}
+	var subscriptions []struct {
+		Email  string `json:"email"`
+		ListID string `json:"list_id"`
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &subscriptions); err != nil {
+		t.Fatalf("email subscriptions list returned invalid JSON: %v", err)
+	}
+
+	selector := ""
+	for _, subscription := range subscriptions {
+		if subscription.Method == "Unsupported" {
+			continue
+		}
+		selector = subscription.Email
+		if selector == "" {
+			selector = subscription.ListID
+		}
+		if selector != "" {
+			break
+		}
+	}
+	if selector == "" {
+		t.Skip("no actionable subscriptions found in the integration account")
+	}
+
+	stdout, stderr, err = runCLIWithRateLimit(t, "email", "subscriptions", "unsubscribe", selector, "--limit", "200", "--since", "90d", "--all-folders", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("email subscriptions unsubscribe dry run failed: %v\nstderr: %s", err, stderr)
+	}
+	var results []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &results); err != nil {
+		t.Fatalf("email subscriptions unsubscribe dry run returned invalid JSON: %v\nstdout: %s", err, stdout)
+	}
+	if len(results) == 0 {
+		t.Fatal("email subscriptions unsubscribe dry run returned no results")
+	}
+	foundPlan := false
+	for _, result := range results {
+		if status, _ := result["status"].(string); strings.Contains(status, "Would") || strings.Contains(status, "would") {
+			foundPlan = true
+		}
+		for key := range result {
+			if strings.Contains(strings.ToLower(key), "unsubscribe") || strings.Contains(strings.ToLower(key), "url") {
+				t.Fatalf("unsubscribe dry-run output exposes an action target in field %q", key)
+			}
+		}
+	}
+	if !foundPlan {
+		t.Fatalf("unsubscribe dry run did not describe a planned action: %#v", results)
+	}
+
+	stdout, stderr, err = runCLIWithRateLimit(t, "email", "subscriptions", "cleanup", selector, "--limit", "200", "--since", "90d", "--all-folders", "--permanent", "--dry-run", "--json")
+	if err != nil {
+		t.Fatalf("email subscriptions cleanup dry run failed: %v\nstderr: %s", err, stderr)
+	}
+	results = nil
+	if err := json.Unmarshal([]byte(stdout), &results); err != nil {
+		t.Fatalf("email subscriptions cleanup dry run returned invalid JSON: %v\nstdout: %s", err, stdout)
+	}
+	if len(results) == 0 {
+		t.Fatal("email subscriptions cleanup dry run returned no results")
+	}
+	if status, _ := results[0]["status"].(string); !strings.Contains(status, "Would permanently delete") {
+		t.Fatalf("cleanup dry run did not describe permanent deletion: %#v", results)
+	}
+}
+
+func TestCLI_EmailSubscriptionsUnsubscribe_RejectsInvalidInput(t *testing.T) {
+	skipIfMissingCreds(t)
+
+	for _, args := range [][]string{
+		{"email", "subscriptions", "unsubscribe"},
+		{"email", "subscriptions", "unsubscribe", "bad selector", "--dry-run"},
+		{"email", "subscriptions", "unsubscribe", "news@example.com", "--limit", "0", "--dry-run"},
+		{"email", "subscriptions", "unsubscribe", "news@example.com", "--permanent", "--dry-run"},
+		{"email", "subscriptions", "unsubscribe", "news@example.com", "--json"},
+		{"email", "subscriptions", "cleanup"},
+		{"email", "subscriptions", "cleanup", "bad selector", "--dry-run"},
+		{"email", "subscriptions", "cleanup", "news@example.com", "--limit", "0", "--dry-run"},
+		{"email", "subscriptions", "cleanup", "news@example.com", "--json"},
+	} {
+		if _, _, err := runCLI(args...); err == nil {
+			t.Fatalf("email subscriptions unsubscribe unexpectedly accepted args: %v", args)
+		}
 	}
 }
 

@@ -152,6 +152,17 @@ func (m *MockClient) DeleteMessage(ctx context.Context, grantID, messageID strin
 	return nil
 }
 
+// DeleteMessagePermanently irreversibly deletes a message.
+func (m *MockClient) DeleteMessagePermanently(ctx context.Context, grantID, messageID string) error {
+	m.DeleteMessagePermanentlyCalled = true
+	m.LastGrantID = grantID
+	m.LastMessageID = messageID
+	if m.DeleteMessagePermanentlyFunc != nil {
+		return m.DeleteMessagePermanentlyFunc(ctx, grantID, messageID)
+	}
+	return nil
+}
+
 // ListScheduledMessages retrieves scheduled messages.
 func (m *MockClient) ListScheduledMessages(ctx context.Context, grantID string) ([]domain.ScheduledMessage, error) {
 	m.LastGrantID = grantID

@@ -16,6 +16,7 @@ API reference: https://developer.nylas.com/docs/v3/email/`,
 	}
 
 	cmd.AddCommand(newListCmd())
+	cmd.AddCommand(newSubscriptionsCmd())
 	cmd.AddCommand(newReadCmd())
 	cmd.AddCommand(newSendCmd())
 	cmd.AddCommand(newReplyCmd())

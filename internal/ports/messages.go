@@ -55,6 +55,9 @@ type MessageClient interface {
 	// DeleteMessage deletes a message.
 	DeleteMessage(ctx context.Context, grantID, messageID string) error
 
+	// DeleteMessagePermanently irreversibly deletes a message.
+	DeleteMessagePermanently(ctx context.Context, grantID, messageID string) error
+
 	// CleanMessages parses messages into clean, display-ready text, stripping
 	// quoted reply chains, signatures, and conclusion phrases.
 	CleanMessages(ctx context.Context, grantID string, req *domain.CleanMessagesRequest) ([]domain.CleanedMessage, error)
