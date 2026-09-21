@@ -68,6 +68,32 @@ make test-integration
 
 **CRITICAL:** Integration tests create real resources. Always use `make ci-full` for automatic cleanup.
 
+### OAuth authorization server tests
+
+`internal/cli/integration/oauth_test.go` drives a real dashboard-account
+authorization server instead of the Nylas API, so it needs its own variable and
+skips without it:
+
+```bash
+NYLAS_OAUTH_AS_URL=http://localhost:3001 \
+  go test -tags integration -run TestOAuthAS ./internal/cli/integration/
+```
+
+Requirements on the server side:
+
+- dashboard-account running (in a Tilt stack it is on port 3001)
+- `/dev` routes enabled — `ENABLE_DEV_ROUTES=true` or `IS_E2E=true`. The tests
+  seed their own user, consent grant and authorization code through them, which
+  is what lets the token exchange run without a browser.
+
+The tests front the server with a small proxy that rewrites the issuer origin in
+the discovery document. dashboard-account builds every advertised endpoint from
+`OAUTH_ISSUER`, and in a local stack that is frequently a tunnel hostname that is
+stale or unreachable; the client under test is spec-correct and follows whatever
+the document says. If you would rather fix it at the source, set
+`OAUTH_ISSUER=http://localhost:3001` in `infra/.env.local` and restart the
+service — the proxy then rewrites nothing.
+
 ---
 
 ## Project Structure
