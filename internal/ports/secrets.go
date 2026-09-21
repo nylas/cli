@@ -34,4 +34,15 @@ const (
 	KeyDashboardDPoPKey      = "dashboard_dpop_key"
 	KeyDashboardAppID        = "dashboard_app_id"
 	KeyDashboardAppRegion    = "dashboard_app_region"
+
+	// OAuth authorization server keys. KeyOAuthIssuer pins the other values
+	// to the server that produced them: a dynamically registered client_id is
+	// meaningless against a different issuer, and a dev tunnel URL changes often.
+	KeyOAuthIssuer       = "oauth_issuer"
+	KeyOAuthClientID     = "oauth_client_id"
+	KeyOAuthAccessToken  = "oauth_access_token"
+	KeyOAuthRefreshToken = "oauth_refresh_token"
+	KeyOAuthIDToken      = "oauth_id_token"
+	KeyOAuthExpiresAt    = "oauth_expires_at"
+	KeyOAuthScope        = "oauth_scope"
 )

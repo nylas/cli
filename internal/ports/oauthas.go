@@ -25,7 +25,9 @@ type OAuthAuthServerClient interface {
 	// PKCE authorization code flow.
 	AuthorizationURL(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error)
 
-	// ExchangeCode redeems an authorization code for a token set.
+	// ExchangeCode redeems an authorization code for a token set. The
+	// returned tokens carry an absolute ExpiresAt derived from expires_in,
+	// which is what callers check before reusing an access token.
 	ExchangeCode(ctx context.Context, params domain.OAuthCodeExchange) (*domain.OAuthTokens, error)
 
 	// Refresh exchanges a refresh token for a new token set. The server
