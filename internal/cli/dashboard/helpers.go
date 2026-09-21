@@ -52,7 +52,7 @@ func createAuthService() (*dashboardapp.AuthService, ports.SecretStore, error) {
 		return nil, nil, err
 	}
 
-	baseURL := getDashboardAccountBaseURL(secretStore)
+	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 
 	return dashboardapp.NewAuthService(accountClient, secretStore), secretStore, nil
@@ -83,14 +83,17 @@ func newDomainService() (*dashboardapp.DomainService, error) {
 		return nil, err
 	}
 
-	baseURL := getDashboardAccountBaseURL(secretStore)
+	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 	return dashboardapp.NewDomainService(accountClient, secretStore), nil
 }
 
-// getDashboardAccountBaseURL returns the dashboard-account base URL.
+// AccountBaseURL returns the dashboard-account base URL.
 // Priority: NYLAS_DASHBOARD_ACCOUNT_URL env var > config file > default.
-func getDashboardAccountBaseURL(secrets ports.SecretStore) string {
+//
+// Exported because the OAuth authorization server is hosted by the same
+// service, so `nylas oauth` must resolve the same address.
+func AccountBaseURL() string {
 	if envURL := os.Getenv("NYLAS_DASHBOARD_ACCOUNT_URL"); envURL != "" {
 		return envURL
 	}

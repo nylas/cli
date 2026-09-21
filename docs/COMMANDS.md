@@ -113,6 +113,53 @@ nylas auth migrate               # Migrate from v2 to v3
 
 ---
 
+## OAuth (Authorization Server)
+
+Log in to the Nylas OAuth 2.1 / OIDC authorization server. This authenticates
+**you**, the person running the CLI, and is distinct from `nylas auth` (which
+connects an end user's mailbox as a provider grant) and from
+`nylas dashboard login` (which opens a dashboard management session).
+
+```bash
+nylas oauth login                # Log in via the browser (authorization code + PKCE)
+nylas oauth login --scope openid,email
+nylas oauth status               # Show the stored session
+nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
+nylas oauth token                # Print a valid access token, refreshing if needed
+nylas oauth logout               # Revoke the session and clear stored tokens
+```
+
+The CLI registers itself as a public client via RFC 7591 dynamic registration
+the first time it runs, and stores the tokens in the system keyring.
+
+Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
+what makes the server issue a refresh token; without it the session ends when
+the access token expires (one hour).
+
+Use the access token with any OAuth-protected endpoint:
+
+```bash
+curl -H "Authorization: Bearer $(nylas oauth token)" https://example/resource
+```
+
+### Pointing at a local authorization server
+
+The authorization server is hosted by `dashboard-account`, so it uses the same
+base URL as the `nylas dashboard` commands:
+
+```bash
+NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
+```
+
+The CLI resolves every endpoint from the server's
+`/.well-known/oauth-authorization-server` document, and that document is built
+from the server's `OAUTH_ISSUER`. If `OAUTH_ISSUER` names a host the CLI cannot
+reach (for example a Cloudflare tunnel that is no longer running), login fails
+even though the local port responds — set `OAUTH_ISSUER` to the address you
+actually browse to.
+
+---
+
 ## Dashboard
 
 Manage your Nylas Dashboard account, applications, domains, and API keys directly from the CLI.
