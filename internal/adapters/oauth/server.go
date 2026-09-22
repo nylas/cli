@@ -184,7 +184,7 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                display: flex; justify-content: center; align-items: center; height: 100vh;
-               margin: 0; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); }
+               margin: 0; background: #f3f4f6; }
         .container { text-align: center; background: white; padding: 3rem; border-radius: 1rem;
                      box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
         h1 { color: #22c55e; margin-bottom: 1rem; }
