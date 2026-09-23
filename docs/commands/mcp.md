@@ -43,7 +43,18 @@ nylas mcp install --assistant claude-code  # Specific assistant
 nylas mcp install --assistant cursor       # Cursor IDE
 nylas mcp install --all                    # All detected assistants
 nylas mcp install --binary /path/to/nylas  # Custom binary path
+nylas mcp install --assistant claude-code --auth oauth  # Proxy authenticates with OAuth
 ```
+
+Every assistant is configured to launch `nylas mcp serve` over STDIO, and no
+credential is written into any assistant config. `--auth oauth` adds
+`--auth oauth` to the launcher (run `nylas oauth login --for mcp` first).
+
+Pointing an assistant directly at the hosted server
+(`https://mcp.{us,eu}.nylas.com`) and letting it run OAuth itself is not
+configured by `install` yet: which supported assistants handle remote MCP with
+OAuth, and in which config format, has not been verified. The local proxy is the
+compatibility path for all of them.
 
 ### Status
 
@@ -100,6 +111,14 @@ With `--auth oauth` the proxy:
 - on `401` with a `WWW-Authenticate` challenge, refreshes once and retries; if
   that fails it tells you to run `nylas oauth login --for mcp`.
 - on `403 insufficient_scope`, names the missing scope and the login command.
+
+#### Protocol
+
+The hosted server is stateless. The proxy sends no `Mcp-Session-Id` and ignores
+one if offered. It sends `Mcp-Method` on every request, `Mcp-Name` for
+`tools/call` and `prompts/get` (the server refuses a name that disagrees with
+the body), and, once `initialize` has answered, `Mcp-Protocol-Version` with the
+version the server negotiated.
 
 ---
 

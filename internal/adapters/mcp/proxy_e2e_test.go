@@ -14,11 +14,12 @@ import (
 // mockMCPServer simulates the upstream Nylas MCP server for E2E proxy tests.
 // It returns realistic tools/list, initialize, and tools/call responses.
 type mockMCPServer struct {
-	t              *testing.T
-	lastToolCall   string
-	lastArgs       map[string]any
-	receivedGrant  string
-	receivedMethod string
+	t                 *testing.T
+	lastToolCall      string
+	lastArgs          map[string]any
+	receivedGrant     string
+	receivedMethod    string
+	receivedSessionID string
 }
 
 func (m *mockMCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +33,7 @@ func (m *mockMCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.receivedMethod = req.Method
+	m.receivedSessionID = r.Header.Get("Mcp-Session-Id")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Mcp-Session-Id", "e2e-session-001")
@@ -301,10 +303,12 @@ func TestE2E_ProxyLifecycle(t *testing.T) {
 		}
 	})
 
-	// === Step 9: session ID stored from server response ===
-	t.Run("session_id_stored", func(t *testing.T) {
-		if proxy.sessionID != "e2e-session-001" {
-			t.Errorf("expected session ID 'e2e-session-001', got %q", proxy.sessionID)
+	// === Step 9: no session — the server is stateless ===
+	// The mock hands out an Mcp-Session-Id on every answer; the proxy must
+	// not carry it into the requests that follow.
+	t.Run("session_id_not_echoed", func(t *testing.T) {
+		if mock.receivedSessionID != "" {
+			t.Errorf("expected no Mcp-Session-Id on requests, got %q", mock.receivedSessionID)
 		}
 	})
 

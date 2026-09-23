@@ -60,9 +60,12 @@ type Proxy struct {
 	defaultGrant string
 	grantStore   ports.GrantStore
 	httpClient   *http.Client
-	sessionID    string
-	grantTools   map[string]bool // Dynamically discovered tools that accept grant_id
-	mu           sync.RWMutex
+	// protocolVersion is what the server answered initialize with, sent back
+	// as Mcp-Protocol-Version on every later request. There is no session:
+	// the hosted server is stateless and issues no Mcp-Session-Id.
+	protocolVersion string
+	grantTools      map[string]bool // Dynamically discovered tools that accept grant_id
+	mu              sync.RWMutex
 }
 
 // NewProxy creates a new MCP proxy with the given API key and region.
@@ -229,6 +232,7 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 			body = p.modifyToolsListResponse(body)
 		}
 		if isInitialize {
+			p.rememberProtocolVersion(body)
 			body = p.modifyInitializeResponse(body)
 		}
 		return body, nil
@@ -247,7 +251,7 @@ func (p *Proxy) send(ctx context.Context, request []byte, parsed *rpcRequest, cr
 
 	p.mu.RLock()
 	defaultGrant := p.defaultGrant
-	sessionID := p.sessionID
+	protocolVersion := p.protocolVersion
 	p.mu.RUnlock()
 
 	// The default grant is only a hint, and an OAuth token only acts on the
@@ -271,9 +275,7 @@ func (p *Proxy) send(ctx context.Context, request []byte, parsed *rpcRequest, cr
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+cred.Token)
-	if sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", sessionID)
-	}
+	setProtocolHeaders(req.Header, parsed, protocolVersion)
 	if grantHint != "" {
 		req.Header.Set("X-Nylas-Grant-Id", grantHint)
 	}
@@ -281,13 +283,6 @@ func (p *Proxy) send(ctx context.Context, request []byte, parsed *rpcRequest, cr
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sending request: %w", err)
-	}
-
-	// Store session ID if provided
-	if id := resp.Header.Get("Mcp-Session-Id"); id != "" {
-		p.mu.Lock()
-		p.sessionID = id
-		p.mu.Unlock()
 	}
 	return resp, nil
 }
