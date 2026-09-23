@@ -199,3 +199,6 @@ ci-results.txt
 # Brainstorming visual companion sessions
 .superpowers/
 .understand-anything/
+
+# Local git worktrees (not tracked)
+.worktrees/
