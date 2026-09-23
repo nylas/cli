@@ -40,7 +40,6 @@ type OAuthServerMetadata struct {
 	TokenEndpoint                 string   `json:"token_endpoint"`
 	UserInfoEndpoint              string   `json:"userinfo_endpoint"`
 	RevocationEndpoint            string   `json:"revocation_endpoint"`
-	RegistrationEndpoint          string   `json:"registration_endpoint"`
 	JWKSURI                       string   `json:"jwks_uri"`
 	ScopesSupported               []string `json:"scopes_supported"`
 	GrantTypesSupported           []string `json:"grant_types_supported"`
@@ -106,35 +105,13 @@ type OAuthAuthorizationParams struct {
 }
 
 // OAuthCodeExchange carries an authorization code back to the token endpoint.
-// ClientSecret stays empty for a public client, which is what the CLI registers as.
+// ClientSecret stays empty for a public client, which is what the CLI is.
 type OAuthCodeExchange struct {
 	ClientID     string
 	ClientSecret string
 	Code         string
 	RedirectURI  string
 	CodeVerifier string
-}
-
-// OAuthClientRegistrationRequest is an RFC 7591 dynamic registration request.
-type OAuthClientRegistrationRequest struct {
-	ClientName              string   `json:"client_name,omitempty"`
-	RedirectURIs            []string `json:"redirect_uris"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
-	GrantTypes              []string `json:"grant_types,omitempty"`
-	ResponseTypes           []string `json:"response_types,omitempty"`
-	Scope                   string   `json:"scope,omitempty"`
-}
-
-// OAuthClientRegistration is the registered client the server returns.
-type OAuthClientRegistration struct {
-	ClientID                string   `json:"client_id"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
-	ClientName              string   `json:"client_name"`
-	RedirectURIs            []string `json:"redirect_uris"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
-	GrantTypes              []string `json:"grant_types"`
-	ResponseTypes           []string `json:"response_types"`
 }
 
 // OAuthTokens is a token endpoint response.

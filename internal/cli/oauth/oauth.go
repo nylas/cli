@@ -28,7 +28,8 @@ Commands:
   logout   Revoke the session and clear stored tokens
 
 The authorization server is hosted by dashboard-account; point the CLI at
-a local one with NYLAS_DASHBOARD_ACCOUNT_URL.`,
+a local one with NYLAS_DASHBOARD_ACCOUNT_URL, and override the static client
+id with NYLAS_OAUTH_CLIENT_ID if that server registers the CLI differently.`,
 	}
 
 	cmd.AddCommand(newLoginCmd())

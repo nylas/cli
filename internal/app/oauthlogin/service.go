@@ -6,47 +6,42 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
 
-// clientName identifies this client on the server's consent screen.
-const clientName = "Nylas CLI"
-
-// loopbackRegistrationURI is the redirect URI the CLI registers.
-//
-// RFC 8252 section 7.3 lets the server free the PORT of a loopback redirect
-// URI at request time, so the ephemeral port the callback server picks still
-// matches this registration. Nothing else is relaxed — the host must match
-// exactly, and the server never treats "localhost" and "127.0.0.1" as the
-// same, so this has to spell the host the callback server advertises.
-const loopbackRegistrationURI = "http://localhost/callback"
-
 // Service performs authorization server logins and owns the stored session.
 type Service struct {
-	client  ports.OAuthAuthServerClient
-	server  ports.OAuthServer
-	browser ports.Browser
-	secrets ports.SecretStore
-	now     func() time.Time
+	clientID string
+	client   ports.OAuthAuthServerClient
+	server   ports.OAuthServer
+	browser  ports.Browser
+	secrets  ports.SecretStore
+	now      func() time.Time
 }
 
-// NewService creates a login service.
+// NewService creates a login service for the given public client id —
+// domain.DefaultOAuthClientID unless a local or dev server needs another.
+//
+// The client is registered statically on the server, with the redirect URIs
+// http://127.0.0.1/callback and http://localhost/callback and a free port
+// (RFC 8252 section 7.3). The server callback must advertise one of those.
 func NewService(
+	clientID string,
 	client ports.OAuthAuthServerClient,
 	server ports.OAuthServer,
 	browser ports.Browser,
 	secrets ports.SecretStore,
 ) *Service {
 	return &Service{
-		client:  client,
-		server:  server,
-		browser: browser,
-		secrets: secrets,
-		now:     time.Now,
+		clientID: clientID,
+		client:   client,
+		server:   server,
+		browser:  browser,
+		secrets:  secrets,
+		now:      time.Now,
 	}
 }
 
@@ -70,8 +65,8 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		return nil, err
 	}
 
-	clientID, err := s.resolveClientID(ctx, metadata.Issuer, scopes)
-	if err != nil {
+	clientID := s.clientID
+	if err := domain.ValidateOAuthClientID(clientID); err != nil {
 		return nil, err
 	}
 
@@ -93,7 +88,12 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		return nil, err
 	}
 
+	// Fail closed before the browser opens: an unregistered spelling would
+	// only surface as a server error page after the user has signed in.
 	redirectURI := s.server.GetRedirectURI()
+	if err := domain.ValidateOAuthLoopbackRedirectURI(redirectURI); err != nil {
+		return nil, err
+	}
 	authURL, err := s.client.AuthorizationURL(ctx, domain.OAuthAuthorizationParams{
 		ClientID:      clientID,
 		RedirectURI:   redirectURI,
@@ -139,7 +139,7 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		return nil, err
 	}
 
-	if err := s.saveTokens(metadata.Issuer, clientID, tokens); err != nil {
+	if err := s.saveTokens(metadata.Issuer, tokens); err != nil {
 		return nil, err
 	}
 
@@ -150,39 +150,6 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		ExpiresAt:  tokens.ExpiresAt,
 		HasRefresh: tokens.RefreshToken != "",
 	}, nil
-}
-
-// resolveClientID reuses the stored registration when it belongs to this
-// issuer, and registers a new public client otherwise.
-func (s *Service) resolveClientID(ctx context.Context, issuer string, scopes []string) (string, error) {
-	storedIssuer, err := s.getSecret(ports.KeyOAuthIssuer)
-	if err != nil {
-		return "", err
-	}
-	storedClientID, err := s.getSecret(ports.KeyOAuthClientID)
-	if err != nil {
-		return "", err
-	}
-	if storedClientID != "" && storedIssuer == issuer {
-		return storedClientID, nil
-	}
-
-	registration, err := s.client.Register(ctx, domain.OAuthClientRegistrationRequest{
-		ClientName:              clientName,
-		RedirectURIs:            []string{loopbackRegistrationURI},
-		TokenEndpointAuthMethod: "none",
-		GrantTypes:              []string{"authorization_code", "refresh_token"},
-		ResponseTypes:           []string{"code"},
-		Scope:                   strings.Join(scopes, " "),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	if err := s.saveClientRegistration(issuer, registration.ClientID); err != nil {
-		return "", err
-	}
-	return registration.ClientID, nil
 }
 
 // AccessToken returns a usable access token, refreshing it when it has expired.
@@ -206,7 +173,7 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 	// The server rotates the refresh token on every use and burns the whole
 	// family if an old one reappears. Persist exactly what came back — never
 	// carry the previous refresh token forward to fill an empty field.
-	if err := s.saveTokens(session.Issuer, session.ClientID, tokens); err != nil {
+	if err := s.saveTokens(session.Issuer, tokens); err != nil {
 		return "", err
 	}
 	return tokens.AccessToken, nil

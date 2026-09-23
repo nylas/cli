@@ -85,6 +85,9 @@ Requirements on the server side:
 - `/dev` routes enabled — `ENABLE_DEV_ROUTES=true` or `IS_E2E=true`. The tests
   seed their own user, consent grant and authorization code through them, which
   is what lets the token exchange run without a browser.
+- the CLI's static public client registered, with the redirect URI
+  `http://127.0.0.1/callback`. Set `NYLAS_OAUTH_CLIENT_ID` if the local server
+  registers it under another id.
 
 The tests front the server with a small proxy that rewrites the issuer origin in
 the discovery document. dashboard-account builds every advertised endpoint from

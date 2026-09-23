@@ -3,6 +3,8 @@ package oauth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/nylas/cli/internal/adapters/browser"
 	"github.com/nylas/cli/internal/adapters/config"
@@ -42,10 +44,36 @@ func createLoginService() (*oauthlogin.Service, error) {
 		callbackPort = cfg.CallbackPort
 	}
 
-	client := oauthas.NewClient(dashboard.AccountBaseURL())
-	callbackServer := oauthadapter.NewCallbackServer(callbackPort)
+	clientID, err := resolveClientID()
+	if err != nil {
+		return nil, err
+	}
 
-	return oauthlogin.NewService(client, callbackServer, browser.NewDefaultBrowser(), secrets), nil
+	client := oauthas.NewClient(dashboard.AccountBaseURL())
+	// 127.0.0.1 rather than localhost: it is one of the two spellings the
+	// server registers for the static client, and it is the address the
+	// server actually binds, so the browser cannot land on the other family.
+	callbackServer := oauthadapter.NewLoopbackIPCallbackServer(callbackPort)
+
+	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets), nil
+}
+
+// clientIDEnv overrides the static public client id, for a local or dev
+// authorization server that registers the CLI under another id.
+const clientIDEnv = "NYLAS_OAUTH_CLIENT_ID"
+
+// resolveClientID returns the client id override when one is set, and the
+// static id otherwise. An override that fails validation is an error rather
+// than a silent fall back to the default, so a typo is noticed.
+func resolveClientID() (string, error) {
+	override := os.Getenv(clientIDEnv)
+	if override == "" {
+		return domain.DefaultOAuthClientID, nil
+	}
+	if err := domain.ValidateOAuthClientID(override); err != nil {
+		return "", fmt.Errorf("%s: %w", clientIDEnv, err)
+	}
+	return override, nil
 }
 
 // wrapOAuthError turns the not-logged-in sentinel into a CLI error that

@@ -17,8 +17,12 @@ func newLoginCmd() *cobra.Command {
 		Short: "Log in to the Nylas authorization server via the browser",
 		Long: `Run an OAuth 2.1 authorization code flow with PKCE.
 
-The CLI registers itself as a public client the first time it runs, opens
-a browser for consent, and stores the tokens in the system keyring.`,
+The CLI is a static public client (no client secret; PKCE proves the
+exchange). It opens a browser for consent, receives the redirect on
+http://127.0.0.1:<port>/callback, and stores the tokens in the system keyring.
+
+Set NYLAS_OAUTH_CLIENT_ID to use a different client id against a local or
+dev authorization server.`,
 		Example: `  # Log in with the default scopes (openid, email, offline_access)
   nylas oauth login
 

@@ -61,6 +61,29 @@ func TestCallbackServer_GetRedirectURI(t *testing.T) {
 	}
 }
 
+func TestLoopbackIPCallbackServer_AdvertisesTheAddressItBinds(t *testing.T) {
+	// The Nylas authorization server registers http://127.0.0.1/callback for
+	// the CLI's static client, and never treats localhost and 127.0.0.1 as the
+	// same host. Advertising the literal it listens on keeps the two in step.
+	server := NewLoopbackIPCallbackServer(0)
+	if err := server.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer func() { _ = server.Stop() }()
+
+	want := "http://127.0.0.1:" + strconv.Itoa(server.port) + "/callback"
+	if got := server.GetRedirectURI(); got != want {
+		t.Fatalf("GetRedirectURI() = %q, want %q", got, want)
+	}
+	if len(server.listeners) != 1 {
+		t.Fatalf("listeners = %d, want 1 (IPv4 loopback only)", len(server.listeners))
+	}
+	addr, ok := server.listeners[0].Addr().(*net.TCPAddr)
+	if !ok || !addr.IP.Equal(net.IPv4(127, 0, 0, 1)) {
+		t.Fatalf("listener bound to %v, want 127.0.0.1", server.listeners[0].Addr())
+	}
+}
+
 func TestCallbackServer_StartAcceptsIPv6LoopbackForAdvertisedLocalhost(t *testing.T) {
 	probe, err := net.Listen("tcp6", "[::1]:0")
 	if err != nil {

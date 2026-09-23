@@ -54,10 +54,11 @@ func newFixture(t *testing.T) *fixture {
 		server:  oauth.NewMockServer("auth-code-1"),
 		clock:   time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC),
 	}
+	f.server.RedirectURI = "http://127.0.0.1:8080/callback"
 
 	now := func() time.Time { return f.clock }
 	f.client.Now = now
-	f.service = NewService(f.client, f.server, f.browser, f.secrets)
+	f.service = NewService(domain.DefaultOAuthClientID, f.client, f.server, f.browser, f.secrets)
 	f.service.now = now
 
 	return f
@@ -70,7 +71,7 @@ func TestLogin_StoresTokensAndReportsSession(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, oauthas.MockIssuer, result.Issuer)
-	assert.Equal(t, "mock-client-id", result.ClientID)
+	assert.Equal(t, domain.DefaultOAuthClientID, result.ClientID)
 	assert.True(t, result.HasRefresh)
 
 	stored := f.secrets.GetAll()
@@ -80,22 +81,73 @@ func TestLogin_StoresTokensAndReportsSession(t *testing.T) {
 	assert.Equal(t, oauthas.MockIssuer, stored[ports.KeyOAuthIssuer])
 }
 
-func TestLogin_RegistersAsPublicLoopbackClient(t *testing.T) {
+func TestLogin_UsesTheStaticPublicClient(t *testing.T) {
+	// The server registers one public client for the CLI; every leg of the
+	// flow must name it, and no secret may be sent because there is none.
 	f := newFixture(t)
 
 	_, err := f.service.Login(context.Background(), nil)
 	require.NoError(t, err)
 
-	require.Len(t, f.client.RegisterRequests, 1)
-	req := f.client.RegisterRequests[0]
+	require.Len(t, f.client.AuthorizationCalls, 1)
+	require.Len(t, f.client.ExchangeCalls, 1)
+	assert.Equal(t, domain.DefaultOAuthClientID, f.client.AuthorizationCalls[0].ClientID)
+	assert.Equal(t, domain.DefaultOAuthClientID, f.client.ExchangeCalls[0].ClientID)
+	assert.Empty(t, f.client.ExchangeCalls[0].ClientSecret)
+}
 
-	// "none" makes it a public client: the CLI cannot keep a secret, and the
-	// server only admits a secretless token request from a client registered
-	// this way.
-	assert.Equal(t, "none", req.TokenEndpointAuthMethod)
-	// Registered without a port because the callback port is assigned at run
-	// time; RFC 8252 lets the server free the port for loopback URIs.
-	assert.Equal(t, []string{"http://localhost/callback"}, req.RedirectURIs)
+func TestLogin_UsesConfiguredClientIDOverride(t *testing.T) {
+	f := newFixture(t)
+	f.service = NewService("dev-client-1", f.client, f.server, f.browser, f.secrets)
+	f.service.now = func() time.Time { return f.clock }
+
+	result, err := f.service.Login(context.Background(), nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, "dev-client-1", result.ClientID)
+	assert.Equal(t, "dev-client-1", f.client.ExchangeCalls[0].ClientID)
+}
+
+func TestLogin_RejectsInvalidClientIDBeforeOpeningBrowser(t *testing.T) {
+	f := newFixture(t)
+	f.service = NewService("bad client&id", f.client, f.server, f.browser, f.secrets)
+
+	_, err := f.service.Login(context.Background(), nil)
+
+	require.ErrorIs(t, err, domain.ErrOAuthInvalidClientID)
+	assert.Empty(t, f.browser.openedURL)
+}
+
+func TestLogin_FailsClosedOnUnregisteredRedirectURI(t *testing.T) {
+	// Only http://127.0.0.1/callback and http://localhost/callback are
+	// registered. Anything else would be refused by the server after the
+	// user has signed in, so it must be refused before the browser opens.
+	for _, uri := range []string{
+		"http://127.0.0.1:8080/other",
+		"https://127.0.0.1:8080/callback",
+		"http://192.168.1.5:8080/callback",
+		"http://127.0.0.1/callback",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			f := newFixture(t)
+			f.server.RedirectURI = uri
+
+			_, err := f.service.Login(context.Background(), nil)
+
+			require.ErrorIs(t, err, domain.ErrOAuthRedirectURI)
+			assert.Empty(t, f.browser.openedURL)
+			assert.Empty(t, f.client.AuthorizationCalls)
+		})
+	}
+}
+
+func TestLogin_AdvertisesTheLoopbackIPRedirect(t *testing.T) {
+	f := newFixture(t)
+
+	_, err := f.service.Login(context.Background(), nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, "http://127.0.0.1:8080/callback", f.client.AuthorizationCalls[0].RedirectURI)
 }
 
 func TestLogin_SendsRFCCompliantPKCEChallenge(t *testing.T) {
@@ -161,30 +213,18 @@ func TestLogin_RequestsOfflineAccessByDefault(t *testing.T) {
 	assert.Contains(t, f.client.AuthorizationCalls[0].Scopes, domain.OAuthScopeOfflineAccess)
 }
 
-func TestLogin_ReusesStoredClientForSameIssuer(t *testing.T) {
+func TestLogin_IgnoresAndClearsLegacyRegisteredClientID(t *testing.T) {
+	// Builds that used dynamic registration left a client id in the keyring.
+	// It must not be used — it names a client the server no longer has — and
+	// a fresh login should not leave it behind.
 	f := newFixture(t)
-	require.NoError(t, f.secrets.Set(ports.KeyOAuthIssuer, oauthas.MockIssuer))
-	require.NoError(t, f.secrets.Set(ports.KeyOAuthClientID, "existing-client"))
+	require.NoError(t, f.secrets.Set(legacyKeyOAuthClientID, "stale-dcr-client"))
 
 	result, err := f.service.Login(context.Background(), nil)
 	require.NoError(t, err)
 
-	assert.Empty(t, f.client.RegisterRequests, "an existing registration must not be duplicated")
-	assert.Equal(t, "existing-client", result.ClientID)
-}
-
-func TestLogin_ReregistersWhenIssuerChanged(t *testing.T) {
-	// A dev tunnel URL changes between sessions, and a client_id registered
-	// against the old issuer does not exist on the new one.
-	f := newFixture(t)
-	require.NoError(t, f.secrets.Set(ports.KeyOAuthIssuer, "https://old-tunnel.example.test"))
-	require.NoError(t, f.secrets.Set(ports.KeyOAuthClientID, "stale-client"))
-
-	result, err := f.service.Login(context.Background(), nil)
-	require.NoError(t, err)
-
-	assert.Len(t, f.client.RegisterRequests, 1)
-	assert.Equal(t, "mock-client-id", result.ClientID)
+	assert.Equal(t, domain.DefaultOAuthClientID, result.ClientID)
+	assert.NotContains(t, f.secrets.GetAll(), legacyKeyOAuthClientID)
 }
 
 func TestLogin_FailsWhenCallbackFails(t *testing.T) {
@@ -285,7 +325,7 @@ func TestStatus_ReportsStoredSession(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, oauthas.MockIssuer, session.Issuer)
-	assert.Equal(t, "mock-client-id", session.ClientID)
+	assert.Equal(t, domain.DefaultOAuthClientID, session.ClientID)
 	assert.Equal(t, "openid email offline_access", session.Tokens.Scope)
 	assert.False(t, session.Tokens.IsExpired(f.clock))
 }

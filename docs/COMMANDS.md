@@ -123,14 +123,20 @@ connects an end user's mailbox as a provider grant) and from
 ```bash
 nylas oauth login                # Log in via the browser (authorization code + PKCE)
 nylas oauth login --scope openid,email
-nylas oauth status               # Show the stored session
+nylas oauth status               # Show the stored session and decoded token claims
 nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
 nylas oauth token                # Print a valid access token, refreshing if needed
 nylas oauth logout               # Revoke the session and clear stored tokens
 ```
 
-The CLI registers itself as a public client via RFC 7591 dynamic registration
-the first time it runs, and stores the tokens in the system keyring.
+The CLI is a static public client (client id
+`b3a94d82-fc7d-4a22-803e-e603ae0f735c`, no client secret — PKCE protects the
+exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
+address the callback server binds. Tokens are stored in the system keyring.
+
+`nylas oauth status` decodes the access token and shows its audience, grants,
+scopes and expiry. The claims are **decoded, not verified** — the CLI does not
+check the signature; only the resource server's answer is authoritative.
 
 Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
 what makes the server issue a refresh token; without it the session ends when
@@ -150,6 +156,10 @@ base URL as the `nylas dashboard` commands:
 ```bash
 NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
 ```
+
+If that server registers the CLI under a different client id, override it with
+`NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
+redirect URI).
 
 The CLI resolves every endpoint from the server's
 `/.well-known/oauth-authorization-server` document, and that document is built

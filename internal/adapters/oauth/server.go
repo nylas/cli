@@ -26,6 +26,13 @@ type CallbackServer struct {
 	once      sync.Once
 	mu        sync.RWMutex
 	state     string
+
+	// ipLiteral makes the server advertise http://127.0.0.1:<port>/callback
+	// and bind IPv4 loopback only, so what it listens on is exactly what it
+	// tells the authorization server. The default advertises "localhost",
+	// which Nylas hosted auth has registered and which may resolve to either
+	// loopback family.
+	ipLiteral bool
 }
 
 // NewCallbackServer creates a new callback server.
@@ -35,6 +42,16 @@ func NewCallbackServer(port int) *CallbackServer {
 		codeChan: make(chan string, 1),
 		errChan:  make(chan error, 1),
 	}
+}
+
+// NewLoopbackIPCallbackServer creates a callback server that binds and
+// advertises the IPv4 loopback literal 127.0.0.1 (RFC 8252 section 7.3
+// recommends the literal over "localhost", whose resolution the client does
+// not control).
+func NewLoopbackIPCallbackServer(port int) *CallbackServer {
+	server := NewCallbackServer(port)
+	server.ipLiteral = true
+	return server
 }
 
 // Start starts the callback server.
@@ -59,7 +76,7 @@ func (s *CallbackServer) Start() error {
 	// redirect URI, which can resolve to either IPv4 or IPv6 loopback
 	// depending on host configuration. Listen on both loopback families when
 	// available without accepting LAN traffic.
-	listeners, port, err := listenLoopback(s.port)
+	listeners, port, err := listenLoopback(s.port, !s.ipLiteral)
 	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
@@ -74,7 +91,7 @@ func (s *CallbackServer) Start() error {
 	return nil
 }
 
-func listenLoopback(port int) ([]net.Listener, int, error) {
+func listenLoopback(port int, includeIPv6 bool) ([]net.Listener, int, error) {
 	ipv4, err := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return nil, 0, err
@@ -91,6 +108,9 @@ func listenLoopback(port int) ([]net.Listener, int, error) {
 	}
 
 	listeners := []net.Listener{ipv4}
+	if !includeIPv6 {
+		return listeners, actualPort, nil
+	}
 	ipv6, err := net.Listen("tcp6", fmt.Sprintf("[::1]:%d", actualPort))
 	if err != nil {
 		if !isIPv6LoopbackUnavailable(err) {
@@ -146,6 +166,9 @@ func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState stri
 
 // GetRedirectURI returns the redirect URI for OAuth.
 func (s *CallbackServer) GetRedirectURI() string {
+	if s.ipLiteral {
+		return fmt.Sprintf("http://127.0.0.1:%d/callback", s.port)
+	}
 	return fmt.Sprintf("http://localhost:%d/callback", s.port)
 }
 

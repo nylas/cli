@@ -12,7 +12,6 @@ import (
 // state the behaviour it cares about.
 type MockClient struct {
 	MetadataFunc         func(ctx context.Context) (*domain.OAuthServerMetadata, error)
-	RegisterFunc         func(ctx context.Context, req domain.OAuthClientRegistrationRequest) (*domain.OAuthClientRegistration, error)
 	AuthorizationURLFunc func(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error)
 	ExchangeCodeFunc     func(ctx context.Context, params domain.OAuthCodeExchange) (*domain.OAuthTokens, error)
 	RefreshFunc          func(ctx context.Context, clientID, refreshToken string) (*domain.OAuthTokens, error)
@@ -25,7 +24,6 @@ type MockClient struct {
 	Now func() time.Time
 
 	// Recorded calls.
-	RegisterRequests   []domain.OAuthClientRegistrationRequest
 	AuthorizationCalls []domain.OAuthAuthorizationParams
 	ExchangeCalls      []domain.OAuthCodeExchange
 	RefreshCalls       []string
@@ -45,21 +43,7 @@ func (m *MockClient) Metadata(ctx context.Context) (*domain.OAuthServerMetadata,
 		TokenEndpoint:                 MockIssuer + "/oauth/token",
 		UserInfoEndpoint:              MockIssuer + "/oauth/userinfo",
 		RevocationEndpoint:            MockIssuer + "/oauth/revoke",
-		RegistrationEndpoint:          MockIssuer + "/oauth/register",
 		CodeChallengeMethodsSupported: []string{"S256"},
-	}, nil
-}
-
-func (m *MockClient) Register(ctx context.Context, req domain.OAuthClientRegistrationRequest) (*domain.OAuthClientRegistration, error) {
-	m.RegisterRequests = append(m.RegisterRequests, req)
-	if m.RegisterFunc != nil {
-		return m.RegisterFunc(ctx, req)
-	}
-	return &domain.OAuthClientRegistration{
-		ClientID:                "mock-client-id",
-		ClientName:              req.ClientName,
-		RedirectURIs:            req.RedirectURIs,
-		TokenEndpointAuthMethod: "none",
 	}, nil
 }
 

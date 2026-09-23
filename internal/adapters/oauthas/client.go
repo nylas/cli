@@ -1,7 +1,7 @@
 // Package oauthas implements a client for the Nylas OAuth 2.1 authorization
 // server hosted by dashboard-account.
 //
-// These endpoints speak plain RFC 6749/7009/7591: no house {"data":...}
+// These endpoints speak plain RFC 6749/7009: no house {"data":...}
 // envelope and no DPoP proof. That is why this does not reuse the
 // dashboard.AccountClient transport, which adds both.
 package oauthas
@@ -84,19 +84,6 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values,
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return c.do(req, result)
-}
-
-func (c *Client) postJSON(ctx context.Context, endpoint string, body, result any) error {
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("failed to encode request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
 	return c.do(req, result)
 }
 

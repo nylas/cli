@@ -10,28 +10,6 @@ import (
 	"github.com/nylas/cli/internal/domain"
 )
 
-// Register performs RFC 7591 dynamic client registration. The server defaults
-// an omitted token_endpoint_auth_method to "none", but the CLI states it so
-// the registration cannot silently become confidential.
-func (c *Client) Register(ctx context.Context, req domain.OAuthClientRegistrationRequest) (*domain.OAuthClientRegistration, error) {
-	metadata, err := c.Metadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if metadata.RegistrationEndpoint == "" {
-		return nil, fmt.Errorf("%w: server does not advertise a registration endpoint", domain.ErrOAuthMetadata)
-	}
-
-	var registration domain.OAuthClientRegistration
-	if err := c.postJSON(ctx, metadata.RegistrationEndpoint, req, &registration); err != nil {
-		return nil, fmt.Errorf("client registration failed: %w", err)
-	}
-	if registration.ClientID == "" {
-		return nil, fmt.Errorf("client registration failed: server returned no client_id")
-	}
-	return &registration, nil
-}
-
 // AuthorizationURL builds the authorization request URL.
 func (c *Client) AuthorizationURL(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error) {
 	metadata, err := c.Metadata(ctx)

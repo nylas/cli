@@ -27,10 +27,22 @@ import (
 // /dev routes enabled; without the variable they skip.
 const oauthASEnv = "NYLAS_OAUTH_AS_URL"
 
-// oauthTestRedirectURI carries a port while the client registers the same URI
-// without one, so every exchange here also exercises the RFC 8252 rule that
-// only the port of a loopback redirect URI is free.
-const oauthTestRedirectURI = "http://localhost:9007/callback"
+// oauthTestRedirectURI carries a port while the static client is registered
+// with http://127.0.0.1/callback and no port, so every exchange here also
+// exercises the RFC 8252 rule that only the port of a loopback redirect URI
+// is free. It is the spelling `nylas oauth login` advertises.
+const oauthTestRedirectURI = "http://127.0.0.1:9007/callback"
+
+// oauthTestClientID is the static public client, or NYLAS_OAUTH_CLIENT_ID
+// when the server under test registers the CLI under another id.
+func oauthTestClientID(t *testing.T) string {
+	t.Helper()
+	if id := os.Getenv("NYLAS_OAUTH_CLIENT_ID"); id != "" {
+		require.NoError(t, domain.ValidateOAuthClientID(id))
+		return id
+	}
+	return domain.DefaultOAuthClientID
+}
 
 func oauthUpstream(t *testing.T) string {
 	t.Helper()
@@ -223,20 +235,6 @@ func mintAuthorizationCode(t *testing.T, upstream, clientID string, subject oaut
 	return minted.Code
 }
 
-func registerCLIClient(t *testing.T, client *oauthas.Client) *domain.OAuthClientRegistration {
-	t.Helper()
-
-	registration, err := client.Register(context.Background(), domain.OAuthClientRegistrationRequest{
-		ClientName:              "Nylas CLI integration test",
-		RedirectURIs:            []string{"http://localhost/callback"},
-		TokenEndpointAuthMethod: "none",
-		GrantTypes:              []string{"authorization_code", "refresh_token"},
-		ResponseTypes:           []string{"code"},
-	})
-	require.NoError(t, err)
-	return registration
-}
-
 func TestOAuthAS_DiscoveryMatchesWhatTheClientNeeds(t *testing.T) {
 	upstream := oauthUpstream(t)
 	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
@@ -246,24 +244,11 @@ func TestOAuthAS_DiscoveryMatchesWhatTheClientNeeds(t *testing.T) {
 
 	assert.Contains(t, metadata.CodeChallengeMethodsSupported, "S256")
 	assert.Contains(t, metadata.TokenEndpointAuthMethods, "none",
-		"the CLI registers as a public client and cannot authenticate otherwise")
+		"the CLI is a public client and cannot authenticate otherwise")
 	assert.Contains(t, metadata.ScopesSupported, domain.OAuthScopeOfflineAccess,
 		"without offline_access the server issues no refresh token")
-	assert.NotEmpty(t, metadata.RegistrationEndpoint)
 	assert.NotEmpty(t, metadata.RevocationEndpoint)
 	assert.NotEmpty(t, metadata.UserInfoEndpoint)
-}
-
-func TestOAuthAS_RegistersCLIAsPublicClient(t *testing.T) {
-	upstream := oauthUpstream(t)
-	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
-
-	registration := registerCLIClient(t, client)
-
-	assert.NotEmpty(t, registration.ClientID)
-	assert.Equal(t, "none", registration.TokenEndpointAuthMethod)
-	assert.Empty(t, registration.ClientSecret,
-		"a public client must not be handed a secret it cannot protect")
 }
 
 func TestOAuthAS_FullAuthorizationCodeExchange(t *testing.T) {
@@ -272,14 +257,14 @@ func TestOAuthAS_FullAuthorizationCodeExchange(t *testing.T) {
 	ctx := context.Background()
 
 	subject := seedOAuthSubject(t, upstream)
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
-	code := mintAuthorizationCode(t, upstream, registration.ClientID, subject, pkce.Challenge)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
 
 	tokens, err := client.ExchangeCode(ctx, domain.OAuthCodeExchange{
-		ClientID:     registration.ClientID,
+		ClientID:     clientID,
 		Code:         code,
 		RedirectURI:  oauthTestRedirectURI,
 		CodeVerifier: pkce.Verifier,
@@ -292,6 +277,13 @@ func TestOAuthAS_FullAuthorizationCodeExchange(t *testing.T) {
 	assert.NotEmpty(t, tokens.IDToken, "openid was consented")
 	assert.False(t, tokens.ExpiresAt.IsZero(), "ExpiresAt must be derived from expires_in")
 	assert.False(t, tokens.IsExpired(time.Now()))
+
+	// The CLI decodes (never verifies) these for `nylas oauth status`.
+	claims, err := domain.DecodeOAuthAccessToken(tokens.AccessToken)
+	require.NoError(t, err, "the server should issue a JWT access token")
+	assert.Equal(t, subject.userPublicID, claims.Subject)
+	assert.Equal(t, clientID, claims.ClientID)
+	assert.False(t, claims.ExpiresAt.IsZero())
 
 	info, err := client.UserInfo(ctx, tokens.AccessToken)
 	require.NoError(t, err)
@@ -306,13 +298,13 @@ func TestOAuthAS_RejectsReplayedAuthorizationCode(t *testing.T) {
 	ctx := context.Background()
 
 	subject := seedOAuthSubject(t, upstream)
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
-	code := mintAuthorizationCode(t, upstream, registration.ClientID, subject, pkce.Challenge)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
 
 	exchange := domain.OAuthCodeExchange{
-		ClientID:     registration.ClientID,
+		ClientID:     clientID,
 		Code:         code,
 		RedirectURI:  oauthTestRedirectURI,
 		CodeVerifier: pkce.Verifier,
@@ -333,15 +325,15 @@ func TestOAuthAS_RejectsMismatchedCodeVerifier(t *testing.T) {
 	ctx := context.Background()
 
 	subject := seedOAuthSubject(t, upstream)
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
 	other, err := domain.NewPKCE()
 	require.NoError(t, err)
-	code := mintAuthorizationCode(t, upstream, registration.ClientID, subject, pkce.Challenge)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
 
 	_, err = client.ExchangeCode(ctx, domain.OAuthCodeExchange{
-		ClientID:     registration.ClientID,
+		ClientID:     clientID,
 		Code:         code,
 		RedirectURI:  oauthTestRedirectURI,
 		CodeVerifier: other.Verifier,
@@ -358,13 +350,13 @@ func TestOAuthAS_RefreshRotatesAndDetectsReuse(t *testing.T) {
 	ctx := context.Background()
 
 	subject := seedOAuthSubject(t, upstream)
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
-	code := mintAuthorizationCode(t, upstream, registration.ClientID, subject, pkce.Challenge)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
 
 	tokens, err := client.ExchangeCode(ctx, domain.OAuthCodeExchange{
-		ClientID:     registration.ClientID,
+		ClientID:     clientID,
 		Code:         code,
 		RedirectURI:  oauthTestRedirectURI,
 		CodeVerifier: pkce.Verifier,
@@ -372,7 +364,7 @@ func TestOAuthAS_RefreshRotatesAndDetectsReuse(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, tokens.RefreshToken)
 
-	refreshed, err := client.Refresh(ctx, registration.ClientID, tokens.RefreshToken)
+	refreshed, err := client.Refresh(ctx, clientID, tokens.RefreshToken)
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, refreshed.AccessToken)
@@ -382,7 +374,7 @@ func TestOAuthAS_RefreshRotatesAndDetectsReuse(t *testing.T) {
 
 	// Replaying the consumed token is what burns the whole family, which is
 	// why oauthlogin never carries an old refresh token forward.
-	_, err = client.Refresh(ctx, registration.ClientID, tokens.RefreshToken)
+	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken)
 	var oauthErr *domain.OAuthError
 	require.ErrorAs(t, err, &oauthErr)
 	assert.Equal(t, "invalid_grant", oauthErr.Code)
@@ -394,22 +386,22 @@ func TestOAuthAS_RevokeEndsTheSession(t *testing.T) {
 	ctx := context.Background()
 
 	subject := seedOAuthSubject(t, upstream)
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
-	code := mintAuthorizationCode(t, upstream, registration.ClientID, subject, pkce.Challenge)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
 
 	tokens, err := client.ExchangeCode(ctx, domain.OAuthCodeExchange{
-		ClientID:     registration.ClientID,
+		ClientID:     clientID,
 		Code:         code,
 		RedirectURI:  oauthTestRedirectURI,
 		CodeVerifier: pkce.Verifier,
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, client.Revoke(ctx, registration.ClientID, tokens.RefreshToken))
+	require.NoError(t, client.Revoke(ctx, clientID, tokens.RefreshToken))
 
-	_, err = client.Refresh(ctx, registration.ClientID, tokens.RefreshToken)
+	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken)
 	require.Error(t, err, "a revoked refresh token must not mint new tokens")
 }
 
@@ -421,14 +413,14 @@ func TestOAuthAS_AuthorizationURLIsAcceptedByTheServer(t *testing.T) {
 	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
 	ctx := context.Background()
 
-	registration := registerCLIClient(t, client)
+	clientID := oauthTestClientID(t)
 	pkce, err := domain.NewPKCE()
 	require.NoError(t, err)
 	state, err := domain.NewOAuthState()
 	require.NoError(t, err)
 
 	authURL, err := client.AuthorizationURL(ctx, domain.OAuthAuthorizationParams{
-		ClientID:      registration.ClientID,
+		ClientID:      clientID,
 		RedirectURI:   oauthTestRedirectURI,
 		Scopes:        domain.DefaultOAuthScopes(),
 		State:         state,

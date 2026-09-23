@@ -270,50 +270,6 @@ func TestClient_Refresh_ReturnsRotatedToken(t *testing.T) {
 	assert.Equal(t, "rt-2", tokens.RefreshToken)
 }
 
-func TestClient_Register(t *testing.T) {
-	var body domain.OAuthClientRegistrationRequest
-	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/oauth/register", r.URL.Path)
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{
-			"client_id": "dcr-client-1",
-			"client_id_issued_at": 1758456000,
-			"client_name": "Nylas CLI",
-			"redirect_uris": ["http://localhost/callback"],
-			"token_endpoint_auth_method": "none",
-			"grant_types": ["authorization_code","refresh_token"],
-			"response_types": ["code"]
-		}`))
-	})
-
-	registration, err := NewClient(server.URL).Register(context.Background(), domain.OAuthClientRegistrationRequest{
-		ClientName:              "Nylas CLI",
-		RedirectURIs:            []string{"http://localhost/callback"},
-		TokenEndpointAuthMethod: "none",
-	})
-	require.NoError(t, err)
-
-	assert.Equal(t, "none", body.TokenEndpointAuthMethod,
-		"the CLI must register as a public client explicitly")
-	assert.Equal(t, "dcr-client-1", registration.ClientID)
-	assert.Empty(t, registration.ClientSecret)
-}
-
-func TestClient_Register_RejectsResponseWithoutClientID(t *testing.T) {
-	server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"client_name":"Nylas CLI"}`))
-	})
-
-	_, err := NewClient(server.URL).Register(context.Background(), domain.OAuthClientRegistrationRequest{})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "client_id")
-}
-
 func TestClient_Revoke(t *testing.T) {
 	var got url.Values
 	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {

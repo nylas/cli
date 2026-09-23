@@ -18,9 +18,6 @@ type OAuthAuthServerClient interface {
 	// endpoint from this document rather than assuming a path.
 	Metadata(ctx context.Context) (*domain.OAuthServerMetadata, error)
 
-	// Register performs RFC 7591 dynamic client registration.
-	Register(ctx context.Context, req domain.OAuthClientRegistrationRequest) (*domain.OAuthClientRegistration, error)
-
 	// AuthorizationURL builds the URL to open in the browser to start a
 	// PKCE authorization code flow.
 	AuthorizationURL(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error)

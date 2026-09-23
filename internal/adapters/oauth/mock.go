@@ -16,6 +16,9 @@ type MockServer struct {
 	StopCalled            bool
 	WaitForCallbackCalled bool
 	TimeoutAfter          time.Duration
+
+	// RedirectURI overrides the advertised redirect URI when set.
+	RedirectURI string
 }
 
 // NewMockServer creates a new MockServer.
@@ -60,5 +63,8 @@ func (m *MockServer) WaitForCallback(ctx context.Context, expectedState string) 
 
 // GetRedirectURI returns the redirect URI.
 func (m *MockServer) GetRedirectURI() string {
+	if m.RedirectURI != "" {
+		return m.RedirectURI
+	}
 	return "http://localhost:8080/callback"
 }

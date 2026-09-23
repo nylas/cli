@@ -9,11 +9,16 @@ import (
 	"github.com/nylas/cli/internal/ports"
 )
 
+// legacyKeyOAuthClientID held a dynamically registered client id before the
+// CLI moved to a static client. Nothing reads it; it is only cleared, so a
+// keyring written by an older build does not keep a stale entry forever.
+const legacyKeyOAuthClientID = "oauth_client_id"
+
 // sessionKeys is every secret this package owns. Clearing the set is what
 // logout means, so a new key must be added here or it outlives the session.
 var sessionKeys = []string{
 	ports.KeyOAuthIssuer,
-	ports.KeyOAuthClientID,
+	legacyKeyOAuthClientID,
 	ports.KeyOAuthAccessToken,
 	ports.KeyOAuthRefreshToken,
 	ports.KeyOAuthIDToken,
@@ -21,7 +26,8 @@ var sessionKeys = []string{
 	ports.KeyOAuthScope,
 }
 
-// Session is a stored authorization server login.
+// Session is a stored authorization server login. ClientID is the client the
+// service is configured with, not a stored value.
 type Session struct {
 	Issuer   string
 	ClientID string
@@ -37,10 +43,12 @@ func (s *Service) loadSession() (*Session, error) {
 		return nil, domain.ErrOAuthNotLoggedIn
 	}
 
-	session := &Session{Tokens: domain.OAuthTokens{AccessToken: accessToken, TokenType: "Bearer"}}
+	session := &Session{
+		ClientID: s.clientID,
+		Tokens:   domain.OAuthTokens{AccessToken: accessToken, TokenType: "Bearer"},
+	}
 	for key, target := range map[string]*string{
 		ports.KeyOAuthIssuer:       &session.Issuer,
-		ports.KeyOAuthClientID:     &session.ClientID,
 		ports.KeyOAuthRefreshToken: &session.Tokens.RefreshToken,
 		ports.KeyOAuthIDToken:      &session.Tokens.IDToken,
 		ports.KeyOAuthScope:        &session.Tokens.Scope,
@@ -72,7 +80,7 @@ func (s *Service) loadSession() (*Session, error) {
 // saveTokens persists a token set. The access token is written last so a
 // partial write cannot leave a session that looks complete but carries a
 // refresh token belonging to a different exchange.
-func (s *Service) saveTokens(issuer, clientID string, tokens *domain.OAuthTokens) error {
+func (s *Service) saveTokens(issuer string, tokens *domain.OAuthTokens) error {
 	expiresAt := ""
 	if !tokens.ExpiresAt.IsZero() {
 		expiresAt = tokens.ExpiresAt.UTC().Format(time.RFC3339)
@@ -83,7 +91,7 @@ func (s *Service) saveTokens(issuer, clientID string, tokens *domain.OAuthTokens
 		value string
 	}{
 		{ports.KeyOAuthIssuer, issuer},
-		{ports.KeyOAuthClientID, clientID},
+		{legacyKeyOAuthClientID, ""},
 		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
 		{ports.KeyOAuthIDToken, tokens.IDToken},
 		{ports.KeyOAuthScope, tokens.Scope},
@@ -101,18 +109,6 @@ func (s *Service) saveTokens(issuer, clientID string, tokens *domain.OAuthTokens
 		if err := s.secrets.Set(entry.key, entry.value); err != nil {
 			return fmt.Errorf("failed to store %s: %w", entry.key, err)
 		}
-	}
-	return nil
-}
-
-// saveClientRegistration records the dynamically registered client against
-// the issuer it belongs to, so a later login can reuse it.
-func (s *Service) saveClientRegistration(issuer, clientID string) error {
-	if err := s.secrets.Set(ports.KeyOAuthIssuer, issuer); err != nil {
-		return fmt.Errorf("failed to store %s: %w", ports.KeyOAuthIssuer, err)
-	}
-	if err := s.secrets.Set(ports.KeyOAuthClientID, clientID); err != nil {
-		return fmt.Errorf("failed to store %s: %w", ports.KeyOAuthClientID, err)
 	}
 	return nil
 }

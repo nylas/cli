@@ -4,6 +4,8 @@ package oauth
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -236,4 +238,66 @@ func TestLogoutCmd_SurfacesRevocationFailure(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "server unreachable")
+}
+
+// jwtWithClaims builds an unsigned JWT; status only decodes, never verifies.
+func jwtWithClaims(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	body, err := json.Marshal(claims)
+	require.NoError(t, err)
+	return "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString(body) + ".sig"
+}
+
+func TestStatusCmd_ShowsDecodedTokenClaims(t *testing.T) {
+	session := loggedInSession()
+	session.Tokens.AccessToken = jwtWithClaims(t, map[string]any{
+		"aud":    "https://mcp.us.nylas.com",
+		"scope":  "email.read offline_access",
+		"exp":    time.Now().Add(15 * time.Minute).Unix(),
+		"grants": []map[string]string{{"id": "grant-1", "application_id": "app-1"}},
+	})
+	withService(t, &fakeService{session: session})
+
+	stdout, _, err := testutil.ExecuteSubCommand(newStatusCmd())
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout, "NOT verified", "the output must not imply the claims were checked")
+	assert.Contains(t, stdout, "Audience: https://mcp.us.nylas.com")
+	assert.Contains(t, stdout, "Scopes:   email.read offline_access")
+	assert.Contains(t, stdout, "grant-1 (application app-1)")
+	assert.NotContains(t, stdout, session.Tokens.AccessToken, "the token itself must never be printed")
+}
+
+func TestStatusCmd_OpaqueTokenIsReportedNotFatal(t *testing.T) {
+	withService(t, &fakeService{session: loggedInSession()})
+
+	stdout, _, err := testutil.ExecuteSubCommand(newStatusCmd())
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout, "unavailable")
+	assert.NotContains(t, stdout, "at-1")
+}
+
+func TestStatusCmd_HelpSaysClaimsAreNotVerified(t *testing.T) {
+	assert.Contains(t, newStatusCmd().Long, "NOT VERIFIED")
+}
+
+func TestResolveClientID(t *testing.T) {
+	t.Run("defaults to the static client", func(t *testing.T) {
+		t.Setenv(clientIDEnv, "")
+		id, err := resolveClientID()
+		require.NoError(t, err)
+		assert.Equal(t, domain.DefaultOAuthClientID, id)
+	})
+	t.Run("honours a valid override", func(t *testing.T) {
+		t.Setenv(clientIDEnv, "dev-client-1")
+		id, err := resolveClientID()
+		require.NoError(t, err)
+		assert.Equal(t, "dev-client-1", id)
+	})
+	t.Run("rejects an invalid override instead of falling back", func(t *testing.T) {
+		t.Setenv(clientIDEnv, "bad id&x=1")
+		_, err := resolveClientID()
+		require.ErrorIs(t, err, domain.ErrOAuthInvalidClientID)
+	})
 }
