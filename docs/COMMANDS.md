@@ -134,6 +134,13 @@ The CLI is a static public client (client id
 exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
 address the callback server binds. Tokens are stored in the system keyring.
 
+Every CLI process on the machine shares the one stored session. Refreshing is
+serialised by a lock file (`oauth-session.lock` in the CLI config directory):
+the server rotates the refresh token on every use and revokes the whole family
+if a consumed one is replayed, so two `nylas mcp serve` processes refreshing at
+once would otherwise sign you out. A process that waited on the lock uses the
+tokens the other one stored instead of refreshing again.
+
 `nylas oauth status` decodes the access token and shows its audience, grants,
 scopes and expiry. The claims are **decoded, not verified** — the CLI does not
 check the signature; only the resource server's answer is authoritative.

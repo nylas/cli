@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/nylas/cli/internal/adapters/filelock"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	"github.com/nylas/cli/internal/adapters/oauth"
 	"github.com/nylas/cli/internal/adapters/oauthas"
@@ -35,6 +37,7 @@ type fixture struct {
 	browser *mockBrowser
 	secrets *keyring.MockSecretStore
 	server  *oauth.MockServer
+	lock    *filelock.Lock
 	clock   time.Time
 }
 
@@ -58,7 +61,8 @@ func newFixture(t *testing.T) *fixture {
 
 	now := func() time.Time { return f.clock }
 	f.client.Now = now
-	f.service = NewService(domain.DefaultOAuthClientID, f.client, f.server, f.browser, f.secrets)
+	f.lock = filelock.New(filepath.Join(t.TempDir(), "oauth-session.lock"))
+	f.service = NewService(domain.DefaultOAuthClientID, f.client, f.server, f.browser, f.secrets, f.lock)
 	f.service.now = now
 
 	return f
@@ -98,7 +102,7 @@ func TestLogin_UsesTheStaticPublicClient(t *testing.T) {
 
 func TestLogin_UsesConfiguredClientIDOverride(t *testing.T) {
 	f := newFixture(t)
-	f.service = NewService("dev-client-1", f.client, f.server, f.browser, f.secrets)
+	f.service = NewService("dev-client-1", f.client, f.server, f.browser, f.secrets, f.lock)
 	f.service.now = func() time.Time { return f.clock }
 
 	result, err := f.service.Login(context.Background(), nil)
@@ -110,7 +114,7 @@ func TestLogin_UsesConfiguredClientIDOverride(t *testing.T) {
 
 func TestLogin_RejectsInvalidClientIDBeforeOpeningBrowser(t *testing.T) {
 	f := newFixture(t)
-	f.service = NewService("bad client&id", f.client, f.server, f.browser, f.secrets)
+	f.service = NewService("bad client&id", f.client, f.server, f.browser, f.secrets, f.lock)
 
 	_, err := f.service.Login(context.Background(), nil)
 

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/nylas/cli/internal/adapters/browser"
 	"github.com/nylas/cli/internal/adapters/config"
+	"github.com/nylas/cli/internal/adapters/filelock"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	oauthadapter "github.com/nylas/cli/internal/adapters/oauth"
 	"github.com/nylas/cli/internal/adapters/oauthas"
@@ -55,7 +57,16 @@ func createLoginService() (*oauthlogin.Service, error) {
 	// server actually binds, so the browser cannot land on the other family.
 	callbackServer := oauthadapter.NewLoopbackIPCallbackServer(callbackPort)
 
-	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets), nil
+	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets, sessionLock()), nil
+}
+
+// sessionLockFile serialises OAuth session writes across every CLI process
+// on the machine — in practice, several `nylas mcp serve` processes started
+// by different assistants that share one keyring session.
+const sessionLockFile = "oauth-session.lock"
+
+func sessionLock() *filelock.Lock {
+	return filelock.New(filepath.Join(config.DefaultConfigDir(), sessionLockFile))
 }
 
 // clientIDEnv overrides the static public client id, for a local or dev

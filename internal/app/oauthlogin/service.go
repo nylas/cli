@@ -19,6 +19,7 @@ type Service struct {
 	server   ports.OAuthServer
 	browser  ports.Browser
 	secrets  ports.SecretStore
+	lock     ports.CrossProcessLock
 	now      func() time.Time
 }
 
@@ -28,12 +29,18 @@ type Service struct {
 // The client is registered statically on the server, with the redirect URIs
 // http://127.0.0.1/callback and http://localhost/callback and a free port
 // (RFC 8252 section 7.3). The server callback must advertise one of those.
+//
+// lock serialises every write to the stored session across processes. It is
+// required: several `nylas mcp serve` processes share one keyring session,
+// and two of them refreshing at once would replay a rotated refresh token,
+// which makes the server revoke the whole family and signs the user out.
 func NewService(
 	clientID string,
 	client ports.OAuthAuthServerClient,
 	server ports.OAuthServer,
 	browser ports.Browser,
 	secrets ports.SecretStore,
+	lock ports.CrossProcessLock,
 ) *Service {
 	return &Service{
 		clientID: clientID,
@@ -41,8 +48,27 @@ func NewService(
 		server:   server,
 		browser:  browser,
 		secrets:  secrets,
+		lock:     lock,
 		now:      time.Now,
 	}
+}
+
+// withSessionLock runs fn while holding the cross-process session lock.
+func (s *Service) withSessionLock(ctx context.Context, fn func() error) error {
+	if s.lock == nil {
+		// Fail closed: refreshing without the lock is exactly the race that
+		// burns the refresh token family.
+		return errors.New("oauth session lock is not configured")
+	}
+	unlock, err := s.lock.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire the OAuth session lock: %w", err)
+	}
+	fnErr := fn()
+	if err := unlock(); err != nil && fnErr == nil {
+		return fmt.Errorf("failed to release the OAuth session lock: %w", err)
+	}
+	return fnErr
 }
 
 // LoginResult summarises a completed login.
@@ -139,7 +165,9 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		return nil, err
 	}
 
-	if err := s.saveTokens(metadata.Issuer, tokens); err != nil {
+	if err := s.withSessionLock(ctx, func() error {
+		return s.saveTokens(metadata.Issuer, tokens)
+	}); err != nil {
 		return nil, err
 	}
 
@@ -161,22 +189,52 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 	if !session.Tokens.IsExpired(s.now()) {
 		return session.Tokens.AccessToken, nil
 	}
-	if session.Tokens.RefreshToken == "" {
-		return "", fmt.Errorf("%w: run `nylas oauth login` again", domain.ErrOAuthNoRefreshToken)
-	}
+	return s.refreshLocked(ctx, "")
+}
 
-	tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken)
+// refreshLocked is the only path that spends a refresh token.
+//
+// It holds the cross-process lock across read, refresh and write, and
+// re-reads the session once the lock is held: whoever waited behind another
+// refresher finds the rotated tokens already stored and uses them rather
+// than replaying the refresh token that process just consumed. rejected is
+// an access token the caller already knows is bad (empty when the token only
+// expired), so a stored copy of it is not mistaken for a fresh one.
+func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, error) {
+	var accessToken string
+	err := s.withSessionLock(ctx, func() error {
+		session, err := s.loadSession()
+		if err != nil {
+			return err
+		}
+		stored := session.Tokens.AccessToken
+		if !session.Tokens.IsExpired(s.now()) && stored != rejected {
+			accessToken = stored
+			return nil
+		}
+		if session.Tokens.RefreshToken == "" {
+			return fmt.Errorf("%w: run `nylas oauth login` again", domain.ErrOAuthNoRefreshToken)
+		}
+
+		tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken)
+		if err != nil {
+			return err
+		}
+
+		// The server rotates the refresh token on every use and burns the
+		// whole family if an old one reappears. Persist exactly what came
+		// back — never carry the previous refresh token forward to fill an
+		// empty field.
+		if err := s.saveTokens(session.Issuer, tokens); err != nil {
+			return err
+		}
+		accessToken = tokens.AccessToken
+		return nil
+	})
 	if err != nil {
 		return "", err
 	}
-
-	// The server rotates the refresh token on every use and burns the whole
-	// family if an old one reappears. Persist exactly what came back — never
-	// carry the previous refresh token forward to fill an empty field.
-	if err := s.saveTokens(session.Issuer, tokens); err != nil {
-		return "", err
-	}
-	return tokens.AccessToken, nil
+	return accessToken, nil
 }
 
 // Status returns the stored session without contacting the server.
@@ -198,22 +256,26 @@ func (s *Service) UserInfo(ctx context.Context) (*domain.OAuthUserInfo, error) {
 // Revocation is best effort: an unreachable server must not leave tokens on
 // disk, since the local copy is the thing the user asked to be rid of.
 func (s *Service) Logout(ctx context.Context) error {
-	session, err := s.loadSession()
-	if err != nil {
-		if errors.Is(err, domain.ErrOAuthNotLoggedIn) {
-			return s.clearSession()
+	// Under the lock, so a refresh in another process cannot write a rotated
+	// session back after this one has cleared it.
+	return s.withSessionLock(ctx, func() error {
+		session, err := s.loadSession()
+		if err != nil {
+			if errors.Is(err, domain.ErrOAuthNotLoggedIn) {
+				return s.clearSession()
+			}
+			return err
 		}
-		return err
-	}
 
-	token := session.Tokens.RefreshToken
-	if token == "" {
-		token = session.Tokens.AccessToken
-	}
-	revokeErr := s.client.Revoke(ctx, session.ClientID, token)
+		token := session.Tokens.RefreshToken
+		if token == "" {
+			token = session.Tokens.AccessToken
+		}
+		revokeErr := s.client.Revoke(ctx, session.ClientID, token)
 
-	if err := s.clearSession(); err != nil {
-		return err
-	}
-	return revokeErr
+		if err := s.clearSession(); err != nil {
+			return err
+		}
+		return revokeErr
+	})
 }
