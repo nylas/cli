@@ -28,6 +28,9 @@ func (c *Client) AuthorizationURL(ctx context.Context, params domain.OAuthAuthor
 	if params.Nonce != "" {
 		query.Set("nonce", params.Nonce)
 	}
+	if params.Resource != "" {
+		query.Set("resource", params.Resource)
+	}
 
 	separator := "?"
 	if strings.Contains(metadata.AuthorizationEndpoint, "?") {
@@ -52,12 +55,17 @@ func (c *Client) ExchangeCode(ctx context.Context, params domain.OAuthCodeExchan
 	if params.ClientSecret != "" {
 		form.Set("client_secret", params.ClientSecret)
 	}
+	if params.Resource != "" {
+		form.Set("resource", params.Resource)
+	}
 
 	return c.requestTokens(ctx, metadata.TokenEndpoint, form)
 }
 
-// Refresh exchanges a refresh token for a new token set.
-func (c *Client) Refresh(ctx context.Context, clientID, refreshToken string) (*domain.OAuthTokens, error) {
+// Refresh exchanges a refresh token for a new token set. resource, when set,
+// is sent as the RFC 8707 resource indicator so the new access token keeps
+// the audience the session was logged in for.
+func (c *Client) Refresh(ctx context.Context, clientID, refreshToken, resource string) (*domain.OAuthTokens, error) {
 	metadata, err := c.Metadata(ctx)
 	if err != nil {
 		return nil, err
@@ -67,6 +75,9 @@ func (c *Client) Refresh(ctx context.Context, clientID, refreshToken string) (*d
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
+	if resource != "" {
+		form.Set("resource", resource)
+	}
 
 	return c.requestTokens(ctx, metadata.TokenEndpoint, form)
 }

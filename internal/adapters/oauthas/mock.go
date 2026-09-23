@@ -14,7 +14,7 @@ type MockClient struct {
 	MetadataFunc         func(ctx context.Context) (*domain.OAuthServerMetadata, error)
 	AuthorizationURLFunc func(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error)
 	ExchangeCodeFunc     func(ctx context.Context, params domain.OAuthCodeExchange) (*domain.OAuthTokens, error)
-	RefreshFunc          func(ctx context.Context, clientID, refreshToken string) (*domain.OAuthTokens, error)
+	RefreshFunc          func(ctx context.Context, clientID, refreshToken, resource string) (*domain.OAuthTokens, error)
 	RevokeFunc           func(ctx context.Context, clientID, token string) error
 	UserInfoFunc         func(ctx context.Context, accessToken string) (*domain.OAuthUserInfo, error)
 
@@ -27,6 +27,7 @@ type MockClient struct {
 	AuthorizationCalls []domain.OAuthAuthorizationParams
 	ExchangeCalls      []domain.OAuthCodeExchange
 	RefreshCalls       []string
+	RefreshResources   []string
 	RevokeCalls        []string
 }
 
@@ -71,10 +72,11 @@ func (m *MockClient) ExchangeCode(ctx context.Context, params domain.OAuthCodeEx
 	}, nil
 }
 
-func (m *MockClient) Refresh(ctx context.Context, clientID, refreshToken string) (*domain.OAuthTokens, error) {
+func (m *MockClient) Refresh(ctx context.Context, clientID, refreshToken, resource string) (*domain.OAuthTokens, error) {
 	m.RefreshCalls = append(m.RefreshCalls, refreshToken)
+	m.RefreshResources = append(m.RefreshResources, resource)
 	if m.RefreshFunc != nil {
-		return m.RefreshFunc(ctx, clientID, refreshToken)
+		return m.RefreshFunc(ctx, clientID, refreshToken, resource)
 	}
 	return &domain.OAuthTokens{
 		AccessToken:  "mock-access-token-2",

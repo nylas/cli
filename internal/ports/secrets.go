@@ -39,6 +39,7 @@ const (
 	// issued the stored tokens. The client id is not stored: the CLI is a
 	// static public client (domain.DefaultOAuthClientID).
 	KeyOAuthIssuer       = "oauth_issuer"
+	KeyOAuthResource     = "oauth_resource"
 	KeyOAuthAccessToken  = "oauth_access_token"
 	KeyOAuthRefreshToken = "oauth_refresh_token"
 	KeyOAuthIDToken      = "oauth_id_token"

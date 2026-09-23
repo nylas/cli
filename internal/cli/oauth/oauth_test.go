@@ -21,7 +21,7 @@ import (
 type fakeService struct {
 	loginResult *oauthlogin.LoginResult
 	loginErr    error
-	loginScopes []string
+	loginOpts   *oauthlogin.LoginOptions
 
 	session   *oauthlogin.Session
 	statusErr error
@@ -36,8 +36,8 @@ type fakeService struct {
 	logoutErr    error
 }
 
-func (f *fakeService) Login(_ context.Context, scopes []string) (*oauthlogin.LoginResult, error) {
-	f.loginScopes = scopes
+func (f *fakeService) Login(_ context.Context, opts oauthlogin.LoginOptions) (*oauthlogin.LoginResult, error) {
+	f.loginOpts = &opts
 	return f.loginResult, f.loginErr
 }
 
@@ -131,7 +131,9 @@ func TestLoginCmd_PassesScopeFlag(t *testing.T) {
 	_, _, err := testutil.ExecuteSubCommand(newLoginCmd(), "--scope", "openid,email")
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"openid", "email"}, svc.loginScopes)
+	require.NotNil(t, svc.loginOpts)
+	assert.Equal(t, []string{"openid", "email"}, svc.loginOpts.Scopes)
+	assert.Empty(t, svc.loginOpts.Resource, "a plain login names no resource server")
 }
 
 func TestLoginCmd_SurfacesFailure(t *testing.T) {
@@ -300,4 +302,41 @@ func TestResolveClientID(t *testing.T) {
 		_, err := resolveClientID()
 		require.ErrorIs(t, err, domain.ErrOAuthInvalidClientID)
 	})
+}
+
+func TestLoginOptions_MCPPreset(t *testing.T) {
+	for region, resource := range map[string]string{"": domain.MCPResourceUS, "us": domain.MCPResourceUS, "eu": domain.MCPResourceEU} {
+		opts, err := loginOptions("mcp", nil, region)
+		require.NoError(t, err, region)
+		assert.Equal(t, resource, opts.Resource, "the resource follows the configured region %q", region)
+		assert.Equal(t, domain.MCPOAuthScopes(), opts.Scopes)
+		assert.True(t, opts.DropUnsupportedScopes)
+	}
+}
+
+func TestLoginOptions_Rejections(t *testing.T) {
+	_, err := loginOptions("mcp", []string{"email.read"}, "us")
+	require.Error(t, err, "--for picks the scopes; a hand-picked list would be half an MCP login")
+
+	_, err = loginOptions("calendar", nil, "us")
+	require.Error(t, err)
+
+	_, err = loginOptions("mcp", nil, "ap")
+	require.ErrorIs(t, err, domain.ErrMCPResource, "an unknown region must not default to US")
+}
+
+func TestLoginCmd_ForMCPPassesThePreset(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{
+		Issuer: "i", ClientID: "c", Resource: domain.MCPResourceUS,
+		DroppedScopes: []string{"notetaker.read"}, HasRefresh: true,
+	}}
+	withService(t, svc)
+
+	stdout, _, err := testutil.ExecuteSubCommand(newLoginCmd(), "--for", "mcp")
+	require.NoError(t, err)
+
+	require.NotNil(t, svc.loginOpts)
+	assert.Contains(t, []string{domain.MCPResourceUS, domain.MCPResourceEU}, svc.loginOpts.Resource)
+	assert.Contains(t, stdout, "Resource:")
+	assert.Contains(t, stdout, "notetaker.read", "scopes the server did not offer are reported")
 }

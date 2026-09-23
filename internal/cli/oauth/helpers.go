@@ -22,7 +22,7 @@ import (
 // loginService is the slice of oauthlogin.Service the commands use, named so
 // tests can substitute a fake via createLoginServiceFn.
 type loginService interface {
-	Login(ctx context.Context, scopes []string) (*oauthlogin.LoginResult, error)
+	Login(ctx context.Context, opts oauthlogin.LoginOptions) (*oauthlogin.LoginResult, error)
 	Status() (*oauthlogin.Session, error)
 	AccessToken(ctx context.Context) (string, error)
 	UserInfo(ctx context.Context) (*domain.OAuthUserInfo, error)
@@ -30,6 +30,22 @@ type loginService interface {
 }
 
 var createLoginServiceFn = func() (loginService, error) { return createLoginService() }
+
+// NewLoginService returns the OAuth login service wired to this machine's
+// keyring, session lock and authorization server. `nylas mcp serve --auth
+// oauth` uses it so its refreshes share the lock with every other process.
+func NewLoginService() (*oauthlogin.Service, error) {
+	return createLoginService()
+}
+
+// configuredRegion is the CLI's configured region, "" when none is set.
+func configuredRegion() string {
+	cfg, err := config.NewDefaultFileStore().Load()
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return cfg.Region
+}
 
 // createLoginService wires the OAuth login service. The authorization server
 // is hosted by dashboard-account, so it resolves to the same base URL as the

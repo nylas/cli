@@ -67,8 +67,39 @@ nylas mcp uninstall --all
 Start the MCP server (called by AI assistants, not directly):
 
 ```bash
-nylas mcp serve
+nylas mcp serve               # authenticate with the API key (default)
+nylas mcp serve --auth oauth  # authenticate with an OAuth session
 ```
+
+#### OAuth (`--auth oauth`)
+
+Log in once for the MCP server, then point the assistant at
+`nylas mcp serve --auth oauth`:
+
+```bash
+nylas oauth login --for mcp
+```
+
+`--for mcp` requests the data scopes the MCP tools use (`email.read`,
+`email.send`, `calendar.read`, `calendar.write`, `contacts.read`,
+`notetaker.read`, `grants.read`) plus `offline_access`, and sends the MCP server
+of your configured region as the RFC 8707 `resource`, so the token is issued
+for that server only. Scopes the authorization server does not offer are left
+out and listed.
+
+With `--auth oauth` the proxy:
+
+- asks for a valid token before **every** request and refreshes it as it nears
+  expiry (access tokens last 15 minutes). Refreshing is serialised across every
+  `nylas mcp serve` on the machine, so several assistants can share one login.
+- sends requests to the MCP server named in the token's audience (`aud`), not
+  the configured region, and refuses a token whose audience names neither.
+- offers the default grant (`X-Nylas-Grant-Id` and the injected `grant_id`)
+  only when the token's `grants` claim lists it, and does not answer
+  `get_grant` from the local grant store.
+- on `401` with a `WWW-Authenticate` challenge, refreshes once and retries; if
+  that fails it tells you to run `nylas oauth login --for mcp`.
+- on `403 insufficient_scope`, names the missing scope and the login command.
 
 ---
 
@@ -158,6 +189,8 @@ region: eu  # or "us" (default)
 ```
 
 The MCP proxy reads this setting and routes requests to the appropriate regional endpoint.
+With `--auth oauth` the region is used once, at `nylas oauth login --for mcp`,
+to choose the token's resource; requests then follow the token's audience.
 
 ---
 

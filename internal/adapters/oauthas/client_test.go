@@ -143,6 +143,42 @@ func TestClient_AuthorizationURL_OmitsEmptyNonce(t *testing.T) {
 	parsed, err := url.Parse(raw)
 	require.NoError(t, err)
 	assert.False(t, parsed.Query().Has("nonce"))
+	assert.False(t, parsed.Query().Has("resource"), "no resource indicator unless one was asked for")
+}
+
+func TestClient_SendsResourceIndicatorOnEveryLeg(t *testing.T) {
+	// RFC 8707: the resource goes on the authorization request AND on each
+	// token request, or the token is issued without the MCP audience and the
+	// MCP server refuses it.
+	var forms []url.Values
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		forms = append(forms, r.PostForm)
+		_, _ = w.Write([]byte(`{"access_token":"at","token_type":"Bearer","expires_in":900,"refresh_token":"rt"}`))
+	})
+	client := NewClient(server.URL)
+	ctx := context.Background()
+
+	raw, err := client.AuthorizationURL(ctx, domain.OAuthAuthorizationParams{
+		ClientID: "client-123",
+		Resource: domain.MCPResourceEU,
+	})
+	require.NoError(t, err)
+	parsed, err := url.Parse(raw)
+	require.NoError(t, err)
+	assert.Equal(t, domain.MCPResourceEU, parsed.Query().Get("resource"))
+
+	_, err = client.ExchangeCode(ctx, domain.OAuthCodeExchange{ClientID: "client-123", Code: "c", Resource: domain.MCPResourceEU})
+	require.NoError(t, err)
+	_, err = client.Refresh(ctx, "client-123", "rt-1", domain.MCPResourceEU)
+	require.NoError(t, err)
+	_, err = client.Refresh(ctx, "client-123", "rt-2", "")
+	require.NoError(t, err)
+
+	require.Len(t, forms, 3)
+	assert.Equal(t, domain.MCPResourceEU, forms[0].Get("resource"), "code exchange")
+	assert.Equal(t, domain.MCPResourceEU, forms[1].Get("resource"), "refresh")
+	assert.False(t, forms[2].Has("resource"), "a session with no resource sends none")
 }
 
 func TestClient_ExchangeCode(t *testing.T) {
@@ -261,7 +297,7 @@ func TestClient_Refresh_ReturnsRotatedToken(t *testing.T) {
 		_, _ = w.Write([]byte(`{"access_token":"at-2","token_type":"Bearer","expires_in":3600,"refresh_token":"rt-2"}`))
 	})
 
-	tokens, err := NewClient(server.URL).Refresh(context.Background(), "client-123", "rt-1")
+	tokens, err := NewClient(server.URL).Refresh(context.Background(), "client-123", "rt-1", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, "refresh_token", got.Get("grant_type"))

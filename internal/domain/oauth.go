@@ -17,9 +17,8 @@ var (
 	ErrOAuthMetadata       = errors.New("invalid authorization server metadata")
 )
 
-// Scopes the Nylas authorization server currently grants. Resource scopes
-// (email.read, grants.read, ...) are defined server-side but withheld until a
-// resource server exists, so requesting one fails the authorization request.
+// Identity scopes. Data scopes (email.read, grants.read, ...) are in
+// mcp_auth.go; the server only offers the ones a deployment has enabled.
 const (
 	OAuthScopeOpenID        = "openid"
 	OAuthScopeEmail         = "email"
@@ -102,6 +101,9 @@ type OAuthAuthorizationParams struct {
 	State         string
 	CodeChallenge string
 	Nonce         string
+	// Resource is the RFC 8707 resource indicator, the server the token is
+	// for. Empty requests a token with no resource-server audience.
+	Resource string
 }
 
 // OAuthCodeExchange carries an authorization code back to the token endpoint.
@@ -112,6 +114,9 @@ type OAuthCodeExchange struct {
 	Code         string
 	RedirectURI  string
 	CodeVerifier string
+	// Resource repeats the authorization request's resource indicator, as
+	// RFC 8707 requires of the token request.
+	Resource string
 }
 
 // OAuthTokens is a token endpoint response.

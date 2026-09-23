@@ -123,6 +123,7 @@ connects an end user's mailbox as a provider grant) and from
 ```bash
 nylas oauth login                # Log in via the browser (authorization code + PKCE)
 nylas oauth login --scope openid,email
+nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
 nylas oauth status               # Show the stored session and decoded token claims
 nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
 nylas oauth token                # Print a valid access token, refreshing if needed
@@ -648,6 +649,7 @@ nylas mcp install --all                    # Install for all detected assistants
 nylas mcp status                           # Check installation status
 nylas mcp uninstall --assistant cursor     # Remove configuration
 nylas mcp serve                            # Start MCP server (used by assistants)
+nylas mcp serve --auth oauth               # ...authenticating with `nylas oauth login --for mcp`
 ```
 
 **Supported assistants:**

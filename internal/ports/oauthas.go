@@ -29,8 +29,9 @@ type OAuthAuthServerClient interface {
 
 	// Refresh exchanges a refresh token for a new token set. The server
 	// rotates refresh tokens and detects replay, so the returned
-	// RefreshToken must replace the one passed in.
-	Refresh(ctx context.Context, clientID, refreshToken string) (*domain.OAuthTokens, error)
+	// RefreshToken must replace the one passed in. resource is the RFC 8707
+	// resource indicator, empty for none.
+	Refresh(ctx context.Context, clientID, refreshToken, resource string) (*domain.OAuthTokens, error)
 
 	// Revoke revokes an access or refresh token (RFC 7009).
 	Revoke(ctx context.Context, clientID, token string) error

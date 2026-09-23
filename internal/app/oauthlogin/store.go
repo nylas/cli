@@ -18,6 +18,7 @@ const legacyKeyOAuthClientID = "oauth_client_id"
 // logout means, so a new key must be added here or it outlives the session.
 var sessionKeys = []string{
 	ports.KeyOAuthIssuer,
+	ports.KeyOAuthResource,
 	legacyKeyOAuthClientID,
 	ports.KeyOAuthAccessToken,
 	ports.KeyOAuthRefreshToken,
@@ -31,6 +32,9 @@ var sessionKeys = []string{
 type Session struct {
 	Issuer   string
 	ClientID string
+	// Resource is the RFC 8707 resource indicator the session was logged in
+	// for; every refresh repeats it so the audience does not change.
+	Resource string
 	Tokens   domain.OAuthTokens
 }
 
@@ -49,6 +53,7 @@ func (s *Service) loadSession() (*Session, error) {
 	}
 	for key, target := range map[string]*string{
 		ports.KeyOAuthIssuer:       &session.Issuer,
+		ports.KeyOAuthResource:     &session.Resource,
 		ports.KeyOAuthRefreshToken: &session.Tokens.RefreshToken,
 		ports.KeyOAuthIDToken:      &session.Tokens.IDToken,
 		ports.KeyOAuthScope:        &session.Tokens.Scope,
@@ -80,7 +85,7 @@ func (s *Service) loadSession() (*Session, error) {
 // saveTokens persists a token set. The access token is written last so a
 // partial write cannot leave a session that looks complete but carries a
 // refresh token belonging to a different exchange.
-func (s *Service) saveTokens(issuer string, tokens *domain.OAuthTokens) error {
+func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens) error {
 	expiresAt := ""
 	if !tokens.ExpiresAt.IsZero() {
 		expiresAt = tokens.ExpiresAt.UTC().Format(time.RFC3339)
@@ -91,6 +96,7 @@ func (s *Service) saveTokens(issuer string, tokens *domain.OAuthTokens) error {
 		value string
 	}{
 		{ports.KeyOAuthIssuer, issuer},
+		{ports.KeyOAuthResource, resource},
 		{legacyKeyOAuthClientID, ""},
 		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
 		{ports.KeyOAuthIDToken, tokens.IDToken},

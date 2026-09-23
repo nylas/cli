@@ -214,7 +214,7 @@ func TestAccessToken_UsesTokenAnotherProcessRefreshedWhileWaiting(t *testing.T) 
 
 func TestAccessToken_DoesNotRefreshWhenTheLockCannotBeTaken(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
 
@@ -232,7 +232,7 @@ func TestAccessToken_DoesNotRefreshWhenTheLockCannotBeTaken(t *testing.T) {
 
 func TestAccessToken_FailsClosedWithoutALock(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
 	f.service.lock = nil
@@ -247,7 +247,7 @@ func TestLogout_WaitsForAnInFlightRefresh(t *testing.T) {
 	// A refresh that lands after logout would write a live session back into
 	// a keyring the user just asked to be cleared.
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	holder, err := f.lock.Lock(context.Background())
@@ -268,10 +268,10 @@ func TestLogout_WaitsForAnInFlightRefresh(t *testing.T) {
 
 func TestAccessToken_RefreshFailureSurfacesTheOAuthError(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
-	f.client.RefreshFunc = func(context.Context, string, string) (*domain.OAuthTokens, error) {
+	f.client.RefreshFunc = func(context.Context, string, string, string) (*domain.OAuthTokens, error) {
 		return nil, &domain.OAuthError{Code: "invalid_grant", StatusCode: http.StatusBadRequest}
 	}
 

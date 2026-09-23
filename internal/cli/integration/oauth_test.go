@@ -364,7 +364,7 @@ func TestOAuthAS_RefreshRotatesAndDetectsReuse(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, tokens.RefreshToken)
 
-	refreshed, err := client.Refresh(ctx, clientID, tokens.RefreshToken)
+	refreshed, err := client.Refresh(ctx, clientID, tokens.RefreshToken, "")
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, refreshed.AccessToken)
@@ -374,7 +374,7 @@ func TestOAuthAS_RefreshRotatesAndDetectsReuse(t *testing.T) {
 
 	// Replaying the consumed token is what burns the whole family, which is
 	// why oauthlogin never carries an old refresh token forward.
-	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken)
+	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken, "")
 	var oauthErr *domain.OAuthError
 	require.ErrorAs(t, err, &oauthErr)
 	assert.Equal(t, "invalid_grant", oauthErr.Code)
@@ -401,7 +401,7 @@ func TestOAuthAS_RevokeEndsTheSession(t *testing.T) {
 
 	require.NoError(t, client.Revoke(ctx, clientID, tokens.RefreshToken))
 
-	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken)
+	_, err = client.Refresh(ctx, clientID, tokens.RefreshToken, "")
 	require.Error(t, err, "a revoked refresh token must not mint new tokens")
 }
 
@@ -441,4 +441,80 @@ func TestOAuthAS_AuthorizationURLIsAcceptedByTheServer(t *testing.T) {
 	location, err := url.Parse(resp.Header.Get("Location"))
 	require.NoError(t, err)
 	assert.Empty(t, location.Query().Get("error"), "the server rejected the authorization request")
+}
+
+// exchangeFreshSession seeds a subject and returns its first token set.
+func exchangeFreshSession(t *testing.T, client *oauthas.Client, upstream string) *domain.OAuthTokens {
+	t.Helper()
+	clientID := oauthTestClientID(t)
+	subject := seedOAuthSubject(t, upstream)
+	pkce, err := domain.NewPKCE()
+	require.NoError(t, err)
+	code := mintAuthorizationCode(t, upstream, clientID, subject, pkce.Challenge)
+
+	tokens, err := client.ExchangeCode(context.Background(), domain.OAuthCodeExchange{
+		ClientID:     clientID,
+		Code:         code,
+		RedirectURI:  oauthTestRedirectURI,
+		CodeVerifier: pkce.Verifier,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, tokens.RefreshToken)
+	return tokens
+}
+
+func TestOAuthAS_AuthorizationURLWithMCPResourceIsAccepted(t *testing.T) {
+	upstream := oauthUpstream(t)
+	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
+	pkce, err := domain.NewPKCE()
+	require.NoError(t, err)
+	state, err := domain.NewOAuthState()
+	require.NoError(t, err)
+
+	authURL, err := client.AuthorizationURL(context.Background(), domain.OAuthAuthorizationParams{
+		ClientID:      oauthTestClientID(t),
+		RedirectURI:   oauthTestRedirectURI,
+		Scopes:        domain.DefaultOAuthScopes(),
+		State:         state,
+		CodeChallenge: pkce.Challenge,
+		Resource:      domain.MCPResourceUS,
+	})
+	require.NoError(t, err)
+
+	httpClient := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := httpClient.Get(authURL)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	require.Equal(t, http.StatusFound, resp.StatusCode)
+	location, err := url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	assert.Empty(t, location.Query().Get("error"), "the MCP resource indicator was rejected")
+}
+
+func TestOAuthAS_RefreshForMCPResourceIssuesMCPAudience(t *testing.T) {
+	upstream := oauthUpstream(t)
+	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
+	tokens := exchangeFreshSession(t, client, upstream)
+
+	refreshed, err := client.Refresh(context.Background(), oauthTestClientID(t), tokens.RefreshToken, domain.MCPResourceUS)
+	require.NoError(t, err)
+
+	claims, err := domain.DecodeOAuthAccessToken(refreshed.AccessToken)
+	require.NoError(t, err)
+	endpoint, err := domain.MCPEndpointFromAudience(claims.Audience)
+	require.NoError(t, err, "a token requested for the MCP server must name it as its audience")
+	assert.Equal(t, domain.MCPResourceUS, endpoint)
+}
+
+func TestOAuthAS_RejectsUnknownResource(t *testing.T) {
+	upstream := oauthUpstream(t)
+	client := oauthas.NewClient(newNormalizedASProxy(t, upstream).URL)
+	tokens := exchangeFreshSession(t, client, upstream)
+
+	_, err := client.Refresh(context.Background(), oauthTestClientID(t), tokens.RefreshToken, "https://not-a-nylas-resource.example")
+
+	var oauthErr *domain.OAuthError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, "invalid_target", oauthErr.Code)
 }

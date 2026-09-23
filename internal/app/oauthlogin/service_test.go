@@ -71,7 +71,7 @@ func newFixture(t *testing.T) *fixture {
 func TestLogin_StoresTokensAndReportsSession(t *testing.T) {
 	f := newFixture(t)
 
-	result, err := f.service.Login(context.Background(), nil)
+	result, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, oauthas.MockIssuer, result.Issuer)
@@ -90,7 +90,7 @@ func TestLogin_UsesTheStaticPublicClient(t *testing.T) {
 	// flow must name it, and no secret may be sent because there is none.
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	require.Len(t, f.client.AuthorizationCalls, 1)
@@ -105,7 +105,7 @@ func TestLogin_UsesConfiguredClientIDOverride(t *testing.T) {
 	f.service = NewService("dev-client-1", f.client, f.server, f.browser, f.secrets, f.lock)
 	f.service.now = func() time.Time { return f.clock }
 
-	result, err := f.service.Login(context.Background(), nil)
+	result, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "dev-client-1", result.ClientID)
@@ -116,7 +116,7 @@ func TestLogin_RejectsInvalidClientIDBeforeOpeningBrowser(t *testing.T) {
 	f := newFixture(t)
 	f.service = NewService("bad client&id", f.client, f.server, f.browser, f.secrets, f.lock)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 
 	require.ErrorIs(t, err, domain.ErrOAuthInvalidClientID)
 	assert.Empty(t, f.browser.openedURL)
@@ -136,7 +136,7 @@ func TestLogin_FailsClosedOnUnregisteredRedirectURI(t *testing.T) {
 			f := newFixture(t)
 			f.server.RedirectURI = uri
 
-			_, err := f.service.Login(context.Background(), nil)
+			_, err := f.service.Login(context.Background(), LoginOptions{})
 
 			require.ErrorIs(t, err, domain.ErrOAuthRedirectURI)
 			assert.Empty(t, f.browser.openedURL)
@@ -148,7 +148,7 @@ func TestLogin_FailsClosedOnUnregisteredRedirectURI(t *testing.T) {
 func TestLogin_AdvertisesTheLoopbackIPRedirect(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "http://127.0.0.1:8080/callback", f.client.AuthorizationCalls[0].RedirectURI)
@@ -157,7 +157,7 @@ func TestLogin_AdvertisesTheLoopbackIPRedirect(t *testing.T) {
 func TestLogin_SendsRFCCompliantPKCEChallenge(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	require.Len(t, f.client.AuthorizationCalls, 1)
@@ -176,7 +176,7 @@ func TestLogin_SendsRFCCompliantPKCEChallenge(t *testing.T) {
 func TestLogin_BindsCallbackStateToAuthorizationRequest(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	sentState := f.client.AuthorizationCalls[0].State
@@ -188,7 +188,7 @@ func TestLogin_BindsCallbackStateToAuthorizationRequest(t *testing.T) {
 func TestLogin_ExchangesAgainstTheSameRedirectURI(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	// The server compares the redirect_uri at the token endpoint against the
@@ -200,7 +200,7 @@ func TestLogin_ExchangesAgainstTheSameRedirectURI(t *testing.T) {
 func TestLogin_OpensBrowserAndStopsServer(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, f.browser.openedURL)
@@ -211,7 +211,7 @@ func TestLogin_OpensBrowserAndStopsServer(t *testing.T) {
 func TestLogin_RequestsOfflineAccessByDefault(t *testing.T) {
 	f := newFixture(t)
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.Contains(t, f.client.AuthorizationCalls[0].Scopes, domain.OAuthScopeOfflineAccess)
@@ -224,7 +224,7 @@ func TestLogin_IgnoresAndClearsLegacyRegisteredClientID(t *testing.T) {
 	f := newFixture(t)
 	require.NoError(t, f.secrets.Set(legacyKeyOAuthClientID, "stale-dcr-client"))
 
-	result, err := f.service.Login(context.Background(), nil)
+	result, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	assert.Equal(t, domain.DefaultOAuthClientID, result.ClientID)
@@ -235,7 +235,7 @@ func TestLogin_FailsWhenCallbackFails(t *testing.T) {
 	f := newFixture(t)
 	f.server.AuthCode = ""
 
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 
 	require.ErrorIs(t, err, domain.ErrAuthFailed)
 	assert.Empty(t, f.secrets.GetAll()[ports.KeyOAuthAccessToken])
@@ -243,7 +243,7 @@ func TestLogin_FailsWhenCallbackFails(t *testing.T) {
 
 func TestAccessToken_ReturnsStoredTokenWhileValid(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	token, err := f.service.AccessToken(context.Background())
@@ -255,7 +255,7 @@ func TestAccessToken_ReturnsStoredTokenWhileValid(t *testing.T) {
 
 func TestAccessToken_RefreshesWhenExpired(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	f.advance(2 * time.Hour)
@@ -271,7 +271,7 @@ func TestAccessToken_PersistsRotatedRefreshToken(t *testing.T) {
 	// The server rotates on every use and burns the family if an old token
 	// reappears, so the new one must land in the store before it is needed.
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
 
@@ -285,10 +285,10 @@ func TestAccessToken_DoesNotResurrectOldRefreshTokenWhenServerOmitsOne(t *testin
 	// Carrying the previous refresh token forward would replay a token the
 	// server has already consumed, which revokes the entire family.
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
-	f.client.RefreshFunc = func(context.Context, string, string) (*domain.OAuthTokens, error) {
+	f.client.RefreshFunc = func(context.Context, string, string, string) (*domain.OAuthTokens, error) {
 		return &domain.OAuthTokens{AccessToken: "at-only", TokenType: "Bearer", ExpiresIn: 3600}, nil
 	}
 
@@ -311,7 +311,7 @@ func TestAccessToken_ExpiredWithNoRefreshToken(t *testing.T) {
 	f.client.ExchangeCodeFunc = func(context.Context, domain.OAuthCodeExchange) (*domain.OAuthTokens, error) {
 		return &domain.OAuthTokens{AccessToken: "at-1", TokenType: "Bearer", ExpiresIn: 3600}, nil
 	}
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.advance(2 * time.Hour)
 
@@ -322,7 +322,7 @@ func TestAccessToken_ExpiredWithNoRefreshToken(t *testing.T) {
 
 func TestStatus_ReportsStoredSession(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	session, err := f.service.Status()
@@ -336,7 +336,7 @@ func TestStatus_ReportsStoredSession(t *testing.T) {
 
 func TestLogout_RevokesRefreshTokenAndClearsEverything(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	require.NoError(t, f.service.Logout(context.Background()))
@@ -351,7 +351,7 @@ func TestLogout_RevokesRefreshTokenAndClearsEverything(t *testing.T) {
 
 func TestLogout_ClearsLocalStateWhenRevocationFails(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 	f.client.RevokeFunc = func(context.Context, string, string) error {
 		return errors.New("server unreachable")
@@ -373,7 +373,7 @@ func TestLogout_WithoutSessionSucceeds(t *testing.T) {
 
 func TestUserInfo_UsesCurrentAccessToken(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.service.Login(context.Background(), nil)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
 	require.NoError(t, err)
 
 	var seen string

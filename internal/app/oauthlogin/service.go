@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -78,17 +79,51 @@ type LoginResult struct {
 	Scope      string
 	ExpiresAt  time.Time
 	HasRefresh bool
+	Resource   string
+	// DroppedScopes are requested scopes the server does not offer, left out
+	// of the request because LoginOptions.DropUnsupportedScopes was set.
+	DroppedScopes []string
+}
+
+// LoginOptions shape an authorization request.
+type LoginOptions struct {
+	// Scopes to request; domain.DefaultOAuthScopes when empty.
+	Scopes []string
+
+	// Resource is the RFC 8707 resource indicator (a hosted MCP server), sent
+	// on the authorization request, the code exchange, and every refresh of
+	// the session. Empty requests no resource-server audience.
+	Resource string
+
+	// DropUnsupportedScopes leaves out scopes the server's discovery document
+	// does not list, instead of letting the whole request fail with
+	// invalid_scope. The server only offers data scopes a deployment enables.
+	DropUnsupportedScopes bool
 }
 
 // Login runs the browser authorization code flow and stores the tokens.
-func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, error) {
+func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, error) {
+	scopes := opts.Scopes
 	if len(scopes) == 0 {
 		scopes = domain.DefaultOAuthScopes()
+	}
+	if opts.Resource != "" {
+		if err := domain.ValidateMCPResource(opts.Resource); err != nil {
+			return nil, err
+		}
 	}
 
 	metadata, err := s.client.Metadata(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	var dropped []string
+	if opts.DropUnsupportedScopes {
+		scopes, dropped = supportedScopes(scopes, metadata.ScopesSupported)
+		if len(scopes) == 0 {
+			return nil, fmt.Errorf("the authorization server offers none of the requested scopes %v", dropped)
+		}
 	}
 
 	clientID := s.clientID
@@ -127,6 +162,7 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		State:         state,
 		CodeChallenge: pkce.Challenge,
 		Nonce:         nonce,
+		Resource:      opts.Resource,
 	})
 	if err != nil {
 		return nil, err
@@ -160,24 +196,44 @@ func (s *Service) Login(ctx context.Context, scopes []string) (*LoginResult, err
 		Code:         callback.code,
 		RedirectURI:  redirectURI,
 		CodeVerifier: pkce.Verifier,
+		Resource:     opts.Resource,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	if err := s.withSessionLock(ctx, func() error {
-		return s.saveTokens(metadata.Issuer, tokens)
+		return s.saveTokens(metadata.Issuer, opts.Resource, tokens)
 	}); err != nil {
 		return nil, err
 	}
 
 	return &LoginResult{
-		Issuer:     metadata.Issuer,
-		ClientID:   clientID,
-		Scope:      tokens.Scope,
-		ExpiresAt:  tokens.ExpiresAt,
-		HasRefresh: tokens.RefreshToken != "",
+		Issuer:        metadata.Issuer,
+		ClientID:      clientID,
+		Scope:         tokens.Scope,
+		ExpiresAt:     tokens.ExpiresAt,
+		HasRefresh:    tokens.RefreshToken != "",
+		Resource:      opts.Resource,
+		DroppedScopes: dropped,
 	}, nil
+}
+
+// supportedScopes splits requested into what the server advertises and what
+// it does not. A server that advertises nothing is taken at its word that it
+// has no list, and everything is kept.
+func supportedScopes(requested, supported []string) (kept, dropped []string) {
+	if len(supported) == 0 {
+		return requested, nil
+	}
+	for _, scope := range requested {
+		if slices.Contains(supported, scope) {
+			kept = append(kept, scope)
+		} else {
+			dropped = append(dropped, scope)
+		}
+	}
+	return kept, dropped
 }
 
 // AccessToken returns a usable access token, refreshing it when it has expired.
@@ -190,6 +246,15 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 		return session.Tokens.AccessToken, nil
 	}
 	return s.refreshLocked(ctx, "")
+}
+
+// RefreshAccessToken is for a caller whose request was just refused with
+// 401: rejected is the access token the server would not accept. It goes
+// through the same cross-process lock as AccessToken, so if another process
+// has already replaced that token this returns the replacement instead of
+// spending the refresh token a second time.
+func (s *Service) RefreshAccessToken(ctx context.Context, rejected string) (string, error) {
+	return s.refreshLocked(ctx, rejected)
 }
 
 // refreshLocked is the only path that spends a refresh token.
@@ -216,7 +281,7 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 			return fmt.Errorf("%w: run `nylas oauth login` again", domain.ErrOAuthNoRefreshToken)
 		}
 
-		tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken)
+		tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken, session.Resource)
 		if err != nil {
 			return err
 		}
@@ -225,7 +290,7 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 		// whole family if an old one reappears. Persist exactly what came
 		// back — never carry the previous refresh token forward to fill an
 		// empty field.
-		if err := s.saveTokens(session.Issuer, tokens); err != nil {
+		if err := s.saveTokens(session.Issuer, session.Resource, tokens); err != nil {
 			return err
 		}
 		accessToken = tokens.AccessToken
