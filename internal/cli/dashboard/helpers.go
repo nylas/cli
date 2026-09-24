@@ -55,7 +55,9 @@ func createAuthService() (*dashboardapp.AuthService, ports.SecretStore, error) {
 	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 
-	return dashboardapp.NewAuthService(accountClient, secretStore), secretStore, nil
+	authSvc := dashboardapp.NewAuthService(accountClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore))
+	return authSvc, secretStore, nil
 }
 
 // createAppService creates the dashboard app management service.
@@ -66,7 +68,54 @@ func createAppService() (*dashboardapp.AppService, error) {
 	}
 
 	gatewayClient := dashboard.NewGatewayClient(dpopSvc)
-	return dashboardapp.NewAppService(gatewayClient, secretStore), nil
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return dashboardapp.NewAppService(gatewayClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)), nil
+}
+
+// OAuthTokenSource builds the OAuth session a dashboard session is exchanged
+// from. The oauth command package registers it: it owns that wiring and
+// already imports this package, so this package cannot import it back.
+var OAuthTokenSource func() (dashboardapp.OAuthAccessTokens, error)
+
+// lazyOAuthTokens defers building the OAuth session until a renewal needs a
+// token, so commands on a `nylas dashboard login` session never touch it.
+type lazyOAuthTokens struct{}
+
+func (lazyOAuthTokens) AccessToken(ctx context.Context) (string, error) {
+	if OAuthTokenSource == nil {
+		return "", errors.New("OAuth login is not available in this build")
+	}
+	tokens, err := OAuthTokenSource()
+	if err != nil {
+		return "", err
+	}
+	return tokens.AccessToken(ctx)
+}
+
+func newSessionRenewer(accountClient *dashboard.AccountClient, secretStore ports.SecretStore) *dashboardapp.SessionRenewer {
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{})
+}
+
+// ExchangeOAuthSession turns the OAuth session into a dashboard session, so
+// `nylas oauth login` is enough for every `nylas dashboard` command.
+func ExchangeOAuthSession(ctx context.Context, tokens dashboardapp.OAuthAccessTokens) (*domain.DashboardOAuthExchangeResponse, error) {
+	dpopSvc, secretStore, err := createDPoPService()
+	if err != nil {
+		return nil, err
+	}
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens).Login(ctx)
+}
+
+// ClearOAuthSession ends the dashboard session if it came from OAuth.
+func ClearOAuthSession(ctx context.Context) error {
+	dpopSvc, secretStore, err := createDPoPService()
+	if err != nil {
+		return err
+	}
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return newSessionRenewer(accountClient, secretStore).ClearIfOAuth(ctx)
 }
 
 // createDomainService creates the dashboard domain management service.
@@ -85,7 +134,8 @@ func newDomainService() (*dashboardapp.DomainService, error) {
 
 	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
-	return dashboardapp.NewDomainService(accountClient, secretStore), nil
+	return dashboardapp.NewDomainService(accountClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)), nil
 }
 
 // AccountBaseURL returns the dashboard-account base URL.

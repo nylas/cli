@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/testutil"
@@ -56,12 +57,41 @@ func (f *fakeService) Logout(context.Context) error {
 	return f.logoutErr
 }
 
-// withService swaps the command factory for the duration of one test.
-func withService(t *testing.T, svc *fakeService) {
+// fakeDashboard records the dashboard session calls login and logout make.
+type fakeDashboard struct {
+	exchangeErr   error
+	exchangedWith dashboardapp.OAuthAccessTokens
+	cleared       bool
+	clearErr      error
+}
+
+// withService swaps the command factory for the duration of one test, and
+// the dashboard session hooks with it so no test reaches the real keyring.
+func withService(t *testing.T, svc *fakeService) *fakeDashboard {
 	t.Helper()
-	original := createLoginServiceFn
+	dash := &fakeDashboard{}
+
+	originalLogin := createLoginServiceFn
+	originalExchange := exchangeDashboardSessionFn
+	originalClear := clearDashboardSessionFn
 	createLoginServiceFn = func() (loginService, error) { return svc, nil }
-	t.Cleanup(func() { createLoginServiceFn = original })
+	exchangeDashboardSessionFn = func(_ context.Context, tokens dashboardapp.OAuthAccessTokens) (*domain.DashboardOAuthExchangeResponse, error) {
+		dash.exchangedWith = tokens
+		if dash.exchangeErr != nil {
+			return nil, dash.exchangeErr
+		}
+		return &domain.DashboardOAuthExchangeResponse{OrgPublicID: "org_1"}, nil
+	}
+	clearDashboardSessionFn = func(context.Context) error {
+		dash.cleared = true
+		return dash.clearErr
+	}
+	t.Cleanup(func() {
+		createLoginServiceFn = originalLogin
+		exchangeDashboardSessionFn = originalExchange
+		clearDashboardSessionFn = originalClear
+	})
+	return dash
 }
 
 func loggedInSession() *oauthlogin.Session {
@@ -339,4 +369,50 @@ func TestLoginCmd_ForMCPPassesThePreset(t *testing.T) {
 	assert.Contains(t, []string{domain.MCPResourceUS, domain.MCPResourceEU}, svc.loginOpts.Resource)
 	assert.Contains(t, stdout, "Resource:")
 	assert.Contains(t, stdout, "notetaker.read", "scopes the server did not offer are reported")
+}
+
+func TestLoginCmd_SignsInTheDashboardCommands(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
+	dash := withService(t, svc)
+
+	stdout, _, err := testutil.ExecuteSubCommand(newLoginCmd())
+	require.NoError(t, err)
+
+	assert.Same(t, svc, dash.exchangedWith, "the dashboard session is exchanged from this login's tokens")
+	assert.Contains(t, stdout, "signed in to organization org_1")
+}
+
+func TestLoginCmd_DashboardExchangeFailureIsOnlyAWarning(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
+	dash := withService(t, svc)
+	dash.exchangeErr = errors.New("server does not support the exchange")
+
+	stdout, _, err := testutil.ExecuteSubCommand(newLoginCmd())
+	require.NoError(t, err, "the OAuth login itself succeeded")
+
+	assert.Contains(t, stdout, "Logged in")
+	assert.Contains(t, stdout, "Dashboard commands are not signed in")
+}
+
+func TestLogoutCmd_EndsTheDashboardSessionItCreated(t *testing.T) {
+	svc := &fakeService{}
+	dash := withService(t, svc)
+
+	_, _, err := testutil.ExecuteSubCommand(newLogoutCmd())
+	require.NoError(t, err)
+
+	assert.True(t, dash.cleared)
+	assert.True(t, svc.logoutCalled)
+}
+
+func TestLogoutCmd_StillRevokesWhenTheDashboardCannotBeEnded(t *testing.T) {
+	svc := &fakeService{}
+	dash := withService(t, svc)
+	dash.clearErr = errors.New("keyring locked")
+
+	stdout, _, err := testutil.ExecuteSubCommand(newLogoutCmd())
+	require.NoError(t, err)
+
+	assert.True(t, svc.logoutCalled)
+	assert.Contains(t, stdout, "Could not end the dashboard session")
 }

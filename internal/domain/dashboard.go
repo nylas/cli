@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // DashboardUser represents an authenticated dashboard user.
 type DashboardUser struct {
 	PublicID     string `json:"publicId"`
@@ -28,6 +30,14 @@ type DashboardAuthResponse struct {
 	OrgToken      string                  `json:"orgToken"`
 	User          DashboardUser           `json:"user"`
 	Organizations []DashboardOrganization `json:"organizations"`
+}
+
+// DashboardOAuthExchangeResponse is a dashboard session exchanged from an
+// OAuth access token. It is for OrgPublicID only and cannot be refreshed.
+type DashboardOAuthExchangeResponse struct {
+	DashboardAuthResponse
+	OrgPublicID string    `json:"orgPublicId"`
+	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
 // DashboardMFARequired is returned when MFA is needed after login.

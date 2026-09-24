@@ -513,6 +513,41 @@ func TestAccountClientSSOPollVariants(t *testing.T) {
 	})
 }
 
+func TestAccountClientExchangeOAuthTokenSendsTheTokenInTheBody(t *testing.T) {
+	t.Parallel()
+
+	server := newAccountClientTestServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, _ []byte, body map[string]any) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/auth/cli/oauth/exchange", r.URL.Path)
+		assert.Equal(t, "eyJ.access.token", body["accessToken"])
+		assert.Empty(t, r.Header.Get("Authorization"), "the server reads Authorization as a dashboard token")
+		assert.Equal(t, "test-proof", r.Header.Get("DPoP"))
+
+		writeDashboardEnvelope(t, w, map[string]any{
+			"userToken":     "user-token",
+			"orgToken":      "org-token",
+			"user":          map[string]any{"publicId": "usr_1"},
+			"organizations": []any{},
+			"orgPublicId":   "org_1",
+			"expiresAt":     "2026-09-24T12:15:00.000Z",
+		})
+	})
+	defer server.Close()
+
+	client := &AccountClient{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+		dpop:       &mockDPoP{proof: "test-proof"},
+	}
+
+	resp, err := client.ExchangeOAuthToken(context.Background(), "eyJ.access.token")
+	require.NoError(t, err)
+	assert.Equal(t, "user-token", resp.UserToken)
+	assert.Equal(t, "usr_1", resp.User.PublicID)
+	assert.Equal(t, "org_1", resp.OrgPublicID)
+	assert.Equal(t, 2026, resp.ExpiresAt.Year())
+}
+
 func TestAccountClientRefreshPropagatesUnderlyingError(t *testing.T) {
 	t.Parallel()
 

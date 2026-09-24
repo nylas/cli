@@ -13,6 +13,7 @@ import (
 	"github.com/nylas/cli/internal/adapters/keyring"
 	oauthadapter "github.com/nylas/cli/internal/adapters/oauth"
 	"github.com/nylas/cli/internal/adapters/oauthas"
+	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/dashboard"
@@ -30,6 +31,19 @@ type loginService interface {
 }
 
 var createLoginServiceFn = func() (loginService, error) { return createLoginService() }
+
+var (
+	exchangeDashboardSessionFn = dashboard.ExchangeOAuthSession
+	clearDashboardSessionFn    = dashboard.ClearOAuthSession
+)
+
+// The dashboard commands renew a session from `nylas oauth login` through the
+// same login service, so refreshes share this machine's session lock.
+func init() {
+	dashboard.OAuthTokenSource = func() (dashboardapp.OAuthAccessTokens, error) {
+		return createLoginService()
+	}
+}
 
 // NewLoginService returns the OAuth login service wired to this machine's
 // keyring, session lock and authorization server. `nylas mcp serve --auth

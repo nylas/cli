@@ -92,6 +92,16 @@ dev authorization server.`,
 					"  No refresh token issued — request the offline_access scope to stay signed in.")
 			}
 
+			// The OAuth login already succeeded, so a failed exchange is reported
+			// rather than returned: only the dashboard commands are affected.
+			dashboardSession, err := exchangeDashboardSessionFn(ctx, svc)
+			if err != nil {
+				_, _ = common.Yellow.Fprintf(out,
+					"  Dashboard commands are not signed in: %v\n", err)
+				return nil
+			}
+			_, _ = fmt.Fprintf(out, "  Dashboard:  signed in to organization %s\n", dashboardSession.OrgPublicID)
+
 			return nil
 		},
 	}
