@@ -12,6 +12,7 @@ import (
 type DomainService struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
+	renewer *SessionRenewer
 }
 
 // NewDomainService creates a new dashboard domain service.
@@ -20,6 +21,13 @@ func NewDomainService(account ports.DashboardAccountClient, secrets ports.Secret
 		account: account,
 		secrets: secrets,
 	}
+}
+
+// WithSessionRenewer lets the service keep a session from `nylas oauth login`
+// current. r may be nil.
+func (s *DomainService) WithSessionRenewer(r *SessionRenewer) *DomainService {
+	s.renewer = r
+	return s
 }
 
 // ListDomains lists domains for the active dashboard organization.
@@ -78,12 +86,15 @@ func (s *DomainService) VerifyDomain(ctx context.Context, domainID, region strin
 	})
 }
 
-func (s *DomainService) loadTokens() (userToken, orgToken string, err error) {
+func (s *DomainService) loadTokens(ctx context.Context) (userToken, orgToken string, err error) {
+	if err := s.renewer.EnsureFresh(ctx); err != nil {
+		return "", "", err
+	}
 	return loadDashboardTokens(s.secrets)
 }
 
 func withDomainSessionRetry[T any](ctx context.Context, s *DomainService, call func(userToken, orgToken string) (T, error)) (T, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	var zero T
 	if err != nil {
 		return zero, err
@@ -94,7 +105,7 @@ func withDomainSessionRetry[T any](ctx context.Context, s *DomainService, call f
 		return result, err
 	}
 
-	userToken, orgToken, err = NewAuthService(s.account, s.secrets).refreshTokens(ctx, userToken, orgToken)
+	userToken, orgToken, err = NewAuthService(s.account, s.secrets).WithSessionRenewer(s.renewer).refreshTokens(ctx, userToken, orgToken)
 	if err != nil {
 		return zero, err
 	}

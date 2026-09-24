@@ -113,6 +113,71 @@ nylas auth migrate               # Migrate from v2 to v3
 
 ---
 
+## OAuth (Authorization Server)
+
+Log in to the Nylas OAuth 2.1 / OIDC authorization server. This authenticates
+**you**, the person running the CLI, and is distinct from `nylas auth` (which
+connects an end user's mailbox as a provider grant) and from
+`nylas dashboard login` (which opens a dashboard management session).
+
+```bash
+nylas oauth login                # Log in via the browser (authorization code + PKCE)
+nylas oauth login --scope openid,email
+nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
+nylas oauth status               # Show the stored session and decoded token claims
+nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
+nylas oauth token                # Print a valid access token, refreshing if needed
+nylas oauth logout               # Revoke the session and clear stored tokens
+```
+
+The CLI is a static public client (client id
+`b3a94d82-fc7d-4a22-803e-e603ae0f735c`, no client secret — PKCE protects the
+exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
+address the callback server binds. Tokens are stored in the system keyring.
+
+Every CLI process on the machine shares the one stored session. Refreshing is
+serialised by a lock file (`oauth-session.lock` in the CLI config directory):
+the server rotates the refresh token on every use and revokes the whole family
+if a consumed one is replayed, so two `nylas mcp serve` processes refreshing at
+once would otherwise sign you out. A process that waited on the lock uses the
+tokens the other one stored instead of refreshing again.
+
+`nylas oauth status` decodes the access token and shows its audience, grants,
+scopes and expiry. The claims are **decoded, not verified** — the CLI does not
+check the signature; only the resource server's answer is authoritative.
+
+Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
+what makes the server issue a refresh token; without it the session ends when
+the access token expires (one hour).
+
+Use the access token with any OAuth-protected endpoint:
+
+```bash
+curl -H "Authorization: Bearer $(nylas oauth token)" https://example/resource
+```
+
+### Pointing at a local authorization server
+
+The authorization server is hosted by `dashboard-account`, so it uses the same
+base URL as the `nylas dashboard` commands:
+
+```bash
+NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
+```
+
+If that server registers the CLI under a different client id, override it with
+`NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
+redirect URI).
+
+The CLI resolves every endpoint from the server's
+`/.well-known/oauth-authorization-server` document, and that document is built
+from the server's `OAUTH_ISSUER`. If `OAUTH_ISSUER` names a host the CLI cannot
+reach (for example a Cloudflare tunnel that is no longer running), login fails
+even though the local port responds — set `OAUTH_ISSUER` to the address you
+actually browse to.
+
+---
+
 ## Dashboard
 
 Manage your Nylas Dashboard account, applications, domains, and API keys directly from the CLI.
@@ -584,6 +649,7 @@ nylas mcp install --all                    # Install for all detected assistants
 nylas mcp status                           # Check installation status
 nylas mcp uninstall --assistant cursor     # Remove configuration
 nylas mcp serve                            # Start MCP server (used by assistants)
+nylas mcp serve --auth oauth               # ...authenticating with `nylas oauth login --for mcp`
 ```
 
 **Supported assistants:**

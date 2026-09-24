@@ -43,7 +43,18 @@ nylas mcp install --assistant claude-code  # Specific assistant
 nylas mcp install --assistant cursor       # Cursor IDE
 nylas mcp install --all                    # All detected assistants
 nylas mcp install --binary /path/to/nylas  # Custom binary path
+nylas mcp install --assistant claude-code --auth oauth  # Proxy authenticates with OAuth
 ```
+
+Every assistant is configured to launch `nylas mcp serve` over STDIO, and no
+credential is written into any assistant config. `--auth oauth` adds
+`--auth oauth` to the launcher (run `nylas oauth login --for mcp` first).
+
+Pointing an assistant directly at the hosted server
+(`https://mcp.{us,eu}.nylas.com`) and letting it run OAuth itself is not
+configured by `install` yet: which supported assistants handle remote MCP with
+OAuth, and in which config format, has not been verified. The local proxy is the
+compatibility path for all of them.
 
 ### Status
 
@@ -67,8 +78,47 @@ nylas mcp uninstall --all
 Start the MCP server (called by AI assistants, not directly):
 
 ```bash
-nylas mcp serve
+nylas mcp serve               # authenticate with the API key (default)
+nylas mcp serve --auth oauth  # authenticate with an OAuth session
 ```
+
+#### OAuth (`--auth oauth`)
+
+Log in once for the MCP server, then point the assistant at
+`nylas mcp serve --auth oauth`:
+
+```bash
+nylas oauth login --for mcp
+```
+
+`--for mcp` requests the data scopes the MCP tools use (`email.read`,
+`email.send`, `calendar.read`, `calendar.write`, `contacts.read`,
+`notetaker.read`, `grants.read`) plus `offline_access`, and sends the MCP server
+of your configured region as the RFC 8707 `resource`, so the token is issued
+for that server only. Scopes the authorization server does not offer are left
+out and listed.
+
+With `--auth oauth` the proxy:
+
+- asks for a valid token before **every** request and refreshes it as it nears
+  expiry (access tokens last 15 minutes). Refreshing is serialised across every
+  `nylas mcp serve` on the machine, so several assistants can share one login.
+- sends requests to the MCP server named in the token's audience (`aud`), not
+  the configured region, and refuses a token whose audience names neither.
+- offers the default grant (`X-Nylas-Grant-Id` and the injected `grant_id`)
+  only when the token's `grants` claim lists it, and does not answer
+  `get_grant` from the local grant store.
+- on `401` with a `WWW-Authenticate` challenge, refreshes once and retries; if
+  that fails it tells you to run `nylas oauth login --for mcp`.
+- on `403 insufficient_scope`, names the missing scope and the login command.
+
+#### Protocol
+
+The hosted server is stateless. The proxy sends no `Mcp-Session-Id` and ignores
+one if offered. It sends `Mcp-Method` on every request, `Mcp-Name` for
+`tools/call` and `prompts/get` (the server refuses a name that disagrees with
+the body), and, once `initialize` has answered, `Mcp-Protocol-Version` with the
+version the server negotiated.
 
 ---
 
@@ -158,6 +208,8 @@ region: eu  # or "us" (default)
 ```
 
 The MCP proxy reads this setting and routes requests to the appropriate regional endpoint.
+With `--auth oauth` the region is used once, at `nylas oauth login --for mcp`,
+to choose the token's resource; requests then follow the token's audience.
 
 ---
 
