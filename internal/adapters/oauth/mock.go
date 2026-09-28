@@ -12,6 +12,7 @@ type MockServer struct {
 	Port                  int
 	AuthCode              string
 	ExpectedState         string
+	SetState              string
 	StartCalled           bool
 	StopCalled            bool
 	WaitForCallbackCalled bool
@@ -39,6 +40,12 @@ func (m *MockServer) Start() error {
 func (m *MockServer) Stop() error {
 	m.StopCalled = true
 	return nil
+}
+
+// SetExpectedState records the state the service set before the browser
+// opened. WaitForCallback records its own copy in ExpectedState.
+func (m *MockServer) SetExpectedState(state string) {
+	m.SetState = state
 }
 
 // WaitForCallback waits for the OAuth callback.

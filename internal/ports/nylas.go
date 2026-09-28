@@ -43,6 +43,10 @@ type OAuthServer interface {
 	// Stop stops the server.
 	Stop() error
 
+	// SetExpectedState sets the state a callback must carry. It is called
+	// before the browser opens, so a fast redirect is checked against it.
+	SetExpectedState(state string)
+
 	// WaitForCallback waits for the OAuth callback and returns the auth code.
 	WaitForCallback(ctx context.Context, expectedState string) (string, error)
 

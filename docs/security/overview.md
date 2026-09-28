@@ -56,6 +56,34 @@ Non-sensitive settings stored in `~/.config/nylas/config.yaml`:
 - Callback port
 - Local default grant mirror
 
+### OAuth Login Callback
+
+`nylas oauth login` and `nylas auth login` receive the redirect on a loopback
+callback server (`127.0.0.1`, plus `::1` for `localhost`):
+
+- The expected `state` is set before the browser opens, and is compared in
+  constant time.
+- Only a request carrying that state can end the login, with a code or an
+  `error`. Any other request to the port is refused with 400 and the login
+  keeps waiting, so a stray or hostile request cannot abort it.
+- The `error` value is shown only if it matches `^[a-z_]{1,64}$`, so control
+  characters from the URL never reach the terminal.
+
+### Session Locks
+
+Session writes are serialised across CLI processes by advisory file locks,
+always taken in this order:
+
+| Lock | Guards |
+|------|--------|
+| `dashboard-session.lock` | Dashboard session keys (renewal from OAuth, clear, reset) |
+| `oauth-session.lock` | OAuth session keys (login, refresh, logout, reset) |
+| `.secrets.lock` | Each read and write of the encrypted file store |
+
+With the encrypted file store the first two sit in the config directory; with
+the system keyring they sit in `~/.config/nylas/` under the account's home
+directory, whatever `XDG_CONFIG_HOME` is.
+
 ---
 
 ## Testing

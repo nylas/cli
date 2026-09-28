@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +151,13 @@ func (s *CallbackServer) Stop() error {
 	return nil
 }
 
+// SetExpectedState sets the state a callback must carry to be accepted. Call
+// it before the browser opens the authorization URL, so a fast redirect is
+// never checked against an unset state.
+func (s *CallbackServer) SetExpectedState(state string) {
+	s.setExpectedState(state)
+}
+
 // WaitForCallback waits for the OAuth callback and returns the auth code.
 func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
 	s.setExpectedState(expectedState)
@@ -173,24 +181,26 @@ func (s *CallbackServer) GetRedirectURI() string {
 }
 
 func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
+	query := r.URL.Query()
+
+	// State first: only the redirect answering this login's request may end
+	// the wait. Anything else — a stale tab, another page probing the fixed
+	// port — is refused without touching the login in progress.
+	if !s.matchesExpectedState(query.Get("state")) {
+		http.Error(w, "Authentication failed: invalid OAuth state", http.StatusBadRequest)
+		return
+	}
+
+	code := query.Get("code")
 	if code == "" {
-		errMsg := r.URL.Query().Get("error")
-		if errMsg == "" {
-			errMsg = "no authorization code received"
+		errMsg := "no authorization code received"
+		if raw := query.Get("error"); raw != "" {
+			errMsg = sanitizeOAuthErrorCode(raw)
 		}
 		s.once.Do(func() {
 			s.errChan <- fmt.Errorf("%w: %s", domain.ErrAuthFailed, errMsg)
 		})
 		http.Error(w, "Authentication failed: "+errMsg, http.StatusBadRequest)
-		return
-	}
-
-	if !s.matchesExpectedState(r.URL.Query().Get("state")) {
-		s.once.Do(func() {
-			s.errChan <- fmt.Errorf("%w: invalid OAuth state", domain.ErrAuthFailed)
-		})
-		http.Error(w, "Authentication failed: invalid OAuth state", http.StatusBadRequest)
 		return
 	}
 
@@ -239,4 +249,18 @@ func (s *CallbackServer) matchesExpectedState(state string) bool {
 	}
 
 	return subtle.ConstantTimeCompare([]byte(state), []byte(expected)) == 1
+}
+
+// oauthErrorCode is the shape of an RFC 6749 section 4.1.2.1 error code.
+var oauthErrorCode = regexp.MustCompile(`^[a-z_]{1,64}$`)
+
+// sanitizeOAuthErrorCode keeps an error code that looks like one and drops
+// anything else: the value comes from a URL anyone can send to the loopback
+// port, and it ends up in terminal output, where control characters would be
+// interpreted.
+func sanitizeOAuthErrorCode(raw string) string {
+	if oauthErrorCode.MatchString(raw) {
+		return raw
+	}
+	return "unrecognized error"
 }

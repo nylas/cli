@@ -184,6 +184,9 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		code string
 		err  error
 	}
+	// Before the browser opens: a redirect that arrives first must be
+	// checked against this login's state, not an unset one.
+	s.server.SetExpectedState(state)
 	callbackCh := make(chan callbackResult, 1)
 	waitCtx, cancelWait := context.WithCancel(ctx)
 	defer cancelWait()

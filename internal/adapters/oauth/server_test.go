@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,55 +150,40 @@ func TestCallbackServer_handleCallback_Success(t *testing.T) {
 }
 
 func TestCallbackServer_handleCallback_ErrorInQuery(t *testing.T) {
+	// An error redirect that answers this login (it carries the state) ends
+	// the wait with the server's error code.
 	server := NewCallbackServer(8080)
+	server.SetExpectedState("test-state")
 
-	// Create request with error
-	req := httptest.NewRequest(http.MethodGet, "/callback?error=access_denied", nil)
+	req := httptest.NewRequest(http.MethodGet, "/callback?error=access_denied&state=test-state", nil)
 	w := httptest.NewRecorder()
-
-	// Handle callback
 	server.handleCallback(w, req)
 
-	// Check response
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-
-	// Check that error was sent to channel
 	select {
 	case err := <-server.errChan:
-		if err == nil {
-			t.Error("Expected error in channel")
-		}
-		if !contains(err.Error(), "access_denied") {
-			t.Errorf("Error message = %q, should contain 'access_denied'", err.Error())
+		if !errors.Is(err, domain.ErrAuthFailed) || !contains(err.Error(), "access_denied") {
+			t.Errorf("error = %v, want ErrAuthFailed with access_denied", err)
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Error("Error not sent to channel")
 	}
 }
-
 func TestCallbackServer_handleCallback_MissingCode(t *testing.T) {
 	server := NewCallbackServer(8080)
+	server.SetExpectedState("test-state")
 
-	// Create request without code or error
-	req := httptest.NewRequest(http.MethodGet, "/callback", nil)
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=test-state", nil)
 	w := httptest.NewRecorder()
-
-	// Handle callback
 	server.handleCallback(w, req)
 
-	// Check response
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-
-	// Check that error was sent to channel
 	select {
 	case err := <-server.errChan:
-		if err == nil {
-			t.Error("Expected error in channel")
-		}
 		if !contains(err.Error(), "no authorization code received") {
 			t.Errorf("Error message = %q, should contain 'no authorization code received'", err.Error())
 		}
@@ -206,79 +192,120 @@ func TestCallbackServer_handleCallback_MissingCode(t *testing.T) {
 	}
 }
 
+func TestCallbackServer_handleCallback_StrayRequestsDoNotEndTheLogin(t *testing.T) {
+	// The port is fixed and reachable by any page in the user's browser. A
+	// request without this login's state is refused, but must not use up the
+	// one callback the real redirect needs.
+	for _, query := range []string{
+		"",
+		"?error=access_denied",
+		"?error=%1b[31mred",
+		"?code=stolen",
+		"?code=stolen&state=wrong-state",
+		"?error=access_denied&state=wrong-state",
+	} {
+		t.Run(query, func(t *testing.T) {
+			server := NewCallbackServer(8080)
+			server.SetExpectedState("test-state")
+
+			w := httptest.NewRecorder()
+			server.handleCallback(w, httptest.NewRequest(http.MethodGet, "/callback"+query, nil))
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			select {
+			case err := <-server.errChan:
+				t.Fatalf("a stray request ended the login: %v", err)
+			case code := <-server.codeChan:
+				t.Fatalf("a stray request yielded a code: %q", code)
+			default:
+			}
+		})
+	}
+}
+
+func TestCallbackServer_handleCallback_ErrorCodeIsAllowListed(t *testing.T) {
+	// The error code reaches the terminal. Escape sequences in it would be
+	// interpreted, so anything that is not an RFC 6749 error code is dropped.
+	server := NewCallbackServer(8080)
+	server.SetExpectedState("test-state")
+
+	w := httptest.NewRecorder()
+	server.handleCallback(w, httptest.NewRequest(http.MethodGet, "/callback?state=test-state&error=%1b%5b31mowned", nil))
+
+	select {
+	case err := <-server.errChan:
+		if strings.ContainsRune(err.Error(), 0x1b) || contains(err.Error(), "owned") {
+			t.Errorf("error = %q, want the raw value dropped", err.Error())
+		}
+		if strings.ContainsRune(w.Body.String(), 0x1b) {
+			t.Errorf("response body reflects the raw value: %q", w.Body.String())
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Error not sent to channel")
+	}
+}
 func TestCallbackServer_handleCallback_InvalidState(t *testing.T) {
 	server := NewCallbackServer(8080)
 	server.setExpectedState("expected-state")
 
 	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123&state=wrong-state", nil)
 	w := httptest.NewRecorder()
-
 	server.handleCallback(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-
 	select {
 	case code := <-server.codeChan:
 		t.Errorf("unexpected code received: %q", code)
+	case err := <-server.errChan:
+		t.Errorf("a wrong state must be refused without ending the login: %v", err)
 	default:
 	}
-
-	select {
-	case err := <-server.errChan:
-		if !errors.Is(err, domain.ErrAuthFailed) {
-			t.Fatalf("error = %v, want %v", err, domain.ErrAuthFailed)
-		}
-		if !contains(err.Error(), "invalid OAuth state") {
-			t.Fatalf("error = %q, want invalid state message", err.Error())
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected invalid state error to be sent")
-	}
 }
-
 func TestCallbackServer_WaitForCallback_InvalidState(t *testing.T) {
+	// A wrong-state request is refused, and the real redirect that follows
+	// still completes the login.
 	server := NewCallbackServer(8080)
-	resultCh := make(chan error, 1)
+	server.SetExpectedState("expected-state")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	go func() {
-		_, err := server.WaitForCallback(ctx, "expected-state")
-		resultCh <- err
-	}()
-
-	deadline := time.Now().Add(100 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if server.matchesExpectedState("expected-state") {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/callback?code=test-code-123&state=wrong-state", nil)
 	w := httptest.NewRecorder()
-	server.handleCallback(w, req)
-
+	server.handleCallback(w, httptest.NewRequest(http.MethodGet, "/callback?code=stolen&state=wrong-state", nil))
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Status code = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 
-	select {
-	case err := <-resultCh:
-		if !errors.Is(err, domain.ErrAuthFailed) {
-			t.Fatalf("error = %v, want %v", err, domain.ErrAuthFailed)
-		}
-		if !contains(err.Error(), "invalid OAuth state") {
-			t.Fatalf("error = %q, want invalid state message", err.Error())
-		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("WaitForCallback did not return after invalid state")
+	w = httptest.NewRecorder()
+	server.handleCallback(w, httptest.NewRequest(http.MethodGet, "/callback?code=real-code&state=expected-state", nil))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	code, err := server.WaitForCallback(ctx, "expected-state")
+	if err != nil {
+		t.Fatalf("WaitForCallback() error = %v", err)
+	}
+	if code != "real-code" {
+		t.Errorf("code = %q, want real-code", code)
 	}
 }
 
+func TestCallbackServer_RedirectBeforeWaitIsAccepted(t *testing.T) {
+	// A browser can redirect before the goroutine calling WaitForCallback
+	// runs. With the state set up front, that redirect is still the login.
+	server := NewCallbackServer(8080)
+	server.SetExpectedState("expected-state")
+
+	w := httptest.NewRecorder()
+	server.handleCallback(w, httptest.NewRequest(http.MethodGet, "/callback?code=fast&state=expected-state", nil))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	code, err := server.WaitForCallback(ctx, "expected-state")
+	if err != nil || code != "fast" {
+		t.Fatalf("WaitForCallback() = %q, %v; want fast, nil", code, err)
+	}
+}
 func TestCallbackServer_WaitForCallback_Success(t *testing.T) {
 	server := NewCallbackServer(8080)
 

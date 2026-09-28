@@ -56,6 +56,9 @@ func (s *Service) Login(ctx context.Context, provider domain.Provider) (*domain.
 	}
 
 	redirectURI := s.server.GetRedirectURI()
+	// Before the browser opens: a redirect that arrives first must be
+	// checked against this login's state, not an unset one.
+	s.server.SetExpectedState(state)
 	callbackCh := make(chan oauthCallbackResult, 1)
 	waitCtx, waitCancel := context.WithCancel(ctx)
 	defer waitCancel()

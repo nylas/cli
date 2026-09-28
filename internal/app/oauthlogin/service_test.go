@@ -24,10 +24,14 @@ import (
 type mockBrowser struct {
 	openedURL string
 	err       error
+	onOpen    func()
 }
 
 func (m *mockBrowser) Open(url string) error {
 	m.openedURL = url
+	if m.onOpen != nil {
+		m.onOpen()
+	}
 	return m.err
 }
 
@@ -183,6 +187,21 @@ func TestLogin_BindsCallbackStateToAuthorizationRequest(t *testing.T) {
 	assert.NotEmpty(t, sentState)
 	assert.Equal(t, sentState, f.server.ExpectedState,
 		"the callback server must reject any state but the one we sent")
+}
+
+func TestLogin_SetsTheExpectedStateBeforeOpeningTheBrowser(t *testing.T) {
+	// The redirect can arrive as soon as the browser opens. The callback
+	// server must already know the state by then, or it compares the redirect
+	// against an unset one and refuses the real login.
+	f := newFixture(t)
+	var stateWhenOpened string
+	f.browser.onOpen = func() { stateWhenOpened = f.server.SetState }
+
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, stateWhenOpened)
+	assert.Equal(t, f.client.AuthorizationCalls[0].State, stateWhenOpened)
 }
 
 func TestLogin_ExchangesAgainstTheSameRedirectURI(t *testing.T) {
