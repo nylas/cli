@@ -39,6 +39,10 @@ const (
 	// KeyDashboardSessionExpiresAt (RFC 3339).
 	KeyDashboardSessionOrigin    = "dashboard_session_origin"
 	KeyDashboardSessionExpiresAt = "dashboard_session_expires_at"
+	// KeyDashboardSessionServer records the servers a dashboard session was
+	// issued for (the account URL and both gateways), so its tokens are never
+	// sent to a server that did not issue them.
+	KeyDashboardSessionServer = "dashboard_session_server"
 
 	// OAuth authorization server keys. KeyOAuthIssuer records which server
 	// issued the stored tokens. The client id is not stored: the CLI is a

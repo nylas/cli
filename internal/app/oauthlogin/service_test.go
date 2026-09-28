@@ -81,7 +81,7 @@ func TestLogin_StoresTokensAndReportsSession(t *testing.T) {
 	stored := f.secrets.GetAll()
 	assert.Equal(t, "mock-access-token", stored[ports.KeyOAuthAccessToken])
 	assert.Equal(t, "mock-refresh-token", stored[ports.KeyOAuthRefreshToken])
-	assert.Equal(t, "mock-id-token", stored[ports.KeyOAuthIDToken])
+	assert.NotContains(t, stored, ports.KeyOAuthIDToken, "the ID token is neither verified nor read, so it is not kept")
 	assert.Equal(t, oauthas.MockIssuer, stored[ports.KeyOAuthIssuer])
 }
 
@@ -449,4 +449,33 @@ func TestClearSession_RemovesEveryKeyWithoutTheServer(t *testing.T) {
 		assert.NotContains(t, f.secrets.GetAll(), key)
 	}
 	assert.Empty(t, f.client.RevokeCalls)
+}
+
+func TestRelogin_RepeatsTheStoredScopesAndResource(t *testing.T) {
+	// `orgs switch` signs in again; a session logged in --for mcp must come
+	// back as one the MCP server still accepts.
+	f := newFixture(t)
+	resource := "https://mcp.us.nylas.com"
+	f.client.ExchangeCodeFunc = func(context.Context, domain.OAuthCodeExchange) (*domain.OAuthTokens, error) {
+		return &domain.OAuthTokens{AccessToken: "at", RefreshToken: "rt", Scope: "openid email.read offline_access", ExpiresAt: f.clock.Add(time.Hour)}, nil
+	}
+	_, err := f.service.Login(context.Background(), LoginOptions{Scopes: []string{"openid", "email.read", "offline_access"}, Resource: resource})
+	require.NoError(t, err)
+
+	result, err := f.service.Relogin(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, f.client.AuthorizationCalls, 2)
+	again := f.client.AuthorizationCalls[1]
+	assert.Equal(t, []string{"openid", "email.read", "offline_access"}, again.Scopes)
+	assert.Equal(t, resource, again.Resource)
+	assert.Equal(t, resource, result.Resource)
+}
+
+func TestRelogin_WithoutASessionAsksForALogin(t *testing.T) {
+	f := newFixture(t)
+
+	_, err := f.service.Relogin(context.Background())
+
+	require.ErrorIs(t, err, domain.ErrOAuthNotLoggedIn)
 }

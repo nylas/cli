@@ -26,6 +26,7 @@ var oauthSessionStateKeys = append(
 	append([]string{}, dashboardSessionStateKeys...),
 	ports.KeyDashboardSessionOrigin,
 	ports.KeyDashboardSessionExpiresAt,
+	ports.KeyDashboardSessionServer,
 )
 
 // SessionRenewer keeps a dashboard session that came from `nylas oauth login`
@@ -35,6 +36,7 @@ type SessionRenewer struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
 	tokens  OAuthAccessTokens
+	server  string
 	now     func() time.Time
 }
 
@@ -42,6 +44,13 @@ type SessionRenewer struct {
 // expired OAuth session can only be replaced by logging in again.
 func NewSessionRenewer(account ports.DashboardAccountClient, secrets ports.SecretStore, tokens OAuthAccessTokens) *SessionRenewer {
 	return &SessionRenewer{account: account, secrets: secrets, tokens: tokens, now: time.Now}
+}
+
+// WithServer records server on every session this renewer stores; see
+// AuthService.WithServer.
+func (r *SessionRenewer) WithServer(server string) *SessionRenewer {
+	r.server = server
+	return r
 }
 
 // Login exchanges the OAuth session for a dashboard session and stores it,
@@ -85,12 +94,13 @@ func (r *SessionRenewer) exchange(ctx context.Context, resetAppSelection bool) (
 		ports.KeyDashboardOrgPublicID:      stringPtrOrNil(resp.OrgPublicID),
 		ports.KeyDashboardSessionOrigin:    stringPtrOrNil(sessionOriginOAuth),
 		ports.KeyDashboardSessionExpiresAt: stringPtrOrNil(resp.ExpiresAt.UTC().Format(time.RFC3339)),
+		ports.KeyDashboardSessionServer:    stringPtrOrNil(r.server),
 	}
 	if resetAppSelection {
 		updates[ports.KeyDashboardAppID] = nil
 		updates[ports.KeyDashboardAppRegion] = nil
 	}
-	if err := NewAuthService(r.account, r.secrets).replaceSecretValues(oauthSessionStateKeys, updates); err != nil {
+	if err := NewAuthService(r.account, r.secrets).WithServer(r.server).replaceSecretValues(oauthSessionStateKeys, updates); err != nil {
 		return nil, fmt.Errorf("failed to store dashboard session: %w", err)
 	}
 	return resp, nil
@@ -103,7 +113,7 @@ func (r *SessionRenewer) ClearIfOAuth(ctx context.Context) error {
 	if r == nil || !isOAuthSession(r.secrets) {
 		return nil
 	}
-	return NewAuthService(r.account, r.secrets).Logout(ctx)
+	return NewAuthService(r.account, r.secrets).WithServer(r.server).Logout(ctx)
 }
 
 func isOAuthSession(secrets ports.SecretStore) bool {

@@ -123,6 +123,8 @@ It also signs in the `nylas dashboard` commands, so `nylas dashboard login` is
 not needed after it. That dashboard session is for the organization you chose
 on the consent screen, lasts as long as the access token, and is renewed
 automatically from the OAuth session. `nylas oauth logout` ends it too.
+To change organization, run `nylas dashboard orgs switch`: it opens the
+browser to sign in again, and you choose the organization there.
 
 Without an account you can sign up on the page that opens. `--region` (or the
 configured region) decides where the new organization is created; without
@@ -142,7 +144,10 @@ nylas oauth logout               # Revoke the session and clear stored tokens
 The CLI is a static public client (client id
 `b3a94d82-fc7d-4a22-803e-e603ae0f735c`, no client secret — PKCE protects the
 exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
-address the callback server binds. Tokens are stored in the system keyring.
+address the callback server binds. Tokens are stored in the system keyring;
+a value too large for one keychain item (Windows allows 2560 bytes) is split
+across several. The ID token is not stored: the CLI neither verifies nor uses
+it.
 
 Every CLI process on the machine shares the one stored session. Refreshing is
 serialised by a lock file, `oauth-session.lock`: in `~/.config/nylas` of your
@@ -152,7 +157,9 @@ secrets file when the file store is used:
 the server rotates the refresh token on every use and revokes the whole family
 if a consumed one is replayed, so two `nylas mcp serve` processes refreshing at
 once would otherwise sign you out. A process that waited on the lock uses the
-tokens the other one stored instead of refreshing again.
+tokens the other one stored instead of refreshing again. A refresh that has
+started runs to completion even if the command is interrupted, because the
+server has already rotated the token it was sent.
 
 `nylas oauth status` decodes the access token and shows its audience, grants,
 scopes and expiry. The claims are **decoded, not verified** — the CLI does not
@@ -210,6 +217,14 @@ nylas dashboard logout               # Log out
 nylas dashboard status               # Show current auth status
 nylas dashboard refresh              # Refresh session tokens
 ```
+
+A dashboard session is tied to the servers it was issued for: the account URL
+and both gateway URLs (`NYLAS_DASHBOARD_ACCOUNT_URL`,
+`NYLAS_DASHBOARD_GATEWAY_URL`, `NYLAS_DASHBOARD_GATEWAY_US_URL`,
+`NYLAS_DASHBOARD_GATEWAY_EU_URL`, or the config file). If any of them changes,
+the stored session is refused rather than sent to a server that did not issue
+it; log in again, or restore the settings. `nylas dashboard logout` then clears
+it locally without contacting the new server.
 
 ### SSO (Direct)
 

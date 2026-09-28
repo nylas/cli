@@ -55,7 +55,6 @@ answer is authoritative. Use --verify to ask the authorization server.`,
 				_, _ = fmt.Fprintf(out, "  Expires:    %s\n", session.Tokens.ExpiresAt.Local().Format("2006-01-02 15:04:05 MST"))
 			}
 			_, _ = fmt.Fprintf(out, "  Refresh:    %s\n", presentAbsent(session.Tokens.RefreshToken != ""))
-			_, _ = fmt.Fprintf(out, "  ID token:   %s\n", presentAbsent(session.Tokens.IDToken != ""))
 			printTokenClaims(out, session.Tokens.AccessToken)
 
 			if !remote {

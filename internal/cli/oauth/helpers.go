@@ -45,6 +45,20 @@ func init() {
 	dashboard.OAuthTokenSource = func() (dashboardapp.OAuthAccessTokens, error) {
 		return createLoginService()
 	}
+	dashboard.OAuthRelogin = relogin
+}
+
+// relogin signs in again with the stored session's scopes and resource and
+// exchanges the result for a dashboard session.
+func relogin(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error) {
+	svc, err := createLoginService()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := svc.Relogin(ctx); err != nil {
+		return nil, err
+	}
+	return exchangeDashboardSessionFn(ctx, svc)
 }
 
 // NewLoginService returns the OAuth login service wired to this machine's

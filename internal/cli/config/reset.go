@@ -116,4 +116,5 @@ func clearDashboardCredentials(secrets ports.SecretStore) {
 	_ = secrets.Delete(ports.KeyDashboardAppRegion)
 	_ = secrets.Delete(ports.KeyDashboardSessionOrigin)
 	_ = secrets.Delete(ports.KeyDashboardSessionExpiresAt)
+	_ = secrets.Delete(ports.KeyDashboardSessionServer)
 }

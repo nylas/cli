@@ -67,6 +67,9 @@ var (
 	ErrDashboardMFARequired    = errors.New("MFA required")
 	ErrDashboardSSOFailed      = errors.New("SSO authentication failed")
 	ErrDashboardDPoP           = errors.New("DPoP proof generation failed")
+	// ErrDashboardServerMismatch: the stored dashboard session was issued for
+	// other servers than the ones the CLI is now configured for.
+	ErrDashboardServerMismatch = errors.New("the stored dashboard session belongs to a different server")
 
 	// Scheduler errors
 	ErrBookingNotFound       = errors.New("booking not found")

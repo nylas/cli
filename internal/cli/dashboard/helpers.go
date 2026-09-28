@@ -56,7 +56,8 @@ func createAuthService() (*dashboardapp.AuthService, ports.SecretStore, error) {
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 
 	authSvc := dashboardapp.NewAuthService(accountClient, secretStore).
-		WithSessionRenewer(newSessionRenewer(accountClient, secretStore))
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer())
 	return authSvc, secretStore, nil
 }
 
@@ -70,13 +71,19 @@ func createAppService() (*dashboardapp.AppService, error) {
 	gatewayClient := dashboard.NewGatewayClient(dpopSvc)
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
 	return dashboardapp.NewAppService(gatewayClient, secretStore).
-		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)), nil
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer()), nil
 }
 
 // OAuthTokenSource builds the OAuth session a dashboard session is exchanged
 // from. The oauth command package registers it: it owns that wiring and
 // already imports this package, so this package cannot import it back.
 var OAuthTokenSource func() (dashboardapp.OAuthAccessTokens, error)
+
+// OAuthRelogin runs `nylas oauth login` again and exchanges the new session,
+// which is how `orgs switch` changes the organization of an OAuth session.
+// The oauth command package registers it, like OAuthTokenSource.
+var OAuthRelogin func(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error)
 
 // lazyOAuthTokens defers building the OAuth session until a renewal needs a
 // token, so commands on a `nylas dashboard login` session never touch it.
@@ -94,7 +101,8 @@ func (lazyOAuthTokens) AccessToken(ctx context.Context) (string, error) {
 }
 
 func newSessionRenewer(accountClient *dashboard.AccountClient, secretStore ports.SecretStore) *dashboardapp.SessionRenewer {
-	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{})
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}).
+		WithServer(SessionServer())
 }
 
 // ExchangeOAuthSession turns the OAuth session into a dashboard session, so
@@ -105,7 +113,9 @@ func ExchangeOAuthSession(ctx context.Context, tokens dashboardapp.OAuthAccessTo
 		return nil, err
 	}
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
-	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens).Login(ctx)
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens).
+		WithServer(SessionServer()).
+		Login(ctx)
 }
 
 // ClearOAuthSession ends the dashboard session if it came from OAuth.
@@ -135,7 +145,8 @@ func newDomainService() (*dashboardapp.DomainService, error) {
 	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 	return dashboardapp.NewDomainService(accountClient, secretStore).
-		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)), nil
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer()), nil
 }
 
 // AccountBaseURL returns the dashboard-account base URL.
@@ -153,6 +164,16 @@ func AccountBaseURL() string {
 		return cfg.Dashboard.AccountBaseURL
 	}
 	return domain.DefaultDashboardAccountBaseURL
+}
+
+// SessionServer names the servers the stored dashboard session may be sent
+// to, as configured right now. See domain.DashboardSessionServer.
+func SessionServer() string {
+	return domain.DashboardSessionServer(
+		AccountBaseURL(),
+		dashboard.GatewayURL("us"),
+		dashboard.GatewayURL("eu"),
+	)
 }
 
 // wrapDashboardError wraps a dashboard error as a CLIError, preserving

@@ -14,6 +14,7 @@ type AppService struct {
 	gateway ports.DashboardGatewayClient
 	secrets ports.SecretStore
 	renewer *SessionRenewer
+	server  string
 }
 
 // NewAppService creates a new application management service.
@@ -28,6 +29,12 @@ func NewAppService(gateway ports.DashboardGatewayClient, secrets ports.SecretSto
 // current. r may be nil.
 func (s *AppService) WithSessionRenewer(r *SessionRenewer) *AppService {
 	s.renewer = r
+	return s
+}
+
+// WithServer ties the stored session to server; see AuthService.WithServer.
+func (s *AppService) WithServer(server string) *AppService {
+	s.server = server
 	return s
 }
 
@@ -151,5 +158,5 @@ func (s *AppService) loadTokens(ctx context.Context) (userToken, orgToken string
 	if err := s.renewer.EnsureFresh(ctx); err != nil {
 		return "", "", err
 	}
-	return loadDashboardTokens(s.secrets)
+	return loadDashboardTokens(s.secrets, s.server)
 }

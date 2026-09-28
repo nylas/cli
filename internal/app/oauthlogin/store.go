@@ -23,6 +23,8 @@ var sessionKeys = []string{
 	legacyKeyOAuthClientID,
 	ports.KeyOAuthAccessToken,
 	ports.KeyOAuthRefreshToken,
+	// Not written any more (see saveTokens); listed so an older build's copy
+	// is cleared.
 	ports.KeyOAuthIDToken,
 	ports.KeyOAuthExpiresAt,
 	ports.KeyOAuthScope,
@@ -60,7 +62,6 @@ func (s *Service) loadSession() (*Session, error) {
 		ports.KeyOAuthServerURL:    &session.ServerURL,
 		ports.KeyOAuthResource:     &session.Resource,
 		ports.KeyOAuthRefreshToken: &session.Tokens.RefreshToken,
-		ports.KeyOAuthIDToken:      &session.Tokens.IDToken,
 		ports.KeyOAuthScope:        &session.Tokens.Scope,
 	} {
 		value, err := s.getSecret(key)
@@ -87,9 +88,20 @@ func (s *Service) loadSession() (*Session, error) {
 	return session, nil
 }
 
-// saveTokens persists a token set. The access token is written last so a
-// partial write cannot leave a session that looks complete but carries a
-// refresh token belonging to a different exchange.
+// saveTokens persists a token set, in the order that keeps a partial write
+// safe to use:
+//
+//   - The server and resource first. A login against another server that
+//     fails after them leaves the old tokens under the new server's name, and
+//     loadSessionForServer refuses them rather than sending them anywhere.
+//   - The refresh token next. The server has already rotated it, so the old
+//     one is spent; losing the new one is what signs the user out.
+//   - The access token, then its expiry last. A write that stops in between
+//     leaves an expiry that reads as past, so the next command refreshes with
+//     the refresh token just stored instead of trusting a stale access token.
+//
+// The ID token is not stored. Nothing verifies or reads it, and it is the
+// largest value in the set, which counts against the keychain's item limits.
 func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens) error {
 	expiresAt := ""
 	if !tokens.ExpiresAt.IsZero() {
@@ -103,12 +115,12 @@ func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens
 		{ports.KeyOAuthIssuer, issuer},
 		{ports.KeyOAuthServerURL, s.client.ServerURL()},
 		{ports.KeyOAuthResource, resource},
-		{legacyKeyOAuthClientID, ""},
-		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
-		{ports.KeyOAuthIDToken, tokens.IDToken},
 		{ports.KeyOAuthScope, tokens.Scope},
-		{ports.KeyOAuthExpiresAt, expiresAt},
+		{legacyKeyOAuthClientID, ""},
+		{ports.KeyOAuthIDToken, ""},
+		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
 		{ports.KeyOAuthAccessToken, tokens.AccessToken},
+		{ports.KeyOAuthExpiresAt, expiresAt},
 	}
 
 	for _, entry := range ordered {

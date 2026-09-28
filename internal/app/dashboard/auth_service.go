@@ -16,6 +16,7 @@ type AuthService struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
 	renewer *SessionRenewer
+	server  string
 }
 
 var (
@@ -56,6 +57,14 @@ func NewAuthService(account ports.DashboardAccountClient, secrets ports.SecretSt
 // current. r may be nil.
 func (s *AuthService) WithSessionRenewer(r *SessionRenewer) *AuthService {
 	s.renewer = r
+	return s
+}
+
+// WithServer ties the stored session to server, the identity of the servers
+// its tokens are sent to (see domain.DashboardSessionServer). A session stored
+// for other servers is refused rather than sent. Empty skips the check.
+func (s *AuthService) WithServer(server string) *AuthService {
+	s.server = server
 	return s
 }
 
@@ -115,7 +124,7 @@ func (s *AuthService) CompleteMFA(ctx context.Context, userPublicID, code, orgPu
 
 // Refresh refreshes the session tokens using the stored tokens.
 func (s *AuthService) Refresh(ctx context.Context) error {
-	userToken, orgToken, err := loadDashboardTokens(s.secrets)
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
 	if err != nil {
 		return err
 	}
@@ -126,7 +135,16 @@ func (s *AuthService) Refresh(ctx context.Context) error {
 
 // Logout invalidates the session and clears local tokens.
 func (s *AuthService) Logout(ctx context.Context) error {
-	userToken, orgToken, _ := loadDashboardTokens(s.secrets)
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
+
+	// A session for other servers is cleared but not revoked: sending its
+	// tokens here would hand them to a server that never issued them.
+	if errors.Is(err, domain.ErrDashboardServerMismatch) {
+		if clearErr := s.clearTokens(); clearErr != nil {
+			return clearErr
+		}
+		return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+	}
 
 	// Best effort: call the server to invalidate tokens
 	if userToken != "" {
@@ -157,6 +175,13 @@ func (s *AuthService) SSOPoll(ctx context.Context, flowID, orgPublicID string) (
 	}
 
 	return resp, nil
+}
+
+// IsOAuthSession reports whether the stored session was exchanged from
+// `nylas oauth login`. Such a session is bound to the organization chosen at
+// sign-in, so switching organization means signing in again.
+func (s *AuthService) IsOAuthSession() bool {
+	return isOAuthSession(s.secrets)
 }
 
 // IsLoggedIn returns true if dashboard tokens exist in the keyring.
@@ -272,6 +297,7 @@ func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
 		ports.KeyDashboardAppRegion:        nil,
 		ports.KeyDashboardSessionOrigin:    nil,
 		ports.KeyDashboardSessionExpiresAt: nil,
+		ports.KeyDashboardSessionServer:    stringPtrOrNil(s.server),
 	})
 }
 
@@ -297,7 +323,7 @@ func (s *AuthService) loadTokens(ctx context.Context) (userToken, orgToken strin
 	if err := s.renewer.EnsureFresh(ctx); err != nil {
 		return "", "", err
 	}
-	return loadDashboardTokens(s.secrets)
+	return loadDashboardTokens(s.secrets, s.server)
 }
 
 func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken string) (string, string, error) {

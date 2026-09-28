@@ -7,11 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
+
+// refreshTimeout bounds a refresh that no longer follows the caller's
+// context (see refreshLocked).
+const refreshTimeout = 30 * time.Second
 
 // Service performs authorization server logins and owns the stored session.
 type Service struct {
@@ -224,6 +229,22 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 	}, nil
 }
 
+// Relogin runs the browser flow again for the stored session's scopes and
+// resource, so a session logged in `--for mcp` stays one the MCP server
+// accepts. It is how the organization of a session changes: the server binds
+// a session to the organization picked on its consent screen, and that choice
+// is only offered by signing in again.
+func (s *Service) Relogin(ctx context.Context) (*LoginResult, error) {
+	session, err := s.loadSessionForServer()
+	if err != nil {
+		return nil, err
+	}
+	return s.Login(ctx, LoginOptions{
+		Scopes:   strings.Fields(session.Tokens.Scope),
+		Resource: session.Resource,
+	})
+}
+
 // supportedScopes splits requested into what the server advertises and what
 // it does not. A server that advertises nothing is taken at its word that it
 // has no list, and everything is kept.
@@ -286,7 +307,13 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 			return fmt.Errorf("%w: run `nylas oauth login` again", domain.ErrOAuthNoRefreshToken)
 		}
 
-		tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken, session.Resource)
+		// Once the request is sent the server rotates the refresh token, so
+		// the caller giving up (Ctrl-C, an MCP request timing out) must not
+		// abandon the response: the stored token would be spent and the new
+		// one lost. The refresh runs to completion on its own deadline.
+		refreshCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
+		defer cancel()
+		tokens, err := s.client.Refresh(refreshCtx, session.ClientID, session.Tokens.RefreshToken, session.Resource)
 		if err != nil {
 			return err
 		}
@@ -296,7 +323,7 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 		// back — never carry the previous refresh token forward to fill an
 		// empty field.
 		if err := s.saveTokens(session.Issuer, session.Resource, tokens); err != nil {
-			return err
+			return s.dropSpentRefreshToken(session.Tokens.RefreshToken, err)
 		}
 		accessToken = tokens.AccessToken
 		return nil
@@ -305,6 +332,25 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 		return "", err
 	}
 	return accessToken, nil
+}
+
+// dropSpentRefreshToken handles a refresh whose answer could not be stored.
+// The server has already rotated spent, so if it is still what the store
+// holds it is deleted: the next command then asks for a login instead of
+// replaying it. A new refresh token that did get stored is kept, because the
+// write order in saveTokens makes the rest of the session recover from it.
+func (s *Service) dropSpentRefreshToken(spent string, saveErr error) error {
+	stored, err := s.getSecret(ports.KeyOAuthRefreshToken)
+	if err != nil {
+		return errors.Join(saveErr, err)
+	}
+	if stored != spent {
+		return saveErr
+	}
+	if err := s.deleteSecret(ports.KeyOAuthRefreshToken); err != nil {
+		return errors.Join(saveErr, err)
+	}
+	return fmt.Errorf("%w; run `nylas oauth login` again", saveErr)
 }
 
 // Status returns the stored session without contacting the server.
