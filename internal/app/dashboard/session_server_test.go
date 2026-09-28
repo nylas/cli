@@ -196,3 +196,23 @@ func TestAuthService_AdoptsAnUnrecordedOAuthSessionFromTheSameAccountServer(t *t
 	require.NoError(t, err)
 	assert.Equal(t, prodServer, secrets.data[ports.KeyDashboardSessionServer])
 }
+
+func TestSessionRenewer_ClearIfOAuthDropsAnUnrecordedSessionFromAnotherServerWithoutSendingIt(t *testing.T) {
+	// `nylas oauth logout` ends the dashboard session first, while the OAuth
+	// session's server is still stored, so an old local session is recognised
+	// as local and cleared here rather than being sent to the new server.
+	secrets := oauthSessionSecrets(time.Now().Add(10 * time.Minute))
+	secrets.data[ports.KeyOAuthServerURL] = "http://localhost:3001"
+	account := &dashboardadapter.MockAccountClient{
+		LogoutFn: func(context.Context, string, string) error {
+			t.Fatal("a local session's tokens were sent to another server")
+			return nil
+		},
+	}
+
+	err := NewSessionRenewer(account, secrets, nil).WithServer(prodServer).ClearIfOAuth(context.Background())
+
+	require.ErrorIs(t, err, domain.ErrDashboardServerMismatch)
+	assert.NotContains(t, secrets.data, ports.KeyDashboardUserToken)
+	assert.NotContains(t, secrets.data, ports.KeyDashboardSessionOrigin)
+}
