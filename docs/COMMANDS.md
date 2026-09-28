@@ -169,6 +169,12 @@ Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
 what makes the server issue a refresh token; without it the session ends when
 the access token expires (one hour).
 
+After login, the CLI also signs the `nylas dashboard` commands in by exchanging
+the access token for a dashboard session. If a session from
+`nylas dashboard login` is already stored for the configured server, it is kept
+(its organization and app selection are unchanged); run `nylas dashboard logout`
+first to use the OAuth login for the dashboard commands instead.
+
 Use the access token with any OAuth-protected endpoint:
 
 ```bash

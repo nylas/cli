@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -11,16 +12,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	dashboardadapter "github.com/nylas/cli/internal/adapters/dashboard"
+	"github.com/nylas/cli/internal/adapters/filelock"
 )
 
 type fakeOAuthTokens struct {
-	token string
-	calls int
+	token    string
+	calls    int
+	minValid time.Duration
 }
 
-func (f *fakeOAuthTokens) AccessToken(context.Context) (string, error) {
+func (f *fakeOAuthTokens) AccessTokenValidFor(_ context.Context, minValid time.Duration) (string, error) {
 	f.calls++
+	f.minValid = minValid
 	return f.token, nil
+}
+
+func newTestLock(t *testing.T) *filelock.Lock {
+	t.Helper()
+	return filelock.New(filepath.Join(t.TempDir(), "dashboard-session.lock"))
 }
 
 // exchangingAccount answers an exchange with the next session tokens and
@@ -59,7 +68,7 @@ func TestSessionRenewer_LoginStoresTheSessionAndResetsTheAppSelection(t *testing
 	secrets.data[ports.KeyDashboardAppID] = "app_from_a_previous_login"
 	tokens := &fakeOAuthTokens{token: "at-1"}
 
-	resp, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, tokens).Login(context.Background())
+	resp, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, tokens, newTestLock(t)).Login(context.Background())
 	require.NoError(t, err)
 
 	assert.Equal(t, "at-1", exchangedWith)
@@ -77,7 +86,7 @@ func TestSessionRenewer_EnsureFreshLeavesADashboardLoginSessionAlone(t *testing.
 	secrets.data[ports.KeyDashboardUserToken] = "dashboard-login-token"
 	tokens := &fakeOAuthTokens{token: "at-1"}
 
-	err := NewSessionRenewer(&dashboardadapter.MockAccountClient{}, secrets, tokens).EnsureFresh(context.Background())
+	err := NewSessionRenewer(&dashboardadapter.MockAccountClient{}, secrets, tokens, newTestLock(t)).EnsureFresh(context.Background())
 	require.NoError(t, err)
 
 	assert.Zero(t, tokens.calls)
@@ -88,7 +97,7 @@ func TestSessionRenewer_EnsureFreshKeepsASessionThatIsNotAboutToExpire(t *testin
 	secrets := oauthSessionSecrets(time.Now().Add(10 * time.Minute))
 	tokens := &fakeOAuthTokens{token: "at-1"}
 
-	err := NewSessionRenewer(&dashboardadapter.MockAccountClient{}, secrets, tokens).EnsureFresh(context.Background())
+	err := NewSessionRenewer(&dashboardadapter.MockAccountClient{}, secrets, tokens, newTestLock(t)).EnsureFresh(context.Background())
 	require.NoError(t, err)
 
 	assert.Zero(t, tokens.calls)
@@ -100,7 +109,7 @@ func TestSessionRenewer_EnsureFreshReexchangesNearExpiryAndKeepsTheActiveApp(t *
 	secrets := oauthSessionSecrets(time.Now().Add(30 * time.Second))
 	tokens := &fakeOAuthTokens{token: "at-2"}
 
-	err := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, tokens).EnsureFresh(context.Background())
+	err := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, tokens, newTestLock(t)).EnsureFresh(context.Background())
 	require.NoError(t, err)
 
 	assert.Equal(t, "at-2", exchangedWith)
@@ -111,7 +120,7 @@ func TestSessionRenewer_EnsureFreshReexchangesNearExpiryAndKeepsTheActiveApp(t *
 func TestAppService_CreateAPIKeyRenewsAnExpiredOAuthSessionFirst(t *testing.T) {
 	var exchangedWith, usedToken string
 	secrets := oauthSessionSecrets(time.Now().Add(-time.Minute))
-	renewer := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-3"})
+	renewer := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-3"}, newTestLock(t))
 	gateway := &dashboardadapter.MockGatewayClient{
 		CreateAPIKeyFn: func(_ context.Context, _, _, _ string, _ int, userToken, _ string) (*domain.GatewayCreatedAPIKey, error) {
 			usedToken = userToken
@@ -130,7 +139,7 @@ func TestAuthService_RefreshExchangesAnOAuthSessionInsteadOfRefreshingIt(t *test
 	var exchangedWith string
 	secrets := oauthSessionSecrets(time.Now().Add(10 * time.Minute))
 	account := exchangingAccount("exchanged-user", &exchangedWith)
-	renewer := NewSessionRenewer(account, secrets, &fakeOAuthTokens{token: "at-4"})
+	renewer := NewSessionRenewer(account, secrets, &fakeOAuthTokens{token: "at-4"}, newTestLock(t))
 
 	err := NewAuthService(account, secrets).WithSessionRenewer(renewer).Refresh(context.Background())
 	require.NoError(t, err)
@@ -173,12 +182,12 @@ func TestSessionRenewer_ClearIfOAuthEndsOnlyAnOAuthSession(t *testing.T) {
 
 	dashboardLogin := newMemSecretStore()
 	dashboardLogin.data[ports.KeyDashboardUserToken] = "dashboard-login-token"
-	require.NoError(t, NewSessionRenewer(account, dashboardLogin, nil).ClearIfOAuth(context.Background()))
+	require.NoError(t, NewSessionRenewer(account, dashboardLogin, nil, newTestLock(t)).ClearIfOAuth(context.Background()))
 	assert.False(t, loggedOut)
 	assert.Equal(t, "dashboard-login-token", dashboardLogin.data[ports.KeyDashboardUserToken])
 
 	oauth := oauthSessionSecrets(time.Now().Add(10 * time.Minute))
-	require.NoError(t, NewSessionRenewer(account, oauth, nil).ClearIfOAuth(context.Background()))
+	require.NoError(t, NewSessionRenewer(account, oauth, nil, newTestLock(t)).ClearIfOAuth(context.Background()))
 	assert.True(t, loggedOut)
 	assert.NotContains(t, oauth.data, ports.KeyDashboardUserToken)
 	assert.NotContains(t, oauth.data, ports.KeyDashboardSessionOrigin)

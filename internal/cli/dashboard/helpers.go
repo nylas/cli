@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/dashboard"
@@ -89,7 +90,7 @@ var OAuthRelogin func(ctx context.Context) (*domain.DashboardOAuthExchangeRespon
 // token, so commands on a `nylas dashboard login` session never touch it.
 type lazyOAuthTokens struct{}
 
-func (lazyOAuthTokens) AccessToken(ctx context.Context) (string, error) {
+func (lazyOAuthTokens) AccessTokenValidFor(ctx context.Context, minValid time.Duration) (string, error) {
 	if OAuthTokenSource == nil {
 		return "", errors.New("OAuth login is not available in this build")
 	}
@@ -97,11 +98,11 @@ func (lazyOAuthTokens) AccessToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tokens.AccessToken(ctx)
+	return tokens.AccessTokenValidFor(ctx, minValid)
 }
 
 func newSessionRenewer(accountClient *dashboard.AccountClient, secretStore ports.SecretStore) *dashboardapp.SessionRenewer {
-	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}).
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}, common.DashboardSessionLock(secretStore)).
 		WithServer(SessionServer())
 }
 
@@ -113,19 +114,21 @@ func ExchangeOAuthSession(ctx context.Context, tokens dashboardapp.OAuthAccessTo
 		return nil, err
 	}
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
-	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens).
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens, common.DashboardSessionLock(secretStore)).
 		WithServer(SessionServer()).
 		Login(ctx)
 }
 
-// ClearOAuthSession ends the dashboard session if it came from OAuth.
-func ClearOAuthSession(ctx context.Context) error {
+// ClearOAuthSessionThen ends the dashboard session if it came from OAuth,
+// then runs then, holding the dashboard session lock across both; see
+// SessionRenewer.ClearIfOAuthThen.
+func ClearOAuthSessionThen(ctx context.Context, then func() error) (clearErr, thenErr error) {
 	dpopSvc, secretStore, err := createDPoPService()
 	if err != nil {
-		return err
+		return err, then()
 	}
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
-	return newSessionRenewer(accountClient, secretStore).ClearIfOAuth(ctx)
+	return newSessionRenewer(accountClient, secretStore).ClearIfOAuthThen(ctx, then)
 }
 
 // createDomainService creates the dashboard domain management service.

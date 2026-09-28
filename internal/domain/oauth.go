@@ -216,10 +216,16 @@ const oauthExpiryLeeway = 30 * time.Second
 // with no known expiry is treated as expired so the caller refreshes rather
 // than sending a credential the server will reject.
 func (t *OAuthTokens) IsExpired(now time.Time) bool {
+	return t.ExpiresWithin(now, 0)
+}
+
+// ExpiresWithin reports whether the access token has less than minValid (and
+// never less than the refresh leeway) left at now.
+func (t *OAuthTokens) ExpiresWithin(now time.Time, minValid time.Duration) bool {
 	if t.ExpiresAt.IsZero() {
 		return true
 	}
-	return !now.Add(oauthExpiryLeeway).Before(t.ExpiresAt)
+	return !now.Add(max(minValid, oauthExpiryLeeway)).Before(t.ExpiresAt)
 }
 
 // OAuthUserInfo holds the OIDC claims returned by the userinfo endpoint.

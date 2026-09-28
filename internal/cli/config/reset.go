@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -64,15 +65,17 @@ To reset only part of the CLI:
 			}
 			_, _ = common.Green.Println("  ✓ API credentials cleared")
 
-			// 2. Clear dashboard credentials
-			clearDashboardCredentials(secretStore)
-			_, _ = common.Green.Println("  ✓ Dashboard session cleared")
-
-			// 3. Clear the OAuth session. Local only: revoking needs the
-			// server, and a reset must work without it.
-			if err := oauthlogin.ClearSession(secretStore); err != nil {
-				return fmt.Errorf("clear OAuth session: %w", err)
+			// 2 and 3. Clear the dashboard and OAuth sessions, under their
+			// locks so a renewal or refresh in flight in another process
+			// (`nylas mcp serve`) cannot write them back afterwards. Local only:
+			// revoking needs the server, and a reset must work without it.
+			ctx, cancel := common.CreateContext()
+			defer cancel()
+			if err := clearSessions(ctx, secretStore,
+				common.DashboardSessionLock(secretStore), common.OAuthSessionLock(secretStore)); err != nil {
+				return err
 			}
+			_, _ = common.Green.Println("  ✓ Dashboard session cleared")
 			_, _ = common.Green.Println("  ✓ OAuth session cleared")
 
 			// 4. Clear grants
@@ -103,6 +106,22 @@ To reset only part of the CLI:
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 
 	return cmd
+}
+
+// clearSessions takes the dashboard lock before the OAuth one, the order every
+// other path uses.
+func clearSessions(ctx context.Context, secrets ports.SecretStore, dashboardLock, oauthLock ports.CrossProcessLock) error {
+	unlock, err := dashboardLock.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire dashboard session lock: %w", err)
+	}
+	defer func() { _ = unlock() }()
+
+	clearDashboardCredentials(secrets)
+	if err := oauthlogin.ClearSessionLocked(ctx, secrets, oauthLock); err != nil {
+		return fmt.Errorf("clear OAuth session: %w", err)
+	}
+	return nil
 }
 
 // clearDashboardCredentials removes all dashboard-related keys from the secret store.

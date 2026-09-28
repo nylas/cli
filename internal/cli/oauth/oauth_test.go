@@ -51,6 +51,10 @@ func (f *fakeService) AccessToken(context.Context) (string, error) {
 	return f.accessToken, f.accessErr
 }
 
+func (f *fakeService) AccessTokenValidFor(context.Context, time.Duration) (string, error) {
+	return f.accessToken, f.accessErr
+}
+
 func (f *fakeService) UserInfo(context.Context) (*domain.OAuthUserInfo, error) {
 	return f.userInfo, f.userErr
 }
@@ -66,6 +70,9 @@ type fakeDashboard struct {
 	exchangedWith dashboardapp.OAuthAccessTokens
 	cleared       bool
 	clearErr      error
+	// clearedBeforeLogout: the dashboard session must go while the OAuth
+	// session's server is still stored.
+	clearedBeforeLogout bool
 }
 
 // withService swaps the command factory for the duration of one test, and
@@ -85,9 +92,10 @@ func withService(t *testing.T, svc *fakeService) *fakeDashboard {
 		}
 		return &domain.DashboardOAuthExchangeResponse{OrgPublicID: "org_1"}, nil
 	}
-	clearDashboardSessionFn = func(context.Context) error {
+	clearDashboardSessionFn = func(_ context.Context, then func() error) (error, error) {
 		dash.cleared = true
-		return dash.clearErr
+		dash.clearedBeforeLogout = !svc.logoutCalled
+		return dash.clearErr, then()
 	}
 	t.Cleanup(func() {
 		createLoginServiceFn = originalLogin
@@ -385,6 +393,18 @@ func TestLoginCmd_SignsInTheDashboardCommands(t *testing.T) {
 	assert.Contains(t, stdout, "signed in to organization org_1")
 }
 
+func TestLoginCmd_KeepsADashboardLoginSessionAndSaysSo(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
+	dash := withService(t, svc)
+	dash.exchangeErr = dashboardapp.ErrDashboardLoginSessionKept
+
+	stdout, _, err := testutil.ExecuteSubCommand(newLoginCmd())
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout, "still signed in with `nylas dashboard login`")
+	assert.NotContains(t, stdout, "not signed in")
+}
+
 func TestLoginCmd_DashboardExchangeFailureIsOnlyAWarning(t *testing.T) {
 	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
 	dash := withService(t, svc)
@@ -405,6 +425,7 @@ func TestLogoutCmd_EndsTheDashboardSessionItCreated(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, dash.cleared)
+	assert.True(t, dash.clearedBeforeLogout, "the dashboard session is cleared while the OAuth server is still stored")
 	assert.True(t, svc.logoutCalled)
 }
 

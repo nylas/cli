@@ -333,11 +333,7 @@ func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken str
 		if s.renewer == nil {
 			return "", "", errOAuthSessionNotRefreshable
 		}
-		resp, err := s.renewer.exchange(ctx, false)
-		if err != nil {
-			return "", "", err
-		}
-		return resp.UserToken, resp.OrgToken, nil
+		return s.renewer.renewRejected(ctx, userToken)
 	}
 
 	resp, err := s.account.Refresh(ctx, userToken, orgToken)

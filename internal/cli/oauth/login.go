@@ -1,11 +1,13 @@
 package oauth
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
@@ -113,6 +115,10 @@ dev authorization server.`,
 			// The OAuth login already succeeded, so a failed exchange is reported
 			// rather than returned: only the dashboard commands are affected.
 			dashboardSession, err := exchangeDashboardSessionFn(ctx, svc)
+			if errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept) {
+				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login` (run `nylas dashboard logout` first to use this login instead)")
+				return nil
+			}
 			if err != nil {
 				_, _ = common.Yellow.Fprintf(out,
 					"  Dashboard commands are not signed in: %v\n", err)

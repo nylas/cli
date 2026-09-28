@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
+	"time"
 
 	"github.com/nylas/cli/internal/adapters/browser"
 	"github.com/nylas/cli/internal/adapters/config"
@@ -28,6 +27,7 @@ type loginService interface {
 	Login(ctx context.Context, opts oauthlogin.LoginOptions) (*oauthlogin.LoginResult, error)
 	Status() (*oauthlogin.Session, error)
 	AccessToken(ctx context.Context) (string, error)
+	AccessTokenValidFor(ctx context.Context, minValid time.Duration) (string, error)
 	UserInfo(ctx context.Context) (*domain.OAuthUserInfo, error)
 	Logout(ctx context.Context) error
 }
@@ -36,7 +36,7 @@ var createLoginServiceFn = func() (loginService, error) { return createLoginServ
 
 var (
 	exchangeDashboardSessionFn = dashboard.ExchangeOAuthSession
-	clearDashboardSessionFn    = dashboard.ClearOAuthSession
+	clearDashboardSessionFn    = dashboard.ClearOAuthSessionThen
 )
 
 // The dashboard commands renew a session from `nylas oauth login` through the
@@ -107,33 +107,14 @@ func createLoginService() (*oauthlogin.Service, error) {
 	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets, sessionLock(secrets)), nil
 }
 
-// sessionLockFile serialises OAuth session writes across every CLI process
-// on the machine — in practice, several `nylas mcp serve` processes started
-// by different assistants that share one keyring session.
-const sessionLockFile = "oauth-session.lock"
+const sessionLockFile = common.OAuthSessionLockFile
 
 func sessionLock(secrets ports.SecretStore) *filelock.Lock {
-	return filelock.New(sessionLockPath(secrets))
+	return common.OAuthSessionLock(secrets)
 }
 
-// sessionLockPath puts the lock with the secrets it protects, so every
-// process sharing a session also shares its lock.
-//
-// The encrypted file store lives in the config directory, so its lock does
-// too. The system keyring is one store per user whatever XDG_CONFIG_HOME says,
-// and an editor or MCP host can start `nylas mcp serve` with a different
-// XDG_CONFIG_HOME than the user's shell. A lock that followed it would let two
-// processes refresh the same session at once, and a replayed refresh token
-// revokes the whole family. So for the keyring the lock sits under the
-// account's home directory from the user database, not from the environment.
 func sessionLockPath(secrets ports.SecretStore) string {
-	if _, ok := secrets.(*keyring.EncryptedFileStore); ok {
-		return filepath.Join(config.DefaultConfigDir(), sessionLockFile)
-	}
-	if account, err := user.Current(); err == nil && account.HomeDir != "" {
-		return filepath.Join(account.HomeDir, ".config", "nylas", sessionLockFile)
-	}
-	return filepath.Join(config.DefaultConfigDir(), sessionLockFile)
+	return common.SessionLockPath(secrets, sessionLockFile)
 }
 
 // clientIDEnv overrides the static public client id, for a local or dev

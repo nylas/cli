@@ -213,7 +213,16 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 	}
 
 	if err := s.withSessionLock(ctx, func() error {
-		return s.saveTokens(metadata.Issuer, opts.Resource, tokens)
+		// Clear whatever session is stored first: a login against a different
+		// server must not leave that server's old tokens filed under the new
+		// server's name, where checkIssuer would then accept them.
+		if err := s.clearSession(); err != nil {
+			return err
+		}
+		if err := s.saveTokens(metadata.Issuer, opts.Resource, tokens); err != nil {
+			return errors.Join(err, s.clearSession())
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
@@ -264,14 +273,21 @@ func supportedScopes(requested, supported []string) (kept, dropped []string) {
 
 // AccessToken returns a usable access token, refreshing it when it has expired.
 func (s *Service) AccessToken(ctx context.Context) (string, error) {
+	return s.AccessTokenValidFor(ctx, 0)
+}
+
+// AccessTokenValidFor returns an access token with at least minValid left,
+// refreshing it early when it has less. A caller whose own session ends with
+// the token (the dashboard exchange) uses it so a renewal gets a new expiry.
+func (s *Service) AccessTokenValidFor(ctx context.Context, minValid time.Duration) (string, error) {
 	session, err := s.loadSessionForServer()
 	if err != nil {
 		return "", err
 	}
-	if !session.Tokens.IsExpired(s.now()) {
+	if !session.Tokens.ExpiresWithin(s.now(), minValid) {
 		return session.Tokens.AccessToken, nil
 	}
-	return s.refreshLocked(ctx, "")
+	return s.refreshLocked(ctx, "", minValid)
 }
 
 // RefreshAccessToken is for a caller whose request was just refused with
@@ -280,7 +296,7 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 // has already replaced that token this returns the replacement instead of
 // spending the refresh token a second time.
 func (s *Service) RefreshAccessToken(ctx context.Context, rejected string) (string, error) {
-	return s.refreshLocked(ctx, rejected)
+	return s.refreshLocked(ctx, rejected, 0)
 }
 
 // refreshLocked is the only path that spends a refresh token.
@@ -291,7 +307,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, rejected string) (stri
 // than replaying the refresh token that process just consumed. rejected is
 // an access token the caller already knows is bad (empty when the token only
 // expired), so a stored copy of it is not mistaken for a fresh one.
-func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, error) {
+func (s *Service) refreshLocked(ctx context.Context, rejected string, minValid time.Duration) (string, error) {
 	var accessToken string
 	err := s.withSessionLock(ctx, func() error {
 		session, err := s.loadSessionForServer()
@@ -299,7 +315,7 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, e
 			return err
 		}
 		stored := session.Tokens.AccessToken
-		if !session.Tokens.IsExpired(s.now()) && stored != rejected {
+		if !session.Tokens.ExpiresWithin(s.now(), minValid) && stored != rejected {
 			accessToken = stored
 			return nil
 		}

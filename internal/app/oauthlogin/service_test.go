@@ -472,10 +472,51 @@ func TestRelogin_RepeatsTheStoredScopesAndResource(t *testing.T) {
 	assert.Equal(t, resource, result.Resource)
 }
 
+func TestLogin_AFailedWriteDuringAServerSwitchDoesNotLeaveTheOldTokensUsable(t *testing.T) {
+	// A login against server B after one to server A must not leave A's
+	// refresh token filed under B's server URL, where checkIssuer would accept
+	// it and send it to B's token endpoint.
+	f := newFixture(t)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	f.client.ServerURLValue = "https://b.example.test"
+	fw := failWritesTo(f, ports.KeyOAuthRefreshToken)
+
+	_, err = f.service.Login(context.Background(), LoginOptions{})
+	require.Error(t, err)
+
+	fw.key = ""
+	f.advance(2 * time.Hour)
+	_, err = f.service.AccessToken(context.Background())
+	require.ErrorIs(t, err, domain.ErrOAuthNotLoggedIn)
+	assert.Empty(t, f.client.RefreshCalls, "A's refresh token must never reach B's token endpoint")
+}
+
 func TestRelogin_WithoutASessionAsksForALogin(t *testing.T) {
 	f := newFixture(t)
 
 	_, err := f.service.Relogin(context.Background())
 
 	require.ErrorIs(t, err, domain.ErrOAuthNotLoggedIn)
+}
+
+func TestAccessTokenValidFor_RefreshesATokenWithTooLittleLifeLeft(t *testing.T) {
+	// The dashboard session ends with the access token. Renewing it a minute
+	// early is only useful if the token handed over outlives that minute.
+	f := newFixture(t)
+	f.client.ExchangeCodeFunc = func(context.Context, domain.OAuthCodeExchange) (*domain.OAuthTokens, error) {
+		return &domain.OAuthTokens{AccessToken: "short", RefreshToken: "rt", ExpiresAt: f.clock.Add(45 * time.Second)}, nil
+	}
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	token, err := f.service.AccessToken(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "short", token, "45s is outside the plain refresh leeway")
+
+	token, err = f.service.AccessTokenValidFor(context.Background(), time.Minute)
+	require.NoError(t, err)
+	assert.NotEqual(t, "short", token)
+	assert.Equal(t, []string{"rt"}, f.client.RefreshCalls)
 }

@@ -1,6 +1,7 @@
 package oauthlogin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -89,16 +90,19 @@ func (s *Service) loadSession() (*Session, error) {
 }
 
 // saveTokens persists a token set, in the order that keeps a partial write
-// safe to use:
+// safe to use for a refresh (same server, same session):
 //
-//   - The server and resource first. A login against another server that
-//     fails after them leaves the old tokens under the new server's name, and
-//     loadSessionForServer refuses them rather than sending them anywhere.
-//   - The refresh token next. The server has already rotated it, so the old
-//     one is spent; losing the new one is what signs the user out.
+//   - The server and resource first, then the refresh token. The server has
+//     already rotated it, so the old one is spent; losing the new one is what
+//     signs the user out.
 //   - The access token, then its expiry last. A write that stops in between
 //     leaves an expiry that reads as past, so the next command refreshes with
 //     the refresh token just stored instead of trusting a stale access token.
+//
+// A login against a different server is not safe against a partial write:
+// the server and resource fields alone don't distinguish "new session, write
+// interrupted" from "old session, still valid", so callers logging in must
+// clear the previous session first (see Service.Login).
 //
 // The ID token is not stored. Nothing verifies or reads it, and it is the
 // largest value in the set, which counts against the keychain's item limits.
@@ -141,8 +145,16 @@ func (s *Service) clearSession() error {
 	return ClearSession(s.secrets)
 }
 
+// ClearSessionLocked is ClearSession under the cross-process session lock, so
+// a refresh in flight in another process (`nylas mcp serve`) cannot write a
+// rotated session back after the clear.
+func ClearSessionLocked(ctx context.Context, secrets ports.SecretStore, lock ports.CrossProcessLock) error {
+	s := &Service{secrets: secrets, lock: lock}
+	return s.withSessionLock(ctx, s.clearSession)
+}
+
 // ClearSession removes every stored OAuth session key without contacting the
-// server. `nylas oauth logout` also revokes; this is for a local reset.
+// server. The caller must hold the session lock; see ClearSessionLocked.
 func ClearSession(secrets ports.SecretStore) error {
 	var errs []error
 	for _, key := range sessionKeys {

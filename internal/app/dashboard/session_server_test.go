@@ -132,7 +132,7 @@ func TestSessionRenewer_LoginRecordsTheServer(t *testing.T) {
 	var exchangedWith string
 	secrets := dashboardSessionFor(localServer)
 
-	_, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-1"}).
+	_, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-1"}, newTestLock(t)).
 		WithServer(prodServer).
 		Login(context.Background())
 
@@ -146,7 +146,7 @@ func TestSessionRenewer_EnsureFreshReplacesAnExpiredSessionForOtherServers(t *te
 	var exchangedWith string
 	secrets := oauthSessionSecrets(time.Now().Add(-time.Minute))
 	secrets.data[ports.KeyDashboardSessionServer] = localServer
-	renewer := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-2"}).
+	renewer := NewSessionRenewer(exchangingAccount("renewed-user", &exchangedWith), secrets, &fakeOAuthTokens{token: "at-2"}, newTestLock(t)).
 		WithServer(prodServer)
 
 	require.NoError(t, renewer.EnsureFresh(context.Background()))
@@ -210,7 +210,7 @@ func TestSessionRenewer_ClearIfOAuthDropsAnUnrecordedSessionFromAnotherServerWit
 		},
 	}
 
-	err := NewSessionRenewer(account, secrets, nil).WithServer(prodServer).ClearIfOAuth(context.Background())
+	err := NewSessionRenewer(account, secrets, nil, newTestLock(t)).WithServer(prodServer).ClearIfOAuth(context.Background())
 
 	require.ErrorIs(t, err, domain.ErrDashboardServerMismatch)
 	assert.NotContains(t, secrets.data, ports.KeyDashboardUserToken)

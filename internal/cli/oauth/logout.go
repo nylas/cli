@@ -25,9 +25,11 @@ session that came from 'nylas oauth login' is ended too; one from
 			ctx, cancel := common.CreateContext()
 			defer cancel()
 
-			dashboardErr := clearDashboardSessionFn(ctx)
-			if err := svc.Logout(ctx); err != nil {
-				return wrapOAuthError(err)
+			dashboardErr, logoutErr := clearDashboardSessionFn(ctx, func() error {
+				return svc.Logout(ctx)
+			})
+			if logoutErr != nil {
+				return wrapOAuthError(logoutErr)
 			}
 			if dashboardErr != nil {
 				_, _ = common.Yellow.Fprintf(cmd.OutOrStdout(),
