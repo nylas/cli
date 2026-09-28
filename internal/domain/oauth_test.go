@@ -159,3 +159,55 @@ func TestDefaultOAuthScopes_RequestsOfflineAccess(t *testing.T) {
 	// without it every login would need the browser again in an hour.
 	assert.Contains(t, DefaultOAuthScopes(), OAuthScopeOfflineAccess)
 }
+
+func metadataOn(issuer string) *OAuthServerMetadata {
+	return &OAuthServerMetadata{
+		Issuer:                issuer,
+		AuthorizationEndpoint: issuer + "/oauth/authorize",
+		TokenEndpoint:         issuer + "/oauth/token",
+		UserInfoEndpoint:      issuer + "/oauth/userinfo",
+		RevocationEndpoint:    issuer + "/oauth/revoke",
+		JWKSURI:               issuer + "/.well-known/jwks.json",
+	}
+}
+
+func TestOAuthServerMetadata_ValidateFor(t *testing.T) {
+	const prod = "https://dashboard-account.eu.nylas.com"
+
+	t.Run("accepts the server it was fetched from, with or without a trailing slash", func(t *testing.T) {
+		require.NoError(t, metadataOn(prod).ValidateFor(prod))
+		require.NoError(t, metadataOn(prod).ValidateFor(prod+"/"))
+		require.NoError(t, metadataOn("http://127.0.0.1:3001").ValidateFor("http://127.0.0.1:3001"))
+		require.NoError(t, metadataOn("http://localhost:3001").ValidateFor("http://localhost:3001"))
+	})
+
+	t.Run("refuses plain http off loopback", func(t *testing.T) {
+		err := metadataOn("http://auth.corp.example").ValidateFor("http://auth.corp.example")
+		require.ErrorIs(t, err, ErrOAuthMetadata)
+	})
+
+	t.Run("refuses an issuer that is not the server", func(t *testing.T) {
+		err := metadataOn("https://evil.example").ValidateFor(prod)
+		require.ErrorIs(t, err, ErrOAuthMetadata)
+	})
+
+	t.Run("refuses an endpoint on another host", func(t *testing.T) {
+		m := metadataOn(prod)
+		m.TokenEndpoint = "https://evil.example/oauth/token"
+		require.ErrorIs(t, m.ValidateFor(prod), ErrOAuthMetadata)
+
+		m = metadataOn(prod)
+		m.AuthorizationEndpoint = "file:///tmp/payload"
+		require.ErrorIs(t, m.ValidateFor(prod), ErrOAuthMetadata)
+
+		m = metadataOn(prod)
+		m.RevocationEndpoint = "http://dashboard-account.eu.nylas.com/oauth/revoke"
+		require.ErrorIs(t, m.ValidateFor(prod), ErrOAuthMetadata, "same host, downgraded scheme")
+	})
+
+	t.Run("lets a local dev server advertise an https tunnel as its issuer", func(t *testing.T) {
+		require.NoError(t, metadataOn("https://abc.tunnel.example").ValidateFor("http://localhost:3001"))
+		err := metadataOn("http://abc.tunnel.example").ValidateFor("http://localhost:3001")
+		require.ErrorIs(t, err, ErrOAuthMetadata, "the tunnel itself must be https")
+	})
+}

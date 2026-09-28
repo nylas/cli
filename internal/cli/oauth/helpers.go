@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/nylas/cli/internal/adapters/browser"
@@ -18,6 +19,7 @@ import (
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/cli/dashboard"
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/ports"
 )
 
 // loginService is the slice of oauthlogin.Service the commands use, named so
@@ -52,8 +54,9 @@ func NewLoginService() (*oauthlogin.Service, error) {
 	return createLoginService()
 }
 
-// configuredRegion is the CLI's configured region, "" when none is set.
-func configuredRegion() string {
+// configuredRegion is the CLI's configured region, "" when none is set. A
+// variable so tests can set it without a config file.
+var configuredRegion = func() string {
 	cfg, err := config.NewDefaultFileStore().Load()
 	if err != nil || cfg == nil {
 		return ""
@@ -87,7 +90,7 @@ func createLoginService() (*oauthlogin.Service, error) {
 	// server actually binds, so the browser cannot land on the other family.
 	callbackServer := oauthadapter.NewLoopbackIPCallbackServer(callbackPort)
 
-	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets, sessionLock()), nil
+	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets, sessionLock(secrets)), nil
 }
 
 // sessionLockFile serialises OAuth session writes across every CLI process
@@ -95,8 +98,28 @@ func createLoginService() (*oauthlogin.Service, error) {
 // by different assistants that share one keyring session.
 const sessionLockFile = "oauth-session.lock"
 
-func sessionLock() *filelock.Lock {
-	return filelock.New(filepath.Join(config.DefaultConfigDir(), sessionLockFile))
+func sessionLock(secrets ports.SecretStore) *filelock.Lock {
+	return filelock.New(sessionLockPath(secrets))
+}
+
+// sessionLockPath puts the lock with the secrets it protects, so every
+// process sharing a session also shares its lock.
+//
+// The encrypted file store lives in the config directory, so its lock does
+// too. The system keyring is one store per user whatever XDG_CONFIG_HOME says,
+// and an editor or MCP host can start `nylas mcp serve` with a different
+// XDG_CONFIG_HOME than the user's shell. A lock that followed it would let two
+// processes refresh the same session at once, and a replayed refresh token
+// revokes the whole family. So for the keyring the lock sits under the
+// account's home directory from the user database, not from the environment.
+func sessionLockPath(secrets ports.SecretStore) string {
+	if _, ok := secrets.(*keyring.EncryptedFileStore); ok {
+		return filepath.Join(config.DefaultConfigDir(), sessionLockFile)
+	}
+	if account, err := user.Current(); err == nil && account.HomeDir != "" {
+		return filepath.Join(account.HomeDir, ".config", "nylas", sessionLockFile)
+	}
+	return filepath.Join(config.DefaultConfigDir(), sessionLockFile)
 }
 
 // clientIDEnv overrides the static public client id, for a local or dev

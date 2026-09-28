@@ -18,6 +18,7 @@ func newLoginCmd() *cobra.Command {
 	var (
 		scopes []string
 		preset string
+		region string
 	)
 
 	cmd := &cobra.Command{
@@ -37,6 +38,11 @@ the configured region (https://mcp.us.nylas.com or https://mcp.eu.nylas.com)
 as the RFC 8707 resource, so the token is issued for that server only. Scopes
 the server does not offer are left out and reported.
 
+If you do not have an account yet, you can sign up on the page that opens.
+--region (or the configured region) decides where the new organization is
+created; without either it is created in the US. It does not change an
+existing account.
+
 Set NYLAS_OAUTH_CLIENT_ID to use a different client id against a local or
 dev authorization server.`,
 		Example: `  # Log in with the default scopes (openid, email, offline_access)
@@ -45,10 +51,22 @@ dev authorization server.`,
   # Log in for 'nylas mcp serve --auth oauth'
   nylas oauth login --for mcp
 
+  # Sign up with a new organization in the EU
+  nylas oauth login --region eu
+
   # Log in against a local authorization server
   NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, err := loginOptions(preset, scopes, configuredRegion())
+			// A bad --region is the user's to fix. A bad configured region is
+			// only a sign-up hint here, so it is dropped rather than blocking
+			// the login; --for mcp still validates it for the resource.
+			if region == "" {
+				region = configuredRegion()
+				if _, err := normalizeRegion(region); err != nil && preset == "" {
+					region = ""
+				}
+			}
+			opts, err := loginOptions(preset, scopes, region)
 			if err != nil {
 				return err
 			}
@@ -110,6 +128,8 @@ dev authorization server.`,
 		fmt.Sprintf("OAuth scopes to request (default %v)", domain.DefaultOAuthScopes()))
 	cmd.Flags().StringVar(&preset, "for", "",
 		"log in for a Nylas resource server: mcp (scopes and resource for 'nylas mcp serve --auth oauth')")
+	cmd.Flags().StringVar(&region, "region", "",
+		"region for an organization created if you sign up: us or eu (default: the configured region)")
 
 	return cmd
 }
@@ -121,7 +141,11 @@ dev authorization server.`,
 func loginOptions(preset string, scopes []string, region string) (oauthlogin.LoginOptions, error) {
 	switch preset {
 	case "":
-		return oauthlogin.LoginOptions{Scopes: scopes}, nil
+		signUpRegion, err := normalizeRegion(region)
+		if err != nil {
+			return oauthlogin.LoginOptions{}, err
+		}
+		return oauthlogin.LoginOptions{Scopes: scopes, Region: signUpRegion}, nil
 	case loginPresetMCP:
 		if len(scopes) > 0 {
 			return oauthlogin.LoginOptions{}, common.NewUserError(
@@ -136,12 +160,26 @@ func loginOptions(preset string, scopes []string, region string) (oauthlogin.Log
 		return oauthlogin.LoginOptions{
 			Scopes:                domain.MCPOAuthScopes(),
 			Resource:              resource,
+			Region:                strings.ToLower(strings.TrimSpace(region)),
 			DropUnsupportedScopes: true,
 		}, nil
 	default:
 		return oauthlogin.LoginOptions{}, common.NewUserError(
 			fmt.Sprintf("unknown --for value %q", preset),
 			"supported: mcp",
+		)
+	}
+}
+
+// normalizeRegion accepts us or eu in any case, and empty for "not set".
+func normalizeRegion(region string) (string, error) {
+	switch r := strings.ToLower(strings.TrimSpace(region)); r {
+	case "", "us", "eu":
+		return r, nil
+	default:
+		return "", common.NewUserError(
+			fmt.Sprintf("unknown region %q", region),
+			"supported: us, eu",
 		)
 	}
 }

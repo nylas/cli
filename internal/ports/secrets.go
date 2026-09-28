@@ -43,7 +43,10 @@ const (
 	// OAuth authorization server keys. KeyOAuthIssuer records which server
 	// issued the stored tokens. The client id is not stored: the CLI is a
 	// static public client (domain.DefaultOAuthClientID).
-	KeyOAuthIssuer       = "oauth_issuer"
+	KeyOAuthIssuer = "oauth_issuer"
+	// KeyOAuthServerURL is the authorization server URL the session was
+	// obtained through; its tokens are only ever sent back there.
+	KeyOAuthServerURL    = "oauth_server_url"
 	KeyOAuthResource     = "oauth_resource"
 	KeyOAuthAccessToken  = "oauth_access_token"
 	KeyOAuthRefreshToken = "oauth_refresh_token"

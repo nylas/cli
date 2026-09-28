@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -49,6 +50,10 @@ type rpcRequest struct {
 	} `json:"params"`
 }
 
+// mcpHTTPClient sends every request with its credential (an API key or an
+// OAuth access token), so it follows no redirect.
+var mcpHTTPClient = httputil.NewNoRedirectClient(httputil.DefaultClientTimeout)
+
 // Proxy forwards MCP requests from STDIO to the Nylas MCP server.
 type Proxy struct {
 	// endpoint is the regional default, used when a credential names no
@@ -74,7 +79,7 @@ func NewProxy(apiKey, region string) *Proxy {
 		endpoint:   GetMCPEndpoint(region),
 		apiKey:     apiKey,
 		creds:      apiKeyCredentials{apiKey: apiKey},
-		httpClient: httputil.DefaultClient,
+		httpClient: mcpHTTPClient,
 	}
 }
 
@@ -87,7 +92,7 @@ func NewOAuthProxy(creds ports.MCPCredentialSource) *Proxy {
 	return &Proxy{
 		creds:      creds,
 		oauth:      true,
-		httpClient: httputil.DefaultClient,
+		httpClient: mcpHTTPClient,
 	}
 }
 
@@ -260,6 +265,11 @@ func (p *Proxy) send(ctx context.Context, request []byte, parsed *rpcRequest, cr
 	if cred.AllowsGrantHint(defaultGrant) {
 		grantHint = defaultGrant
 	}
+
+	// Every attempt starts from the request as the assistant sent it: the
+	// grant injection below writes into the parsed arguments, and a retry
+	// after renewal must not inherit the previous credential's grant.
+	parsed = cloneRPCRequest(parsed)
 
 	// Inject default grant into tool calls if not specified
 	request = p.injectGrant(request, parsed, grantHint)
@@ -592,4 +602,15 @@ func toInt64(v any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// cloneRPCRequest copies req deeply enough for injectGrant and
+// normalizeToolArguments to change the copy's arguments freely.
+func cloneRPCRequest(req *rpcRequest) *rpcRequest {
+	if req == nil {
+		return nil
+	}
+	clone := *req
+	clone.Params.Arguments = maps.Clone(req.Params.Arguments)
+	return &clone
 }

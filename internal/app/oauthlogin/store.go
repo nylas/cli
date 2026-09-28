@@ -18,6 +18,7 @@ const legacyKeyOAuthClientID = "oauth_client_id"
 // logout means, so a new key must be added here or it outlives the session.
 var sessionKeys = []string{
 	ports.KeyOAuthIssuer,
+	ports.KeyOAuthServerURL,
 	ports.KeyOAuthResource,
 	legacyKeyOAuthClientID,
 	ports.KeyOAuthAccessToken,
@@ -30,8 +31,11 @@ var sessionKeys = []string{
 // Session is a stored authorization server login. ClientID is the client the
 // service is configured with, not a stored value.
 type Session struct {
-	Issuer   string
-	ClientID string
+	Issuer string
+	// ServerURL is the authorization server URL the session came from. Empty
+	// for a session stored before it was recorded; the issuer stands in.
+	ServerURL string
+	ClientID  string
 	// Resource is the RFC 8707 resource indicator the session was logged in
 	// for; every refresh repeats it so the audience does not change.
 	Resource string
@@ -53,6 +57,7 @@ func (s *Service) loadSession() (*Session, error) {
 	}
 	for key, target := range map[string]*string{
 		ports.KeyOAuthIssuer:       &session.Issuer,
+		ports.KeyOAuthServerURL:    &session.ServerURL,
 		ports.KeyOAuthResource:     &session.Resource,
 		ports.KeyOAuthRefreshToken: &session.Tokens.RefreshToken,
 		ports.KeyOAuthIDToken:      &session.Tokens.IDToken,
@@ -96,6 +101,7 @@ func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens
 		value string
 	}{
 		{ports.KeyOAuthIssuer, issuer},
+		{ports.KeyOAuthServerURL, s.client.ServerURL()},
 		{ports.KeyOAuthResource, resource},
 		{legacyKeyOAuthClientID, ""},
 		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
@@ -120,10 +126,16 @@ func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens
 }
 
 func (s *Service) clearSession() error {
+	return ClearSession(s.secrets)
+}
+
+// ClearSession removes every stored OAuth session key without contacting the
+// server. `nylas oauth logout` also revokes; this is for a local reset.
+func ClearSession(secrets ports.SecretStore) error {
 	var errs []error
 	for _, key := range sessionKeys {
-		if err := s.deleteSecret(key); err != nil {
-			errs = append(errs, err)
+		if err := secrets.Delete(key); err != nil && !errors.Is(err, domain.ErrSecretNotFound) {
+			errs = append(errs, fmt.Errorf("failed to clear %s: %w", key, err))
 		}
 	}
 	return errors.Join(errs...)

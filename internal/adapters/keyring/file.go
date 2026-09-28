@@ -1,6 +1,7 @@
 package keyring
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/nylas/cli/internal/adapters/filelock"
 	"github.com/nylas/cli/internal/domain"
 	"golang.org/x/crypto/argon2"
 )
@@ -18,6 +21,9 @@ import (
 const (
 	fileStorePassphraseEnv = "NYLAS_FILE_STORE_PASSPHRASE"
 	fileStoreSaltSize      = 16
+	// fileStoreLockTimeout bounds how long one operation waits for another
+	// process's. Each holds the lock for a single read-modify-write.
+	fileStoreLockTimeout = 10 * time.Second
 )
 
 // EncryptedFileStore implements SecretStore using an encrypted file.
@@ -39,7 +45,13 @@ type EncryptedFileStore struct {
 	passphrase   []byte
 	migrationKey []byte
 	legacyKey    []byte
-	mu           sync.RWMutex
+	// mu serialises goroutines; fileLock serialises processes. Every call is
+	// a read-modify-write of the whole file, so without fileLock two CLI
+	// processes interleave and the last rename silently discards the other's
+	// write — for an OAuth session, a just-rotated refresh token, whose loss
+	// makes the next refresh a replay that revokes the whole token family.
+	mu       sync.RWMutex
+	fileLock *filelock.Lock
 }
 
 // NewEncryptedFileStore creates a new EncryptedFileStore rooted in configDir.
@@ -89,13 +101,33 @@ func NewEncryptedFileStore(configDir string) (*EncryptedFileStore, error) {
 		passphrase:   passphrase,
 		migrationKey: migrationKey,
 		legacyKey:    legacyKey,
+		fileLock:     filelock.New(filepath.Join(configDir, ".secrets.lock")),
+	}, nil
+}
+
+// lock takes both locks. The returned function releases them.
+func (f *EncryptedFileStore) lock() (func(), error) {
+	f.mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), fileStoreLockTimeout)
+	defer cancel()
+	unlock, err := f.fileLock.Lock(ctx)
+	if err != nil {
+		f.mu.Unlock()
+		return nil, fmt.Errorf("%w: %v", domain.ErrSecretStoreFailed, err)
+	}
+	return func() {
+		_ = unlock()
+		f.mu.Unlock()
 	}, nil
 }
 
 // Set stores a secret value for the given key.
 func (f *EncryptedFileStore) Set(key, value string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	release, err := f.lock()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	secrets, err := f.loadSecrets()
 	if err != nil && !os.IsNotExist(err) {
@@ -121,8 +153,11 @@ func (f *EncryptedFileStore) Set(key, value string) error {
 // CLI workloads aren't read-heavy, so serializing reads is the right
 // trade for guaranteed migration correctness.
 func (f *EncryptedFileStore) Get(key string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	release, err := f.lock()
+	if err != nil {
+		return "", err
+	}
+	defer release()
 
 	secrets, err := f.loadSecrets()
 	if err != nil {
@@ -141,8 +176,11 @@ func (f *EncryptedFileStore) Get(key string) (string, error) {
 
 // Delete removes a secret for the given key.
 func (f *EncryptedFileStore) Delete(key string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	release, err := f.lock()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	secrets, err := f.loadSecrets()
 	if err != nil {

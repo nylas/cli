@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -15,6 +17,10 @@ var (
 	ErrOAuthNotLoggedIn    = errors.New("not logged in to the Nylas authorization server")
 	ErrOAuthNoRefreshToken = errors.New("no refresh token stored")
 	ErrOAuthMetadata       = errors.New("invalid authorization server metadata")
+	// ErrOAuthIssuerMismatch: the stored session belongs to a different
+	// authorization server than the one configured now, so its tokens must
+	// not be sent there.
+	ErrOAuthIssuerMismatch = errors.New("the stored OAuth session was issued by a different authorization server")
 )
 
 // Identity scopes. Data scopes (email.read, grants.read, ...) are in
@@ -70,6 +76,74 @@ func (m *OAuthServerMetadata) Validate() error {
 	return nil
 }
 
+// ValidateFor checks the document against the server it was fetched from.
+// It is what stands between a tampered or misdirected discovery response and
+// the code, PKCE verifier and refresh tokens the CLI then sends:
+//   - the base URL is https, except on a loopback address;
+//   - the issuer IS the base URL (RFC 8414 section 3.3). The one exception is
+//     a loopback base URL, where a local dev server may advertise a tunnel as
+//     its issuer; that issuer must still be https or loopback;
+//   - every endpoint is on the issuer's own scheme and host.
+func (m *OAuthServerMetadata) ValidateFor(baseURL string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Host == "" {
+		return fmt.Errorf("%w: %q is not an absolute URL", ErrOAuthMetadata, baseURL)
+	}
+	if !isHTTPSOrLoopback(base) {
+		return fmt.Errorf("%w: %s must use https (http is only allowed on a loopback address)", ErrOAuthMetadata, baseURL)
+	}
+	issuer, err := url.Parse(NormalizeOAuthIssuer(m.Issuer))
+	if err != nil || issuer.Host == "" {
+		return fmt.Errorf("%w: issuer %q is not an absolute URL", ErrOAuthMetadata, m.Issuer)
+	}
+	if IsLoopbackHost(base.Hostname()) {
+		if !isHTTPSOrLoopback(issuer) {
+			return fmt.Errorf("%w: issuer %q must use https", ErrOAuthMetadata, m.Issuer)
+		}
+	} else if NormalizeOAuthIssuer(m.Issuer) != NormalizeOAuthIssuer(baseURL) {
+		return fmt.Errorf("%w: issuer %q does not match %q", ErrOAuthMetadata, m.Issuer, baseURL)
+	}
+	for name, endpoint := range map[string]string{
+		"authorization_endpoint": m.AuthorizationEndpoint,
+		"token_endpoint":         m.TokenEndpoint,
+		"userinfo_endpoint":      m.UserInfoEndpoint,
+		"revocation_endpoint":    m.RevocationEndpoint,
+		"jwks_uri":               m.JWKSURI,
+	} {
+		if endpoint == "" {
+			continue
+		}
+		parsed, err := url.Parse(endpoint)
+		if err != nil || parsed.Scheme != issuer.Scheme || !strings.EqualFold(parsed.Host, issuer.Host) {
+			return fmt.Errorf("%w: %s %q is not on %s", ErrOAuthMetadata, name, endpoint, issuer.Scheme+"://"+issuer.Host)
+		}
+	}
+	return nil
+}
+
+// NormalizeOAuthIssuer makes two spellings of one issuer compare equal: a
+// trailing slash is not a different server.
+func NormalizeOAuthIssuer(issuer string) string {
+	return strings.TrimRight(strings.TrimSpace(issuer), "/")
+}
+
+// isHTTPSOrLoopback reports whether u is https, or plain http to this machine.
+func isHTTPSOrLoopback(u *url.URL) bool {
+	return u.Scheme == "https" || (u.Scheme == "http" && IsLoopbackHost(u.Hostname()))
+}
+
+// IsLoopbackHost reports whether host is localhost or a loopback IP.
+func IsLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -104,6 +178,10 @@ type OAuthAuthorizationParams struct {
 	// Resource is the RFC 8707 resource indicator, the server the token is
 	// for. Empty requests a token with no resource-server audience.
 	Resource string
+	// Region ("us" or "eu") is where the organization of an account created
+	// during this sign-in is placed. A hint only: it never changes an existing
+	// account. Empty leaves it to the server.
+	Region string
 }
 
 // OAuthCodeExchange carries an authorization code back to the token endpoint.

@@ -18,6 +18,11 @@ type OAuthAuthServerClient interface {
 	// endpoint from this document rather than assuming a path.
 	Metadata(ctx context.Context) (*domain.OAuthServerMetadata, error)
 
+	// ServerURL is the authorization server this client talks to, without a
+	// network call. A stored session from another server must not be sent
+	// to it.
+	ServerURL() string
+
 	// AuthorizationURL builds the URL to open in the browser to start a
 	// PKCE authorization code flow.
 	AuthorizationURL(ctx context.Context, params domain.OAuthAuthorizationParams) (string, error)

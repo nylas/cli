@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -305,4 +307,43 @@ func extractClaim(t *testing.T, proof, key string) string {
 		return str
 	}
 	return ""
+}
+
+// readFailingStore fails every Get, like a locked or unreachable keychain.
+type readFailingStore struct{ *mockSecretStore }
+
+func (readFailingStore) Get(string) (string, error) { return "", errors.New("keychain locked") }
+
+func TestNew_ReadFailureDoesNotReplaceTheStoredKey(t *testing.T) {
+	t.Parallel()
+	store := newMockSecretStore()
+	_, err := New(store)
+	require.NoError(t, err)
+	stored := store.data["dashboard_dpop_key"]
+
+	_, err = New(readFailingStore{store})
+
+	require.ErrorIs(t, err, domain.ErrDashboardDPoP)
+	assert.Equal(t, stored, store.data["dashboard_dpop_key"],
+		"the server binds sessions to this key; a failed read must not overwrite it")
+}
+
+func TestNew_MissingKeyIsGenerated(t *testing.T) {
+	t.Parallel()
+	store := notFoundStore{newMockSecretStore()}
+
+	_, err := New(store)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, store.data["dashboard_dpop_key"])
+}
+
+// notFoundStore reports a missing key the way the real keyring does.
+type notFoundStore struct{ *mockSecretStore }
+
+func (s notFoundStore) Get(key string) (string, error) {
+	if v, ok := s.data[key]; ok {
+		return v, nil
+	}
+	return "", domain.ErrSecretNotFound
 }

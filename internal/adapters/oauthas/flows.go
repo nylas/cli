@@ -31,6 +31,9 @@ func (c *Client) AuthorizationURL(ctx context.Context, params domain.OAuthAuthor
 	if params.Resource != "" {
 		query.Set("resource", params.Resource)
 	}
+	if params.Region != "" {
+		query.Set("region", params.Region)
+	}
 
 	separator := "?"
 	if strings.Contains(metadata.AuthorizationEndpoint, "?") {

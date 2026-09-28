@@ -7,9 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/nylas/cli/internal/adapters/keyring"
 	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
@@ -415,4 +418,67 @@ func TestLogoutCmd_StillRevokesWhenTheDashboardCannotBeEnded(t *testing.T) {
 
 	assert.True(t, svc.logoutCalled)
 	assert.Contains(t, stdout, "Could not end the dashboard session")
+}
+
+func TestLoginOptions_CarryTheSignUpRegion(t *testing.T) {
+	for _, tc := range []struct{ preset, region, want string }{
+		{"", "", ""},
+		{"", "EU", "eu"},
+		{"", " us ", "us"},
+		{"mcp", "eu", "eu"},
+		{"mcp", "", ""},
+	} {
+		opts, err := loginOptions(tc.preset, nil, tc.region)
+		require.NoError(t, err, tc)
+		assert.Equal(t, tc.want, opts.Region, "preset %q region %q", tc.preset, tc.region)
+	}
+
+	_, err := loginOptions("", nil, "ap")
+	require.Error(t, err, "an unknown region is refused rather than dropped")
+}
+
+func TestLoginCmd_RegionFlagReachesTheLogin(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
+	withService(t, svc)
+
+	_, _, err := testutil.ExecuteSubCommand(newLoginCmd(), "--region", "eu")
+	require.NoError(t, err)
+
+	require.NotNil(t, svc.loginOpts)
+	assert.Equal(t, "eu", svc.loginOpts.Region)
+}
+
+func TestLoginCmd_ABadConfiguredRegionDoesNotBlockLogin(t *testing.T) {
+	svc := &fakeService{loginResult: &oauthlogin.LoginResult{Issuer: "i", ClientID: "c", HasRefresh: true}}
+	withService(t, svc)
+	original := configuredRegion
+	configuredRegion = func() string { return "ap-south" }
+	t.Cleanup(func() { configuredRegion = original })
+
+	_, _, err := testutil.ExecuteSubCommand(newLoginCmd())
+	require.NoError(t, err, "a configured region is only a sign-up hint")
+	assert.Empty(t, svc.loginOpts.Region)
+
+	_, _, err = testutil.ExecuteSubCommand(newLoginCmd(), "--region", "ap-south")
+	require.Error(t, err, "a bad --region is the user's to fix")
+}
+
+func TestSessionLockPath_KeyringLockIgnoresXDGConfigHome(t *testing.T) {
+	// Two processes sharing the one system keyring must share one lock, even
+	// when an MCP host starts one of them with another XDG_CONFIG_HOME.
+	withoutXDG := sessionLockPath(keyring.NewMockSecretStore())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	withXDG := sessionLockPath(keyring.NewMockSecretStore())
+
+	assert.Equal(t, withoutXDG, withXDG)
+	assert.NotContains(t, withXDG, os.Getenv("XDG_CONFIG_HOME"))
+}
+
+func TestSessionLockPath_FileStoreLockLivesWithTheSecretsFile(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	store, err := keyring.NewEncryptedFileStore(filepath.Join(xdg, "nylas"))
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(xdg, "nylas", sessionLockFile), sessionLockPath(store))
 }

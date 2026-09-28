@@ -144,6 +144,21 @@ func TestClient_AuthorizationURL_OmitsEmptyNonce(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, parsed.Query().Has("nonce"))
 	assert.False(t, parsed.Query().Has("resource"), "no resource indicator unless one was asked for")
+	assert.False(t, parsed.Query().Has("region"), "no sign-up region unless one was asked for")
+}
+
+func TestClient_AuthorizationURL_SendsTheSignUpRegion(t *testing.T) {
+	server := newTestServer(t, nil)
+
+	raw, err := NewClient(server.URL).AuthorizationURL(context.Background(), domain.OAuthAuthorizationParams{
+		ClientID: "client-123",
+		Region:   "eu",
+	})
+	require.NoError(t, err)
+
+	parsed, err := url.Parse(raw)
+	require.NoError(t, err)
+	assert.Equal(t, "eu", parsed.Query().Get("region"))
 }
 
 func TestClient_SendsResourceIndicatorOnEveryLeg(t *testing.T) {
@@ -366,4 +381,22 @@ func TestClient_FollowsDiscoveredEndpointHost(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, tokenCalls)
+}
+
+func TestClient_TokenRequestsDoNotFollowRedirects(t *testing.T) {
+	// A 307/308 would replay the form — code, PKCE verifier, refresh token —
+	// to wherever it points.
+	stolen := 0
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		stolen++
+	}))
+	t.Cleanup(elsewhere.Close)
+
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/oauth/token", http.StatusTemporaryRedirect)
+	})
+
+	_, err := NewClient(server.URL).Refresh(context.Background(), "c", "refresh-token", "")
+	require.Error(t, err)
+	assert.Zero(t, stolen, "the refresh token must not be replayed to the redirect target")
 }

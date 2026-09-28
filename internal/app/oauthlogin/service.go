@@ -95,6 +95,10 @@ type LoginOptions struct {
 	// the session. Empty requests no resource-server audience.
 	Resource string
 
+	// Region ("us" or "eu") places the organization of an account created
+	// during sign-in. Empty leaves it to the server.
+	Region string
+
 	// DropUnsupportedScopes leaves out scopes the server's discovery document
 	// does not list, instead of letting the whole request fail with
 	// invalid_scope. The server only offers data scopes a deployment enables.
@@ -163,6 +167,7 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		CodeChallenge: pkce.Challenge,
 		Nonce:         nonce,
 		Resource:      opts.Resource,
+		Region:        opts.Region,
 	})
 	if err != nil {
 		return nil, err
@@ -238,7 +243,7 @@ func supportedScopes(requested, supported []string) (kept, dropped []string) {
 
 // AccessToken returns a usable access token, refreshing it when it has expired.
 func (s *Service) AccessToken(ctx context.Context) (string, error) {
-	session, err := s.loadSession()
+	session, err := s.loadSessionForServer()
 	if err != nil {
 		return "", err
 	}
@@ -268,7 +273,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, rejected string) (stri
 func (s *Service) refreshLocked(ctx context.Context, rejected string) (string, error) {
 	var accessToken string
 	err := s.withSessionLock(ctx, func() error {
-		session, err := s.loadSession()
+		session, err := s.loadSessionForServer()
 		if err != nil {
 			return err
 		}
@@ -332,6 +337,15 @@ func (s *Service) Logout(ctx context.Context) error {
 			return err
 		}
 
+		// A session from another server is cleared but not revoked: sending
+		// its token here would hand it to a server that never issued it.
+		if err := s.checkIssuer(session); err != nil {
+			if clearErr := s.clearSession(); clearErr != nil {
+				return clearErr
+			}
+			return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+		}
+
 		token := session.Tokens.RefreshToken
 		if token == "" {
 			token = session.Tokens.AccessToken
@@ -343,4 +357,35 @@ func (s *Service) Logout(ctx context.Context) error {
 		}
 		return revokeErr
 	})
+}
+
+// loadSessionForServer loads the session only if it was issued by the server
+// this service talks to. Every path that sends a stored token anywhere goes
+// through it: the refresh token to the token endpoint, the access token to
+// userinfo, to the dashboard exchange and to the MCP server.
+func (s *Service) loadSessionForServer() (*Session, error) {
+	session, err := s.loadSession()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkIssuer(session); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+func (s *Service) checkIssuer(session *Session) error {
+	stored := session.ServerURL
+	if stored == "" {
+		stored = session.Issuer
+	}
+	stored = domain.NormalizeOAuthIssuer(stored)
+	current := domain.NormalizeOAuthIssuer(s.client.ServerURL())
+	if stored == current {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: it came from %q but the configured server is %q; run `nylas oauth login` against %q, or point NYLAS_DASHBOARD_ACCOUNT_URL back at %q",
+		domain.ErrOAuthIssuerMismatch, stored, current, current, stored,
+	)
 }

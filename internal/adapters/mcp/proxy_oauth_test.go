@@ -326,3 +326,56 @@ func TestAPIKeyProxy_GrantHintIsUnrestricted(t *testing.T) {
 
 	assert.Equal(t, "grant-9", fake.recorded()[0].grantHeader)
 }
+
+func TestOAuthProxy_RetryAfterRenewalRebuildsTheGrantFromTheOriginalRequest(t *testing.T) {
+	// The first attempt writes grant_id into the parsed arguments. The retry
+	// must start from what the assistant sent, not from that edited copy.
+	for _, tool := range []string{"list_messages", "list_events"} {
+		for _, tt := range []struct {
+			name       string
+			freshGrant []string
+			want       any
+		}{
+			{"renewed token still lists the grant", []string{"grant-1"}, "grant-1"},
+			{"renewed token no longer lists it", []string{"grant-2"}, nil},
+		} {
+			t.Run(tool+"/"+tt.name, func(t *testing.T) {
+				fake, server := newOAuthTestProxy(t,
+					respondStatus(http.StatusUnauthorized, `Bearer error="invalid_token"`),
+					respondOK,
+				)
+				creds := &fakeCredentials{
+					credentials: []*domain.MCPCredential{oauthCred(server, "stale", "grant-1")},
+					renewed:     oauthCred(server, "fresh", tt.freshGrant...),
+				}
+				proxy := NewOAuthProxy(creds)
+				proxy.SetDefaultGrant("grant-1")
+
+				req := parseRPC(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tool + `","arguments":{}}}`)
+				_, err := proxy.forward(t.Context(), req.raw, req.parsed)
+				require.NoError(t, err)
+
+				got := fake.recorded()
+				require.Len(t, got, 2)
+				args := got[1].body["params"].(map[string]any)["arguments"].(map[string]any)
+				assert.Equal(t, tt.want, args["grant_id"])
+				assert.Equal(t, "Bearer fresh", got[1].authorization)
+			})
+		}
+	}
+}
+
+func TestProxy_DoesNotFollowRedirectsWithTheCredential(t *testing.T) {
+	stolen := 0
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { stolen++ }))
+	t.Cleanup(elsewhere.Close)
+	_, server := newOAuthTestProxy(t, func(w http.ResponseWriter) {
+		w.Header().Set("Location", elsewhere.URL)
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+	proxy := NewOAuthProxy(&fakeCredentials{credentials: []*domain.MCPCredential{oauthCred(server, "t")}})
+
+	_, _ = proxy.forward(t.Context(), []byte(`{"jsonrpc":"2.0","id":1,"method":"ping"}`), nil)
+
+	assert.Zero(t, stolen, "the bearer token must not follow a redirect")
+}

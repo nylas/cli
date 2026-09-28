@@ -41,10 +41,24 @@ type Client struct {
 // NewClient creates a client rooted at the authorization server's base URL.
 func NewClient(baseURL string) *Client {
 	return &Client{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		httpClient: &http.Client{Timeout: defaultHTTPTimout},
-		now:        time.Now,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		// No redirects: a token request carries a code, a PKCE verifier or a
+		// refresh token in its body, and a 307/308 would replay it elsewhere.
+		httpClient: &http.Client{
+			Timeout: defaultHTTPTimout,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		now: time.Now,
 	}
+}
+
+// ServerURL is the authorization server this client talks to, normalised.
+// A stored session records the URL it came from, and callers compare the two
+// before sending that session's tokens anywhere.
+func (c *Client) ServerURL() string {
+	return domain.NormalizeOAuthIssuer(c.baseURL)
 }
 
 // Metadata fetches and caches the RFC 8414 metadata document.
@@ -59,7 +73,7 @@ func (c *Client) Metadata(ctx context.Context) (*domain.OAuthServerMetadata, err
 	if err := c.getJSON(ctx, c.baseURL+discoveryPath, "", &metadata); err != nil {
 		return nil, fmt.Errorf("failed to discover authorization server at %s: %w", c.baseURL, err)
 	}
-	if err := metadata.Validate(); err != nil {
+	if err := metadata.ValidateFor(c.baseURL); err != nil {
 		return nil, err
 	}
 

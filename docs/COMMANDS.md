@@ -117,13 +117,22 @@ nylas auth migrate               # Migrate from v2 to v3
 
 Log in to the Nylas OAuth 2.1 / OIDC authorization server. This authenticates
 **you**, the person running the CLI, and is distinct from `nylas auth` (which
-connects an end user's mailbox as a provider grant) and from
-`nylas dashboard login` (which opens a dashboard management session).
+connects an end user's mailbox as a provider grant).
+
+It also signs in the `nylas dashboard` commands, so `nylas dashboard login` is
+not needed after it. That dashboard session is for the organization you chose
+on the consent screen, lasts as long as the access token, and is renewed
+automatically from the OAuth session. `nylas oauth logout` ends it too.
+
+Without an account you can sign up on the page that opens. `--region` (or the
+configured region) decides where the new organization is created; without
+either it is created in the US.
 
 ```bash
 nylas oauth login                # Log in via the browser (authorization code + PKCE)
 nylas oauth login --scope openid,email
 nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
+nylas oauth login --region eu    # Sign up with a new organization in the EU
 nylas oauth status               # Show the stored session and decoded token claims
 nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
 nylas oauth token                # Print a valid access token, refreshing if needed
@@ -136,7 +145,10 @@ exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
 address the callback server binds. Tokens are stored in the system keyring.
 
 Every CLI process on the machine shares the one stored session. Refreshing is
-serialised by a lock file (`oauth-session.lock` in the CLI config directory):
+serialised by a lock file, `oauth-session.lock`: in `~/.config/nylas` of your
+account when the session is in the system keyring (whatever `XDG_CONFIG_HOME`
+says, since the keyring does not follow it either), and beside the encrypted
+secrets file when the file store is used:
 the server rotates the refresh token on every use and revokes the whole family
 if a consumed one is replayed, so two `nylas mcp serve` processes refreshing at
 once would otherwise sign you out. A process that waited on the lock uses the

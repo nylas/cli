@@ -18,6 +18,9 @@ type MockClient struct {
 	RevokeFunc           func(ctx context.Context, clientID, token string) error
 	UserInfoFunc         func(ctx context.Context, accessToken string) (*domain.OAuthUserInfo, error)
 
+	// ServerURLValue overrides what ServerURL reports.
+	ServerURLValue string
+
 	// Now backs the ExpiresAt the default token responses carry, mirroring
 	// what the real client derives from expires_in. Tests with a fixed clock
 	// set this to the same clock as the service under test.
@@ -33,6 +36,14 @@ type MockClient struct {
 
 // MockIssuer is the issuer MockClient advertises by default.
 const MockIssuer = "https://auth.example.test"
+
+// ServerURL returns ServerURLValue, or MockIssuer when it is unset.
+func (m *MockClient) ServerURL() string {
+	if m.ServerURLValue != "" {
+		return m.ServerURLValue
+	}
+	return MockIssuer
+}
 
 func (m *MockClient) Metadata(ctx context.Context) (*domain.OAuthServerMetadata, error) {
 	if m.MetadataFunc != nil {

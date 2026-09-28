@@ -8,6 +8,7 @@ import (
 	adapterconfig "github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/keyring"
 	authapp "github.com/nylas/cli/internal/app/auth"
+	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -23,10 +24,14 @@ func newResetCmd() *cobra.Command {
 
   - API credentials (API key, client ID, client secret)
   - Dashboard session (login tokens, selected app)
+  - OAuth session ('nylas oauth login' tokens)
   - Grants (authenticated email accounts)
   - Config file (reset to defaults)
 
 After reset, run 'nylas init' to set up again.
+
+Reset only removes local copies. To also revoke the OAuth session on the
+server, run 'nylas oauth logout' first.
 
 To reset only part of the CLI:
   nylas auth config --reset    Reset API credentials only
@@ -63,7 +68,14 @@ To reset only part of the CLI:
 			clearDashboardCredentials(secretStore)
 			_, _ = common.Green.Println("  ✓ Dashboard session cleared")
 
-			// 3. Clear grants
+			// 3. Clear the OAuth session. Local only: revoking needs the
+			// server, and a reset must work without it.
+			if err := oauthlogin.ClearSession(secretStore); err != nil {
+				return fmt.Errorf("clear OAuth session: %w", err)
+			}
+			_, _ = common.Green.Println("  ✓ OAuth session cleared")
+
+			// 4. Clear grants
 			grantStore, err := common.NewDefaultGrantStore()
 			if err != nil {
 				return fmt.Errorf("access grant store: %w", err)
@@ -73,7 +85,7 @@ To reset only part of the CLI:
 			}
 			_, _ = common.Green.Println("  ✓ Grants cleared")
 
-			// 4. Reset config file to defaults
+			// 5. Reset config file to defaults
 			if err := configStore.Save(domain.DefaultConfig()); err != nil {
 				return fmt.Errorf("reset config file: %w", err)
 			}

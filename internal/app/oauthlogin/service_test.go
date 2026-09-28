@@ -388,3 +388,65 @@ func TestUserInfo_UsesCurrentAccessToken(t *testing.T) {
 	assert.Equal(t, "mock-access-token", seen)
 	assert.Equal(t, "dev@example.test", info.Email)
 }
+
+func TestSession_TokensNeverGoToAnotherServer(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	// The same keyring, now pointed at another server — a changed
+	// NYLAS_DASHBOARD_ACCOUNT_URL or config value.
+	f.client.ServerURLValue = "https://other.example.test"
+
+	_, err = f.service.AccessToken(context.Background())
+	require.ErrorIs(t, err, domain.ErrOAuthIssuerMismatch)
+
+	f.advance(2 * time.Hour)
+	_, err = f.service.AccessToken(context.Background())
+	require.ErrorIs(t, err, domain.ErrOAuthIssuerMismatch)
+	_, err = f.service.RefreshAccessToken(context.Background(), "mock-access-token")
+	require.ErrorIs(t, err, domain.ErrOAuthIssuerMismatch)
+	_, err = f.service.UserInfo(context.Background())
+	require.ErrorIs(t, err, domain.ErrOAuthIssuerMismatch)
+
+	assert.Empty(t, f.client.RefreshCalls, "the refresh token must not reach the other server")
+}
+
+func TestLogout_ClearsButDoesNotRevokeASessionFromAnotherServer(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+	f.client.ServerURLValue = "https://other.example.test"
+
+	err = f.service.Logout(context.Background())
+
+	require.ErrorIs(t, err, domain.ErrOAuthIssuerMismatch)
+	assert.Empty(t, f.client.RevokeCalls, "revoking would hand the token to a server that never issued it")
+	for _, key := range sessionKeys {
+		assert.NotContains(t, f.secrets.GetAll(), key)
+	}
+}
+
+func TestSession_WithoutAStoredServerURLFallsBackToTheIssuer(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+	require.NoError(t, f.secrets.Delete(ports.KeyOAuthServerURL))
+
+	token, err := f.service.AccessToken(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "mock-access-token", token)
+}
+
+func TestClearSession_RemovesEveryKeyWithoutTheServer(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	require.NoError(t, ClearSession(f.secrets))
+
+	for _, key := range sessionKeys {
+		assert.NotContains(t, f.secrets.GetAll(), key)
+	}
+	assert.Empty(t, f.client.RevokeCalls)
+}

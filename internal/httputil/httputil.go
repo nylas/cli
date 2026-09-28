@@ -61,6 +61,18 @@ func NewClient(timeout time.Duration) *http.Client {
 // special behavior (e.g. disabled redirects).
 var DefaultClient = NewClient(DefaultClientTimeout)
 
+// NewNoRedirectClient is NewClient that never follows a redirect, for
+// requests that carry a credential: a 307/308 re-sends the body, and Go keeps
+// the Authorization header on a same-host or subdomain hop even if it drops
+// to http. The 3xx response is returned to the caller as is.
+func NewNoRedirectClient(timeout time.Duration) *http.Client {
+	client := NewClient(timeout)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return client
+}
+
 // NewServer returns an *http.Server hardened with the standard CLI defaults:
 // a 10s header-read timeout, 120s idle timeout, and a 1MB max header size.
 //
