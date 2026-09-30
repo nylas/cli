@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"math"
 	"net/http"
@@ -115,8 +116,13 @@ func (p *Proxy) SetGrantStore(store ports.GrantStore) {
 
 // Run starts the proxy, reading from stdin and writing to stdout.
 func (p *Proxy) Run(ctx context.Context) error {
-	reader := bufio.NewReader(os.Stdin)
-	writer := bufio.NewWriter(os.Stdout)
+	return p.serve(ctx, os.Stdin, os.Stdout)
+}
+
+// serve runs the proxy loop over the given streams.
+func (p *Proxy) serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	reader := bufio.NewReader(in)
+	writer := bufio.NewWriter(out)
 
 	for {
 		select {
@@ -172,6 +178,12 @@ func (p *Proxy) Run(ctx context.Context) error {
 		// Forward to Nylas MCP server
 		response, err := p.forward(ctx, line, &req)
 		if err != nil {
+			// A notification must never be answered, not even with an error
+			// (JSON-RPC 2.0 §4.1), so its failure goes to the log instead.
+			if isNotification(line) {
+				log.Printf("mcp: forwarding %s notification failed: %v", req.Method, err)
+				continue
+			}
 			// Write error response
 			errorResp := p.createErrorResponse(&req, err)
 			if _, writeErr := writer.Write(append(errorResp, '\n')); writeErr != nil {
@@ -189,6 +201,18 @@ func (p *Proxy) Run(ctx context.Context) error {
 			_ = writer.Flush()
 		}
 	}
+}
+
+// isNotification reports whether a JSON-RPC message is a notification: one
+// with no "id" member at all. An explicit "id": null is still a request, and
+// rpcRequest.ID cannot tell the two apart.
+func isNotification(message []byte) bool {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(message, &members); err != nil {
+		return false
+	}
+	_, hasID := members["id"]
+	return !hasID
 }
 
 // forward sends a request to the Nylas MCP server and returns the response.
