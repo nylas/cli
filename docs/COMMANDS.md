@@ -167,7 +167,7 @@ check the signature; only the resource server's answer is authoritative.
 
 Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
 what makes the server issue a refresh token; without it the session ends when
-the access token expires (one hour).
+the access token expires (15 minutes by default).
 
 After login, the CLI also signs the `nylas dashboard` commands in by exchanging
 the access token for a dashboard session. If a session from
@@ -193,6 +193,12 @@ NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
 If that server registers the CLI under a different client id, override it with
 `NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
 redirect URI).
+
+The dashboard session exchange only accepts tokens from dashboard-account's
+built-in first-party clients (the Nylas CLI and Nylas Mail). With any other
+client id, `nylas oauth login` still succeeds, but the exchange is refused and
+the `nylas dashboard` commands stay signed out; use `nylas dashboard login`
+for those.
 
 The CLI resolves every endpoint from the server's
 `/.well-known/oauth-authorization-server` document, and that document is built
