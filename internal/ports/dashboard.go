@@ -37,6 +37,10 @@ type DashboardAccountClient interface {
 	// SSOPoll polls the SSO device flow for completion.
 	SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
 
+	// ExchangeOAuthToken trades an OAuth access token issued to the CLI for a
+	// dashboard session that ends when the access token does.
+	ExchangeOAuthToken(ctx context.Context, accessToken string) (*domain.DashboardOAuthExchangeResponse, error)
+
 	// GetCurrentSession returns the current session info including the active org.
 	GetCurrentSession(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
 

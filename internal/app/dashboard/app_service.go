@@ -13,6 +13,8 @@ import (
 type AppService struct {
 	gateway ports.DashboardGatewayClient
 	secrets ports.SecretStore
+	renewer *SessionRenewer
+	server  string
 }
 
 // NewAppService creates a new application management service.
@@ -23,10 +25,23 @@ func NewAppService(gateway ports.DashboardGatewayClient, secrets ports.SecretSto
 	}
 }
 
+// WithSessionRenewer lets the service keep a session from `nylas oauth login`
+// current. r may be nil.
+func (s *AppService) WithSessionRenewer(r *SessionRenewer) *AppService {
+	s.renewer = r
+	return s
+}
+
+// WithServer ties the stored session to server; see AuthService.WithServer.
+func (s *AppService) WithServer(server string) *AppService {
+	s.server = server
+	return s
+}
+
 // ListApplications retrieves applications from both US and EU regions in parallel.
 // If regionFilter is non-empty, only that region is queried.
 func (s *AppService) ListApplications(ctx context.Context, orgPublicID, regionFilter string) ([]domain.GatewayApplication, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +103,7 @@ func (s *AppService) ListApplications(ctx context.Context, orgPublicID, regionFi
 
 // CreateApplication creates a new application in the specified region.
 func (s *AppService) CreateApplication(ctx context.Context, orgPublicID, region, name string) (*domain.GatewayCreatedApplication, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +113,7 @@ func (s *AppService) CreateApplication(ctx context.Context, orgPublicID, region,
 
 // ListAPIKeys retrieves API keys for an application.
 func (s *AppService) ListAPIKeys(ctx context.Context, appID, region string) ([]domain.GatewayAPIKey, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +123,7 @@ func (s *AppService) ListAPIKeys(ctx context.Context, appID, region string) ([]d
 
 // CreateAPIKey creates a new API key for an application.
 func (s *AppService) CreateAPIKey(ctx context.Context, appID, region, name string, expiresInDays int) (*domain.GatewayCreatedAPIKey, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +154,9 @@ func deduplicateApps(apps []domain.GatewayApplication) []domain.GatewayApplicati
 }
 
 // loadTokens retrieves the stored dashboard tokens.
-func (s *AppService) loadTokens() (userToken, orgToken string, err error) {
-	return loadDashboardTokens(s.secrets)
+func (s *AppService) loadTokens(ctx context.Context) (userToken, orgToken string, err error) {
+	if err := s.renewer.EnsureFresh(ctx); err != nil {
+		return "", "", err
+	}
+	return loadDashboardTokens(s.secrets, s.server)
 }

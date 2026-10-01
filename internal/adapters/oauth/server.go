@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,13 @@ type CallbackServer struct {
 	once      sync.Once
 	mu        sync.RWMutex
 	state     string
+
+	// ipLiteral makes the server advertise http://127.0.0.1:<port>/callback
+	// and bind IPv4 loopback only, so what it listens on is exactly what it
+	// tells the authorization server. The default advertises "localhost",
+	// which Nylas hosted auth has registered and which may resolve to either
+	// loopback family.
+	ipLiteral bool
 }
 
 // NewCallbackServer creates a new callback server.
@@ -35,6 +43,16 @@ func NewCallbackServer(port int) *CallbackServer {
 		codeChan: make(chan string, 1),
 		errChan:  make(chan error, 1),
 	}
+}
+
+// NewLoopbackIPCallbackServer creates a callback server that binds and
+// advertises the IPv4 loopback literal 127.0.0.1 (RFC 8252 section 7.3
+// recommends the literal over "localhost", whose resolution the client does
+// not control).
+func NewLoopbackIPCallbackServer(port int) *CallbackServer {
+	server := NewCallbackServer(port)
+	server.ipLiteral = true
+	return server
 }
 
 // Start starts the callback server.
@@ -59,7 +77,7 @@ func (s *CallbackServer) Start() error {
 	// redirect URI, which can resolve to either IPv4 or IPv6 loopback
 	// depending on host configuration. Listen on both loopback families when
 	// available without accepting LAN traffic.
-	listeners, port, err := listenLoopback(s.port)
+	listeners, port, err := listenLoopback(s.port, !s.ipLiteral)
 	if err != nil {
 		return fmt.Errorf("failed to start callback server: %w", err)
 	}
@@ -74,7 +92,7 @@ func (s *CallbackServer) Start() error {
 	return nil
 }
 
-func listenLoopback(port int) ([]net.Listener, int, error) {
+func listenLoopback(port int, includeIPv6 bool) ([]net.Listener, int, error) {
 	ipv4, err := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return nil, 0, err
@@ -91,6 +109,9 @@ func listenLoopback(port int) ([]net.Listener, int, error) {
 	}
 
 	listeners := []net.Listener{ipv4}
+	if !includeIPv6 {
+		return listeners, actualPort, nil
+	}
 	ipv6, err := net.Listen("tcp6", fmt.Sprintf("[::1]:%d", actualPort))
 	if err != nil {
 		if !isIPv6LoopbackUnavailable(err) {
@@ -130,6 +151,13 @@ func (s *CallbackServer) Stop() error {
 	return nil
 }
 
+// SetExpectedState sets the state a callback must carry to be accepted. Call
+// it before the browser opens the authorization URL, so a fast redirect is
+// never checked against an unset state.
+func (s *CallbackServer) SetExpectedState(state string) {
+	s.setExpectedState(state)
+}
+
 // WaitForCallback waits for the OAuth callback and returns the auth code.
 func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
 	s.setExpectedState(expectedState)
@@ -146,28 +174,33 @@ func (s *CallbackServer) WaitForCallback(ctx context.Context, expectedState stri
 
 // GetRedirectURI returns the redirect URI for OAuth.
 func (s *CallbackServer) GetRedirectURI() string {
+	if s.ipLiteral {
+		return fmt.Sprintf("http://127.0.0.1:%d/callback", s.port)
+	}
 	return fmt.Sprintf("http://localhost:%d/callback", s.port)
 }
 
 func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
+	query := r.URL.Query()
+
+	// State first: only the redirect answering this login's request may end
+	// the wait. Anything else — a stale tab, another page probing the fixed
+	// port — is refused without touching the login in progress.
+	if !s.matchesExpectedState(query.Get("state")) {
+		http.Error(w, "Authentication failed: invalid OAuth state", http.StatusBadRequest)
+		return
+	}
+
+	code := query.Get("code")
 	if code == "" {
-		errMsg := r.URL.Query().Get("error")
-		if errMsg == "" {
-			errMsg = "no authorization code received"
+		errMsg := "no authorization code received"
+		if raw := query.Get("error"); raw != "" {
+			errMsg = sanitizeOAuthErrorCode(raw)
 		}
 		s.once.Do(func() {
 			s.errChan <- fmt.Errorf("%w: %s", domain.ErrAuthFailed, errMsg)
 		})
 		http.Error(w, "Authentication failed: "+errMsg, http.StatusBadRequest)
-		return
-	}
-
-	if !s.matchesExpectedState(r.URL.Query().Get("state")) {
-		s.once.Do(func() {
-			s.errChan <- fmt.Errorf("%w: invalid OAuth state", domain.ErrAuthFailed)
-		})
-		http.Error(w, "Authentication failed: invalid OAuth state", http.StatusBadRequest)
 		return
 	}
 
@@ -184,7 +217,7 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                display: flex; justify-content: center; align-items: center; height: 100vh;
-               margin: 0; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); }
+               margin: 0; background: #f3f4f6; }
         .container { text-align: center; background: white; padding: 3rem; border-radius: 1rem;
                      box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
         h1 { color: #22c55e; margin-bottom: 1rem; }
@@ -216,4 +249,18 @@ func (s *CallbackServer) matchesExpectedState(state string) bool {
 	}
 
 	return subtle.ConstantTimeCompare([]byte(state), []byte(expected)) == 1
+}
+
+// oauthErrorCode is the shape of an RFC 6749 section 4.1.2.1 error code.
+var oauthErrorCode = regexp.MustCompile(`^[a-z_]{1,64}$`)
+
+// sanitizeOAuthErrorCode keeps an error code that looks like one and drops
+// anything else: the value comes from a URL anyone can send to the loopback
+// port, and it ends up in terminal output, where control characters would be
+// interpreted.
+func sanitizeOAuthErrorCode(raw string) string {
+	if oauthErrorCode.MatchString(raw) {
+		return raw
+	}
+	return "unrecognized error"
 }

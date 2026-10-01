@@ -4,70 +4,73 @@ package oauth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/nylas/cli/internal/domain"
 )
 
-func TestIntegration_CallbackServer_InvalidStateFailsImmediately(t *testing.T) {
+// TestIntegration_CallbackServer_InvalidStateIsRefusedAndTheLoginContinues
+// drives the real listener: a request with the wrong state is refused with
+// 400 and does not end the login, and the real redirect after it still does.
+func TestIntegration_CallbackServer_InvalidStateIsRefusedAndTheLoginContinues(t *testing.T) {
 	server := NewCallbackServer(0)
 	if err := server.Start(); err != nil {
 		t.Fatalf("failed to start callback server: %v", err)
 	}
 	defer func() { _ = server.Stop() }()
+	server.SetExpectedState("expected-state")
 
 	port := server.listener.Addr().(*net.TCPAddr).Port
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	resultCh := make(chan error, 1)
+	type result struct {
+		code string
+		err  error
+	}
+	resultCh := make(chan result, 1)
 	go func() {
-		_, err := server.WaitForCallback(ctx, "expected-state")
-		resultCh <- err
+		code, err := server.WaitForCallback(ctx, "expected-state")
+		resultCh <- result{code, err}
 	}()
 
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if server.matchesExpectedState("expected-state") {
-			break
+	get := func(query string) int {
+		t.Helper()
+		url := fmt.Sprintf("http://127.0.0.1:%d/callback?%s", port, query)
+		var resp *http.Response
+		var err error
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if resp, err = http.Get(url); err == nil {
+				break
+			}
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	callbackURL := fmt.Sprintf("http://127.0.0.1:%d/callback?code=test-code-123&state=wrong-state", port)
-	var resp *http.Response
-	var err error
-	requestDeadline := time.Now().Add(time.Second)
-	for time.Now().Before(requestDeadline) {
-		resp, err = http.Get(callbackURL)
-		if err == nil {
-			break
+		if err != nil {
+			t.Fatalf("failed to send callback request: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if err != nil {
-		t.Fatalf("failed to send callback request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		_ = resp.Body.Close()
+		return resp.StatusCode
 	}
 
+	if status := get("code=stolen&state=wrong-state"); status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
 	select {
-	case err := <-resultCh:
-		if !errors.Is(err, domain.ErrAuthFailed) {
-			t.Fatalf("error = %v, want %v", err, domain.ErrAuthFailed)
+	case r := <-resultCh:
+		t.Fatalf("a wrong-state request ended the login: %+v", r)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if status := get("code=real-code&state=expected-state"); status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	select {
+	case r := <-resultCh:
+		if r.err != nil || r.code != "real-code" {
+			t.Fatalf("WaitForCallback() = %q, %v; want real-code, nil", r.code, r.err)
 		}
-		if err == nil || err.Error() == domain.ErrAuthFailed.Error() {
-			t.Fatalf("error = %v, want invalid state details", err)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("WaitForCallback did not fail after invalid state callback")
+	case <-time.After(time.Second):
+		t.Fatal("WaitForCallback did not return after the real redirect")
 	}
 }

@@ -17,6 +17,7 @@ type MockAccountClient struct {
 	LogoutFn                  func(ctx context.Context, userToken, orgToken string) error
 	SSOStartFn                func(ctx context.Context, loginType, mode string, privacyPolicyAccepted bool, email string) (*domain.DashboardSSOStartResponse, error)
 	SSOPollFn                 func(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error)
+	ExchangeOAuthTokenFn      func(ctx context.Context, accessToken string) (*domain.DashboardOAuthExchangeResponse, error)
 	GetCurrentSessionFn       func(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error)
 	SwitchOrgFn               func(ctx context.Context, orgPublicID, userToken, orgToken string) (*domain.DashboardSwitchOrgResponse, error)
 	ListDomainsFn             func(ctx context.Context, limit int, pageToken, userToken, orgToken string) (domain.DashboardInboxDomainPage, error)
@@ -55,6 +56,9 @@ func (m *MockAccountClient) SSOStart(ctx context.Context, loginType, mode string
 }
 func (m *MockAccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error) {
 	return m.SSOPollFn(ctx, flowID, orgPublicID)
+}
+func (m *MockAccountClient) ExchangeOAuthToken(ctx context.Context, accessToken string) (*domain.DashboardOAuthExchangeResponse, error) {
+	return m.ExchangeOAuthTokenFn(ctx, accessToken)
 }
 func (m *MockAccountClient) GetCurrentSession(ctx context.Context, userToken, orgToken string) (*domain.DashboardSessionResponse, error) {
 	if m.GetCurrentSessionFn != nil {

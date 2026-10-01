@@ -34,4 +34,27 @@ const (
 	KeyDashboardDPoPKey      = "dashboard_dpop_key"
 	KeyDashboardAppID        = "dashboard_app_id"
 	KeyDashboardAppRegion    = "dashboard_app_region"
+	// Set when the dashboard session was exchanged from an OAuth access
+	// token. Such a session cannot be refreshed, only exchanged again before
+	// KeyDashboardSessionExpiresAt (RFC 3339).
+	KeyDashboardSessionOrigin    = "dashboard_session_origin"
+	KeyDashboardSessionExpiresAt = "dashboard_session_expires_at"
+	// KeyDashboardSessionServer records the servers a dashboard session was
+	// issued for (the account URL and both gateways), so its tokens are never
+	// sent to a server that did not issue them.
+	KeyDashboardSessionServer = "dashboard_session_server"
+
+	// OAuth authorization server keys. KeyOAuthIssuer records which server
+	// issued the stored tokens. The client id is not stored: the CLI is a
+	// static public client (domain.DefaultOAuthClientID).
+	KeyOAuthIssuer = "oauth_issuer"
+	// KeyOAuthServerURL is the authorization server URL the session was
+	// obtained through; its tokens are only ever sent back there.
+	KeyOAuthServerURL    = "oauth_server_url"
+	KeyOAuthResource     = "oauth_resource"
+	KeyOAuthAccessToken  = "oauth_access_token"
+	KeyOAuthRefreshToken = "oauth_refresh_token"
+	KeyOAuthIDToken      = "oauth_id_token"
+	KeyOAuthExpiresAt    = "oauth_expires_at"
+	KeyOAuthScope        = "oauth_scope"
 )

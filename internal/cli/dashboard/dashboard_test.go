@@ -251,7 +251,7 @@ func TestGetDashboardAccountBaseURL(t *testing.T) {
 	}()
 
 	require.NoError(t, os.Setenv("NYLAS_DASHBOARD_ACCOUNT_URL", "https://dashboard.example.com"))
-	assert.Equal(t, "https://dashboard.example.com", getDashboardAccountBaseURL(nil))
+	assert.Equal(t, "https://dashboard.example.com", AccountBaseURL())
 }
 
 func TestMapProvider(t *testing.T) {

@@ -2,9 +2,13 @@
 package keyring
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
@@ -21,9 +25,52 @@ func NewSystemKeyring() *SystemKeyring {
 	return &SystemKeyring{}
 }
 
+// Keychains cap the size of one item: Windows Credential Manager at 2560
+// bytes, and the macOS `security` command at 4096 for the whole command line.
+// A token can outgrow that, so a value longer than keychainChunkSize is split
+// across several items and the key holds a header naming them.
+const (
+	keychainChunkSize   = 2000
+	keychainChunkPrefix = "nylas:chunked:v1:"
+	keychainMaxChunks   = 64
+)
+
 // Set stores a secret value for the given key.
+//
+// A long value's chunks are written under a fresh generation id before the
+// header that points at them, so a reader never pairs a header with chunks
+// from another write. The previous generation is removed afterwards.
 func (k *SystemKeyring) Set(key, value string) error {
-	return keyring.Set(serviceName, key, value)
+	previous, _ := keyring.Get(serviceName, key)
+
+	if len(value) <= keychainChunkSize && !strings.HasPrefix(value, keychainChunkPrefix) {
+		if err := keyring.Set(serviceName, key, value); err != nil {
+			return err
+		}
+		deleteChunks(key, previous)
+		return nil
+	}
+
+	parts := splitChunks(value)
+	if len(parts) > keychainMaxChunks {
+		return fmt.Errorf("secret %s is too large for the system keyring (%d bytes)", key, len(value))
+	}
+	gen, err := newChunkGeneration()
+	if err != nil {
+		return err
+	}
+	for i, part := range parts {
+		if err := keyring.Set(serviceName, chunkKey(key, gen, i), part); err != nil {
+			deleteChunks(key, chunkHeader(gen, i))
+			return err
+		}
+	}
+	if err := keyring.Set(serviceName, key, chunkHeader(gen, len(parts))); err != nil {
+		deleteChunks(key, chunkHeader(gen, len(parts)))
+		return err
+	}
+	deleteChunks(key, previous)
+	return nil
 }
 
 // Get retrieves a secret value for the given key.
@@ -32,16 +79,91 @@ func (k *SystemKeyring) Get(key string) (string, error) {
 	if errors.Is(err, keyring.ErrNotFound) {
 		return "", domain.ErrSecretNotFound
 	}
-	return value, err
+	if err != nil {
+		return "", err
+	}
+	gen, n, ok := parseChunkHeader(value)
+	if !ok {
+		return value, nil
+	}
+	var b strings.Builder
+	for i := range n {
+		part, err := keyring.Get(serviceName, chunkKey(key, gen, i))
+		if err != nil {
+			// Another process replaced the value between the two reads, or a
+			// chunk was removed by hand. Either way this copy is unusable.
+			return "", fmt.Errorf("secret %s is incomplete in the system keyring: %w", key, err)
+		}
+		b.WriteString(part)
+	}
+	return b.String(), nil
 }
 
 // Delete removes a secret for the given key.
 func (k *SystemKeyring) Delete(key string) error {
+	previous, _ := keyring.Get(serviceName, key)
 	err := keyring.Delete(serviceName, key)
-	if err == keyring.ErrNotFound {
-		return nil // Already deleted
+	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		return err
 	}
-	return err
+	deleteChunks(key, previous)
+	return nil
+}
+
+func splitChunks(value string) []string {
+	var parts []string
+	for len(value) > keychainChunkSize {
+		parts = append(parts, value[:keychainChunkSize])
+		value = value[keychainChunkSize:]
+	}
+	return append(parts, value)
+}
+
+func newChunkGeneration() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate a keyring chunk id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func chunkKey(key, gen string, i int) string {
+	return fmt.Sprintf("%s.chunk.%s.%d", key, gen, i)
+}
+
+func chunkHeader(gen string, n int) string {
+	return fmt.Sprintf("%s%s:%d", keychainChunkPrefix, gen, n)
+}
+
+func parseChunkHeader(value string) (gen string, n int, ok bool) {
+	rest, found := strings.CutPrefix(value, keychainChunkPrefix)
+	if !found {
+		return "", 0, false
+	}
+	gen, count, found := strings.Cut(rest, ":")
+	if !found || len(gen) != 16 {
+		return "", 0, false
+	}
+	if _, err := hex.DecodeString(gen); err != nil {
+		return "", 0, false
+	}
+	n, err := strconv.Atoi(count)
+	if err != nil || n < 1 || n > keychainMaxChunks {
+		return "", 0, false
+	}
+	return gen, n, true
+}
+
+// deleteChunks removes the chunks a header points at, best effort: a leftover
+// chunk is unreachable once no header names it.
+func deleteChunks(key, header string) {
+	gen, n, ok := parseChunkHeader(header)
+	if !ok {
+		return
+	}
+	for i := range n {
+		_ = keyring.Delete(serviceName, chunkKey(key, gen, i))
+	}
 }
 
 // IsAvailable checks if the system keychain is available.

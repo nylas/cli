@@ -23,6 +23,7 @@ internal/
     mcp/                      # MCP proxy server
     utilities/                # Timezone, scheduling, contacts services
     oauth/                    # OAuth callback server
+    filelock/                 # Cross-process file lock (OAuth refresh)
     browser/                  # Browser automation
     tunnel/                   # Cloudflare tunnel
     webhookserver/            # Webhook server
@@ -186,6 +187,7 @@ url := qb.BuildURL(baseURL)
    | `mcp/` | MCP proxy server for AI assistants |
    | `config/` | Configuration validation |
    | `oauth/` | OAuth callback server |
+   | `filelock/` | Cross-process advisory file lock (flock / LockFileEx) serialising OAuth token refresh |
    | `utilities/` | Services (contacts, email, scheduling, timezone, webhook) |
    | `browser/` | Browser automation |
    | `tunnel/` | Cloudflare tunnel |

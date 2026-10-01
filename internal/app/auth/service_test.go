@@ -281,6 +281,7 @@ type mockOAuthServer struct {
 	redirectURI   string
 	code          string
 	expectedState string
+	setState      string
 	startErr      error
 	waitErr       error
 	startCalled   bool
@@ -301,6 +302,10 @@ func (m *mockOAuthServer) GetRedirectURI() string {
 	return m.redirectURI
 }
 
+func (m *mockOAuthServer) SetExpectedState(state string) {
+	m.setState = state
+}
+
 func (m *mockOAuthServer) WaitForCallback(ctx context.Context, expectedState string) (string, error) {
 	m.expectedState = expectedState
 	if m.waitErr != nil {
@@ -313,10 +318,14 @@ func (m *mockOAuthServer) WaitForCallback(ctx context.Context, expectedState str
 type mockBrowser struct {
 	openedURL string
 	openErr   error
+	onOpen    func()
 }
 
 func (m *mockBrowser) Open(url string) error {
 	m.openedURL = url
+	if m.onOpen != nil {
+		m.onOpen()
+	}
 	return m.openErr
 }
 
@@ -363,7 +372,8 @@ func TestService_Login(t *testing.T) {
 			redirectURI: "http://localhost:8080/callback",
 			code:        "auth-code-123",
 		}
-		browser := &mockBrowser{}
+		var stateWhenBrowserOpened string
+		browser := &mockBrowser{onOpen: func() { stateWhenBrowserOpened = server.setState }}
 
 		svc := NewService(client, grantStore, configStore, server, browser)
 
@@ -377,6 +387,9 @@ func TestService_Login(t *testing.T) {
 		// Verify server was started and stopped
 		assert.True(t, server.startCalled)
 		assert.True(t, server.stopCalled)
+
+		assert.Equal(t, capturedState, stateWhenBrowserOpened,
+			"a fast redirect must be checked against this login's state, not an unset one")
 
 		// Verify browser and callback state/PKCE values were wired through.
 		assert.Equal(t, "https://mock.nylas.com/auth?state="+capturedState, browser.openedURL)

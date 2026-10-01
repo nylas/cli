@@ -15,6 +15,8 @@ import (
 type AuthService struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
+	renewer *SessionRenewer
+	server  string
 }
 
 var (
@@ -49,6 +51,21 @@ func NewAuthService(account ports.DashboardAccountClient, secrets ports.SecretSt
 		account: account,
 		secrets: secrets,
 	}
+}
+
+// WithSessionRenewer lets the service keep a session from `nylas oauth login`
+// current. r may be nil.
+func (s *AuthService) WithSessionRenewer(r *SessionRenewer) *AuthService {
+	s.renewer = r
+	return s
+}
+
+// WithServer ties the stored session to server, the identity of the servers
+// its tokens are sent to (see domain.DashboardSessionServer). A session stored
+// for other servers is refused rather than sent. Empty skips the check.
+func (s *AuthService) WithServer(server string) *AuthService {
+	s.server = server
+	return s
 }
 
 // Register creates a new dashboard account and triggers email verification.
@@ -107,7 +124,7 @@ func (s *AuthService) CompleteMFA(ctx context.Context, userPublicID, code, orgPu
 
 // Refresh refreshes the session tokens using the stored tokens.
 func (s *AuthService) Refresh(ctx context.Context) error {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
 	if err != nil {
 		return err
 	}
@@ -118,7 +135,16 @@ func (s *AuthService) Refresh(ctx context.Context) error {
 
 // Logout invalidates the session and clears local tokens.
 func (s *AuthService) Logout(ctx context.Context) error {
-	userToken, orgToken, _ := s.loadTokens()
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
+
+	// A session for other servers is cleared but not revoked: sending its
+	// tokens here would hand them to a server that never issued them.
+	if errors.Is(err, domain.ErrDashboardServerMismatch) {
+		if clearErr := s.clearTokens(); clearErr != nil {
+			return clearErr
+		}
+		return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+	}
 
 	// Best effort: call the server to invalidate tokens
 	if userToken != "" {
@@ -151,6 +177,13 @@ func (s *AuthService) SSOPoll(ctx context.Context, flowID, orgPublicID string) (
 	return resp, nil
 }
 
+// IsOAuthSession reports whether the stored session was exchanged from
+// `nylas oauth login`. Such a session is bound to the organization chosen at
+// sign-in, so switching organization means signing in again.
+func (s *AuthService) IsOAuthSession() bool {
+	return isOAuthSession(s.secrets)
+}
+
 // IsLoggedIn returns true if dashboard tokens exist in the keyring.
 func (s *AuthService) IsLoggedIn() bool {
 	token, err := s.secrets.Get(ports.KeyDashboardUserToken)
@@ -179,7 +212,7 @@ func (s *AuthService) GetStatus() Status {
 
 // GetCurrentSession returns the current session info, including the active org and all orgs.
 func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardSessionResponse, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +232,7 @@ func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardS
 
 // SwitchOrg switches the active organization and stores the new org token.
 func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domain.DashboardSwitchOrgResponse, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -255,13 +288,16 @@ func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
 		orgPublicID = resp.Organizations[0].PublicID
 	}
 
-	return s.replaceSecretValues(dashboardSessionStateKeys, map[string]*string{
-		ports.KeyDashboardUserToken:    stringPtrOrNil(resp.UserToken),
-		ports.KeyDashboardOrgToken:     stringPtrOrNil(resp.OrgToken),
-		ports.KeyDashboardUserPublicID: stringPtrOrNil(resp.User.PublicID),
-		ports.KeyDashboardOrgPublicID:  stringPtrOrNil(orgPublicID),
-		ports.KeyDashboardAppID:        nil,
-		ports.KeyDashboardAppRegion:    nil,
+	return s.replaceSecretValues(oauthSessionStateKeys, map[string]*string{
+		ports.KeyDashboardUserToken:        stringPtrOrNil(resp.UserToken),
+		ports.KeyDashboardOrgToken:         stringPtrOrNil(resp.OrgToken),
+		ports.KeyDashboardUserPublicID:     stringPtrOrNil(resp.User.PublicID),
+		ports.KeyDashboardOrgPublicID:      stringPtrOrNil(orgPublicID),
+		ports.KeyDashboardAppID:            nil,
+		ports.KeyDashboardAppRegion:        nil,
+		ports.KeyDashboardSessionOrigin:    nil,
+		ports.KeyDashboardSessionExpiresAt: nil,
+		ports.KeyDashboardSessionServer:    stringPtrOrNil(s.server),
 	})
 }
 
@@ -274,7 +310,7 @@ func (s *AuthService) SetActiveOrg(orgPublicID string) error {
 // including the active app selection to prevent stale state after re-login.
 func (s *AuthService) clearTokens() error {
 	var errs []error
-	for _, key := range dashboardSessionStateKeys {
+	for _, key := range oauthSessionStateKeys {
 		if err := s.secrets.Delete(key); err != nil {
 			errs = append(errs, fmt.Errorf("failed to clear %s: %w", key, err))
 		}
@@ -282,12 +318,24 @@ func (s *AuthService) clearTokens() error {
 	return errors.Join(errs...)
 }
 
-// loadTokens retrieves the stored tokens.
-func (s *AuthService) loadTokens() (userToken, orgToken string, err error) {
-	return loadDashboardTokens(s.secrets)
+// loadTokens retrieves the stored tokens, renewing a session from OAuth first.
+func (s *AuthService) loadTokens(ctx context.Context) (userToken, orgToken string, err error) {
+	if err := s.renewer.EnsureFresh(ctx); err != nil {
+		return "", "", err
+	}
+	return loadDashboardTokens(s.secrets, s.server)
 }
 
 func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken string) (string, string, error) {
+	// The server refuses to refresh a session exchanged from OAuth; exchange
+	// a fresh access token for a new one instead.
+	if isOAuthSession(s.secrets) {
+		if s.renewer == nil {
+			return "", "", errOAuthSessionNotRefreshable
+		}
+		return s.renewer.renewRejected(ctx, userToken)
+	}
+
 	resp, err := s.account.Refresh(ctx, userToken, orgToken)
 	if err != nil {
 		return "", "", err

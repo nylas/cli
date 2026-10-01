@@ -20,6 +20,7 @@ func newInstallCmd() *cobra.Command {
 		assistantID string
 		binaryPath  string
 		installAll  bool
+		authMode    string
 	)
 
 	cmd := &cobra.Command{
@@ -35,7 +36,19 @@ Supported assistants:
   - claude-code     Claude Code (~/.claude.json)
   - cursor          Cursor IDE
   - windsurf        Windsurf IDE
-  - vscode          VS Code (project-level .vscode/mcp.json)`,
+  - vscode          VS Code (project-level .vscode/mcp.json)
+
+Every assistant is configured to launch 'nylas mcp serve' over STDIO. No
+credential is written to any assistant config: with --auth api-key (default)
+serve reads the API key from the keyring, and with --auth oauth it uses the
+session from 'nylas oauth login --for mcp'.
+
+Connecting an assistant straight to the hosted server
+(https://mcp.us.nylas.com or https://mcp.eu.nylas.com) and letting it run
+OAuth itself is not configured here yet: which of these assistants support
+remote MCP servers with OAuth, and in what config format, is not something
+this command can verify. The local proxy is the compatibility path for all
+of them.`,
 		Example: `  # Interactive mode - prompts for assistant selection
   nylas mcp install
 
@@ -46,20 +59,45 @@ Supported assistants:
   nylas mcp install --all
 
   # Specify custom binary path
-  nylas mcp install --assistant cursor --binary /usr/local/bin/nylas`,
+  nylas mcp install --assistant cursor --binary /usr/local/bin/nylas
+
+  # Configure the proxy to authenticate with an OAuth session
+  nylas oauth login --for mcp
+  nylas mcp install --assistant claude-code --auth oauth`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInstall(assistantID, binaryPath, installAll)
+			serveArgs, err := serveArgsFor(authMode)
+			if err != nil {
+				return err
+			}
+			return runInstall(assistantID, binaryPath, installAll, serveArgs)
 		},
 	}
 
 	cmd.Flags().StringVarP(&assistantID, "assistant", "a", "", "Target assistant (claude-desktop, cursor, windsurf, vscode, claude-code)")
 	cmd.Flags().StringVarP(&binaryPath, "binary", "b", "", "Path to nylas binary (default: auto-detect)")
 	cmd.Flags().BoolVar(&installAll, "all", false, "Install for all detected assistants")
+	cmd.Flags().StringVar(&authMode, "auth", authAPIKey, "credential 'nylas mcp serve' authenticates with: api-key or oauth")
 
 	return cmd
 }
 
-func runInstall(assistantID, binaryPath string, installAll bool) error {
+// serveArgsFor is the argument list written into an assistant config. The
+// default stays byte-for-byte what earlier releases wrote.
+func serveArgsFor(authMode string) ([]string, error) {
+	switch authMode {
+	case "", authAPIKey:
+		return []string{"mcp", "serve"}, nil
+	case authOAuth:
+		return []string{"mcp", "serve", "--auth", authOAuth}, nil
+	default:
+		return nil, common.NewUserError(
+			fmt.Sprintf("unknown --auth value %q", authMode),
+			"supported: api-key, oauth",
+		)
+	}
+}
+
+func runInstall(assistantID, binaryPath string, installAll bool, serveArgs []string) error {
 	// Detect binary path if not provided
 	if binaryPath == "" {
 		var err error
@@ -114,7 +152,7 @@ func runInstall(assistantID, binaryPath string, installAll bool) error {
 			continue
 		}
 
-		err := installForAssistant(a, binaryPath)
+		err := installServer(a, binaryPath, serveArgs)
 		if err != nil {
 			_, _ = common.Yellow.Printf("  ! %s: %v\n", a.Name, err)
 			continue
@@ -178,6 +216,11 @@ func selectAssistant() (*Assistant, error) {
 }
 
 func installForAssistant(a Assistant, binaryPath string) error {
+	return installServer(a, binaryPath, []string{"mcp", "serve"})
+}
+
+// installServer writes the `nylas mcp serve` launcher into a's config.
+func installServer(a Assistant, binaryPath string, serveArgs []string) error {
 	configPath := a.GetConfigPath()
 
 	// Ensure parent directory exists
@@ -194,7 +237,7 @@ func installForAssistant(a Assistant, binaryPath string) error {
 
 	setAssistantServer(config, a, nylasServerName, map[string]any{
 		"command": binaryPath,
-		"args":    []string{"mcp", "serve"},
+		"args":    serveArgs,
 	})
 
 	// Write config

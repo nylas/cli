@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
 func TestProxy_forward(t *testing.T) {
 	t.Parallel()
+	var sawSessionID atomic.Bool
 
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -20,6 +22,9 @@ func TestProxy_forward(t *testing.T) {
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("Mcp-Session-Id") != "" {
+			sawSessionID.Store(true)
 		}
 
 		// Return a response
@@ -49,9 +54,13 @@ func TestProxy_forward(t *testing.T) {
 		t.Errorf("expected jsonrpc '2.0', got '%v'", resp["jsonrpc"])
 	}
 
-	// Verify session ID was stored
-	if proxy.sessionID != "test-session-123" {
-		t.Errorf("expected sessionID 'test-session-123', got '%s'", proxy.sessionID)
+	// The hosted server is stateless: a session id it sends is not kept,
+	// so there is nothing to echo on the next request.
+	if _, err := proxy.forward(t.Context(), request, nil); err != nil {
+		t.Fatalf("second forward failed: %v", err)
+	}
+	if sawSessionID.Load() {
+		t.Error("the proxy must not send Mcp-Session-Id to the stateless server")
 	}
 }
 

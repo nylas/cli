@@ -113,6 +113,112 @@ nylas auth migrate               # Migrate from v2 to v3
 
 ---
 
+## OAuth (Authorization Server)
+
+Log in to the Nylas OAuth 2.1 / OIDC authorization server. This authenticates
+**you**, the person running the CLI, and is distinct from `nylas auth` (which
+connects an end user's mailbox as a provider grant).
+
+It also signs in the `nylas dashboard` commands, so `nylas dashboard login` is
+not needed after it. That dashboard session is for the organization you chose
+on the consent screen, lasts as long as the access token, and is renewed
+automatically from the OAuth session. `nylas oauth logout` ends it too.
+To change organization, run `nylas dashboard orgs switch`: it opens the
+browser to sign in again, and you choose the organization there.
+
+Without an account you can sign up on the page that opens. `--region` (or the
+configured region) decides where the new organization is created; without
+either it is created in the US.
+
+```bash
+nylas oauth login                # Log in via the browser (authorization code + PKCE)
+nylas oauth login --scope openid,email
+nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
+nylas oauth login --region eu    # Sign up with a new organization in the EU
+nylas oauth status               # Show the stored session and decoded token claims
+nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
+nylas oauth token                # Print a valid access token, refreshing if needed
+nylas oauth logout               # Revoke the session and clear stored tokens
+```
+
+The CLI is a static public client (client id
+`b3a94d82-fc7d-4a22-803e-e603ae0f735c`, no client secret — PKCE protects the
+exchange). The browser redirects to `http://127.0.0.1:<port>/callback`, the
+address the callback server binds. Tokens are stored in the system keyring;
+a value too large for one keychain item (Windows allows 2560 bytes) is split
+across several. The ID token is not stored: the CLI neither verifies nor uses
+it.
+
+Every CLI process on the machine shares the one stored session. Refreshing is
+serialised by a lock file, `oauth-session.lock`: in `~/.config/nylas` of your
+account when the session is in the system keyring (whatever `XDG_CONFIG_HOME`
+says, since the keyring does not follow it either), and beside the encrypted
+secrets file when the file store is used:
+the server rotates the refresh token on every use and revokes the whole family
+if a consumed one is replayed, so two `nylas mcp serve` processes refreshing at
+once would otherwise sign you out. A process that waited on the lock uses the
+tokens the other one stored instead of refreshing again. A refresh that has
+started runs to completion even if the command is interrupted, because the
+server has already rotated the token it was sent.
+
+`nylas oauth status` decodes the access token and shows its audience, grants,
+scopes and expiry. The claims are **decoded, not verified** — the CLI does not
+check the signature; only the resource server's answer is authoritative.
+
+Default scopes are `openid`, `email`, `offline_access` and `dashboard.session`.
+`offline_access` is what makes the server issue a refresh token; without it the
+session ends when the access token expires (15 minutes by default).
+`dashboard.session` is what lets the CLI sign the `nylas dashboard` commands in:
+the consent screen shows it as *Use the Nylas Dashboard as you, with your full
+role in this organization*. The server accepts it only from the CLI's built-in
+client and does not list it in its discovery document, so the CLI always sends
+it rather than dropping it as not offered. A login made with `--scope` and
+without `dashboard.session` works, but leaves the dashboard commands signed out.
+
+After login, the CLI also signs the `nylas dashboard` commands in by exchanging
+the access token for a dashboard session. The exchange requires the token to
+carry `dashboard.session`; for a login that was not granted it, the CLI says so
+and asks you to run `nylas oauth login` again. `nylas dashboard orgs switch`
+adds `dashboard.session` when it signs in again. If a session from
+`nylas dashboard login` is already stored for the configured server, it is kept
+(its organization and app selection are unchanged); run `nylas dashboard logout`
+first to use the OAuth login for the dashboard commands instead.
+
+Use the access token with any OAuth-protected endpoint:
+
+```bash
+curl -H "Authorization: Bearer $(nylas oauth token)" https://example/resource
+```
+
+### Pointing at a local authorization server
+
+The authorization server is hosted by `dashboard-account`, so it uses the same
+base URL as the `nylas dashboard` commands:
+
+```bash
+NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
+```
+
+If that server registers the CLI under a different client id, override it with
+`NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
+redirect URI).
+
+The dashboard session exchange only accepts tokens from dashboard-account's
+built-in first-party clients (the Nylas CLI and Nylas Mail), and only that
+client may request `dashboard.session`. With any other client id the CLI leaves
+`dashboard.session` out of the request (the server would refuse the whole
+request otherwise), so `nylas oauth login` still succeeds, but the `nylas
+dashboard` commands stay signed out; use `nylas dashboard login` for those.
+
+The CLI resolves every endpoint from the server's
+`/.well-known/oauth-authorization-server` document, and that document is built
+from the server's `OAUTH_ISSUER`. If `OAUTH_ISSUER` names a host the CLI cannot
+reach (for example a Cloudflare tunnel that is no longer running), login fails
+even though the local port responds — set `OAUTH_ISSUER` to the address you
+actually browse to.
+
+---
+
 ## Dashboard
 
 Manage your Nylas Dashboard account, applications, domains, and API keys directly from the CLI.
@@ -133,6 +239,14 @@ nylas dashboard logout               # Log out
 nylas dashboard status               # Show current auth status
 nylas dashboard refresh              # Refresh session tokens
 ```
+
+A dashboard session is tied to the servers it was issued for: the account URL
+and both gateway URLs (`NYLAS_DASHBOARD_ACCOUNT_URL`,
+`NYLAS_DASHBOARD_GATEWAY_URL`, `NYLAS_DASHBOARD_GATEWAY_US_URL`,
+`NYLAS_DASHBOARD_GATEWAY_EU_URL`, or the config file). If any of them changes,
+the stored session is refused rather than sent to a server that did not issue
+it; log in again, or restore the settings. `nylas dashboard logout` then clears
+it locally without contacting the new server.
 
 ### SSO (Direct)
 
@@ -584,6 +698,7 @@ nylas mcp install --all                    # Install for all detected assistants
 nylas mcp status                           # Check installation status
 nylas mcp uninstall --assistant cursor     # Remove configuration
 nylas mcp serve                            # Start MCP server (used by assistants)
+nylas mcp serve --auth oauth               # ...authenticating with `nylas oauth login --for mcp`
 ```
 
 **Supported assistants:**
