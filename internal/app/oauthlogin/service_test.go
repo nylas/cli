@@ -486,9 +486,26 @@ func TestRelogin_RepeatsTheStoredScopesAndResource(t *testing.T) {
 
 	require.Len(t, f.client.AuthorizationCalls, 2)
 	again := f.client.AuthorizationCalls[1]
-	assert.Equal(t, []string{"openid", "email.read", "offline_access"}, again.Scopes)
+	// A session from before dashboard.session existed gains it, because the
+	// command that relogs in (switch-org) is a dashboard command.
+	assert.Equal(t, []string{"openid", "email.read", "offline_access", "dashboard.session"}, again.Scopes)
 	assert.Equal(t, resource, again.Resource)
 	assert.Equal(t, resource, result.Resource)
+}
+
+func TestRelogin_DoesNotRepeatDashboardSession(t *testing.T) {
+	f := newFixture(t)
+	f.client.ExchangeCodeFunc = func(context.Context, domain.OAuthCodeExchange) (*domain.OAuthTokens, error) {
+		return &domain.OAuthTokens{AccessToken: "at", RefreshToken: "rt", Scope: "openid offline_access dashboard.session", ExpiresAt: f.clock.Add(time.Hour)}, nil
+	}
+	_, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	_, err = f.service.Relogin(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, f.client.AuthorizationCalls, 2)
+	assert.Equal(t, []string{"openid", "offline_access", "dashboard.session"}, f.client.AuthorizationCalls[1].Scopes)
 }
 
 func TestLogin_AFailedWriteDuringAServerSwitchDoesNotLeaveTheOldTokensUsable(t *testing.T) {
@@ -538,4 +555,30 @@ func TestAccessTokenValidFor_RefreshesATokenWithTooLittleLifeLeft(t *testing.T) 
 	require.NoError(t, err)
 	assert.NotEqual(t, "short", token)
 	assert.Equal(t, []string{"rt"}, f.client.RefreshCalls)
+}
+
+func TestLogin_AClientIDOverrideDoesNotRequestDashboardSession(t *testing.T) {
+	// The server refuses dashboard.session from any client but the built-in
+	// CLI, and would fail the whole request; the override leaves it out.
+	f := newFixture(t)
+	f.service = NewService("11111111-2222-3333-4444-555555555555", f.client, f.server, f.browser, f.secrets, f.lock)
+	f.service.now = func() time.Time { return f.clock }
+
+	result, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, f.client.AuthorizationCalls, 1)
+	assert.Equal(t, []string{"openid", "email", "offline_access"}, f.client.AuthorizationCalls[0].Scopes)
+	assert.Equal(t, []string{"dashboard.session"}, result.DroppedScopes)
+}
+
+func TestLogin_TheBuiltInClientRequestsDashboardSession(t *testing.T) {
+	f := newFixture(t)
+
+	result, err := f.service.Login(context.Background(), LoginOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, f.client.AuthorizationCalls, 1)
+	assert.Contains(t, f.client.AuthorizationCalls[0].Scopes, "dashboard.session")
+	assert.Empty(t, result.DroppedScopes)
 }

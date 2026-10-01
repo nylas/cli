@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -150,6 +151,13 @@ func (r *SessionRenewer) exchange(ctx context.Context, resetAppSelection bool) (
 	accessToken, err := r.tokens.AccessTokenValidFor(ctx, oauthSessionRenewBefore)
 	if err != nil {
 		return nil, err
+	}
+	// The server refuses a token without dashboard.session with a bare
+	// INVALID_TOKEN. Reading the unverified claim here only turns that into
+	// an actionable message; the server still decides.
+	if claims, err := domain.DecodeOAuthAccessToken(accessToken); err == nil &&
+		!slices.Contains(claims.Scopes(), domain.OAuthScopeDashboardSession) {
+		return nil, fmt.Errorf("%w: run `nylas oauth login` again and allow dashboard access", domain.ErrDashboardSessionNotConsented)
 	}
 	resp, err := r.account.ExchangeOAuthToken(ctx, accessToken)
 	if err != nil {

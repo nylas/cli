@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -79,6 +81,36 @@ func TestSessionRenewer_LoginStoresTheSessionAndResetsTheAppSelection(t *testing
 	assert.Equal(t, sessionOriginOAuth, secrets.data[ports.KeyDashboardSessionOrigin])
 	assert.NotEmpty(t, secrets.data[ports.KeyDashboardSessionExpiresAt])
 	assert.NotContains(t, secrets.data, ports.KeyDashboardAppID)
+}
+
+// unsignedAccessToken is a JWT-shaped token carrying scope. The renewer only
+// reads the claim; the server is what verifies a token.
+func unsignedAccessToken(scope string) string {
+	enc := base64.RawURLEncoding.EncodeToString
+	payload := `{"sub":"usr_1","org":"org_1","aud":"https://mcp.us.nylas.com","exp":4102444800,"scope":"` + scope + `"}`
+	return enc([]byte(`{"alg":"EdDSA","typ":"at+jwt"}`)) + "." + enc([]byte(payload)) + ".sig"
+}
+
+func TestSessionRenewer_ExchangesATokenGrantedADashboardSession(t *testing.T) {
+	var exchangedWith string
+	token := unsignedAccessToken("openid offline_access dashboard.session")
+
+	_, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), newMemSecretStore(), &fakeOAuthTokens{token: token}, newTestLock(t)).Login(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, token, exchangedWith)
+}
+
+func TestSessionRenewer_RefusesATokenNotGrantedADashboardSessionWithoutAskingTheServer(t *testing.T) {
+	var exchangedWith string
+	secrets := newMemSecretStore()
+	token := unsignedAccessToken("openid offline_access")
+
+	_, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, &fakeOAuthTokens{token: token}, newTestLock(t)).Login(context.Background())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrDashboardSessionNotConsented))
+	assert.Contains(t, err.Error(), "nylas oauth login")
+	assert.Empty(t, exchangedWith, "the server was not asked")
+	assert.Empty(t, secrets.data[ports.KeyDashboardUserToken])
 }
 
 func TestSessionRenewer_EnsureFreshLeavesADashboardLoginSessionAlone(t *testing.T) {

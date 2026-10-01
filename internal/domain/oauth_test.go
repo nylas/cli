@@ -160,6 +160,28 @@ func TestDefaultOAuthScopes_RequestsOfflineAccess(t *testing.T) {
 	assert.Contains(t, DefaultOAuthScopes(), OAuthScopeOfflineAccess)
 }
 
+func TestDefaultOAuthScopes_RequestsADashboardSession(t *testing.T) {
+	// The exchange that signs the dashboard commands in requires it.
+	assert.Contains(t, DefaultOAuthScopes(), OAuthScopeDashboardSession)
+	assert.Contains(t, MCPOAuthScopes(), OAuthScopeDashboardSession)
+}
+
+func TestIsFirstPartyOAuthScope(t *testing.T) {
+	assert.True(t, IsFirstPartyOAuthScope("dashboard.session"))
+	for _, scope := range []string{"openid", "offline_access", "email.read", "dashboard.sessions", "Dashboard.Session", ""} {
+		assert.False(t, IsFirstPartyOAuthScope(scope), scope)
+	}
+}
+
+func TestWithDashboardSessionScope(t *testing.T) {
+	scopes := []string{"openid", "offline_access"}
+	assert.Equal(t, []string{"openid", "offline_access", "dashboard.session"}, WithDashboardSessionScope(scopes))
+	assert.Equal(t, []string{"openid", "offline_access"}, scopes, "the caller's slice is not modified")
+
+	already := []string{"dashboard.session", "openid"}
+	assert.Equal(t, already, WithDashboardSessionScope(already))
+}
+
 func metadataOn(issuer string) *OAuthServerMetadata {
 	return &OAuthServerMetadata{
 		Issuer:                issuer,

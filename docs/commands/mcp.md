@@ -93,7 +93,9 @@ nylas oauth login --for mcp
 
 `--for mcp` requests the data scopes the MCP tools use (`email.read`,
 `email.send`, `calendar.read`, `calendar.write`, `contacts.read`,
-`notetaker.read`, `grants.read`) plus `offline_access`, and sends the MCP server
+`notetaker.read`, `grants.read`) plus `offline_access` and `dashboard.session`
+(which signs the `nylas dashboard` commands in too; the MCP server ignores it),
+and sends the MCP server
 of your configured region as the RFC 8707 `resource`, so the token is issued
 for that server only. Scopes the authorization server does not offer are left
 out and listed.

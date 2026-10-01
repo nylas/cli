@@ -63,10 +63,13 @@ var (
 	// Dashboard auth errors
 	ErrDashboardNotLoggedIn    = errors.New("not logged in to Nylas Dashboard")
 	ErrDashboardSessionExpired = errors.New("dashboard session expired")
-	ErrDashboardLoginFailed    = errors.New("dashboard login failed")
-	ErrDashboardMFARequired    = errors.New("MFA required")
-	ErrDashboardSSOFailed      = errors.New("SSO authentication failed")
-	ErrDashboardDPoP           = errors.New("DPoP proof generation failed")
+	// ErrDashboardSessionNotConsented: the stored OAuth session was not
+	// granted dashboard.session, so the server will not exchange it.
+	ErrDashboardSessionNotConsented = errors.New("this OAuth login was not granted dashboard access")
+	ErrDashboardLoginFailed         = errors.New("dashboard login failed")
+	ErrDashboardMFARequired         = errors.New("MFA required")
+	ErrDashboardSSOFailed           = errors.New("SSO authentication failed")
+	ErrDashboardDPoP                = errors.New("DPoP proof generation failed")
 	// ErrDashboardServerMismatch: the stored dashboard session was issued for
 	// other servers than the ones the CLI is now configured for.
 	ErrDashboardServerMismatch = errors.New("the stored dashboard session belongs to a different server")

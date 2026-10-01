@@ -125,7 +125,7 @@ func TestClient_AuthorizationURL(t *testing.T) {
 	assert.Equal(t, "code", query.Get("response_type"))
 	assert.Equal(t, "client-123", query.Get("client_id"))
 	assert.Equal(t, "http://localhost:9007/callback", query.Get("redirect_uri"))
-	assert.Equal(t, "openid email offline_access", query.Get("scope"))
+	assert.Equal(t, "openid email offline_access dashboard.session", query.Get("scope"))
 	assert.Equal(t, "state-abc", query.Get("state"))
 	assert.Equal(t, "challenge-xyz", query.Get("code_challenge"))
 	assert.Equal(t, "S256", query.Get("code_challenge_method"))

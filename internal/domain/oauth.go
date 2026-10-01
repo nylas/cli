@@ -31,10 +31,37 @@ const (
 	OAuthScopeOfflineAccess = "offline_access"
 )
 
-// DefaultOAuthScopes is what `nylas oauth login` requests: identity plus a
-// refresh token. offline_access is the only way the server issues one.
+// OAuthScopeDashboardSession is what the dashboard-session exchange
+// (POST /auth/cli/oauth/exchange) requires. Its consent line tells the person
+// the CLI will act as them in the dashboard with their full role.
+//
+// It is FIRST-PARTY ONLY: the server accepts it only from a built-in client
+// such as the CLI, and never lists it in scopes_supported, so it is never
+// dropped as "not offered" (see IsFirstPartyOAuthScope).
+const OAuthScopeDashboardSession = "dashboard.session"
+
+// IsFirstPartyOAuthScope reports a scope the server accepts from the CLI
+// without advertising it in discovery.
+func IsFirstPartyOAuthScope(scope string) bool {
+	return scope == OAuthScopeDashboardSession
+}
+
+// DefaultOAuthScopes is what `nylas oauth login` requests: identity, a
+// refresh token (offline_access is the only way the server issues one), and
+// the dashboard session the dashboard commands are signed in with.
 func DefaultOAuthScopes() []string {
-	return []string{OAuthScopeOpenID, OAuthScopeEmail, OAuthScopeOfflineAccess}
+	return []string{OAuthScopeOpenID, OAuthScopeEmail, OAuthScopeOfflineAccess, OAuthScopeDashboardSession}
+}
+
+// WithDashboardSessionScope returns scopes with dashboard.session added when
+// it is missing, leaving the caller's slice untouched.
+func WithDashboardSessionScope(scopes []string) []string {
+	for _, scope := range scopes {
+		if scope == OAuthScopeDashboardSession {
+			return scopes
+		}
+	}
+	return append(append([]string{}, scopes...), OAuthScopeDashboardSession)
 }
 
 // OAuthServerMetadata is the subset of the RFC 8414 authorization server

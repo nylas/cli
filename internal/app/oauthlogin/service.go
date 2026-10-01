@@ -140,6 +140,19 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		return nil, err
 	}
 
+	// The server accepts a first-party scope only from the built-in CLI
+	// client and refuses the whole request otherwise, so a NYLAS_OAUTH_CLIENT_ID
+	// override leaves it out. The dashboard exchange would refuse that
+	// client's token anyway.
+	if clientID != domain.DefaultOAuthClientID {
+		var firstParty []string
+		scopes, firstParty = withoutFirstPartyScopes(scopes)
+		dropped = append(dropped, firstParty...)
+		if len(scopes) == 0 {
+			return nil, fmt.Errorf("client %s may not request any of the scopes %v", clientID, firstParty)
+		}
+	}
+
 	if err := s.server.Start(); err != nil {
 		return nil, err
 	}
@@ -251,21 +264,37 @@ func (s *Service) Relogin(ctx context.Context) (*LoginResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A session from before dashboard.session existed lacks it, and the
+	// dashboard commands that relogin (switch-org) need it.
 	return s.Login(ctx, LoginOptions{
-		Scopes:   strings.Fields(session.Tokens.Scope),
+		Scopes:   domain.WithDashboardSessionScope(strings.Fields(session.Tokens.Scope)),
 		Resource: session.Resource,
 	})
 }
 
+// withoutFirstPartyScopes splits scopes into the ones any client may request
+// and the first-party ones only the built-in CLI client may.
+func withoutFirstPartyScopes(scopes []string) (kept, firstParty []string) {
+	for _, scope := range scopes {
+		if domain.IsFirstPartyOAuthScope(scope) {
+			firstParty = append(firstParty, scope)
+		} else {
+			kept = append(kept, scope)
+		}
+	}
+	return kept, firstParty
+}
+
 // supportedScopes splits requested into what the server advertises and what
 // it does not. A server that advertises nothing is taken at its word that it
-// has no list, and everything is kept.
+// has no list, and everything is kept. A first-party scope is always kept: the
+// server accepts it from the CLI and deliberately never advertises it.
 func supportedScopes(requested, supported []string) (kept, dropped []string) {
 	if len(supported) == 0 {
 		return requested, nil
 	}
 	for _, scope := range requested {
-		if slices.Contains(supported, scope) {
+		if domain.IsFirstPartyOAuthScope(scope) || slices.Contains(supported, scope) {
 			kept = append(kept, scope)
 		} else {
 			dropped = append(dropped, scope)

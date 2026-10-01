@@ -77,7 +77,9 @@ const (
 // MCPOAuthScopes is what `nylas oauth login --for mcp` requests: the data
 // scopes the hosted MCP tools use, plus offline_access so a long-running
 // `nylas mcp serve` can refresh. grants.read, not grants.write — the tools
-// look grants up and never create or delete one.
+// look grants up and never create or delete one. dashboard.session keeps the
+// dashboard commands signed in after this login too; the MCP server ignores
+// it.
 func MCPOAuthScopes() []string {
 	return []string{
 		OAuthScopeEmailRead,
@@ -88,6 +90,7 @@ func MCPOAuthScopes() []string {
 		OAuthScopeNotetakerRead,
 		OAuthScopeGrantsRead,
 		OAuthScopeOfflineAccess,
+		OAuthScopeDashboardSession,
 	}
 }
 

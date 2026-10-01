@@ -95,7 +95,10 @@ func TestLogin_DropsScopesTheServerDoesNotOffer(t *testing.T) {
 	result, err := f.service.Login(context.Background(), mcpLogin())
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"email.read", "calendar.read", "grants.read", "offline_access"},
+	// dashboard.session is never advertised and is kept anyway: the server
+	// accepts it from the CLI, and dropping it would sign the dashboard
+	// commands out.
+	assert.Equal(t, []string{"email.read", "calendar.read", "grants.read", "offline_access", "dashboard.session"},
 		f.client.AuthorizationCalls[0].Scopes)
 	assert.ElementsMatch(t, []string{"email.send", "calendar.write", "contacts.read", "notetaker.read"}, result.DroppedScopes)
 }

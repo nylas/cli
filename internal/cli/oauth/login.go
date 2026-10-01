@@ -40,6 +40,12 @@ the configured region (https://mcp.us.nylas.com or https://mcp.eu.nylas.com)
 as the RFC 8707 resource, so the token is issued for that server only. Scopes
 the server does not offer are left out and reported.
 
+Every login also requests dashboard.session, which signs the 'nylas dashboard'
+commands in. The consent screen shows it as "Use the Nylas Dashboard as you,
+with your full role in this organization". It is never advertised by the
+server and never left out, except with NYLAS_OAUTH_CLIENT_ID, which the server
+does not allow to request it.
+
 If you do not have an account yet, you can sign up on the page that opens.
 --region (or the configured region) decides where the new organization is
 created; without either it is created in the US. It does not change an
@@ -47,7 +53,7 @@ existing account.
 
 Set NYLAS_OAUTH_CLIENT_ID to use a different client id against a local or
 dev authorization server.`,
-		Example: `  # Log in with the default scopes (openid, email, offline_access)
+		Example: `  # Log in with the default scopes (openid, email, offline_access, dashboard.session)
   nylas oauth login
 
   # Log in for 'nylas mcp serve --auth oauth'

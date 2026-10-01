@@ -165,12 +165,21 @@ server has already rotated the token it was sent.
 scopes and expiry. The claims are **decoded, not verified** — the CLI does not
 check the signature; only the resource server's answer is authoritative.
 
-Default scopes are `openid`, `email` and `offline_access`. `offline_access` is
-what makes the server issue a refresh token; without it the session ends when
-the access token expires (15 minutes by default).
+Default scopes are `openid`, `email`, `offline_access` and `dashboard.session`.
+`offline_access` is what makes the server issue a refresh token; without it the
+session ends when the access token expires (15 minutes by default).
+`dashboard.session` is what lets the CLI sign the `nylas dashboard` commands in:
+the consent screen shows it as *Use the Nylas Dashboard as you, with your full
+role in this organization*. The server accepts it only from the CLI's built-in
+client and does not list it in its discovery document, so the CLI always sends
+it rather than dropping it as not offered. A login made with `--scope` and
+without `dashboard.session` works, but leaves the dashboard commands signed out.
 
 After login, the CLI also signs the `nylas dashboard` commands in by exchanging
-the access token for a dashboard session. If a session from
+the access token for a dashboard session. The exchange requires the token to
+carry `dashboard.session`; for a login that was not granted it, the CLI says so
+and asks you to run `nylas oauth login` again. `nylas dashboard orgs switch`
+adds `dashboard.session` when it signs in again. If a session from
 `nylas dashboard login` is already stored for the configured server, it is kept
 (its organization and app selection are unchanged); run `nylas dashboard logout`
 first to use the OAuth login for the dashboard commands instead.
@@ -195,10 +204,11 @@ If that server registers the CLI under a different client id, override it with
 redirect URI).
 
 The dashboard session exchange only accepts tokens from dashboard-account's
-built-in first-party clients (the Nylas CLI and Nylas Mail). With any other
-client id, `nylas oauth login` still succeeds, but the exchange is refused and
-the `nylas dashboard` commands stay signed out; use `nylas dashboard login`
-for those.
+built-in first-party clients (the Nylas CLI and Nylas Mail), and only that
+client may request `dashboard.session`. With any other client id the CLI leaves
+`dashboard.session` out of the request (the server would refuse the whole
+request otherwise), so `nylas oauth login` still succeeds, but the `nylas
+dashboard` commands stay signed out; use `nylas dashboard login` for those.
 
 The CLI resolves every endpoint from the server's
 `/.well-known/oauth-authorization-server` document, and that document is built
