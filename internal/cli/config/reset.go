@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -117,23 +118,36 @@ func clearSessions(ctx context.Context, secrets ports.SecretStore, dashboardLock
 	}
 	defer func() { _ = unlock() }()
 
-	clearDashboardCredentials(secrets)
+	dashboardErr := clearDashboardCredentials(secrets)
 	if err := oauthlogin.ClearSessionLocked(ctx, secrets, oauthLock); err != nil {
-		return fmt.Errorf("clear OAuth session: %w", err)
+		return errors.Join(dashboardErr, fmt.Errorf("clear OAuth session: %w", err))
 	}
-	return nil
+	return dashboardErr
 }
 
-// clearDashboardCredentials removes all dashboard-related keys from the secret store.
-func clearDashboardCredentials(secrets ports.SecretStore) {
-	_ = secrets.Delete(ports.KeyDashboardUserToken)
-	_ = secrets.Delete(ports.KeyDashboardOrgToken)
-	_ = secrets.Delete(ports.KeyDashboardUserPublicID)
-	_ = secrets.Delete(ports.KeyDashboardOrgPublicID)
-	_ = secrets.Delete(ports.KeyDashboardDPoPKey)
-	_ = secrets.Delete(ports.KeyDashboardAppID)
-	_ = secrets.Delete(ports.KeyDashboardAppRegion)
-	_ = secrets.Delete(ports.KeyDashboardSessionOrigin)
-	_ = secrets.Delete(ports.KeyDashboardSessionExpiresAt)
-	_ = secrets.Delete(ports.KeyDashboardSessionServer)
+// clearDashboardCredentials removes all dashboard-related keys from the
+// secret store. A key that could not be removed is reported, so reset does
+// not claim a session is gone while its tokens are still stored.
+func clearDashboardCredentials(secrets ports.SecretStore) error {
+	var errs []error
+	for _, key := range []string{
+		ports.KeyDashboardUserToken,
+		ports.KeyDashboardOrgToken,
+		ports.KeyDashboardUserPublicID,
+		ports.KeyDashboardOrgPublicID,
+		ports.KeyDashboardDPoPKey,
+		ports.KeyDashboardAppID,
+		ports.KeyDashboardAppRegion,
+		ports.KeyDashboardSessionOrigin,
+		ports.KeyDashboardSessionExpiresAt,
+		ports.KeyDashboardSessionServer,
+	} {
+		if err := secrets.Delete(key); err != nil && !errors.Is(err, domain.ErrSecretNotFound) {
+			errs = append(errs, fmt.Errorf("clear %s: %w", key, err))
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("clear dashboard session: %w", err)
+	}
+	return nil
 }

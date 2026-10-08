@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/version"
@@ -116,4 +118,20 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 // It uses LimitedBody to prevent oversized payloads.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	return json.NewDecoder(LimitedBody(w, r, MaxRequestBodySize)).Decode(target)
+}
+
+// PrintableSnippet makes text a server sent safe to put in an error message:
+// control characters (escape sequences, CR, LF) become spaces, so the text
+// cannot rewrite a terminal or forge a log line, and it is cut to max runes.
+func PrintableSnippet(text string, max int) string {
+	cleaned := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			return ' '
+		}
+		return r
+	}, strings.TrimSpace(text))
+	if runes := []rune(cleaned); len(runes) > max {
+		cleaned = string(runes[:max]) + "…"
+	}
+	return cleaned
 }

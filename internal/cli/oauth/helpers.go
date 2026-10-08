@@ -58,7 +58,20 @@ func relogin(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error
 	if _, err := svc.Relogin(ctx); err != nil {
 		return nil, err
 	}
-	return exchangeDashboardSessionFn(ctx, svc)
+	exchangeCtx, cancel := afterConsentContext(ctx)
+	defer cancel()
+	return exchangeDashboardSessionFn(exchangeCtx, svc)
+}
+
+// dashboardExchangeTimeout bounds the dashboard session exchange that follows
+// a browser sign-in.
+const dashboardExchangeTimeout = 30 * time.Second
+
+// afterConsentContext gives the work after a browser sign-in its own
+// deadline. The sign-in shares a long context with the consent screen, and a
+// user who took most of it there would otherwise see the exchange time out.
+func afterConsentContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), dashboardExchangeTimeout)
 }
 
 // NewLoginService returns the OAuth login service wired to this machine's
@@ -107,14 +120,8 @@ func createLoginService() (*oauthlogin.Service, error) {
 	return oauthlogin.NewService(clientID, client, callbackServer, browser.NewDefaultBrowser(), secrets, sessionLock(secrets)), nil
 }
 
-const sessionLockFile = common.OAuthSessionLockFile
-
 func sessionLock(secrets ports.SecretStore) *filelock.Lock {
 	return common.OAuthSessionLock(secrets)
-}
-
-func sessionLockPath(secrets ports.SecretStore) string {
-	return common.SessionLockPath(secrets, sessionLockFile)
 }
 
 // clientIDEnv overrides the static public client id, for a local or dev

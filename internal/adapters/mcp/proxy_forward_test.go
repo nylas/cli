@@ -108,11 +108,10 @@ func TestProxy_forward_WithDefaultGrant(t *testing.T) {
 	}
 }
 
-func TestProxy_injectDefaultGrant(t *testing.T) {
+func TestProxy_injectGrant(t *testing.T) {
 	t.Parallel()
 
 	proxy := NewProxy("test-api-key", "us")
-	proxy.SetDefaultGrant("my-grant-id")
 
 	tests := []struct {
 		name       string
@@ -208,7 +207,7 @@ func TestProxy_injectDefaultGrant(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := proxy.injectDefaultGrant([]byte(tt.input), nil)
+			result := proxy.injectGrant([]byte(tt.input), nil, "my-grant-id")
 
 			var parsed struct {
 				Params struct {

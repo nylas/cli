@@ -95,6 +95,12 @@ func (c *Client) requestTokens(ctx context.Context, endpoint string, form url.Va
 	}
 	if tokens.ExpiresIn > 0 {
 		tokens.ExpiresAt = c.now().Add(time.Duration(tokens.ExpiresIn) * time.Second)
+	} else if claims, err := domain.DecodeOAuthAccessToken(tokens.AccessToken); err == nil {
+		// expires_in is only RECOMMENDED. Without it a zero expiry would
+		// read as expired and spend the refresh token on every command, so
+		// the token's own exp stands in. It is not verified, and does not
+		// need to be: it only decides when to refresh.
+		tokens.ExpiresAt = claims.ExpiresAt
 	}
 	return &tokens, nil
 }

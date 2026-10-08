@@ -52,7 +52,10 @@ func TestIsNotification(t *testing.T) {
 		{"numeric id", `{"jsonrpc":"2.0","id":1,"method":"ping"}`, false},
 		{"string id", `{"jsonrpc":"2.0","id":"a","method":"ping"}`, false},
 		{"explicit null id is a request", `{"jsonrpc":"2.0","id":null,"method":"ping"}`, false},
-		{"not an object", `[{"jsonrpc":"2.0","method":"x"}]`, false},
+		{"batch of notifications", `[{"jsonrpc":"2.0","method":"x"},{"jsonrpc":"2.0","method":"y"}]`, true},
+		{"batch with a request", `[{"jsonrpc":"2.0","method":"x"},{"jsonrpc":"2.0","id":1,"method":"y"}]`, false},
+		{"empty batch", `[]`, false},
+		{"not an object", `"x"`, false},
 		{"invalid JSON", `{`, false},
 	}
 	for _, tt := range tests {

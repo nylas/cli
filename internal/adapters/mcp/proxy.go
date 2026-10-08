@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -49,6 +48,24 @@ type rpcRequest struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
 	} `json:"params"`
+
+	// notification is set when the message had no "id" member. ID cannot
+	// say so (absent and null both decode to nil), and re-marshalling a
+	// notification with "id": null would turn it into a request.
+	notification bool
+}
+
+// MarshalJSON leaves "id" out of a notification; see rpcRequest.notification.
+func (r rpcRequest) MarshalJSON() ([]byte, error) {
+	type plain rpcRequest // drops this method, so Marshal does not recurse
+	if !r.notification {
+		return json.Marshal(plain(r))
+	}
+	return json.Marshal(struct {
+		JSONRPC string `json:"jsonrpc"`
+		Method  string `json:"method"`
+		Params  any    `json:"params"`
+	}{r.JSONRPC, r.Method, r.Params})
 }
 
 // mcpHTTPClient sends every request with its credential (an API key or an
@@ -60,7 +77,6 @@ type Proxy struct {
 	// endpoint is the regional default, used when a credential names no
 	// server of its own. An OAuth credential always names one.
 	endpoint     string
-	apiKey       string
 	creds        ports.MCPCredentialSource
 	oauth        bool
 	defaultGrant string
@@ -78,7 +94,6 @@ type Proxy struct {
 func NewProxy(apiKey, region string) *Proxy {
 	return &Proxy{
 		endpoint:   GetMCPEndpoint(region),
-		apiKey:     apiKey,
 		creds:      apiKeyCredentials{apiKey: apiKey},
 		httpClient: mcpHTTPClient,
 	}
@@ -146,27 +161,35 @@ func (p *Proxy) serve(ctx context.Context, in io.Reader, out io.Writer) error {
 			continue
 		}
 
+		notification := isNotification(line)
+
 		// Parse JSON once for all operations
 		var req rpcRequest
 		if err := json.Unmarshal(line, &req); err != nil {
-			// Not valid JSON - forward as-is, let server handle error
+			// Not a single request (invalid JSON, a batch): forward as-is
+			// and let the server handle it.
 			response, fwdErr := p.forward(ctx, line, nil)
 			if fwdErr != nil {
+				if notification {
+					log.Printf("mcp: forwarding a notification failed: %q", fwdErr.Error())
+					continue
+				}
 				errorResp := p.createErrorResponse(nil, fwdErr)
 				_, _ = writer.Write(append(errorResp, '\n'))
 				_ = writer.Flush()
 				continue
 			}
-			if len(response) > 0 {
+			if len(response) > 0 && !notification {
 				_, _ = writer.Write(append(response, '\n'))
 				_ = writer.Flush()
 			}
 			continue
 		}
+		req.notification = notification
 
 		// Try to handle locally first (for get_grant without email)
 		if localResponse, handled := p.handleLocalToolCall(&req); handled {
-			if len(localResponse) > 0 {
+			if len(localResponse) > 0 && !notification {
 				if _, err := writer.Write(append(localResponse, '\n')); err != nil {
 					return fmt.Errorf("writing local response: %w", err)
 				}
@@ -180,8 +203,10 @@ func (p *Proxy) serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		if err != nil {
 			// A notification must never be answered, not even with an error
 			// (JSON-RPC 2.0 §4.1), so its failure goes to the log instead.
-			if isNotification(line) {
-				log.Printf("mcp: forwarding %s notification failed: %v", req.Method, err)
+			// Both are quoted: they carry text from the client and the
+			// server, which must not reach a terminal as escape sequences.
+			if notification {
+				log.Printf("mcp: forwarding %q notification failed: %q", req.Method, err.Error())
 				continue
 			}
 			// Write error response
@@ -193,26 +218,15 @@ func (p *Proxy) serve(ctx context.Context, in io.Reader, out io.Writer) error {
 			continue
 		}
 
-		// Write response
-		if len(response) > 0 {
+		// Write response. Nothing answers a notification, so a body the
+		// server sent for one is not relayed either.
+		if len(response) > 0 && !notification {
 			if _, err := writer.Write(append(response, '\n')); err != nil {
 				return fmt.Errorf("writing response: %w", err)
 			}
 			_ = writer.Flush()
 		}
 	}
-}
-
-// isNotification reports whether a JSON-RPC message is a notification: one
-// with no "id" member at all. An explicit "id": null is still a request, and
-// rpcRequest.ID cannot tell the two apart.
-func isNotification(message []byte) bool {
-	var members map[string]json.RawMessage
-	if err := json.Unmarshal(message, &members); err != nil {
-		return false
-	}
-	_, hasID := members["id"]
-	return !hasID
 }
 
 // forward sends a request to the Nylas MCP server and returns the response.
@@ -266,126 +280,6 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 		}
 		return body, nil
 	}
-}
-
-// send makes one HTTP request with cred. The caller closes the response.
-func (p *Proxy) send(ctx context.Context, request []byte, parsed *rpcRequest, cred *domain.MCPCredential) (*http.Response, error) {
-	endpoint := cred.Endpoint
-	if endpoint == "" {
-		endpoint = p.endpoint
-	}
-	if endpoint == "" {
-		return nil, errors.New("no MCP server to send the request to")
-	}
-
-	p.mu.RLock()
-	defaultGrant := p.defaultGrant
-	protocolVersion := p.protocolVersion
-	p.mu.RUnlock()
-
-	// The default grant is only a hint, and an OAuth token only acts on the
-	// grants it names: offering any other would be refused at best.
-	grantHint := ""
-	if cred.AllowsGrantHint(defaultGrant) {
-		grantHint = defaultGrant
-	}
-
-	// Every attempt starts from the request as the assistant sent it: the
-	// grant injection below writes into the parsed arguments, and a retry
-	// after renewal must not inherit the previous credential's grant.
-	parsed = cloneRPCRequest(parsed)
-
-	// Inject default grant into tool calls if not specified
-	request = p.injectGrant(request, parsed, grantHint)
-
-	// Normalize tool arguments (type coercion, timestamp rounding)
-	request = p.normalizeToolArguments(request, parsed)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(request))
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+cred.Token)
-	setProtocolHeaders(req.Header, parsed, protocolVersion)
-	if grantHint != "" {
-		req.Header.Set("X-Nylas-Grant-Id", grantHint)
-	}
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending request: %w", err)
-	}
-	return resp, nil
-}
-
-// readResponse turns an HTTP response into the JSON-RPC payload to write
-// back, closing it.
-func (p *Proxy) readResponse(resp *http.Response, cred *domain.MCPCredential) ([]byte, error) {
-	defer func() { _ = resp.Body.Close() }()
-
-	// Handle 202 Accepted (no body)
-	if resp.StatusCode == http.StatusAccepted {
-		return nil, nil
-	}
-
-	// Handle errors
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		return nil, p.statusError(resp, body, cred)
-	}
-
-	// Handle SSE stream
-	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return p.readSSE(resp.Body)
-	}
-
-	// Handle JSON response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-	return body, nil
-}
-
-// readSSE reads Server-Sent Events and extracts JSON-RPC messages.
-func (p *Proxy) readSSE(reader io.Reader) ([]byte, error) {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
-	var responses []json.RawMessage
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// SSE data lines start with "data: "
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-			if data != "" {
-				responses = append(responses, json.RawMessage(data))
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading SSE: %w", err)
-	}
-
-	// Return single response or batch
-	if len(responses) == 0 {
-		return nil, nil
-	}
-	if len(responses) == 1 {
-		return responses[0], nil
-	}
-
-	// Batch multiple responses
-	batch, err := json.Marshal(responses)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling batch: %w", err)
-	}
-	return batch, nil
 }
 
 // fallbackGrantTools is a static fallback used before the first tools/list response
@@ -446,15 +340,6 @@ func (p *Proxy) toolRequiresGrant(toolName string) bool {
 		return gt[toolName]
 	}
 	return fallbackGrantTools[toolName]
-}
-
-// injectDefaultGrant injects the default grant_id into tool call requests if not already specified.
-// Uses the pre-parsed request if available to avoid re-parsing.
-func (p *Proxy) injectDefaultGrant(request []byte, parsed *rpcRequest) []byte {
-	p.mu.RLock()
-	defaultGrant := p.defaultGrant
-	p.mu.RUnlock()
-	return p.injectGrant(request, parsed, defaultGrant)
 }
 
 // injectGrant injects defaultGrant as grant_id into a tool call that accepts
@@ -626,15 +511,4 @@ func toInt64(v any) (int64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-// cloneRPCRequest copies req deeply enough for injectGrant and
-// normalizeToolArguments to change the copy's arguments freely.
-func cloneRPCRequest(req *rpcRequest) *rpcRequest {
-	if req == nil {
-		return nil
-	}
-	clone := *req
-	clone.Params.Arguments = maps.Clone(req.Params.Arguments)
-	return &clone
 }

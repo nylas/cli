@@ -487,9 +487,9 @@ func TestLoginCmd_ABadConfiguredRegionDoesNotBlockLogin(t *testing.T) {
 func TestSessionLockPath_KeyringLockIgnoresXDGConfigHome(t *testing.T) {
 	// Two processes sharing the one system keyring must share one lock, even
 	// when an MCP host starts one of them with another XDG_CONFIG_HOME.
-	withoutXDG := sessionLockPath(keyring.NewMockSecretStore())
+	withoutXDG := common.SessionLockPath(keyring.NewMockSecretStore(), common.OAuthSessionLockFile)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	withXDG := sessionLockPath(keyring.NewMockSecretStore())
+	withXDG := common.SessionLockPath(keyring.NewMockSecretStore(), common.OAuthSessionLockFile)
 
 	assert.Equal(t, withoutXDG, withXDG)
 	assert.NotContains(t, withXDG, os.Getenv("XDG_CONFIG_HOME"))
@@ -501,5 +501,5 @@ func TestSessionLockPath_FileStoreLockLivesWithTheSecretsFile(t *testing.T) {
 	store, err := keyring.NewEncryptedFileStore(filepath.Join(xdg, "nylas"))
 	require.NoError(t, err)
 
-	assert.Equal(t, filepath.Join(xdg, "nylas", sessionLockFile), sessionLockPath(store))
+	assert.Equal(t, filepath.Join(xdg, "nylas", common.OAuthSessionLockFile), common.SessionLockPath(store, common.OAuthSessionLockFile))
 }

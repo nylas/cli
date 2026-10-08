@@ -65,9 +65,15 @@ of them.`,
   nylas oauth login --for mcp
   nylas mcp install --assistant claude-code --auth oauth`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serveArgs, err := serveArgsFor(authMode)
-			if err != nil {
-				return err
+			// Without --auth, an assistant keeps the mode it was installed
+			// with: re-running install must not silently turn an OAuth
+			// install back into an API key one.
+			var serveArgs []string
+			if cmd.Flags().Changed("auth") {
+				var err error
+				if serveArgs, err = serveArgsFor(authMode); err != nil {
+					return err
+				}
 			}
 			return runInstall(assistantID, binaryPath, installAll, serveArgs)
 		},
@@ -219,7 +225,27 @@ func installForAssistant(a Assistant, binaryPath string) error {
 	return installServer(a, binaryPath, []string{"mcp", "serve"})
 }
 
-// installServer writes the `nylas mcp serve` launcher into a's config.
+// installedServeArgs is the serve command a's config already runs: the OAuth
+// one if it was installed with --auth oauth, and the API key default
+// otherwise.
+func installedServeArgs(config map[string]any, a Assistant) []string {
+	oauthArgs, _ := serveArgsFor(authOAuth)
+	defaultArgs, _ := serveArgsFor(authAPIKey)
+	server, _, ok := findAssistantServer(config, a, nylasServerName)
+	if !ok {
+		return defaultArgs
+	}
+	args, _ := server["args"].([]any)
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--auth" && args[i+1] == authOAuth {
+			return oauthArgs
+		}
+	}
+	return defaultArgs
+}
+
+// installServer writes the `nylas mcp serve` launcher into a's config. nil
+// serveArgs keeps the mode it is already installed with.
 func installServer(a Assistant, binaryPath string, serveArgs []string) error {
 	configPath := a.GetConfigPath()
 
@@ -235,6 +261,9 @@ func installServer(a Assistant, binaryPath string, serveArgs []string) error {
 		return fmt.Errorf("parsing existing config: %w", err)
 	}
 
+	if serveArgs == nil {
+		serveArgs = installedServeArgs(config, a)
+	}
 	setAssistantServer(config, a, nylasServerName, map[string]any{
 		"command": binaryPath,
 		"args":    serveArgs,

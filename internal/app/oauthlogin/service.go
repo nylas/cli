@@ -217,7 +217,12 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		return nil, callback.err
 	}
 
-	tokens, err := s.client.ExchangeCode(ctx, domain.OAuthCodeExchange{
+	// The consent screen may have used most of ctx. The code is single-use,
+	// so the exchange and the write that keeps its answer get their own
+	// deadline rather than whatever the user left of it.
+	exchangeCtx, cancelExchange := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
+	defer cancelExchange()
+	tokens, err := s.client.ExchangeCode(exchangeCtx, domain.OAuthCodeExchange{
 		ClientID:     clientID,
 		Code:         callback.code,
 		RedirectURI:  redirectURI,
@@ -228,7 +233,8 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		return nil, err
 	}
 
-	if err := s.withSessionLock(ctx, func() error {
+	if err := s.withSessionLock(exchangeCtx, func() error {
+		s.revokeReplacedSession(exchangeCtx)
 		// Clear whatever session is stored first: a login against a different
 		// server must not leave that server's old tokens filed under the new
 		// server's name, where checkIssuer would then accept them.
@@ -252,6 +258,19 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		Resource:      opts.Resource,
 		DroppedScopes: dropped,
 	}, nil
+}
+
+// revokeReplacedSession revokes the refresh token of the session a login is
+// about to replace, so each `oauth login` or `orgs switch` does not leave a
+// live token family behind on the server. Best effort, and only for a session
+// this server issued: sending another server's token here would hand it over.
+// The caller holds the session lock.
+func (s *Service) revokeReplacedSession(ctx context.Context) {
+	old, err := s.loadSession()
+	if err != nil || old.Tokens.RefreshToken == "" || s.checkIssuer(old) != nil {
+		return
+	}
+	_ = s.client.Revoke(ctx, old.ClientID, old.Tokens.RefreshToken)
 }
 
 // Relogin runs the browser flow again for the stored session's scopes and

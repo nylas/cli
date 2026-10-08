@@ -272,15 +272,11 @@ func createDefaultApp(appSvc *dashboardapp.AppService, orgID string) (*domain.Ga
 
 // setActiveApp stores the active application in the keyring.
 func setActiveApp(appID, region string) error {
-	_, secrets, err := dashboard.CreateAuthService()
+	authSvc, _, err := dashboard.CreateAuthService()
 	if err != nil {
 		return err
 	}
-
-	if err := secrets.Set(ports.KeyDashboardAppID, appID); err != nil {
-		return err
-	}
-	return secrets.Set(ports.KeyDashboardAppRegion, region)
+	return authSvc.SetActiveApp(context.Background(), appID, region)
 }
 
 // appDisplayName returns a human-readable display name for an application.

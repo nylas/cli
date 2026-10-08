@@ -57,3 +57,32 @@ func TestInstallCmd_AuthFlagDefaultsToAPIKey(t *testing.T) {
 	require.NotNil(t, flag)
 	assert.Equal(t, authAPIKey, flag.DefValue)
 }
+
+func TestInstallServer_WithoutAuthKeepsAnOAuthInstall(t *testing.T) {
+	// Re-running install (to fix a binary path, say) must not quietly switch
+	// the assistant back to the API key.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	a := testAssistant("cursor", configPath)
+	oauthArgs, err := serveArgsFor(authOAuth)
+	require.NoError(t, err)
+	require.NoError(t, installServer(a, "/usr/local/bin/nylas", oauthArgs))
+
+	require.NoError(t, installServer(a, "/opt/bin/nylas", nil))
+
+	raw, err := os.ReadFile(configPath) // #nosec G304 -- test temp file
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"/opt/bin/nylas"`)
+	assert.Contains(t, string(raw), `"oauth"`)
+}
+
+func TestInstallServer_WithoutAuthDefaultsToAPIKey(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+
+	require.NoError(t, installServer(testAssistant("cursor", configPath), "/usr/local/bin/nylas", nil))
+
+	raw, err := os.ReadFile(configPath) // #nosec G304 -- test temp file
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), `"--auth"`)
+}

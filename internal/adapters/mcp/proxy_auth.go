@@ -9,14 +9,18 @@ import (
 	"strings"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 )
 
 // OAuthLoginCommand is what a user runs to get a session the hosted MCP
 // server accepts. Every OAuth failure the proxy reports names it.
 const OAuthLoginCommand = "nylas oauth login --for mcp"
 
-// maxErrorBody bounds how much of an error response is read and echoed.
+// maxErrorBody bounds how much of an error response is read.
 const maxErrorBody = 4 << 10
+
+// maxErrorSnippet bounds how much of it is echoed in an error.
+const maxErrorSnippet = 500
 
 // apiKeyCredentials is the credential source behind NewProxy: the same API
 // key for every request, and nothing to renew.
@@ -76,7 +80,9 @@ func (p *Proxy) loginError(what string, cause error) error {
 func (p *Proxy) statusError(resp *http.Response, body []byte, cred *domain.MCPCredential) error {
 	challenge := domain.ParseBearerChallenge(resp.Header.Get("WWW-Authenticate"))
 
-	if resp.StatusCode == http.StatusForbidden && challenge != nil && challenge.Error == "insufficient_scope" {
+	// Only an OAuth login can be re-run for more scopes; an API key proxy
+	// falls through to the server's own answer.
+	if resp.StatusCode == http.StatusForbidden && p.oauth && challenge != nil && challenge.Error == "insufficient_scope" {
 		missing := "a scope"
 		if scopes := challenge.Scopes(); len(scopes) > 0 {
 			missing = "scope " + strings.Join(scopes, ", ")
@@ -90,7 +96,7 @@ func (p *Proxy) statusError(resp *http.Response, body []byte, cred *domain.MCPCr
 			OAuthLoginCommand)
 	}
 
-	return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	return fmt.Errorf("server returned %d: %s", resp.StatusCode, httputil.PrintableSnippet(string(body), maxErrorSnippet))
 }
 
 func drainAndClose(resp *http.Response) {

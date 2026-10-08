@@ -216,3 +216,40 @@ func TestSessionRenewer_ClearIfOAuthDropsAnUnrecordedSessionFromAnotherServerWit
 	assert.NotContains(t, secrets.data, ports.KeyDashboardUserToken)
 	assert.NotContains(t, secrets.data, ports.KeyDashboardSessionOrigin)
 }
+
+// swapAfterFirstRead replaces the stored session with another server's right
+// after the first read of the user token, as a concurrent login would.
+type swapAfterFirstRead struct {
+	*memSecretStore
+	swap func()
+	done bool
+}
+
+func (s *swapAfterFirstRead) Get(key string) (string, error) {
+	value, err := s.memSecretStore.Get(key)
+	if key == ports.KeyDashboardUserToken && !s.done {
+		s.done = true
+		s.swap()
+	}
+	return value, err
+}
+
+func TestLoadDashboardTokens_ReadStraddlingALoginNeverPairsOneServersTokenWithAnother(t *testing.T) {
+	// The CLI is configured for production. While it reads the local
+	// session, a login against production replaces it. It must not send the
+	// local token to production, which reading that token and then
+	// production's server name would do.
+	inner := dashboardSessionFor(localServer)
+	inner.data[ports.KeyDashboardUserToken] = "local-user"
+	secrets := &swapAfterFirstRead{memSecretStore: inner, swap: func() {
+		inner.data[ports.KeyDashboardSessionServer] = prodServer
+		inner.data[ports.KeyDashboardUserToken] = "prod-user"
+		inner.data[ports.KeyDashboardOrgToken] = "prod-org"
+	}}
+
+	user, org, err := loadDashboardTokens(secrets, prodServer)
+
+	require.NoError(t, err)
+	assert.Equal(t, "prod-user", user)
+	assert.Equal(t, "prod-org", org)
+}

@@ -120,7 +120,9 @@ dev authorization server.`,
 
 			// The OAuth login already succeeded, so a failed exchange is reported
 			// rather than returned: only the dashboard commands are affected.
-			dashboardSession, err := exchangeDashboardSessionFn(ctx, svc)
+			exchangeCtx, cancelExchange := afterConsentContext(ctx)
+			defer cancelExchange()
+			dashboardSession, err := exchangeDashboardSessionFn(exchangeCtx, svc)
 			if errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept) {
 				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login` (run `nylas dashboard logout` first to use this login instead)")
 				return nil

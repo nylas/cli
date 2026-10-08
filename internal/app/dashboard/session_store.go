@@ -12,7 +12,28 @@ import (
 // Returns ErrDashboardNotLoggedIn when no user token is present, and
 // ErrDashboardServerMismatch when the session was issued for other servers
 // than server (see checkSessionServer).
+//
+// It reads without the dashboard session lock, so a login for another server
+// can replace the session mid-read. The user token and server are re-read
+// last; if either changed, the read straddled a write and is retried, so one
+// server's token is never paired with another server's name.
 func loadDashboardTokens(secrets ports.SecretStore, server string) (userToken, orgToken string, err error) {
+	for range 3 {
+		userToken, orgToken, err = readDashboardTokens(secrets, server)
+		if err != nil {
+			return "", "", err
+		}
+		again, againErr := secrets.Get(ports.KeyDashboardUserToken)
+		stored, storedErr := secrets.Get(ports.KeyDashboardSessionServer)
+		if againErr == nil && again == userToken &&
+			(server == "" || (storedErr == nil && stored == server)) {
+			return userToken, orgToken, nil
+		}
+	}
+	return "", "", fmt.Errorf("%w: the stored session kept changing while it was read", domain.ErrDashboardNotLoggedIn)
+}
+
+func readDashboardTokens(secrets ports.SecretStore, server string) (userToken, orgToken string, err error) {
 	userToken, err = secrets.Get(ports.KeyDashboardUserToken)
 	if err != nil {
 		if errors.Is(err, domain.ErrSecretNotFound) {

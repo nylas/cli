@@ -74,25 +74,52 @@ func (k *SystemKeyring) Set(key, value string) error {
 }
 
 // Get retrieves a secret value for the given key.
+//
+// A chunked value is a header and its chunks, read separately. Another
+// process can replace the value in between, removing the chunks this read is
+// about to fetch, so a missing chunk re-reads the header and tries again
+// while it keeps changing.
 func (k *SystemKeyring) Get(key string) (string, error) {
-	value, err := keyring.Get(serviceName, key)
-	if errors.Is(err, keyring.ErrNotFound) {
-		return "", domain.ErrSecretNotFound
+	var lastErr error
+	for attempt := 0; attempt < chunkReadAttempts; attempt++ {
+		value, err := keyringGet(serviceName, key)
+		if errors.Is(err, keyring.ErrNotFound) {
+			return "", domain.ErrSecretNotFound
+		}
+		if err != nil {
+			return "", err
+		}
+		gen, n, ok := parseChunkHeader(value)
+		if !ok {
+			return value, nil
+		}
+		joined, err := readChunks(key, gen, n)
+		if err == nil {
+			return joined, nil
+		}
+		lastErr = err
+		if current, _ := keyringGet(serviceName, key); current == value {
+			break // The header did not move: the chunk is really gone.
+		}
 	}
-	if err != nil {
-		return "", err
-	}
-	gen, n, ok := parseChunkHeader(value)
-	if !ok {
-		return value, nil
-	}
+	// The value was removed by hand, or kept changing under this read.
+	return "", fmt.Errorf("secret %s is incomplete in the system keyring: %w", key, lastErr)
+}
+
+// keyringGet is keyring.Get, replaceable so a test can rewrite a value in the
+// middle of a chunked read.
+var keyringGet = keyring.Get
+
+// chunkReadAttempts bounds Get's retries while another process rewrites a
+// chunked value.
+const chunkReadAttempts = 3
+
+func readChunks(key, gen string, n int) (string, error) {
 	var b strings.Builder
 	for i := range n {
-		part, err := keyring.Get(serviceName, chunkKey(key, gen, i))
+		part, err := keyringGet(serviceName, chunkKey(key, gen, i))
 		if err != nil {
-			// Another process replaced the value between the two reads, or a
-			// chunk was removed by hand. Either way this copy is unusable.
-			return "", fmt.Errorf("secret %s is incomplete in the system keyring: %w", key, err)
+			return "", err
 		}
 		b.WriteString(part)
 	}

@@ -243,7 +243,7 @@ func TestAuthServiceStoreTokensRollsBackOnFailure(t *testing.T) {
 	require.NoError(t, store.Set(ports.KeyDashboardAppRegion, "eu"))
 
 	svc := NewAuthService(&dashboardadapter.MockAccountClient{}, store)
-	err := svc.storeTokens(&domain.DashboardAuthResponse{
+	err := svc.storeTokens(context.Background(), &domain.DashboardAuthResponse{
 		UserToken: "user-new",
 		OrgToken:  "org-new",
 		User:      domain.DashboardUser{PublicID: "user-new"},

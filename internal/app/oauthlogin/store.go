@@ -45,31 +45,58 @@ type Session struct {
 	Tokens   domain.OAuthTokens
 }
 
+// loadSession reads the stored session without the session lock. A login
+// against another server can replace the session while it is being read, so
+// the server is read first and the access token and server re-read last: if
+// either changed, the read straddled a write and is retried, so one server's
+// token is never paired with another server's name (which checkIssuer would
+// then accept).
 func (s *Service) loadSession() (*Session, error) {
-	accessToken, err := s.getSecret(ports.KeyOAuthAccessToken)
-	if err != nil {
-		return nil, err
-	}
-	if accessToken == "" {
-		return nil, domain.ErrOAuthNotLoggedIn
-	}
-
-	session := &Session{
-		ClientID: s.clientID,
-		Tokens:   domain.OAuthTokens{AccessToken: accessToken, TokenType: "Bearer"},
-	}
-	for key, target := range map[string]*string{
-		ports.KeyOAuthIssuer:       &session.Issuer,
-		ports.KeyOAuthServerURL:    &session.ServerURL,
-		ports.KeyOAuthResource:     &session.Resource,
-		ports.KeyOAuthRefreshToken: &session.Tokens.RefreshToken,
-		ports.KeyOAuthScope:        &session.Tokens.Scope,
-	} {
-		value, err := s.getSecret(key)
+	for attempt := 0; attempt < 3; attempt++ {
+		session, err := s.readSession()
 		if err != nil {
 			return nil, err
 		}
-		*target = value
+		accessToken, err := s.getSecret(ports.KeyOAuthAccessToken)
+		if err != nil {
+			return nil, err
+		}
+		serverURL, err := s.getSecret(ports.KeyOAuthServerURL)
+		if err != nil {
+			return nil, err
+		}
+		if accessToken == session.Tokens.AccessToken && serverURL == session.ServerURL {
+			return session, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: the stored session kept changing while it was read", domain.ErrOAuthNotLoggedIn)
+}
+
+func (s *Service) readSession() (*Session, error) {
+	session := &Session{
+		ClientID: s.clientID,
+		Tokens:   domain.OAuthTokens{TokenType: "Bearer"},
+	}
+	// The server first, the tokens after it; see loadSession.
+	for _, field := range []struct {
+		key    string
+		target *string
+	}{
+		{ports.KeyOAuthServerURL, &session.ServerURL},
+		{ports.KeyOAuthIssuer, &session.Issuer},
+		{ports.KeyOAuthResource, &session.Resource},
+		{ports.KeyOAuthScope, &session.Tokens.Scope},
+		{ports.KeyOAuthRefreshToken, &session.Tokens.RefreshToken},
+		{ports.KeyOAuthAccessToken, &session.Tokens.AccessToken},
+	} {
+		value, err := s.getSecret(field.key)
+		if err != nil {
+			return nil, err
+		}
+		*field.target = value
+	}
+	if session.Tokens.AccessToken == "" {
+		return nil, domain.ErrOAuthNotLoggedIn
 	}
 
 	expiresAt, err := s.getSecret(ports.KeyOAuthExpiresAt)

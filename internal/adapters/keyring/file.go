@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,11 +108,20 @@ func NewEncryptedFileStore(configDir string) (*EncryptedFileStore, error) {
 }
 
 // lock takes both locks. The returned function releases them.
-func (f *EncryptedFileStore) lock() (func(), error) {
+//
+// A reader that may not create the lock file (a read-only config directory)
+// goes ahead with only the in-process lock: no process can write the store
+// there either, since a write renames a new file into that directory, so
+// there is nothing to wait for. Without this every command on a read-only
+// config failed, even one that only reads a secret.
+func (f *EncryptedFileStore) lock(readOnly bool) (func(), error) {
 	f.mu.Lock()
 	ctx, cancel := context.WithTimeout(context.Background(), fileStoreLockTimeout)
 	defer cancel()
 	unlock, err := f.fileLock.Lock(ctx)
+	if err != nil && readOnly && errors.Is(err, fs.ErrPermission) {
+		return f.mu.Unlock, nil
+	}
 	if err != nil {
 		f.mu.Unlock()
 		return nil, fmt.Errorf("%w: %v", domain.ErrSecretStoreFailed, err)
@@ -123,7 +134,7 @@ func (f *EncryptedFileStore) lock() (func(), error) {
 
 // Set stores a secret value for the given key.
 func (f *EncryptedFileStore) Set(key, value string) error {
-	release, err := f.lock()
+	release, err := f.lock(false)
 	if err != nil {
 		return err
 	}
@@ -153,7 +164,11 @@ func (f *EncryptedFileStore) Set(key, value string) error {
 // CLI workloads aren't read-heavy, so serializing reads is the right
 // trade for guaranteed migration correctness.
 func (f *EncryptedFileStore) Get(key string) (string, error) {
-	release, err := f.lock()
+	// Nothing stored yet: no lock file is needed to say so.
+	if _, err := os.Stat(f.path); errors.Is(err, fs.ErrNotExist) {
+		return "", domain.ErrSecretNotFound
+	}
+	release, err := f.lock(true)
 	if err != nil {
 		return "", err
 	}
@@ -176,7 +191,10 @@ func (f *EncryptedFileStore) Get(key string) (string, error) {
 
 // Delete removes a secret for the given key.
 func (f *EncryptedFileStore) Delete(key string) error {
-	release, err := f.lock()
+	if _, err := os.Stat(f.path); errors.Is(err, fs.ErrNotExist) {
+		return nil // Already doesn't exist
+	}
+	release, err := f.lock(false)
 	if err != nil {
 		return err
 	}

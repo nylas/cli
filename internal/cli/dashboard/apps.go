@@ -226,15 +226,11 @@ When called without arguments, lists your applications and lets you pick one int
 				return dashboardError("region is required", "Use --region us or --region eu")
 			}
 
-			_, secrets, err := createDPoPService()
+			authSvc, _, err := createAuthService()
 			if err != nil {
 				return wrapDashboardError(err)
 			}
-
-			if err := secrets.Set(ports.KeyDashboardAppID, appID); err != nil {
-				return wrapDashboardError(err)
-			}
-			if err := secrets.Set(ports.KeyDashboardAppRegion, region); err != nil {
+			if err := authSvc.SetActiveApp(cmd.Context(), appID, region); err != nil {
 				return wrapDashboardError(err)
 			}
 

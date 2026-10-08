@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestClearDashboardCredentials(t *testing.T) {
 			"api_key":                  "keep-me",
 		}}
 
-		clearDashboardCredentials(store)
+		require.NoError(t, clearDashboardCredentials(store))
 
 		// Dashboard keys should be gone
 		assert.Empty(t, store.data["dashboard_user_token"])
@@ -63,3 +64,15 @@ func (m *memStore) Get(key string) (string, error) {
 func (m *memStore) Delete(key string) error { delete(m.data, key); return nil }
 func (m *memStore) IsAvailable() bool       { return true }
 func (m *memStore) Name() string            { return "mem" }
+
+type failingDeleteStore struct{ *memStore }
+
+func (failingDeleteStore) Delete(string) error { return errors.New("keychain locked") }
+
+func TestClearDashboardCredentials_ReportsAKeyItCouldNotRemove(t *testing.T) {
+	// Reset must not print "cleared" while the session's tokens are stored.
+	err := clearDashboardCredentials(failingDeleteStore{&memStore{data: map[string]string{"dashboard_user_token": "tok"}}})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "keychain locked")
+}

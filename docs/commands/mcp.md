@@ -49,6 +49,7 @@ nylas mcp install --assistant claude-code --auth oauth  # Proxy authenticates wi
 Every assistant is configured to launch `nylas mcp serve` over STDIO, and no
 credential is written into any assistant config. `--auth oauth` adds
 `--auth oauth` to the launcher (run `nylas oauth login --for mcp` first).
+Without `--auth`, re-running `install` keeps the mode an assistant already has.
 
 Pointing an assistant directly at the hosted server
 (`https://mcp.{us,eu}.nylas.com`) and letting it run OAuth itself is not
@@ -105,6 +106,10 @@ With `--auth oauth` the proxy:
 - asks for a valid token before **every** request and refreshes it as it nears
   expiry (access tokens last 15 minutes). Refreshing is serialised across every
   `nylas mcp serve` on the machine, so several assistants can share one login.
+  A token with time left is kept in memory rather than read from the keyring
+  each time, so after `nylas oauth logout` a running proxy keeps using its
+  current access token until that token expires (at most 15 minutes); restart
+  the assistant to stop it sooner.
 - sends requests to the MCP server named in the token's audience (`aud`), not
   the configured region, and refuses a token whose audience names neither.
 - offers the default grant (`X-Nylas-Grant-Id` and the injected `grant_id`)

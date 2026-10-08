@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
+	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/version"
 )
 
@@ -138,17 +139,16 @@ func parseOAuthError(statusCode int, body []byte) error {
 		Description string `json:"error_description"`
 	}
 	if err := json.Unmarshal(body, &payload); err == nil && payload.Error != "" {
+		// Both reach the terminal in the CLI's error text, so neither may
+		// carry escape sequences or line breaks from the server.
 		return &domain.OAuthError{
-			Code:        payload.Error,
-			Description: payload.Description,
+			Code:        httputil.PrintableSnippet(payload.Error, 64),
+			Description: httputil.PrintableSnippet(payload.Description, 200),
 			StatusCode:  statusCode,
 		}
 	}
 
-	snippet := strings.TrimSpace(string(body))
-	if len(snippet) > 200 {
-		snippet = snippet[:200]
-	}
+	snippet := httputil.PrintableSnippet(string(body), 200)
 	return &domain.OAuthError{
 		Code:        "http_" + strconv.Itoa(statusCode),
 		Description: snippet,

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -40,8 +41,8 @@ func TestNewProxy(t *testing.T) {
 			t.Fatal("NewProxy returned nil")
 			return
 		}
-		if proxy.apiKey != "test-api-key" {
-			t.Errorf("expected apiKey 'test-api-key', got '%s'", proxy.apiKey)
+		if cred, err := proxy.creds.Credential(context.Background()); err != nil || cred.Token != "test-api-key" {
+			t.Errorf("expected the API key as the credential, got %+v, %v", cred, err)
 		}
 		if proxy.endpoint != NylasMCPEndpointUS {
 			t.Errorf("expected endpoint '%s', got '%s'", NylasMCPEndpointUS, proxy.endpoint)

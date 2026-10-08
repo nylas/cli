@@ -127,8 +127,10 @@ func switchOAuthSessionOrg(
 	}
 
 	if orgFlag != "" && resp.OrgPublicID != orgFlag {
+		// The sign-in has already replaced the session, so say where the
+		// dashboard commands now point rather than implying nothing changed.
 		return dashboardError(
-			fmt.Sprintf("signed in to organization %s, not %s", resp.OrgPublicID, orgFlag),
+			fmt.Sprintf("you are now signed in to organization %s, not %s", resp.OrgPublicID, orgFlag),
 			"Run `nylas dashboard orgs switch` again and choose "+orgFlag+" on the sign-in page",
 		)
 	}

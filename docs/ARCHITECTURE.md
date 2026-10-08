@@ -23,7 +23,10 @@ internal/
     mcp/                      # MCP proxy server
     utilities/                # Timezone, scheduling, contacts services
     oauth/                    # OAuth callback server
-    filelock/                 # Cross-process file lock (OAuth refresh)
+    oauthas/                  # Client for the Nylas OAuth authorization server (PKCE, refresh, revoke)
+    dashboard/                # Dashboard account and gateway clients
+    dpop/                     # DPoP proofs for the dashboard session
+    filelock/                 # Cross-process file lock (session writes)
     browser/                  # Browser automation
     tunnel/                   # Cloudflare tunnel
     webhookserver/            # Webhook server
@@ -37,6 +40,8 @@ internal/
     email/                    # Email operations
     integration/              # CLI integration tests
     mcp/                      # MCP server command
+    oauth/                    # nylas oauth login/status/token/logout
+    dashboard/                # nylas dashboard commands
     notetaker/                # Meeting notetaker
     otp/                      # OTP extraction
     scheduler/                # Booking pages
@@ -45,7 +50,7 @@ internal/
     update/                   # Self-update
     webhook/                  # Webhook management
   tui/                        # Terminal UI
-  app/                        # Shared app logic (auth, otp)
+  app/                        # Shared app logic (auth, otp, dashboard sessions, oauthlogin)
   testutil/                   # Test utilities
   util/                       # General utilities
 docs/                         # Documentation

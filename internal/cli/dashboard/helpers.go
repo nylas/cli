@@ -38,12 +38,30 @@ func createDPoPService() (ports.DPoP, ports.SecretStore, error) {
 		return nil, nil, err
 	}
 
-	dpopSvc, err := dpop.New(secretStore)
+	dpopSvc, err := loadOrCreateDPoPKey(secretStore)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return dpopSvc, secretStore, nil
+}
+
+// loadOrCreateDPoPKey loads the DPoP key, creating it under the dashboard
+// session lock when there is none. Two processes creating it at once would
+// each store a key and the last write would win, leaving the other with a
+// session bound to a key nothing holds any more.
+func loadOrCreateDPoPKey(secretStore ports.SecretStore) (*dpop.Service, error) {
+	if _, err := secretStore.Get(ports.KeyDashboardDPoPKey); !errors.Is(err, domain.ErrSecretNotFound) {
+		return dpop.New(secretStore) // stored, or a read error dpop.New reports
+	}
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+	unlock, err := common.DashboardSessionLock(secretStore).Lock(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire the dashboard session lock: %w", err)
+	}
+	defer func() { _ = unlock() }()
+	return dpop.New(secretStore) // reads again: another process may have created it
 }
 
 // createAuthService creates the full dashboard auth service chain.

@@ -254,3 +254,13 @@ func TestDecodeJSON_MapTarget(t *testing.T) {
 	assert.Equal(t, "bar", target["foo"])
 	assert.Equal(t, float64(42), target["num"])
 }
+
+func TestPrintableSnippet(t *testing.T) {
+	got := httputil.PrintableSnippet("  a\x1b]0;x\x07\r\nb  ", 100)
+	if got != "a ]0;x   b" {
+		t.Errorf("control characters: got %q", got)
+	}
+	if got := httputil.PrintableSnippet("héllo wörld", 5); got != "héllo…" {
+		t.Errorf("cut by rune: got %q", got)
+	}
+}
