@@ -32,6 +32,7 @@ func TestVirtualCalendarGrants(t *testing.T) {
 
 	client := nylas.NewHTTPClient()
 	client.SetRegion("us")
+	applyTestBaseURL(client)
 	client.SetCredentials("", "", apiKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -110,6 +111,7 @@ func TestVirtualCalendarWorkflow(t *testing.T) {
 
 	client := nylas.NewHTTPClient()
 	client.SetRegion("us")
+	applyTestBaseURL(client)
 	client.SetCredentials("", "", apiKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

@@ -117,8 +117,17 @@ func removeEnvKey(env []string, key string) []string {
 // getTestClient creates a test API client
 func getTestClient() *nylas.HTTPClient {
 	client := nylas.NewHTTPClient()
+	applyTestBaseURL(client)
 	client.SetCredentials(testClientID, "", testAPIKey)
 	return client
+}
+
+// applyTestBaseURL points direct API clients at NYLAS_API_BASE_URL (e.g. staging),
+// matching what the CLI binary does, so in-process calls hit the same environment.
+func applyTestBaseURL(client *nylas.HTTPClient) {
+	if baseURL := os.Getenv("NYLAS_API_BASE_URL"); baseURL != "" {
+		client.SetBaseURL(baseURL)
+	}
 }
 
 // skipIfProviderNotSupported checks if the stderr indicates the provider doesn't support
