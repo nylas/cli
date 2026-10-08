@@ -277,6 +277,13 @@ func (c *GatewayClient) doGraphQL(ctx context.Context, url, query string, variab
 //	NYLAS_DASHBOARD_GATEWAY_US_URL  → overrides US only
 //	NYLAS_DASHBOARD_GATEWAY_EU_URL  → overrides EU only
 //	NYLAS_DASHBOARD_GATEWAY_URL     → overrides both (single local gateway)
+//
+// GatewayURL returns the gateway GraphQL URL for region ("eu", else US),
+// honouring the NYLAS_DASHBOARD_GATEWAY_* overrides.
+func GatewayURL(region string) string {
+	return gatewayURL(region)
+}
+
 func gatewayURL(region string) string {
 	if region == "eu" {
 		if envURL := os.Getenv("NYLAS_DASHBOARD_GATEWAY_EU_URL"); envURL != "" {

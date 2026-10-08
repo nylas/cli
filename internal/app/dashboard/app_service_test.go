@@ -178,7 +178,7 @@ func TestLoadDashboardTokensPropagatesSecretStoreFailures(t *testing.T) {
 			failGetKey:     ports.KeyDashboardUserToken,
 		}
 
-		_, _, err := loadDashboardTokens(store)
+		_, _, err := loadDashboardTokens(store, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load dashboard user token")
 		assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)
@@ -193,7 +193,7 @@ func TestLoadDashboardTokensPropagatesSecretStoreFailures(t *testing.T) {
 		}
 		seedTokens(store, "user-token", "")
 
-		_, _, err := loadDashboardTokens(store)
+		_, _, err := loadDashboardTokens(store, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load dashboard organization token")
 		assert.ErrorIs(t, err, domain.ErrSecretStoreFailed)

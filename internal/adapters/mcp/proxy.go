@@ -6,23 +6,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/httputil"
 	"github.com/nylas/cli/internal/ports"
 )
 
 const (
 	// NylasMCPEndpointUS is the US regional MCP endpoint.
-	NylasMCPEndpointUS = "https://mcp.us.nylas.com"
+	NylasMCPEndpointUS = domain.MCPResourceUS
 	// NylasMCPEndpointEU is the EU regional MCP endpoint.
-	NylasMCPEndpointEU = "https://mcp.eu.nylas.com"
+	NylasMCPEndpointEU = domain.MCPResourceEU
 )
 
 // GetMCPEndpoint returns the appropriate MCP endpoint for the given region.
@@ -45,28 +48,67 @@ type rpcRequest struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
 	} `json:"params"`
+
+	// notification is set when the message had no "id" member. ID cannot
+	// say so (absent and null both decode to nil), and re-marshalling a
+	// notification with "id": null would turn it into a request.
+	notification bool
 }
+
+// MarshalJSON leaves "id" out of a notification; see rpcRequest.notification.
+func (r rpcRequest) MarshalJSON() ([]byte, error) {
+	type plain rpcRequest // drops this method, so Marshal does not recurse
+	if !r.notification {
+		return json.Marshal(plain(r))
+	}
+	return json.Marshal(struct {
+		JSONRPC string `json:"jsonrpc"`
+		Method  string `json:"method"`
+		Params  any    `json:"params"`
+	}{r.JSONRPC, r.Method, r.Params})
+}
+
+// mcpHTTPClient sends every request with its credential (an API key or an
+// OAuth access token), so it follows no redirect.
+var mcpHTTPClient = httputil.NewNoRedirectClient(httputil.DefaultClientTimeout)
 
 // Proxy forwards MCP requests from STDIO to the Nylas MCP server.
 type Proxy struct {
+	// endpoint is the regional default, used when a credential names no
+	// server of its own. An OAuth credential always names one.
 	endpoint     string
-	apiKey       string
-	authHeader   string // Cached "Bearer <apiKey>" value
+	creds        ports.MCPCredentialSource
+	oauth        bool
 	defaultGrant string
 	grantStore   ports.GrantStore
 	httpClient   *http.Client
-	sessionID    string
-	grantTools   map[string]bool // Dynamically discovered tools that accept grant_id
-	mu           sync.RWMutex
+	// protocolVersion is what the server answered initialize with, sent back
+	// as Mcp-Protocol-Version on every later request. There is no session:
+	// the hosted server is stateless and issues no Mcp-Session-Id.
+	protocolVersion string
+	grantTools      map[string]bool // Dynamically discovered tools that accept grant_id
+	mu              sync.RWMutex
 }
 
 // NewProxy creates a new MCP proxy with the given API key and region.
 func NewProxy(apiKey, region string) *Proxy {
 	return &Proxy{
 		endpoint:   GetMCPEndpoint(region),
-		apiKey:     apiKey,
-		authHeader: "Bearer " + apiKey, // Cache auth header
-		httpClient: httputil.DefaultClient,
+		creds:      apiKeyCredentials{apiKey: apiKey},
+		httpClient: mcpHTTPClient,
+	}
+}
+
+// NewOAuthProxy creates an MCP proxy that authenticates with an OAuth
+// session. The source is asked for a credential before every request, so a
+// fifteen-minute access token is refreshed as it ages rather than failing
+// the first request after it expires, and the MCP host is whatever the
+// credential names — the audience the token was issued for.
+func NewOAuthProxy(creds ports.MCPCredentialSource) *Proxy {
+	return &Proxy{
+		creds:      creds,
+		oauth:      true,
+		httpClient: mcpHTTPClient,
 	}
 }
 
@@ -89,8 +131,13 @@ func (p *Proxy) SetGrantStore(store ports.GrantStore) {
 
 // Run starts the proxy, reading from stdin and writing to stdout.
 func (p *Proxy) Run(ctx context.Context) error {
-	reader := bufio.NewReader(os.Stdin)
-	writer := bufio.NewWriter(os.Stdout)
+	return p.serve(ctx, os.Stdin, os.Stdout)
+}
+
+// serve runs the proxy loop over the given streams.
+func (p *Proxy) serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	reader := bufio.NewReader(in)
+	writer := bufio.NewWriter(out)
 
 	for {
 		select {
@@ -114,27 +161,35 @@ func (p *Proxy) Run(ctx context.Context) error {
 			continue
 		}
 
+		notification := isNotification(line)
+
 		// Parse JSON once for all operations
 		var req rpcRequest
 		if err := json.Unmarshal(line, &req); err != nil {
-			// Not valid JSON - forward as-is, let server handle error
+			// Not a single request (invalid JSON, a batch): forward as-is
+			// and let the server handle it.
 			response, fwdErr := p.forward(ctx, line, nil)
 			if fwdErr != nil {
+				if notification {
+					log.Printf("mcp: forwarding a notification failed: %q", fwdErr.Error())
+					continue
+				}
 				errorResp := p.createErrorResponse(nil, fwdErr)
 				_, _ = writer.Write(append(errorResp, '\n'))
 				_ = writer.Flush()
 				continue
 			}
-			if len(response) > 0 {
+			if len(response) > 0 && !notification {
 				_, _ = writer.Write(append(response, '\n'))
 				_ = writer.Flush()
 			}
 			continue
 		}
+		req.notification = notification
 
 		// Try to handle locally first (for get_grant without email)
 		if localResponse, handled := p.handleLocalToolCall(&req); handled {
-			if len(localResponse) > 0 {
+			if len(localResponse) > 0 && !notification {
 				if _, err := writer.Write(append(localResponse, '\n')); err != nil {
 					return fmt.Errorf("writing local response: %w", err)
 				}
@@ -146,6 +201,14 @@ func (p *Proxy) Run(ctx context.Context) error {
 		// Forward to Nylas MCP server
 		response, err := p.forward(ctx, line, &req)
 		if err != nil {
+			// A notification must never be answered, not even with an error
+			// (JSON-RPC 2.0 §4.1), so its failure goes to the log instead.
+			// Both are quoted: they carry text from the client and the
+			// server, which must not reach a terminal as escape sequences.
+			if notification {
+				log.Printf("mcp: forwarding %q notification failed: %q", req.Method, err.Error())
+				continue
+			}
 			// Write error response
 			errorResp := p.createErrorResponse(&req, err)
 			if _, writeErr := writer.Write(append(errorResp, '\n')); writeErr != nil {
@@ -155,8 +218,9 @@ func (p *Proxy) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Write response
-		if len(response) > 0 {
+		// Write response. Nothing answers a notification, so a body the
+		// server sent for one is not relayed either.
+		if len(response) > 0 && !notification {
 			if _, err := writer.Write(append(response, '\n')); err != nil {
 				return fmt.Errorf("writing response: %w", err)
 			}
@@ -172,63 +236,37 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 	isToolsList := parsed != nil && parsed.Method == "tools/list"
 	isInitialize := parsed != nil && parsed.Method == "initialize"
 
-	// Inject default grant into tool calls if not specified
-	request = p.injectDefaultGrant(request, parsed)
-
-	// Normalize tool arguments (type coercion, timestamp rounding)
-	request = p.normalizeToolArguments(request, parsed)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(request))
+	cred, err := p.credential(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, err
 	}
 
-	// Set required headers (use cached auth header)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", p.authHeader)
+	renewed := false
+	for {
+		resp, err := p.send(ctx, request, parsed, cred)
+		if err != nil {
+			return nil, err
+		}
 
-	// Include session ID and default grant if we have them (read lock)
-	p.mu.RLock()
-	if p.sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", p.sessionID)
-	}
-	if p.defaultGrant != "" {
-		req.Header.Set("X-Nylas-Grant-Id", p.defaultGrant)
-	}
-	p.mu.RUnlock()
+		// A 401 carrying a Bearer challenge means the token was refused, not
+		// that the request was bad: renew once and resend. A second refusal
+		// is reported rather than retried, so a revoked session cannot loop.
+		if resp.StatusCode == http.StatusUnauthorized && !renewed &&
+			domain.ParseBearerChallenge(resp.Header.Get("WWW-Authenticate")) != nil {
+			next, renewErr := p.renew(ctx, cred)
+			if renewErr == nil {
+				drainAndClose(resp)
+				cred = next
+				renewed = true
+				continue
+			}
+			if !errors.Is(renewErr, domain.ErrMCPCredentialNotRenewable) {
+				drainAndClose(resp)
+				return nil, renewErr
+			}
+		}
 
-	// Send request
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Store session ID if provided
-	if sessionID := resp.Header.Get("Mcp-Session-Id"); sessionID != "" {
-		p.mu.Lock()
-		p.sessionID = sessionID
-		p.mu.Unlock()
-	}
-
-	// Handle response based on content type
-	contentType := resp.Header.Get("Content-Type")
-
-	// Handle 202 Accepted (no body)
-	if resp.StatusCode == http.StatusAccepted {
-		return nil, nil
-	}
-
-	// Handle errors
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Handle SSE stream
-	if strings.HasPrefix(contentType, "text/event-stream") {
-		body, err := p.readSSE(resp.Body)
+		body, err := p.readResponse(resp, cred)
 		if err != nil {
 			return nil, err
 		}
@@ -237,64 +275,11 @@ func (p *Proxy) forward(ctx context.Context, request []byte, parsed *rpcRequest)
 			body = p.modifyToolsListResponse(body)
 		}
 		if isInitialize {
+			p.rememberProtocolVersion(body)
 			body = p.modifyInitializeResponse(body)
 		}
 		return body, nil
 	}
-
-	// Handle JSON response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-
-	// Modify responses as needed
-	if isToolsList {
-		body = p.modifyToolsListResponse(body)
-	}
-	if isInitialize {
-		body = p.modifyInitializeResponse(body)
-	}
-
-	return body, nil
-}
-
-// readSSE reads Server-Sent Events and extracts JSON-RPC messages.
-func (p *Proxy) readSSE(reader io.Reader) ([]byte, error) {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
-	var responses []json.RawMessage
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// SSE data lines start with "data: "
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
-			if data != "" {
-				responses = append(responses, json.RawMessage(data))
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading SSE: %w", err)
-	}
-
-	// Return single response or batch
-	if len(responses) == 0 {
-		return nil, nil
-	}
-	if len(responses) == 1 {
-		return responses[0], nil
-	}
-
-	// Batch multiple responses
-	batch, err := json.Marshal(responses)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling batch: %w", err)
-	}
-	return batch, nil
 }
 
 // fallbackGrantTools is a static fallback used before the first tools/list response
@@ -357,13 +342,9 @@ func (p *Proxy) toolRequiresGrant(toolName string) bool {
 	return fallbackGrantTools[toolName]
 }
 
-// injectDefaultGrant injects the default grant_id into tool call requests if not already specified.
-// Uses the pre-parsed request if available to avoid re-parsing.
-func (p *Proxy) injectDefaultGrant(request []byte, parsed *rpcRequest) []byte {
-	p.mu.RLock()
-	defaultGrant := p.defaultGrant
-	p.mu.RUnlock()
-
+// injectGrant injects defaultGrant as grant_id into a tool call that accepts
+// one and names none. An empty defaultGrant injects nothing.
+func (p *Proxy) injectGrant(request []byte, parsed *rpcRequest, defaultGrant string) []byte {
 	if defaultGrant == "" {
 		return request
 	}

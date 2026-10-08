@@ -656,7 +656,7 @@ func TestAuthServiceStoreTokens(t *testing.T) {
 		store := newMemSecretStore()
 		svc := NewAuthService(&dashboardadapter.MockAccountClient{}, store)
 
-		err := svc.storeTokens(&domain.DashboardAuthResponse{
+		err := svc.storeTokens(context.Background(), &domain.DashboardAuthResponse{
 			UserToken: "user-token",
 			User:      domain.DashboardUser{PublicID: "user-1"},
 			Organizations: []domain.DashboardOrganization{
@@ -676,7 +676,7 @@ func TestAuthServiceStoreTokens(t *testing.T) {
 		store := newMemSecretStore()
 		svc := NewAuthService(&dashboardadapter.MockAccountClient{}, store)
 
-		err := svc.storeTokens(&domain.DashboardAuthResponse{
+		err := svc.storeTokens(context.Background(), &domain.DashboardAuthResponse{
 			UserToken: "user-token",
 			User:      domain.DashboardUser{PublicID: "user-1"},
 			Organizations: []domain.DashboardOrganization{

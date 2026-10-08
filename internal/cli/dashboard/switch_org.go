@@ -1,7 +1,9 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -19,7 +21,11 @@ func newSwitchOrgCmd() *cobra.Command {
 		Long: `Switch your dashboard session to a different organization.
 
 Lists all organizations you belong to and lets you select one,
-or pass --org to switch directly.`,
+or pass --org to switch directly.
+
+A session from 'nylas oauth login' belongs to the organization chosen on the
+sign-in page, so switching opens the browser to sign in again: choose the
+organization there. --org then checks that the one chosen is the one named.`,
 		Example: `  # Interactive — choose from your orgs
   nylas dashboard orgs switch
 
@@ -29,6 +35,11 @@ or pass --org to switch directly.`,
 			authSvc, _, err := createAuthService()
 			if err != nil {
 				return wrapDashboardError(err)
+			}
+			if authSvc.IsOAuthSession() {
+				ctx, cancel := common.CreateLongContext()
+				defer cancel()
+				return switchOAuthSessionOrg(ctx, cmd.OutOrStdout(), orgFlag, OAuthRelogin)
 			}
 			if orgFlag == "" && !isInteractive() {
 				return dashboardError(
@@ -89,6 +100,43 @@ or pass --org to switch directly.`,
 	cmd.Flags().StringVar(&orgFlag, "org", "", "Organization public ID to switch to")
 
 	return cmd
+}
+
+// switchOAuthSessionOrg changes the organization of a session from `nylas
+// oauth login`. The server binds that session to the organization picked on
+// its consent screen and refuses to switch it, so the switch is a new sign-in.
+func switchOAuthSessionOrg(
+	ctx context.Context,
+	out io.Writer,
+	orgFlag string,
+	relogin func(context.Context) (*domain.DashboardOAuthExchangeResponse, error),
+) error {
+	if relogin == nil {
+		return dashboardError(
+			"this session came from `nylas oauth login` and its organization is chosen at sign-in",
+			"Run `nylas oauth login` again and choose the organization there",
+		)
+	}
+
+	_, _ = fmt.Fprintln(out, "This session came from `nylas oauth login`, which is tied to the organization chosen at sign-in.")
+	_, _ = fmt.Fprintln(out, "Opening your browser to sign in again: choose the organization there.")
+
+	resp, err := relogin(ctx)
+	if err != nil {
+		return wrapDashboardError(err)
+	}
+
+	if orgFlag != "" && resp.OrgPublicID != orgFlag {
+		// The sign-in has already replaced the session, so say where the
+		// dashboard commands now point rather than implying nothing changed.
+		return dashboardError(
+			fmt.Sprintf("you are now signed in to organization %s, not %s", resp.OrgPublicID, orgFlag),
+			"Run `nylas dashboard orgs switch` again and choose "+orgFlag+" on the sign-in page",
+		)
+	}
+
+	_, _ = common.Green.Fprintf(out, "✓ Switched to organization: %s\n", resp.OrgPublicID)
+	return nil
 }
 
 // selectOrgFromSession prompts the user to select an org from the session's relations.

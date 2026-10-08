@@ -15,6 +15,8 @@ import (
 type AuthService struct {
 	account ports.DashboardAccountClient
 	secrets ports.SecretStore
+	renewer *SessionRenewer
+	server  string
 }
 
 var (
@@ -51,6 +53,21 @@ func NewAuthService(account ports.DashboardAccountClient, secrets ports.SecretSt
 	}
 }
 
+// WithSessionRenewer lets the service keep a session from `nylas oauth login`
+// current. r may be nil.
+func (s *AuthService) WithSessionRenewer(r *SessionRenewer) *AuthService {
+	s.renewer = r
+	return s
+}
+
+// WithServer ties the stored session to server, the identity of the servers
+// its tokens are sent to (see domain.DashboardSessionServer). A session stored
+// for other servers is refused rather than sent. Empty skips the check.
+func (s *AuthService) WithServer(server string) *AuthService {
+	s.server = server
+	return s
+}
+
 // Register creates a new dashboard account and triggers email verification.
 func (s *AuthService) Register(ctx context.Context, email, password string, privacyPolicyAccepted bool) (*domain.DashboardRegisterResponse, error) {
 	return s.account.Register(ctx, email, password, privacyPolicyAccepted)
@@ -63,7 +80,7 @@ func (s *AuthService) VerifyEmailCode(ctx context.Context, email, code, region s
 		return nil, err
 	}
 
-	if err := s.storeTokens(resp); err != nil {
+	if err := s.storeTokens(ctx, resp); err != nil {
 		return nil, fmt.Errorf("failed to store credentials: %w", err)
 	}
 	return resp, nil
@@ -83,7 +100,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, orgPublicID st
 	}
 
 	if auth != nil {
-		if err := s.storeTokens(auth); err != nil {
+		if err := s.storeTokens(ctx, auth); err != nil {
 			return nil, nil, fmt.Errorf("failed to store credentials: %w", err)
 		}
 		return auth, nil, nil
@@ -99,7 +116,7 @@ func (s *AuthService) CompleteMFA(ctx context.Context, userPublicID, code, orgPu
 		return nil, err
 	}
 
-	if err := s.storeTokens(resp); err != nil {
+	if err := s.storeTokens(ctx, resp); err != nil {
 		return nil, fmt.Errorf("failed to store credentials: %w", err)
 	}
 	return resp, nil
@@ -107,7 +124,7 @@ func (s *AuthService) CompleteMFA(ctx context.Context, userPublicID, code, orgPu
 
 // Refresh refreshes the session tokens using the stored tokens.
 func (s *AuthService) Refresh(ctx context.Context) error {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
 	if err != nil {
 		return err
 	}
@@ -118,7 +135,20 @@ func (s *AuthService) Refresh(ctx context.Context) error {
 
 // Logout invalidates the session and clears local tokens.
 func (s *AuthService) Logout(ctx context.Context) error {
-	userToken, orgToken, _ := s.loadTokens()
+	return s.withSessionLock(ctx, func() error { return s.logout(ctx) })
+}
+
+func (s *AuthService) logout(ctx context.Context) error {
+	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
+
+	// A session for other servers is cleared but not revoked: sending its
+	// tokens here would hand them to a server that never issued them.
+	if errors.Is(err, domain.ErrDashboardServerMismatch) {
+		if clearErr := s.clearTokens(); clearErr != nil {
+			return clearErr
+		}
+		return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+	}
 
 	// Best effort: call the server to invalidate tokens
 	if userToken != "" {
@@ -143,12 +173,19 @@ func (s *AuthService) SSOPoll(ctx context.Context, flowID, orgPublicID string) (
 	}
 
 	if resp.Status == domain.SSOStatusComplete && resp.Auth != nil {
-		if err := s.storeTokens(resp.Auth); err != nil {
+		if err := s.storeTokens(ctx, resp.Auth); err != nil {
 			return nil, fmt.Errorf("failed to store credentials: %w", err)
 		}
 	}
 
 	return resp, nil
+}
+
+// IsOAuthSession reports whether the stored session was exchanged from
+// `nylas oauth login`. Such a session is bound to the organization chosen at
+// sign-in, so switching organization means signing in again.
+func (s *AuthService) IsOAuthSession() bool {
+	return isOAuthSession(s.secrets)
 }
 
 // IsLoggedIn returns true if dashboard tokens exist in the keyring.
@@ -179,7 +216,7 @@ func (s *AuthService) GetStatus() Status {
 
 // GetCurrentSession returns the current session info, including the active org and all orgs.
 func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardSessionResponse, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +236,7 @@ func (s *AuthService) GetCurrentSession(ctx context.Context) (*domain.DashboardS
 
 // SwitchOrg switches the active organization and stores the new org token.
 func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domain.DashboardSwitchOrgResponse, error) {
-	userToken, orgToken, err := s.loadTokens()
+	userToken, orgToken, err := s.loadTokens(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -220,11 +257,13 @@ func (s *AuthService) SwitchOrg(ctx context.Context, orgPublicID string) (*domai
 	if resp.Org.PublicID != "" {
 		nextOrgID = resp.Org.PublicID
 	}
-	if err := s.replaceSecretValues(dashboardSwitchOrgStateKeys, map[string]*string{
-		ports.KeyDashboardOrgToken:    stringPtrOrNil(resp.OrgToken),
-		ports.KeyDashboardOrgPublicID: stringPtrOrNil(nextOrgID),
-		ports.KeyDashboardAppID:       nil,
-		ports.KeyDashboardAppRegion:   nil,
+	if err := s.withSessionLock(ctx, func() error {
+		return s.replaceSecretValues(dashboardSwitchOrgStateKeys, map[string]*string{
+			ports.KeyDashboardOrgToken:    stringPtrOrNil(resp.OrgToken),
+			ports.KeyDashboardOrgPublicID: stringPtrOrNil(nextOrgID),
+			ports.KeyDashboardAppID:       nil,
+			ports.KeyDashboardAppRegion:   nil,
+		})
 	}); err != nil {
 		return nil, fmt.Errorf("failed to persist organization switch: %w", err)
 	}
@@ -241,7 +280,9 @@ func (s *AuthService) SyncSessionOrg(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch current dashboard session: %w", err)
 	}
 	if session.CurrentOrg != "" {
-		if err := s.secrets.Set(ports.KeyDashboardOrgPublicID, session.CurrentOrg); err != nil {
+		if err := s.withSessionLock(ctx, func() error {
+			return s.secrets.Set(ports.KeyDashboardOrgPublicID, session.CurrentOrg)
+		}); err != nil {
 			return fmt.Errorf("failed to store active organization: %w", err)
 		}
 	}
@@ -249,20 +290,49 @@ func (s *AuthService) SyncSessionOrg(ctx context.Context) error {
 }
 
 // storeTokens persists auth tokens and user/org identifiers.
-func (s *AuthService) storeTokens(resp *domain.DashboardAuthResponse) error {
+func (s *AuthService) storeTokens(ctx context.Context, resp *domain.DashboardAuthResponse) error {
+	return s.withSessionLock(ctx, func() error { return s.storeTokensLocked(resp) })
+}
+
+func (s *AuthService) storeTokensLocked(resp *domain.DashboardAuthResponse) error {
 	orgPublicID := ""
 	if len(resp.Organizations) == 1 {
 		orgPublicID = resp.Organizations[0].PublicID
 	}
 
-	return s.replaceSecretValues(dashboardSessionStateKeys, map[string]*string{
-		ports.KeyDashboardUserToken:    stringPtrOrNil(resp.UserToken),
-		ports.KeyDashboardOrgToken:     stringPtrOrNil(resp.OrgToken),
-		ports.KeyDashboardUserPublicID: stringPtrOrNil(resp.User.PublicID),
-		ports.KeyDashboardOrgPublicID:  stringPtrOrNil(orgPublicID),
-		ports.KeyDashboardAppID:        nil,
-		ports.KeyDashboardAppRegion:    nil,
+	return s.replaceSecretValues(oauthSessionStateKeys, map[string]*string{
+		ports.KeyDashboardUserToken:        stringPtrOrNil(resp.UserToken),
+		ports.KeyDashboardOrgToken:         stringPtrOrNil(resp.OrgToken),
+		ports.KeyDashboardUserPublicID:     stringPtrOrNil(resp.User.PublicID),
+		ports.KeyDashboardOrgPublicID:      stringPtrOrNil(orgPublicID),
+		ports.KeyDashboardAppID:            nil,
+		ports.KeyDashboardAppRegion:        nil,
+		ports.KeyDashboardSessionOrigin:    nil,
+		ports.KeyDashboardSessionExpiresAt: nil,
+		ports.KeyDashboardSessionServer:    stringPtrOrNil(s.server),
 	})
+}
+
+// SetActiveApp stores the active application selection.
+func (s *AuthService) SetActiveApp(ctx context.Context, appID, region string) error {
+	return s.withSessionLock(ctx, func() error {
+		return s.replaceSecretValues([]string{ports.KeyDashboardAppID, ports.KeyDashboardAppRegion}, map[string]*string{
+			ports.KeyDashboardAppID:     stringPtrOrNil(appID),
+			ports.KeyDashboardAppRegion: stringPtrOrNil(region),
+		})
+	})
+}
+
+// withSessionLock runs fn holding the cross-process dashboard session lock,
+// the one the session renewer takes, so a password, SSO or OAuth login, a
+// logout and a renewal never interleave their writes. Without a renewer (and
+// for the services the renewer builds while it already holds the lock) fn
+// runs directly: the lock is not re-entrant.
+func (s *AuthService) withSessionLock(ctx context.Context, fn func() error) error {
+	if s.renewer == nil {
+		return fn()
+	}
+	return s.renewer.withLock(ctx, fn)
 }
 
 // SetActiveOrg updates the active organization.
@@ -274,7 +344,7 @@ func (s *AuthService) SetActiveOrg(orgPublicID string) error {
 // including the active app selection to prevent stale state after re-login.
 func (s *AuthService) clearTokens() error {
 	var errs []error
-	for _, key := range dashboardSessionStateKeys {
+	for _, key := range oauthSessionStateKeys {
 		if err := s.secrets.Delete(key); err != nil {
 			errs = append(errs, fmt.Errorf("failed to clear %s: %w", key, err))
 		}
@@ -282,31 +352,53 @@ func (s *AuthService) clearTokens() error {
 	return errors.Join(errs...)
 }
 
-// loadTokens retrieves the stored tokens.
-func (s *AuthService) loadTokens() (userToken, orgToken string, err error) {
-	return loadDashboardTokens(s.secrets)
+// loadTokens retrieves the stored tokens, renewing a session from OAuth first.
+func (s *AuthService) loadTokens(ctx context.Context) (userToken, orgToken string, err error) {
+	if err := s.renewer.EnsureFresh(ctx); err != nil {
+		return "", "", err
+	}
+	return loadDashboardTokens(s.secrets, s.server)
 }
 
 func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken string) (string, string, error) {
-	resp, err := s.account.Refresh(ctx, userToken, orgToken)
+	// The server refuses to refresh a session exchanged from OAuth; exchange
+	// a fresh access token for a new one instead.
+	if isOAuthSession(s.secrets) {
+		if s.renewer == nil {
+			return "", "", errOAuthSessionNotRefreshable
+		}
+		return s.renewer.renewRejected(ctx, userToken)
+	}
+
+	err := s.withSessionLock(ctx, func() error {
+		// Another process may have refreshed while this one waited; its
+		// tokens are the live ones, and refreshing the spent pair would fail.
+		if stored, storedOrg, err := loadDashboardTokens(s.secrets, s.server); err == nil && stored != userToken {
+			userToken, orgToken = stored, storedOrg
+			return nil
+		}
+		resp, err := s.account.Refresh(ctx, userToken, orgToken)
+		if err != nil {
+			return err
+		}
+		updates := map[string]*string{
+			ports.KeyDashboardUserToken: stringPtrOrNil(resp.UserToken),
+		}
+		if resp.OrgToken != "" {
+			updates[ports.KeyDashboardOrgToken] = stringPtrOrNil(resp.OrgToken)
+		}
+		if err := s.replaceSecretValues(dashboardRefreshStateKeys, updates); err != nil {
+			return fmt.Errorf("failed to store refreshed credentials: %w", err)
+		}
+		userToken = resp.UserToken
+		if resp.OrgToken != "" {
+			orgToken = resp.OrgToken
+		}
+		return nil
+	})
 	if err != nil {
 		return "", "", err
 	}
-
-	updates := map[string]*string{
-		ports.KeyDashboardUserToken: stringPtrOrNil(resp.UserToken),
-	}
-	if resp.OrgToken != "" {
-		updates[ports.KeyDashboardOrgToken] = stringPtrOrNil(resp.OrgToken)
-	}
-	if err := s.replaceSecretValues(dashboardRefreshStateKeys, updates); err != nil {
-		return "", "", fmt.Errorf("failed to store refreshed credentials: %w", err)
-	}
-	userToken = resp.UserToken
-	if resp.OrgToken != "" {
-		orgToken = resp.OrgToken
-	}
-
 	return userToken, orgToken, nil
 }
 

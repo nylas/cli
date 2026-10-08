@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -30,9 +31,15 @@ type Service struct {
 func New(secrets ports.SecretStore) (*Service, error) {
 	s := &Service{}
 
-	// Try to load existing key
+	// Try to load existing key. Only a key that is genuinely absent is
+	// replaced: a failed read (a locked or unreachable keychain) must not
+	// overwrite the stored key, because the server binds a dashboard session,
+	// and each CLI access token it exchanges, to the key that proved them.
 	seedB64, err := secrets.Get(ports.KeyDashboardDPoPKey)
-	if err == nil && seedB64 != "" {
+	if err != nil && !errors.Is(err, domain.ErrSecretNotFound) {
+		return nil, fmt.Errorf("%w: failed to read the stored key: %w", domain.ErrDashboardDPoP, err)
+	}
+	if seedB64 != "" {
 		seed, decErr := base64.StdEncoding.DecodeString(seedB64)
 		if decErr == nil && len(seed) == ed25519.SeedSize {
 			s.privateKey = ed25519.NewKeyFromSeed(seed)

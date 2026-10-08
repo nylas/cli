@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"strings"
+	"time"
+)
+
 // DashboardUser represents an authenticated dashboard user.
 type DashboardUser struct {
 	PublicID     string `json:"publicId"`
@@ -28,6 +33,14 @@ type DashboardAuthResponse struct {
 	OrgToken      string                  `json:"orgToken"`
 	User          DashboardUser           `json:"user"`
 	Organizations []DashboardOrganization `json:"organizations"`
+}
+
+// DashboardOAuthExchangeResponse is a dashboard session exchanged from an
+// OAuth access token. It is for OrgPublicID only and cannot be refreshed.
+type DashboardOAuthExchangeResponse struct {
+	DashboardAuthResponse
+	OrgPublicID string    `json:"orgPublicId"`
+	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
 // DashboardMFARequired is returned when MFA is needed after login.
@@ -255,3 +268,23 @@ const (
 	GatewayBaseURLUS = "https://dashboard-api-gateway.us.nylas.com/graphql"
 	GatewayBaseURLEU = "https://dashboard-api-gateway.eu.nylas.com/graphql"
 )
+
+// DashboardSessionServer names the servers a dashboard session's tokens go
+// to: the account service that issues it and the gateway of each region. A
+// session is only ever sent to the servers it was stored with, so changing
+// any of them (an env var, the config file) needs a new login.
+func DashboardSessionServer(accountURL, gatewayUS, gatewayEU string) string {
+	norm := func(u string) string { return strings.TrimRight(strings.TrimSpace(u), "/") }
+	return "account=" + norm(accountURL) + " us=" + norm(gatewayUS) + " eu=" + norm(gatewayEU)
+}
+
+// DashboardSessionAccountURL returns the account URL part of a value built by
+// DashboardSessionServer, or "" when server is not one.
+func DashboardSessionAccountURL(server string) string {
+	first, _, _ := strings.Cut(server, " ")
+	account, ok := strings.CutPrefix(first, "account=")
+	if !ok {
+		return ""
+	}
+	return account
+}

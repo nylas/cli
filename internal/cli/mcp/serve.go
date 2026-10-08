@@ -6,14 +6,26 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/mcp"
+	"github.com/nylas/cli/internal/app/oauthlogin"
 	"github.com/nylas/cli/internal/cli/common"
+	oauthcli "github.com/nylas/cli/internal/cli/oauth"
+	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
+// Values of `nylas mcp serve --auth`.
+const (
+	authAPIKey = "api-key"
+	authOAuth  = "oauth"
+)
+
 func newServeCmd() *cobra.Command {
+	var authMode string
+
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the MCP server",
@@ -30,21 +42,60 @@ MCP server and adds local enhancements:
   - Timezone-aware timestamp display
   - Secure credential handling via system keyring
 
-The server communicates via STDIO (standard input/output) and requires
-Nylas credentials to be configured via 'nylas auth login'.
+Authentication (--auth):
+  api-key  (default) the API key from 'nylas auth login', sent to the MCP
+           server of the configured region.
+  oauth    the OAuth session from 'nylas oauth login --for mcp'. The token
+           is refreshed as it nears expiry (one refresher per machine, shared
+           with every other 'nylas mcp serve'), and requests go to the MCP
+           server named in the token's audience. The default grant is only
+           offered as a hint when the token lists it; local grant lookup is
+           off, since local grants belong to the API key's application.
+
+The server communicates via STDIO (standard input/output).
 
 For more information: https://developer.nylas.com/docs/dev-guide/mcp/`,
-		RunE: runServe,
+		Example: `  # Proxy with the API key (default)
+  nylas mcp serve
+
+  # Proxy with an OAuth session
+  nylas oauth login --for mcp
+  nylas mcp serve --auth oauth`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			proxy, err := buildProxy(authMode)
+			if err != nil {
+				return err
+			}
+			return runProxy(proxy)
+		},
 	}
+
+	cmd.Flags().StringVar(&authMode, "auth", authAPIKey, "credential to authenticate with: api-key or oauth")
 
 	return cmd
 }
 
-func runServe(cmd *cobra.Command, args []string) error {
+// buildProxy constructs the proxy for an --auth value. Anything but the two
+// known modes is refused rather than defaulted.
+func buildProxy(authMode string) (*mcp.Proxy, error) {
+	switch authMode {
+	case authAPIKey:
+		return buildAPIKeyProxy()
+	case authOAuth:
+		return buildOAuthProxy()
+	default:
+		return nil, common.NewUserError(
+			fmt.Sprintf("unknown --auth value %q", authMode),
+			"supported: api-key, oauth",
+		)
+	}
+}
+
+func buildAPIKeyProxy() (*mcp.Proxy, error) {
 	// Get API key from credentials
 	apiKey, err := common.GetAPIKey()
 	if err != nil {
-		return fmt.Errorf("failed to get API key: %w\n\nPlease run 'nylas auth login' first", err)
+		return nil, fmt.Errorf("failed to get API key: %w\n\nPlease run 'nylas auth login' first", err)
 	}
 
 	// Get region from config (defaults to "us")
@@ -54,20 +105,58 @@ func runServe(cmd *cobra.Command, args []string) error {
 		region = cfg.Region
 	}
 
-	// Get default grant ID (optional - helps Claude know which account to use)
-	grantID, _ := common.GetGrantID(nil)
-
 	// Create MCP proxy with region
 	proxy := mcp.NewProxy(apiKey, region)
-	if grantID != "" {
-		proxy.SetDefaultGrant(grantID)
-	}
+	setDefaultGrant(proxy)
 
 	// Set up grant store for local grant lookups (allows get_grant without email).
 	if grantStore, err := common.NewDefaultGrantStore(); err == nil {
 		proxy.SetGrantStore(grantStore)
 	}
+	return proxy, nil
+}
 
+// newOAuthCredentialsFn is swapped in tests.
+var newOAuthCredentialsFn = func() (ports.MCPCredentialSource, error) {
+	svc, err := oauthcli.NewLoginService()
+	if err != nil {
+		return nil, err
+	}
+	return oauthlogin.NewMCPCredentials(svc), nil
+}
+
+// oauthPreflightTimeout bounds the start-up check, which may refresh.
+const oauthPreflightTimeout = 30 * time.Second
+
+func buildOAuthProxy() (*mcp.Proxy, error) {
+	creds, err := newOAuthCredentialsFn()
+	if err != nil {
+		return nil, err
+	}
+
+	// Fail at start-up, where the message reaches a terminal or the
+	// assistant's server log, rather than on the first tool call.
+	ctx, cancel := context.WithTimeout(context.Background(), oauthPreflightTimeout)
+	defer cancel()
+	if _, err := creds.Credential(ctx); err != nil {
+		return nil, fmt.Errorf("no usable OAuth session for the Nylas MCP server: %w\n\nRun '%s' first", err, mcp.OAuthLoginCommand)
+	}
+
+	proxy := mcp.NewOAuthProxy(creds)
+	// A hint only: the proxy offers it per request, and only when the
+	// current token lists that grant.
+	setDefaultGrant(proxy)
+	return proxy, nil
+}
+
+func setDefaultGrant(proxy *mcp.Proxy) {
+	// Get default grant ID (optional - helps Claude know which account to use)
+	if grantID, _ := common.GetGrantID(nil); grantID != "" {
+		proxy.SetDefaultGrant(grantID)
+	}
+}
+
+func runProxy(proxy *mcp.Proxy) error {
 	// Setup context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

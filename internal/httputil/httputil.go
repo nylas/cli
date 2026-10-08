@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/version"
@@ -61,6 +63,18 @@ func NewClient(timeout time.Duration) *http.Client {
 // special behavior (e.g. disabled redirects).
 var DefaultClient = NewClient(DefaultClientTimeout)
 
+// NewNoRedirectClient is NewClient that never follows a redirect, for
+// requests that carry a credential: a 307/308 re-sends the body, and Go keeps
+// the Authorization header on a same-host or subdomain hop even if it drops
+// to http. The 3xx response is returned to the caller as is.
+func NewNoRedirectClient(timeout time.Duration) *http.Client {
+	client := NewClient(timeout)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return client
+}
+
 // NewServer returns an *http.Server hardened with the standard CLI defaults:
 // a 10s header-read timeout, 120s idle timeout, and a 1MB max header size.
 //
@@ -104,4 +118,20 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 // It uses LimitedBody to prevent oversized payloads.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	return json.NewDecoder(LimitedBody(w, r, MaxRequestBodySize)).Decode(target)
+}
+
+// PrintableSnippet makes text a server sent safe to put in an error message:
+// control characters (escape sequences, CR, LF) become spaces, so the text
+// cannot rewrite a terminal or forge a log line, and it is cut to max runes.
+func PrintableSnippet(text string, max int) string {
+	cleaned := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			return ' '
+		}
+		return r
+	}, strings.TrimSpace(text))
+	if runes := []rune(cleaned); len(runes) > max {
+		cleaned = string(runes[:max]) + "…"
+	}
+	return cleaned
 }

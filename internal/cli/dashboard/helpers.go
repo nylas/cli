@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/nylas/cli/internal/adapters/config"
 	"github.com/nylas/cli/internal/adapters/dashboard"
@@ -37,12 +38,30 @@ func createDPoPService() (ports.DPoP, ports.SecretStore, error) {
 		return nil, nil, err
 	}
 
-	dpopSvc, err := dpop.New(secretStore)
+	dpopSvc, err := loadOrCreateDPoPKey(secretStore)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return dpopSvc, secretStore, nil
+}
+
+// loadOrCreateDPoPKey loads the DPoP key, creating it under the dashboard
+// session lock when there is none. Two processes creating it at once would
+// each store a key and the last write would win, leaving the other with a
+// session bound to a key nothing holds any more.
+func loadOrCreateDPoPKey(secretStore ports.SecretStore) (*dpop.Service, error) {
+	if _, err := secretStore.Get(ports.KeyDashboardDPoPKey); !errors.Is(err, domain.ErrSecretNotFound) {
+		return dpop.New(secretStore) // stored, or a read error dpop.New reports
+	}
+	ctx, cancel := common.CreateContext()
+	defer cancel()
+	unlock, err := common.DashboardSessionLock(secretStore).Lock(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire the dashboard session lock: %w", err)
+	}
+	defer func() { _ = unlock() }()
+	return dpop.New(secretStore) // reads again: another process may have created it
 }
 
 // createAuthService creates the full dashboard auth service chain.
@@ -52,10 +71,13 @@ func createAuthService() (*dashboardapp.AuthService, ports.SecretStore, error) {
 		return nil, nil, err
 	}
 
-	baseURL := getDashboardAccountBaseURL(secretStore)
+	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
 
-	return dashboardapp.NewAuthService(accountClient, secretStore), secretStore, nil
+	authSvc := dashboardapp.NewAuthService(accountClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer())
+	return authSvc, secretStore, nil
 }
 
 // createAppService creates the dashboard app management service.
@@ -66,7 +88,65 @@ func createAppService() (*dashboardapp.AppService, error) {
 	}
 
 	gatewayClient := dashboard.NewGatewayClient(dpopSvc)
-	return dashboardapp.NewAppService(gatewayClient, secretStore), nil
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return dashboardapp.NewAppService(gatewayClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer()), nil
+}
+
+// OAuthTokenSource builds the OAuth session a dashboard session is exchanged
+// from. The oauth command package registers it: it owns that wiring and
+// already imports this package, so this package cannot import it back.
+var OAuthTokenSource func() (dashboardapp.OAuthAccessTokens, error)
+
+// OAuthRelogin runs `nylas oauth login` again and exchanges the new session,
+// which is how `orgs switch` changes the organization of an OAuth session.
+// The oauth command package registers it, like OAuthTokenSource.
+var OAuthRelogin func(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error)
+
+// lazyOAuthTokens defers building the OAuth session until a renewal needs a
+// token, so commands on a `nylas dashboard login` session never touch it.
+type lazyOAuthTokens struct{}
+
+func (lazyOAuthTokens) AccessTokenValidFor(ctx context.Context, minValid time.Duration) (string, error) {
+	if OAuthTokenSource == nil {
+		return "", errors.New("OAuth login is not available in this build")
+	}
+	tokens, err := OAuthTokenSource()
+	if err != nil {
+		return "", err
+	}
+	return tokens.AccessTokenValidFor(ctx, minValid)
+}
+
+func newSessionRenewer(accountClient *dashboard.AccountClient, secretStore ports.SecretStore) *dashboardapp.SessionRenewer {
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}, common.DashboardSessionLock(secretStore)).
+		WithServer(SessionServer())
+}
+
+// ExchangeOAuthSession turns the OAuth session into a dashboard session, so
+// `nylas oauth login` is enough for every `nylas dashboard` command.
+func ExchangeOAuthSession(ctx context.Context, tokens dashboardapp.OAuthAccessTokens) (*domain.DashboardOAuthExchangeResponse, error) {
+	dpopSvc, secretStore, err := createDPoPService()
+	if err != nil {
+		return nil, err
+	}
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, tokens, common.DashboardSessionLock(secretStore)).
+		WithServer(SessionServer()).
+		Login(ctx)
+}
+
+// ClearOAuthSessionThen ends the dashboard session if it came from OAuth,
+// then runs then, holding the dashboard session lock across both; see
+// SessionRenewer.ClearIfOAuthThen.
+func ClearOAuthSessionThen(ctx context.Context, then func() error) (clearErr, thenErr error) {
+	dpopSvc, secretStore, err := createDPoPService()
+	if err != nil {
+		return err, then()
+	}
+	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
+	return newSessionRenewer(accountClient, secretStore).ClearIfOAuthThen(ctx, then)
 }
 
 // createDomainService creates the dashboard domain management service.
@@ -83,14 +163,19 @@ func newDomainService() (*dashboardapp.DomainService, error) {
 		return nil, err
 	}
 
-	baseURL := getDashboardAccountBaseURL(secretStore)
+	baseURL := AccountBaseURL()
 	accountClient := dashboard.NewAccountClient(baseURL, dpopSvc)
-	return dashboardapp.NewDomainService(accountClient, secretStore), nil
+	return dashboardapp.NewDomainService(accountClient, secretStore).
+		WithSessionRenewer(newSessionRenewer(accountClient, secretStore)).
+		WithServer(SessionServer()), nil
 }
 
-// getDashboardAccountBaseURL returns the dashboard-account base URL.
+// AccountBaseURL returns the dashboard-account base URL.
 // Priority: NYLAS_DASHBOARD_ACCOUNT_URL env var > config file > default.
-func getDashboardAccountBaseURL(secrets ports.SecretStore) string {
+//
+// Exported because the OAuth authorization server is hosted by the same
+// service, so `nylas oauth` must resolve the same address.
+func AccountBaseURL() string {
 	if envURL := os.Getenv("NYLAS_DASHBOARD_ACCOUNT_URL"); envURL != "" {
 		return envURL
 	}
@@ -100,6 +185,16 @@ func getDashboardAccountBaseURL(secrets ports.SecretStore) string {
 		return cfg.Dashboard.AccountBaseURL
 	}
 	return domain.DefaultDashboardAccountBaseURL
+}
+
+// SessionServer names the servers the stored dashboard session may be sent
+// to, as configured right now. See domain.DashboardSessionServer.
+func SessionServer() string {
+	return domain.DashboardSessionServer(
+		AccountBaseURL(),
+		dashboard.GatewayURL("us"),
+		dashboard.GatewayURL("eu"),
+	)
 }
 
 // wrapDashboardError wraps a dashboard error as a CLIError, preserving

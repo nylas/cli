@@ -490,7 +490,7 @@ func TestProxy_normalizeToolArguments_CombinedWithGrantInjection(t *testing.T) {
 	proxy := NewProxy("test-api-key", "us")
 	proxy.SetDefaultGrant("my-grant-123")
 
-	// Simulate the full pipeline: injectDefaultGrant + normalizeToolArguments
+	// Simulate the full pipeline: injectGrant + normalizeToolArguments
 	raw := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_events","arguments":{"get_all_query_parameters":{"calendar_id":"primary","start":1747065600,"end":1747152000,"limit":5}}}}`)
 
 	var req rpcRequest
@@ -499,8 +499,8 @@ func TestProxy_normalizeToolArguments_CombinedWithGrantInjection(t *testing.T) {
 	}
 
 	// Apply both transformations like forward() does
-	result := proxy.injectDefaultGrant(raw, &req)
-	result = proxy.normalizeToolArguments(result, nil) // nil because injectDefaultGrant may have changed the bytes
+	result := proxy.injectGrant(raw, &req, "my-grant-123")
+	result = proxy.normalizeToolArguments(result, nil) // nil because injectGrant may have changed the bytes
 
 	var parsed rpcRequest
 	if err := json.Unmarshal(result, &parsed); err != nil {

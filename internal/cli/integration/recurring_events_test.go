@@ -25,6 +25,7 @@ func TestRecurringEventOperations(t *testing.T) {
 
 	client := nylas.NewHTTPClient()
 	client.SetRegion("us")
+	applyTestBaseURL(client)
 	client.SetCredentials("", "", apiKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -161,6 +162,7 @@ func TestRecurringEventPatterns(t *testing.T) {
 
 	client := nylas.NewHTTPClient()
 	client.SetRegion("us")
+	applyTestBaseURL(client)
 	client.SetCredentials("", "", apiKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

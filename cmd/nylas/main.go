@@ -20,6 +20,7 @@ import (
 	"github.com/nylas/cli/internal/cli/email"
 	"github.com/nylas/cli/internal/cli/mcp"
 	"github.com/nylas/cli/internal/cli/notetaker"
+	oauthcmd "github.com/nylas/cli/internal/cli/oauth"
 	"github.com/nylas/cli/internal/cli/otp"
 	"github.com/nylas/cli/internal/cli/rpc"
 	"github.com/nylas/cli/internal/cli/scheduler"
@@ -48,6 +49,7 @@ func main() {
 	rootCmd.AddCommand(calendar.NewCalendarCmd())
 	rootCmd.AddCommand(contacts.NewContactsCmd())
 	rootCmd.AddCommand(dashboard.NewDashboardCmd())
+	rootCmd.AddCommand(oauthcmd.NewOAuthCmd())
 	rootCmd.AddCommand(setup.NewSetupCmd())
 	rootCmd.AddCommand(scheduler.NewSchedulerCmd())
 	rootCmd.AddCommand(admin.NewAdminCmd())

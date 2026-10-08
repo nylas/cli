@@ -162,6 +162,19 @@ func (c *AccountClient) SSOStart(ctx context.Context, loginType, mode string, pr
 	return &result, nil
 }
 
+// ExchangeOAuthToken trades an OAuth access token for a DPoP-bound dashboard
+// session. The token goes in the body: this server reads Authorization as a
+// dashboard session token.
+func (c *AccountClient) ExchangeOAuthToken(ctx context.Context, accessToken string) (*domain.DashboardOAuthExchangeResponse, error) {
+	body := map[string]any{"accessToken": accessToken}
+
+	var result domain.DashboardOAuthExchangeResponse
+	if err := c.doPost(ctx, "/auth/cli/oauth/exchange", body, nil, "", &result); err != nil {
+		return nil, fmt.Errorf("failed to exchange the OAuth session for a dashboard session: %w", err)
+	}
+	return &result, nil
+}
+
 // SSOPoll polls the SSO device flow for completion.
 func (c *AccountClient) SSOPoll(ctx context.Context, flowID, orgPublicID string) (*domain.DashboardSSOPollResponse, error) {
 	body := map[string]any{
