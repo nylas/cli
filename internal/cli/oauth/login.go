@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -89,11 +90,23 @@ dev authorization server.`,
 			ctx, cancel := common.CreateLongContext()
 			defer cancel()
 
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Opening your browser to complete sign-in...")
+			// Structured output keeps stdout for the report, so the prompt
+			// goes to stderr there; --quiet drops it.
+			if !quietOutput(cmd) {
+				prompt := cmd.OutOrStdout()
+				if structuredOutput(cmd) {
+					prompt = cmd.ErrOrStderr()
+				}
+				_, _ = fmt.Fprintln(prompt, "Opening your browser to complete sign-in...")
+			}
 
 			result, err := svc.Login(ctx, opts)
 			if err != nil {
 				return wrapOAuthError(err)
+			}
+
+			if structuredOutput(cmd) {
+				return writeLoginReport(ctx, cmd, svc, result)
 			}
 
 			out := cmd.OutOrStdout()
@@ -124,7 +137,7 @@ dev authorization server.`,
 			defer cancelExchange()
 			dashboardSession, err := exchangeDashboardSessionFn(exchangeCtx, svc)
 			if errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept) {
-				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login` (run `nylas dashboard logout` first to use this login instead)")
+				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login`. To use this login instead, or if that session has expired, run `nylas dashboard logout` and then this command again")
 				return nil
 			}
 			if err != nil {
@@ -146,6 +159,28 @@ dev authorization server.`,
 		"region for an organization created if you sign up: us or eu (default: the configured region)")
 
 	return cmd
+}
+
+// writeLoginReport is the structured form of the login output. It runs the
+// same dashboard exchange as the text form, and like it reports a failed
+// exchange instead of returning it.
+func writeLoginReport(ctx context.Context, cmd *cobra.Command, svc loginService, result *oauthlogin.LoginResult) error {
+	report := newLoginReport(result)
+
+	exchangeCtx, cancelExchange := afterConsentContext(ctx)
+	defer cancelExchange()
+	dashboardSession, err := exchangeDashboardSessionFn(exchangeCtx, svc)
+	switch {
+	case errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept):
+		report.Dashboard.KeptDashboardLogin = true
+	case err != nil:
+		report.Dashboard.Error = err.Error()
+	default:
+		report.Dashboard.SignedIn = true
+		report.Dashboard.OrgPublicID = dashboardSession.OrgPublicID
+	}
+
+	return common.GetOutputWriter(cmd).Write(report)
 }
 
 // loginOptions turns the flags into a login request. A preset decides both

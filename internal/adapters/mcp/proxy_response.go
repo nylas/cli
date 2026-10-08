@@ -211,7 +211,7 @@ func (p *Proxy) modifyToolsListResponse(response []byte) []byte {
 		}
 	}
 
-	// Cache the discovered grant tools for use in injectDefaultGrant
+	// Cache the discovered grant tools for use in injectGrant
 	if len(discovered) > 0 {
 		p.mu.Lock()
 		p.grantTools = discovered

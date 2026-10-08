@@ -184,7 +184,8 @@ func (s *AuthService) SSOPoll(ctx context.Context, flowID, orgPublicID string) (
 // IsOAuthSession reports whether the stored session was exchanged from
 // `nylas oauth login`. Such a session is bound to the organization chosen at
 // sign-in, so switching organization means signing in again.
-func (s *AuthService) IsOAuthSession() bool {
+// A keyring that cannot be read is reported rather than answered as false.
+func (s *AuthService) IsOAuthSession() (bool, error) {
 	return isOAuthSession(s.secrets)
 }
 
@@ -362,15 +363,20 @@ func (s *AuthService) loadTokens(ctx context.Context) (userToken, orgToken strin
 
 func (s *AuthService) refreshTokens(ctx context.Context, userToken, orgToken string) (string, string, error) {
 	// The server refuses to refresh a session exchanged from OAuth; exchange
-	// a fresh access token for a new one instead.
-	if isOAuthSession(s.secrets) {
+	// a fresh access token for a new one instead. A failed read of the origin
+	// is returned rather than taken for a refreshable session.
+	fromOAuth, err := isOAuthSession(s.secrets)
+	if err != nil {
+		return "", "", err
+	}
+	if fromOAuth {
 		if s.renewer == nil {
 			return "", "", errOAuthSessionNotRefreshable
 		}
 		return s.renewer.renewRejected(ctx, userToken)
 	}
 
-	err := s.withSessionLock(ctx, func() error {
+	err = s.withSessionLock(ctx, func() error {
 		// Another process may have refreshed while this one waited; its
 		// tokens are the live ones, and refreshing the spent pair would fail.
 		if stored, storedOrg, err := loadDashboardTokens(s.secrets, s.server); err == nil && stored != userToken {
