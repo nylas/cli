@@ -139,6 +139,7 @@ nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth
 nylas oauth login --region eu    # Sign up with a new organization in the EU
 nylas oauth status               # Show the stored session and decoded token claims
 nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
+nylas oauth status --json        # Same facts as JSON (never includes a token)
 nylas oauth token                # Print a valid access token, refreshing if needed
 nylas oauth logout               # Revoke the session and clear stored tokens
 ```
@@ -180,6 +181,14 @@ server has already rotated the token it was sent.
 `nylas oauth status` decodes the access token and shows its audience, grants,
 scopes and expiry. The claims are **decoded, not verified** — the CLI does not
 check the signature; only the resource server's answer is authoritative.
+
+`nylas oauth status`, `login` and `logout` honour the global `--json`,
+`--format yaml` and `--quiet` flags. `oauth status --json` prints `logged_in`,
+`expired`, `server`, `issuer`, `client_id`, `resource`, `scopes`, `expires_at`,
+`has_refresh_token` and the decoded `token_claims` (plus `userinfo` with
+`--verify`); no token is ever included. `--quiet` prints nothing, so the exit
+code alone says whether a session is stored. `nylas oauth token` always prints
+the bare token.
 
 Default scopes are `openid`, `email`, `offline_access` and `dashboard.session`.
 `offline_access` is what makes the server issue a refresh token; without it the

@@ -36,7 +36,11 @@ organization there. --org then checks that the one chosen is the one named.`,
 			if err != nil {
 				return wrapDashboardError(err)
 			}
-			if authSvc.IsOAuthSession() {
+			fromOAuth, err := authSvc.IsOAuthSession()
+			if err != nil {
+				return wrapDashboardError(err)
+			}
+			if fromOAuth {
 				ctx, cancel := common.CreateLongContext()
 				defer cancel()
 				return switchOAuthSessionOrg(ctx, cmd.OutOrStdout(), orgFlag, OAuthRelogin)

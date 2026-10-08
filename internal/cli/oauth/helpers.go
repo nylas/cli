@@ -39,13 +39,17 @@ var (
 	clearDashboardSessionFn    = dashboard.ClearOAuthSessionThen
 )
 
-// The dashboard commands renew a session from `nylas oauth login` through the
-// same login service, so refreshes share this machine's session lock.
-func init() {
-	dashboard.OAuthTokenSource = func() (dashboardapp.OAuthAccessTokens, error) {
-		return createLoginService()
-	}
+// WireDashboard connects the dashboard commands to `nylas oauth login`: they
+// renew a session from it through the same login service, so refreshes share
+// this machine's session lock. main calls it when registering commands; until
+// then the dashboard commands treat an OAuth-backed session as unavailable.
+func WireDashboard() {
+	dashboard.OAuthTokenSource = dashboardTokenSource
 	dashboard.OAuthRelogin = relogin
+}
+
+func dashboardTokenSource() (dashboardapp.OAuthAccessTokens, error) {
+	return createLoginService()
 }
 
 // relogin signs in again with the stored session's scopes and resource and

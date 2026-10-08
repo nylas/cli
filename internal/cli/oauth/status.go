@@ -23,7 +23,11 @@ func newStatusCmd() *cobra.Command {
 The access token's claims (audience, grants, scopes, expiry) are DECODED
 locally and NOT VERIFIED: the CLI does not check the token's signature. They
 describe what the stored token says about itself; only the resource server's
-answer is authoritative. Use --verify to ask the authorization server.`,
+answer is authoritative. Use --verify to ask the authorization server.
+
+--json (or --format yaml) prints the same facts as structured output, still
+without any token; --quiet prints nothing and leaves the exit code to say
+whether a session is stored.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := createLoginServiceFn()
 			if err != nil {
@@ -37,6 +41,23 @@ answer is authoritative. Use --verify to ask the authorization server.`,
 
 			ctx, cancel := common.CreateContext()
 			defer cancel()
+
+			if structuredOutput(cmd) {
+				report := newStatusReport(session, time.Now())
+				if remote {
+					info, err := svc.UserInfo(ctx)
+					if err != nil {
+						return wrapOAuthError(err)
+					}
+					report.UserInfo = &userInfoReport{
+						Subject:       info.Subject,
+						Email:         info.Email,
+						EmailVerified: info.EmailVerified,
+						Org:           info.Org,
+					}
+				}
+				return common.GetOutputWriter(cmd).Write(report)
+			}
 
 			out := cmd.OutOrStdout()
 			expired := session.Tokens.IsExpired(time.Now())
