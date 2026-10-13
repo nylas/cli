@@ -144,3 +144,12 @@ func TestDeviceLogin_RegionConstrainsSignupAudience(t *testing.T) {
 	assert.Equal(t, domain.MCPResourceEU, result.Resource)
 	assert.Equal(t, domain.MCPResourceEU, f.secrets.GetAll()[ports.KeyOAuthResource])
 }
+
+func TestDeviceLogin_RetriesTransient503WithoutRestart(t *testing.T) {
+	f, c, opts, intervals := deviceFixture(t)
+	c.errors = []error{&domain.OAuthError{Code: "temporarily_unavailable", StatusCode: 503}}
+	_, err := f.service.Login(context.Background(), *opts)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Duration{5 * time.Second, 10 * time.Second}, *intervals)
+	assert.Equal(t, 2, c.polls)
+}

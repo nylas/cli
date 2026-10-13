@@ -94,6 +94,11 @@ func (s *Service) loginDevice(ctx context.Context, metadata *domain.OAuthServerM
 				switch oauthErr.Code {
 				case "authorization_pending":
 					continue
+				case "temporarily_unavailable", "server_error":
+					if oauthErr.StatusCode == 503 {
+						interval = max(interval, min(interval*2, 60*time.Second))
+						continue
+					}
 				case "slow_down":
 					interval += 5 * time.Second
 					continue
