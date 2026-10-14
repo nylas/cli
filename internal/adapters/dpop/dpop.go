@@ -40,13 +40,20 @@ func New(secrets ports.SecretStore) (*Service, error) {
 		return nil, fmt.Errorf("%w: failed to read the stored key: %w", domain.ErrDashboardDPoP, err)
 	}
 	if seedB64 != "" {
+		// A stored key that does not decode is reported, not replaced: it may
+		// be a damaged read rather than a damaged key, and overwriting it would
+		// orphan every session bound to the real one.
 		seed, decErr := base64.StdEncoding.DecodeString(seedB64)
-		if decErr == nil && len(seed) == ed25519.SeedSize {
-			s.privateKey = ed25519.NewKeyFromSeed(seed)
-			s.publicKey = s.privateKey.Public().(ed25519.PublicKey)
-			s.thumbprint = s.computeThumbprint()
-			return s, nil
+		if decErr != nil {
+			return nil, fmt.Errorf("%w: the stored key is not valid base64: %w", domain.ErrDashboardDPoP, decErr)
 		}
+		if len(seed) != ed25519.SeedSize {
+			return nil, fmt.Errorf("%w: the stored key is %d bytes, want %d", domain.ErrDashboardDPoP, len(seed), ed25519.SeedSize)
+		}
+		s.privateKey = ed25519.NewKeyFromSeed(seed)
+		s.publicKey = s.privateKey.Public().(ed25519.PublicKey)
+		s.thumbprint = s.computeThumbprint()
+		return s, nil
 	}
 
 	// Generate new keypair

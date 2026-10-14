@@ -50,6 +50,8 @@ func main() {
 	rootCmd.AddCommand(contacts.NewContactsCmd())
 	rootCmd.AddCommand(dashboard.NewDashboardCmd())
 	rootCmd.AddCommand(oauthcmd.NewOAuthCmd())
+	// The dashboard commands renew OAuth-backed sessions through `nylas oauth`.
+	oauthcmd.WireDashboard()
 	rootCmd.AddCommand(setup.NewSetupCmd())
 	rootCmd.AddCommand(scheduler.NewSchedulerCmd())
 	rootCmd.AddCommand(admin.NewAdminCmd())
