@@ -219,6 +219,18 @@ If that server registers the CLI under a different client id, override it with
 `NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
 redirect URI).
 
+A non-production server also names its own MCP servers, and answers the
+production ones with `invalid_target`. Point the regional resource at them with
+`NYLAS_MCP_US_URL` / `NYLAS_MCP_EU_URL` (an `https://` origin; `http://` only
+for loopback). Each replaces that region's server rather than adding one, so
+an OAuth token is still only sent to the one server its audience names:
+
+```bash
+NYLAS_DASHBOARD_ACCOUNT_URL=https://dashboard-account-stg.eu.nylas.com \
+NYLAS_MCP_US_URL=https://mcp-staging.us.nylas.com \
+nylas oauth login --device
+```
+
 The dashboard session exchange only accepts tokens from dashboard-account's
 built-in first-party clients (the Nylas CLI and Nylas Mail), and only that
 client may request `dashboard.session`. With any other client id the CLI leaves

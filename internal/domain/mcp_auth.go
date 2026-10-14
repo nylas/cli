@@ -3,6 +3,9 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"os"
 	"slices"
 	"strings"
 )
@@ -15,6 +18,16 @@ const (
 	MCPResourceEU = "https://mcp.eu.nylas.com"
 )
 
+// A non-production authorization server (staging, a local stack) names its
+// own MCP servers, and answers the production ones with invalid_target. These
+// replace the regional server for the OAuth resource, the token audience the
+// CLI accepts, and so the host an OAuth token is sent to. They replace rather
+// than add: the CLI still trusts exactly one server per region.
+const (
+	EnvMCPURLUS = "NYLAS_MCP_US_URL"
+	EnvMCPURLEU = "NYLAS_MCP_EU_URL"
+)
+
 // ErrMCPResource is returned for a resource or audience that is not one of
 // the hosted Nylas MCP servers.
 var ErrMCPResource = errors.New("not a Nylas MCP server")
@@ -24,9 +37,9 @@ var ErrMCPResource = errors.New("not a Nylas MCP server")
 func MCPResourceForRegion(region string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(region)) {
 	case "", "us":
-		return MCPResourceUS, nil
+		return mcpResource(EnvMCPURLUS, MCPResourceUS)
 	case "eu":
-		return MCPResourceEU, nil
+		return mcpResource(EnvMCPURLEU, MCPResourceEU)
 	default:
 		return "", fmt.Errorf("%w: unknown region %q (want us or eu)", ErrMCPResource, region)
 	}
@@ -34,10 +47,46 @@ func MCPResourceForRegion(region string) (string, error) {
 
 // ValidateMCPResource reports whether resource is a hosted MCP server.
 func ValidateMCPResource(resource string) error {
-	if resource != MCPResourceUS && resource != MCPResourceEU {
-		return fmt.Errorf("%w: %q", ErrMCPResource, resource)
+	if resource != "" {
+		for _, region := range []string{"us", "eu"} {
+			if allowed, err := MCPResourceForRegion(region); err == nil && resource == allowed {
+				return nil
+			}
+		}
 	}
-	return nil
+	return fmt.Errorf("%w: %q", ErrMCPResource, resource)
+}
+
+// mcpResource resolves one region's server: the override in env when set,
+// otherwise the production server. An override is an origin, HTTPS unless it
+// is loopback, so a typo cannot send a token over plain HTTP to another host.
+// A single trailing slash is dropped because the authorization server binds
+// the slash-less spelling as the audience; anything else is refused rather
+// than silently replaced by production.
+func mcpResource(env, production string) (string, error) {
+	raw := strings.TrimSpace(os.Getenv(env))
+	if raw == "" {
+		return production, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return "", fmt.Errorf("%w: %s must be an origin such as https://mcp.example.com", ErrMCPResource, env)
+	}
+	switch {
+	case u.Scheme == "https":
+	case u.Scheme == "http" && isLoopbackHost(u.Hostname()):
+	default:
+		return "", fmt.Errorf("%w: %s must use https (http only for localhost)", ErrMCPResource, env)
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // MCPEndpointFromAudience picks the MCP server a token was issued for. The

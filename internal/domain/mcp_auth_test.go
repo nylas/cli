@@ -30,6 +30,55 @@ func TestValidateMCPResource(t *testing.T) {
 	}
 }
 
+func TestMCPResource_Override(t *testing.T) {
+	t.Setenv(EnvMCPURLUS, "https://mcp-staging.us.example.test/")
+	got, err := MCPResourceForRegion("us")
+	require.NoError(t, err)
+	assert.Equal(t, "https://mcp-staging.us.example.test", got, "one trailing slash is dropped")
+	got, err = MCPResourceForRegion("eu")
+	require.NoError(t, err)
+	assert.Equal(t, MCPResourceEU, got, "the other region keeps production")
+
+	// The override REPLACES the region's server: production US is no longer
+	// trusted, so a token can only go to the one server per region.
+	require.NoError(t, ValidateMCPResource("https://mcp-staging.us.example.test"))
+	require.NoError(t, ValidateMCPResource(MCPResourceEU))
+	require.ErrorIs(t, ValidateMCPResource(MCPResourceUS), ErrMCPResource)
+	endpoint, err := MCPEndpointFromAudience([]string{"https://mcp-staging.us.example.test"})
+	require.NoError(t, err)
+	assert.Equal(t, "https://mcp-staging.us.example.test", endpoint)
+}
+
+func TestMCPResource_OverrideLoopbackHTTP(t *testing.T) {
+	for _, origin := range []string{"http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"} {
+		t.Setenv(EnvMCPURLEU, origin)
+		got, err := MCPResourceForRegion("eu")
+		require.NoError(t, err, origin)
+		assert.Equal(t, origin, got)
+	}
+}
+
+// A bad override fails closed instead of quietly using production, and never
+// becomes trusted itself.
+func TestMCPResource_OverrideRejected(t *testing.T) {
+	for _, bad := range []string{
+		"http://mcp.example.test",
+		"ftp://mcp.example.test",
+		"https://user@mcp.example.test",
+		"https://mcp.example.test/path",
+		"https://mcp.example.test?x=1",
+		"https://mcp.example.test#f",
+		"mcp.example.test",
+		"https://",
+	} {
+		t.Setenv(EnvMCPURLUS, bad)
+		_, err := MCPResourceForRegion("us")
+		require.ErrorIs(t, err, ErrMCPResource, bad)
+		assert.ErrorIs(t, ValidateMCPResource(bad), ErrMCPResource, bad)
+		assert.ErrorIs(t, ValidateMCPResource(MCPResourceUS), ErrMCPResource, bad)
+	}
+}
+
 func TestMCPEndpointFromAudience(t *testing.T) {
 	got, err := MCPEndpointFromAudience([]string{"https://mcp.eu.nylas.com"})
 	require.NoError(t, err)

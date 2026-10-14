@@ -63,3 +63,26 @@ func TestMetadata_RejectsCrossHostDeviceEndpoint(t *testing.T) {
 	metadata := domain.OAuthServerMetadata{Issuer: "https://auth.example.test", AuthorizationEndpoint: "https://auth.example.test/authorize", TokenEndpoint: "https://auth.example.test/token", DeviceAuthorizationEndpoint: "https://other.example.test/device"}
 	require.ErrorIs(t, metadata.ValidateFor(metadata.Issuer), domain.ErrOAuthMetadata)
 }
+
+// invalid_target is how a server refuses the MCP resource. It must survive
+// as itself rather than collapse into server_error, still without the body.
+func TestDeviceClient_KeepsInvalidTarget(t *testing.T) {
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	mux.HandleFunc(discoveryPath, func(w http.ResponseWriter, _ *http.Request) {
+		doc := discoveryDocument(server.URL)
+		doc["device_authorization_endpoint"] = server.URL + "/device-start"
+		_ = json.NewEncoder(w).Encode(doc)
+	})
+	mux.HandleFunc("/device-start", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_target","error_description":"server-text"}`))
+	})
+	_, err := NewClient(server.URL).StartDeviceAuthorization(context.Background(), domain.DefaultOAuthClientID, []string{"openid"}, domain.MCPResourceUS)
+	var oauthErr *domain.OAuthError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, "invalid_target", oauthErr.Code)
+	assert.Equal(t, http.StatusBadRequest, oauthErr.StatusCode)
+	assert.NotContains(t, err.Error(), "server-text")
+}

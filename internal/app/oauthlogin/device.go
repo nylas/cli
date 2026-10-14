@@ -46,7 +46,7 @@ func (s *Service) loginDevice(ctx context.Context, metadata *domain.OAuthServerM
 	started := s.now()
 	authorization, err := client.StartDeviceAuthorization(ctx, s.clientID, scopes, opts.Resource)
 	if err != nil {
-		return nil, err
+		return nil, explainDeviceTarget(err, opts.Resource)
 	}
 	if authorization == nil {
 		return nil, domain.ErrOAuthMetadata
@@ -136,4 +136,18 @@ func (s *Service) loginDevice(ctx context.Context, metadata *domain.OAuthServerM
 			ExpiresAt: tokens.ExpiresAt, HasRefresh: tokens.RefreshToken != "", Resource: opts.Resource,
 			DroppedScopes: dropped}, nil
 	}
+}
+
+// explainDeviceTarget says why the server refused the resource. Device errors
+// never carry the server's description, so without this the reader sees a
+// bare invalid_target and no way forward. The usual cause is a non-production
+// server that names its own MCP servers.
+func explainDeviceTarget(err error, resource string) error {
+	var oauthErr *domain.OAuthError
+	if resource == "" || !errors.As(err, &oauthErr) || oauthErr.Code != "invalid_target" {
+		return err
+	}
+	return fmt.Errorf("%w: this server does not accept %s as the MCP server; "+
+		"for a non-production server set %s or %s to the MCP server it names",
+		err, resource, domain.EnvMCPURLUS, domain.EnvMCPURLEU)
 }

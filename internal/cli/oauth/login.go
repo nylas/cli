@@ -65,7 +65,10 @@ created; without either it is created in the US. It does not change an
 existing account.
 
 Set NYLAS_OAUTH_CLIENT_ID to use a different client id against a local or
-dev authorization server.`,
+dev authorization server. Such a server names its own MCP servers and refuses
+the production ones (invalid_target): set NYLAS_MCP_US_URL and/or
+NYLAS_MCP_EU_URL to the origins it names. Each replaces that region's server,
+so a token is only ever sent to the one server its region names.`,
 		Example: `  # Log in with the default scopes (openid, email, offline_access, dashboard.session)
   nylas oauth login
 

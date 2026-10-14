@@ -58,7 +58,7 @@ func safeDeviceError(err error) error {
 	if errors.As(err, &oauthErr) {
 		code := "server_error"
 		switch oauthErr.Code {
-		case "authorization_pending", "slow_down", "access_denied", "expired_token", "invalid_grant", "invalid_client", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "invalid_request", "server_error", "temporarily_unavailable":
+		case "authorization_pending", "slow_down", "access_denied", "expired_token", "invalid_grant", "invalid_client", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "invalid_target", "invalid_request", "server_error", "temporarily_unavailable":
 			code = oauthErr.Code
 		}
 		return &domain.OAuthError{Code: code, StatusCode: oauthErr.StatusCode}

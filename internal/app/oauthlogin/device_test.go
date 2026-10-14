@@ -22,10 +22,14 @@ type deviceTestClient struct {
 	polls         int
 	scopes        []string
 	resource      string
+	startErr      error
 }
 
 func (c *deviceTestClient) StartDeviceAuthorization(_ context.Context, _ string, scopes []string, resource string) (*domain.OAuthDeviceAuthorization, error) {
 	c.scopes, c.resource = scopes, resource
+	if c.startErr != nil {
+		return nil, c.startErr
+	}
 	return c.authorization, nil
 }
 
@@ -152,4 +156,39 @@ func TestDeviceLogin_RetriesTransient503WithoutRestart(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []time.Duration{5 * time.Second, 10 * time.Second}, *intervals)
 	assert.Equal(t, 2, c.polls)
+}
+
+// Staging answers the production MCP server with invalid_target. Device
+// errors drop the server's description, so the CLI must say what to do.
+func TestDeviceLogin_InvalidTargetNamesTheOverride(t *testing.T) {
+	f, c, opts, _ := deviceFixture(t)
+	c.startErr = &domain.OAuthError{Code: "invalid_target", StatusCode: 400}
+	opts.Resource = domain.MCPResourceUS
+	_, err := f.service.Login(context.Background(), *opts)
+	require.Error(t, err)
+	var oauthErr *domain.OAuthError
+	require.ErrorAs(t, err, &oauthErr)
+	assert.Equal(t, "invalid_target", oauthErr.Code)
+	assert.Contains(t, err.Error(), domain.MCPResourceUS)
+	assert.Contains(t, err.Error(), domain.EnvMCPURLUS)
+	assert.Contains(t, err.Error(), domain.EnvMCPURLEU)
+}
+
+func TestDeviceLogin_OtherStartErrorsAreUnchanged(t *testing.T) {
+	f, c, opts, _ := deviceFixture(t)
+	refused := &domain.OAuthError{Code: "invalid_client", StatusCode: 401}
+	c.startErr = refused
+	opts.Resource = domain.MCPResourceUS
+	_, err := f.service.Login(context.Background(), *opts)
+	assert.Same(t, refused, err)
+}
+
+func TestDeviceLogin_RegionUsesTheMCPOverride(t *testing.T) {
+	t.Setenv(domain.EnvMCPURLUS, "https://mcp-staging.us.example.test")
+	f, c, opts, _ := deviceFixture(t)
+	opts.Region = "us"
+	_, err := f.service.Login(context.Background(), *opts)
+	require.NoError(t, err)
+	assert.Equal(t, "https://mcp-staging.us.example.test", c.resource)
+	assert.Equal(t, "https://mcp-staging.us.example.test", f.secrets.GetAll()[ports.KeyOAuthResource])
 }
