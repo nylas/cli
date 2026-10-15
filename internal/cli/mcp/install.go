@@ -21,6 +21,7 @@ func newInstallCmd() *cobra.Command {
 		binaryPath  string
 		installAll  bool
 		authMode    string
+		credential  string
 	)
 
 	cmd := &cobra.Command{
@@ -41,7 +42,9 @@ Supported assistants:
 Every assistant is configured to launch 'nylas mcp serve' over STDIO. No
 credential is written to any assistant config: with --auth api-key (default)
 serve reads the API key from the keyring, and with --auth oauth it uses the
-session from 'nylas oauth login --for mcp'.
+session from 'nylas oauth login --for mcp'. --credential (with --auth oauth)
+pins the MCP-only credential from 'nylas oauth login --mcp-only' that serve
+uses; it is an id, not a secret.
 
 Connecting an assistant straight to the hosted server
 (https://mcp.us.nylas.com or https://mcp.eu.nylas.com) and letting it run
@@ -69,9 +72,9 @@ of them.`,
 			// with: re-running install must not silently turn an OAuth
 			// install back into an API key one.
 			var serveArgs []string
-			if cmd.Flags().Changed("auth") {
+			if cmd.Flags().Changed("auth") || credential != "" {
 				var err error
-				if serveArgs, err = serveArgsFor(authMode); err != nil {
+				if serveArgs, err = serveArgsWith(authMode, credential); err != nil {
 					return err
 				}
 			}
@@ -83,8 +86,23 @@ of them.`,
 	cmd.Flags().StringVarP(&binaryPath, "binary", "b", "", "Path to nylas binary (default: auto-detect)")
 	cmd.Flags().BoolVar(&installAll, "all", false, "Install for all detected assistants")
 	cmd.Flags().StringVar(&authMode, "auth", authAPIKey, "credential 'nylas mcp serve' authenticates with: api-key or oauth")
+	cmd.Flags().StringVar(&credential, "credential", "",
+		"with --auth oauth, the MCP-only credential 'nylas mcp serve' uses (an id from 'nylas oauth status')")
 
 	return cmd
+}
+
+// serveArgsWith is serveArgsFor with an MCP-only credential id, which only
+// --auth oauth takes.
+func serveArgsWith(authMode, credential string) ([]string, error) {
+	if credential == "" {
+		return serveArgsFor(authMode)
+	}
+	if authMode != authOAuth {
+		return nil, common.NewUserError("--credential requires --auth oauth", "")
+	}
+	args, err := serveArgsFor(authMode)
+	return append(args, "--credential", credential), err
 }
 
 // serveArgsFor is the argument list written into an assistant config. The
@@ -238,7 +256,7 @@ func installedServeArgs(config map[string]any, a Assistant) []string {
 	args, _ := server["args"].([]any)
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == "--auth" && args[i+1] == authOAuth {
-			return oauthArgs
+			return append(oauthArgs, installedCredentialArgs(args)...)
 		}
 	}
 	return defaultArgs
@@ -383,4 +401,17 @@ func detectBinaryPath() (string, error) {
 	}
 
 	return "", fmt.Errorf("could not find nylas binary")
+}
+
+// installedCredentialArgs keeps the --credential an OAuth install pinned, so
+// re-running install does not silently move it to another credential.
+func installedCredentialArgs(args []any) []string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--credential" {
+			if id, ok := args[i+1].(string); ok && id != "" {
+				return []string{"--credential", id}
+			}
+		}
+	}
+	return nil
 }

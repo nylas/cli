@@ -64,6 +64,18 @@ func (f *fakeService) Logout(context.Context) error {
 	return f.logoutErr
 }
 
+func (f *fakeService) ListMCPCredentials() ([]oauthlogin.MCPCredentialRecord, error) {
+	return nil, nil
+}
+
+func (f *fakeService) ForMCPCredential(id string) (loginService, error) {
+	return nil, oauthlogin.ErrMCPCredentialNotFound
+}
+
+func (f *fakeService) LogoutMCPCredential(context.Context, string) error {
+	return oauthlogin.ErrMCPCredentialNotFound
+}
+
 // fakeDashboard records the dashboard session calls login and logout make.
 type fakeDashboard struct {
 	exchangeErr   error

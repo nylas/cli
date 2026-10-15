@@ -136,12 +136,50 @@ nylas oauth login --device       # Remote/headless sign-in or signup on another 
 nylas oauth login --no-browser   # Same device flow without a local browser
 nylas oauth login --scope openid,email
 nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
+nylas oauth login --mcp-only     # MCP-only credential, optionally limited to an IAM principal
 nylas oauth login --region eu    # Sign up with a new organization in the EU
-nylas oauth status               # Show the stored session and decoded token claims
+nylas oauth status               # Show the stored sessions and decoded token claims
 nylas oauth status --verify      # Also confirm the token against /oauth/userinfo
 nylas oauth token                # Print a valid access token, refreshing if needed
-nylas oauth logout               # Revoke the session and clear stored tokens
+nylas oauth token --credential <id>   # ...of one MCP-only credential
+nylas oauth logout               # Revoke the default session and clear its tokens
+nylas oauth logout --credential <id>  # Revoke one MCP-only credential
+nylas oauth logout --all         # Revoke the default session and every MCP-only credential
 ```
+
+### MCP-only credentials
+
+`nylas oauth login --mcp-only` signs in for the hosted MCP server only. It
+requests the `--for mcp` scopes **without** `dashboard.session`, which is what
+lets the consent screen offer an IAM principal. Pick one to limit the
+credential to that principal's permissions and connected accounts, or pick
+none to keep your own access within the scopes you consent to. Choosing a
+principal happens on the consent page; the CLI has no principal flag. It works
+with the browser and with `--device`.
+
+An MCP-only credential never signs the `nylas dashboard` commands in, and is
+never exchanged for a dashboard session: a token narrowed by a principal must
+not become a full-role one. Dashboard access needs a separate
+`nylas oauth login`. A plain login whose consent picked a principal anyway is
+refused and revoked rather than stored as the default session.
+
+Each MCP-only credential is stored beside the default session, never in place
+of it, under a short id derived from the server, the MCP server (audience),
+the organization, the user and the principal. Logging in again with all of
+those the same replaces that credential and revokes the one it replaced; any
+other combination is stored alongside it, so two principals or two regions
+never overwrite each other. `nylas oauth status` lists every credential with
+its id, access mode, audience, organization and principal (never a token).
+
+`nylas mcp serve --auth oauth` uses the default session when there is one. With
+no default session it uses the only MCP-only credential, and with several it
+asks for `--credential <id>`. `nylas mcp install --auth oauth --credential <id>`
+pins one in the assistant's config; the id is not a secret.
+
+When the server answers a refresh with `503 temporarily_unavailable` (it does
+when it cannot evaluate a principal), the CLI retries after `Retry-After`, with
+backoff, using the same refresh token, and keeps the stored sign-in if the
+server stays unavailable.
 
 The CLI is a static public client (client id
 `b3a94d82-fc7d-4a22-803e-e603ae0f735c`, no client secret — PKCE protects the
@@ -177,8 +215,8 @@ tokens the other one stored instead of refreshing again. A refresh that has
 started runs to completion even if the command is interrupted, because the
 server has already rotated the token it was sent.
 
-`nylas oauth status` decodes the access token and shows its audience, grants,
-scopes and expiry. The claims are **decoded, not verified** — the CLI does not
+`nylas oauth status` decodes the access token and shows its audience,
+organization, principal, grants, scopes and expiry. The claims are **decoded, not verified** — the CLI does not
 check the signature; only the resource server's answer is authoritative.
 
 Default scopes are `openid`, `email`, `offline_access` and `dashboard.session`.
@@ -727,6 +765,7 @@ nylas mcp status                           # Check installation status
 nylas mcp uninstall --assistant cursor     # Remove configuration
 nylas mcp serve                            # Start MCP server (used by assistants)
 nylas mcp serve --auth oauth               # ...authenticating with `nylas oauth login --for mcp`
+nylas mcp serve --auth oauth --credential <id>  # ...with one `nylas oauth login --mcp-only` credential
 ```
 
 **Supported assistants:**

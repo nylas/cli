@@ -143,6 +143,16 @@ func MCPOAuthScopes() []string {
 	}
 }
 
+// MCPOnlyOAuthScopes is what `nylas oauth login --mcp-only` requests:
+// MCPOAuthScopes without dashboard.session. The consent screen offers an IAM
+// principal only for a request without it, and a credential from this login
+// never signs the dashboard commands in.
+func MCPOnlyOAuthScopes() []string {
+	return slices.DeleteFunc(MCPOAuthScopes(), func(scope string) bool {
+		return scope == OAuthScopeDashboardSession
+	})
+}
+
 // ErrMCPCredentialNotRenewable is returned by a credential source that has
 // nothing to renew — an API key is what it is.
 var ErrMCPCredentialNotRenewable = errors.New("credential cannot be renewed")

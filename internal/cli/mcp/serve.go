@@ -24,7 +24,10 @@ const (
 )
 
 func newServeCmd() *cobra.Command {
-	var authMode string
+	var (
+		authMode   string
+		credential string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -45,12 +48,17 @@ MCP server and adds local enhancements:
 Authentication (--auth):
   api-key  (default) the API key from 'nylas auth login', sent to the MCP
            server of the configured region.
-  oauth    the OAuth session from 'nylas oauth login --for mcp'. The token
+  oauth    the OAuth session from 'nylas oauth login --for mcp', or an
+           MCP-only credential from 'nylas oauth login --mcp-only'. The token
            is refreshed as it nears expiry (one refresher per machine, shared
            with every other 'nylas mcp serve'), and requests go to the MCP
            server named in the token's audience. The default grant is only
            offered as a hint when the token lists it; local grant lookup is
            off, since local grants belong to the API key's application.
+           --credential picks an MCP-only credential by the id 'nylas oauth
+           status' lists. Without it the default session is used; with no
+           default session, the only MCP-only credential is, and with several
+           --credential is required.
 
 The server communicates via STDIO (standard input/output).
 
@@ -60,9 +68,13 @@ For more information: https://developer.nylas.com/docs/dev-guide/mcp/`,
 
   # Proxy with an OAuth session
   nylas oauth login --for mcp
-  nylas mcp serve --auth oauth`,
+  nylas mcp serve --auth oauth
+
+  # Proxy with an MCP-only credential limited to an IAM principal
+  nylas oauth login --mcp-only
+  nylas mcp serve --auth oauth --credential <id from nylas oauth status>`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			proxy, err := buildProxy(authMode)
+			proxy, err := buildProxyWith(authMode, credential)
 			if err != nil {
 				return err
 			}
@@ -71,6 +83,8 @@ For more information: https://developer.nylas.com/docs/dev-guide/mcp/`,
 	}
 
 	cmd.Flags().StringVar(&authMode, "auth", authAPIKey, "credential to authenticate with: api-key or oauth")
+	cmd.Flags().StringVar(&credential, "credential", "",
+		"with --auth oauth, the MCP-only credential to use (an id from 'nylas oauth status')")
 
 	return cmd
 }
@@ -78,11 +92,20 @@ For more information: https://developer.nylas.com/docs/dev-guide/mcp/`,
 // buildProxy constructs the proxy for an --auth value. Anything but the two
 // known modes is refused rather than defaulted.
 func buildProxy(authMode string) (*mcp.Proxy, error) {
+	return buildProxyWith(authMode, "")
+}
+
+// buildProxyWith is buildProxy with an MCP-only credential id, which only
+// --auth oauth can use.
+func buildProxyWith(authMode, credential string) (*mcp.Proxy, error) {
+	if credential != "" && authMode != authOAuth {
+		return nil, common.NewUserError("--credential requires --auth oauth", "")
+	}
 	switch authMode {
 	case authAPIKey:
 		return buildAPIKeyProxy()
 	case authOAuth:
-		return buildOAuthProxy()
+		return buildOAuthProxy(credential)
 	default:
 		return nil, common.NewUserError(
 			fmt.Sprintf("unknown --auth value %q", authMode),
@@ -116,20 +139,34 @@ func buildAPIKeyProxy() (*mcp.Proxy, error) {
 	return proxy, nil
 }
 
-// newOAuthCredentialsFn is swapped in tests.
-var newOAuthCredentialsFn = func() (ports.MCPCredentialSource, error) {
+// newOAuthCredentialsFn and newOAuthCredentialFn are swapped in tests. The
+// first serves the default selection, the second a --credential id.
+var (
+	newOAuthCredentialsFn = func() (ports.MCPCredentialSource, error) { return oauthCredentials("") }
+	newOAuthCredentialFn  = oauthCredentials
+)
+
+func oauthCredentials(id string) (ports.MCPCredentialSource, error) {
 	svc, err := oauthcli.NewLoginService()
 	if err != nil {
 		return nil, err
 	}
-	return oauthlogin.NewMCPCredentials(svc), nil
+	selected, err := svc.SelectMCPCredential(id)
+	if err != nil {
+		return nil, err
+	}
+	return oauthlogin.NewMCPCredentials(selected), nil
 }
 
 // oauthPreflightTimeout bounds the start-up check, which may refresh.
 const oauthPreflightTimeout = 30 * time.Second
 
-func buildOAuthProxy() (*mcp.Proxy, error) {
-	creds, err := newOAuthCredentialsFn()
+func buildOAuthProxy(credential string) (*mcp.Proxy, error) {
+	newCreds := newOAuthCredentialsFn
+	if credential != "" {
+		newCreds = func() (ports.MCPCredentialSource, error) { return newOAuthCredentialFn(credential) }
+	}
+	creds, err := newCreds()
 	if err != nil {
 		return nil, err
 	}

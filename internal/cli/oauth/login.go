@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -27,6 +28,7 @@ func newLoginCmd() *cobra.Command {
 		region    string
 		device    bool
 		noBrowser bool
+		mcpOnly   bool
 	)
 
 	cmd := &cobra.Command{
@@ -53,7 +55,19 @@ the configured region (https://mcp.us.nylas.com or https://mcp.eu.nylas.com)
 as the RFC 8707 resource, so the token is issued for that server only. Scopes
 the server does not offer are left out and reported.
 
-Every login also requests dashboard.session, which signs the 'nylas dashboard'
+--mcp-only logs in for the hosted MCP server only. It requests what --for mcp
+does except dashboard.session, so the consent screen can offer an IAM
+principal: pick one to limit the credential to that principal's permissions
+and connected accounts, or none to keep your own access within the scopes you
+consent to. The credential is stored as its own MCP credential beside your
+default session, never in place of it, and it never signs the 'nylas
+dashboard' commands in: dashboard access needs a separate 'nylas oauth login'.
+Logging in again for the same server, organization and principal replaces that
+credential; any other combination is stored alongside it. 'nylas oauth status'
+lists them, and 'nylas mcp serve --auth oauth --credential <id>' uses one. It
+works with --device too.
+
+Every other login also requests dashboard.session, which signs the 'nylas dashboard'
 commands in. The consent screen shows it as "Use the Nylas Dashboard as you,
 with your full role in this organization". It is never advertised by the
 server and never left out, except with NYLAS_OAUTH_CLIENT_ID, which the server
@@ -78,6 +92,10 @@ so a token is only ever sent to the one server its region names.`,
   # Sign in over SSH without a local browser
   nylas oauth login --device
 
+  # An MCP-only credential, optionally limited to an IAM principal
+  nylas oauth login --mcp-only
+  nylas oauth login --mcp-only --device --region eu
+
   # Sign up with a new organization in the EU
   nylas oauth login --region eu
 
@@ -89,11 +107,11 @@ so a token is only ever sent to the one server its region names.`,
 			// the login; --for mcp still validates it for the resource.
 			if region == "" {
 				region = configuredRegion()
-				if _, err := normalizeRegion(region); err != nil && preset == "" {
+				if _, err := normalizeRegion(region); err != nil && preset == "" && !mcpOnly {
 					region = ""
 				}
 			}
-			opts, err := loginOptions(preset, scopes, region)
+			opts, err := loginOptionsFor(preset, scopes, region, mcpOnly)
 			if err != nil {
 				return err
 			}
@@ -159,6 +177,15 @@ so a token is only ever sent to the one server its region names.`,
 					"  No refresh token issued — request the offline_access scope to stay signed in.")
 			}
 
+			// An MCP-only credential is never exchanged: it may be narrowed by
+			// a principal, and dashboard.session was not requested.
+			if result.Credential != nil {
+				printMCPCredential(out, result.Credential)
+				_, _ = fmt.Fprintln(out, "  Dashboard:  not signed in by this login; run `nylas oauth login` for dashboard access")
+				_, _ = fmt.Fprintf(out, "  Use it:     nylas mcp serve --auth oauth --credential %s\n", result.Credential.ID)
+				return nil
+			}
+
 			// The OAuth login already succeeded, so a failed exchange is reported
 			// rather than returned: only the dashboard commands are affected.
 			exchangeCtx, cancelExchange := afterConsentContext(ctx)
@@ -188,7 +215,36 @@ so a token is only ever sent to the one server its region names.`,
 
 	cmd.Flags().BoolVar(&device, "device", false, "sign in or sign up using a code on another device")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "use device sign-in without opening a local browser")
+	cmd.Flags().BoolVar(&mcpOnly, "mcp-only", false,
+		"log in for the hosted MCP server only, as its own credential: no dashboard access, and the consent screen may limit it to an IAM principal")
 	return cmd
+}
+
+// loginOptionsFor is loginOptions with --mcp-only: the MCP preset without
+// dashboard.session, stored as its own credential.
+func loginOptionsFor(preset string, scopes []string, region string, mcpOnly bool) (oauthlogin.LoginOptions, error) {
+	if !mcpOnly {
+		return loginOptions(preset, scopes, region)
+	}
+	if preset != "" && preset != loginPresetMCP {
+		return oauthlogin.LoginOptions{}, common.NewUserError(
+			fmt.Sprintf("--mcp-only cannot be combined with --for %s", preset),
+			"--mcp-only already logs in for the MCP server",
+		)
+	}
+	if len(scopes) > 0 {
+		return oauthlogin.LoginOptions{}, common.NewUserError(
+			"--mcp-only and --scope cannot be combined",
+			"--mcp-only chooses the scopes the MCP tools need",
+		)
+	}
+	opts, err := loginOptions(loginPresetMCP, nil, region)
+	if err != nil {
+		return oauthlogin.LoginOptions{}, err
+	}
+	opts.Scopes = domain.MCPOnlyOAuthScopes()
+	opts.MCPOnly = true
+	return opts, nil
 }
 
 // loginOptions turns the flags into a login request. A preset decides both
@@ -244,4 +300,20 @@ func normalizeRegion(region string) (string, error) {
 // DISPLAY is deliberately irrelevant: local macOS/Windows normally omit it.
 func isSSHSession() bool {
 	return os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_CLIENT") != "" || os.Getenv("SSH_TTY") != ""
+}
+
+// printMCPCredential describes an MCP-only credential without its token.
+func printMCPCredential(out io.Writer, record *oauthlogin.MCPCredentialRecord) {
+	_, _ = fmt.Fprintln(out, "  Access:     MCP only (no dashboard access)")
+	_, _ = fmt.Fprintf(out, "  Credential: %s\n", record.ID)
+	_, _ = fmt.Fprintf(out, "  Audience:   %s\n", record.Audience)
+	_, _ = fmt.Fprintf(out, "  Org:        %s\n", record.Org)
+	_, _ = fmt.Fprintf(out, "  Principal:  %s\n", describePrincipal(record.Principal))
+}
+
+func describePrincipal(principal *domain.OAuthTokenPrincipal) string {
+	if principal == nil {
+		return "none (your own access, within the consented scopes)"
+	}
+	return fmt.Sprintf("%s (%s)", principal.ID, principal.Region)
 }
