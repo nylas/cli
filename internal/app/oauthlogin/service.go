@@ -28,6 +28,11 @@ type Service struct {
 	lock       ports.CrossProcessLock
 	now        func() time.Time
 	waitDevice func(context.Context, time.Duration) error
+	// waitRetry sleeps before a refresh retry; swapped in tests.
+	waitRetry func(context.Context, time.Duration) error
+	// credentialID binds the service to one MCP-only credential's keys.
+	// Empty is the default session. See credentials.go.
+	credentialID string
 }
 
 // NewService creates a login service for the given public client id —
@@ -89,6 +94,9 @@ type LoginResult struct {
 	// DroppedScopes are requested scopes the server does not offer, left out
 	// of the request because LoginOptions.DropUnsupportedScopes was set.
 	DroppedScopes []string
+	// Credential is set for an MCP-only login: where it was stored, and the
+	// principal it is narrowed by, if any. Nil for the default session.
+	Credential *MCPCredentialRecord
 }
 
 // LoginOptions shape an authorization request.
@@ -113,6 +121,12 @@ type LoginOptions struct {
 	// does not list, instead of letting the whole request fail with
 	// invalid_scope. The server only offers data scopes a deployment enables.
 	DropUnsupportedScopes bool
+
+	// MCPOnly stores the login as its own MCP-only credential instead of the
+	// default session. It requires a Resource and never requests
+	// dashboard.session, which is what lets the consent screen offer an IAM
+	// principal.
+	MCPOnly bool
 }
 
 // Login runs the browser authorization code flow and stores the tokens.
@@ -124,6 +138,14 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 	if opts.Resource != "" {
 		if err := domain.ValidateMCPResource(opts.Resource); err != nil {
 			return nil, err
+		}
+	}
+	if opts.MCPOnly {
+		if opts.Resource == "" {
+			return nil, errors.New("an MCP-only login needs an MCP server as its resource")
+		}
+		if slices.Contains(scopes, domain.OAuthScopeDashboardSession) {
+			return nil, errors.New("an MCP-only login cannot request dashboard.session")
 		}
 	}
 
@@ -242,31 +264,24 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		return nil, err
 	}
 
-	if err := s.withSessionLock(exchangeCtx, func() error {
-		s.revokeReplacedSession(exchangeCtx)
-		// Clear whatever session is stored first: a login against a different
-		// server must not leave that server's old tokens filed under the new
-		// server's name, where checkIssuer would then accept them.
-		if err := s.clearSession(); err != nil {
-			return err
-		}
-		if err := s.saveTokens(metadata.Issuer, opts.Resource, tokens); err != nil {
-			return errors.Join(err, s.clearSession())
-		}
-		return nil
-	}); err != nil {
+	credential, err := s.storeLogin(exchangeCtx, metadata.Issuer, opts, tokens)
+	if err != nil {
 		return nil, err
 	}
+	return loginResult(metadata.Issuer, clientID, opts, tokens, dropped, credential), nil
+}
 
+func loginResult(issuer, clientID string, opts LoginOptions, tokens *domain.OAuthTokens, dropped []string, credential *MCPCredentialRecord) *LoginResult {
 	return &LoginResult{
-		Issuer:        metadata.Issuer,
+		Issuer:        issuer,
 		ClientID:      clientID,
 		Scope:         tokens.Scope,
 		ExpiresAt:     tokens.ExpiresAt,
 		HasRefresh:    tokens.RefreshToken != "",
 		Resource:      opts.Resource,
 		DroppedScopes: dropped,
-	}, nil
+		Credential:    credential,
+	}
 }
 
 // revokeReplacedSession revokes the refresh token of the session a login is
@@ -389,7 +404,7 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string, minValid t
 		// one lost. The refresh runs to completion on its own deadline.
 		refreshCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
 		defer cancel()
-		tokens, err := s.client.Refresh(refreshCtx, session.ClientID, session.Tokens.RefreshToken, session.Resource)
+		tokens, err := s.refresh(refreshCtx, session)
 		if err != nil {
 			return err
 		}
@@ -410,20 +425,54 @@ func (s *Service) refreshLocked(ctx context.Context, rejected string, minValid t
 	return accessToken, nil
 }
 
+// refreshAttempts bounds how often a refresh the server answered with 503 is
+// sent again.
+const refreshAttempts = 3
+
+// refresh spends the refresh token. A 503 means a read the server needed
+// failed before it rotated anything (it answers that way when IAM cannot
+// evaluate a principal), so the same refresh token is sent again after
+// Retry-After, with backoff. It is never a reason to drop the stored session.
+func (s *Service) refresh(ctx context.Context, session *Session) (*domain.OAuthTokens, error) {
+	wait := s.waitRetry
+	if wait == nil {
+		wait = waitDevicePoll
+	}
+	delay := time.Second
+	for attempt := 1; ; attempt++ {
+		tokens, err := s.client.Refresh(ctx, session.ClientID, session.Tokens.RefreshToken, session.Resource)
+		var oauthErr *domain.OAuthError
+		if err == nil || !errors.As(err, &oauthErr) || !oauthErr.IsTemporarilyUnavailable() {
+			return tokens, err
+		}
+		if attempt == refreshAttempts {
+			return nil, fmt.Errorf("%w; your sign-in is kept, try again shortly", err)
+		}
+		pause := delay
+		if oauthErr.RetryAfter > 0 {
+			pause = oauthErr.RetryAfter
+		}
+		if waitErr := wait(ctx, pause); waitErr != nil {
+			return nil, fmt.Errorf("%w; your sign-in is kept, try again shortly", err)
+		}
+		delay *= 2
+	}
+}
+
 // dropSpentRefreshToken handles a refresh whose answer could not be stored.
 // The server has already rotated spent, so if it is still what the store
 // holds it is deleted: the next command then asks for a login instead of
 // replaying it. A new refresh token that did get stored is kept, because the
 // write order in saveTokens makes the rest of the session recover from it.
 func (s *Service) dropSpentRefreshToken(spent string, saveErr error) error {
-	stored, err := s.getSecret(ports.KeyOAuthRefreshToken)
+	stored, err := s.getSecret(s.key(ports.KeyOAuthRefreshToken))
 	if err != nil {
 		return errors.Join(saveErr, err)
 	}
 	if stored != spent {
 		return saveErr
 	}
-	if err := s.deleteSecret(ports.KeyOAuthRefreshToken); err != nil {
+	if err := s.deleteSecret(s.key(ports.KeyOAuthRefreshToken)); err != nil {
 		return errors.Join(saveErr, err)
 	}
 	return fmt.Errorf("%w; run `nylas oauth login` again", saveErr)
@@ -450,35 +499,38 @@ func (s *Service) UserInfo(ctx context.Context) (*domain.OAuthUserInfo, error) {
 func (s *Service) Logout(ctx context.Context) error {
 	// Under the lock, so a refresh in another process cannot write a rotated
 	// session back after this one has cleared it.
-	return s.withSessionLock(ctx, func() error {
-		session, err := s.loadSession()
-		if err != nil {
-			if errors.Is(err, domain.ErrOAuthNotLoggedIn) {
-				return s.clearSession()
-			}
-			return err
-		}
+	return s.withSessionLock(ctx, func() error { return s.logoutLocked(ctx) })
+}
 
-		// A session from another server is cleared but not revoked: sending
-		// its token here would hand it to a server that never issued it.
-		if err := s.checkIssuer(session); err != nil {
-			if clearErr := s.clearSession(); clearErr != nil {
-				return clearErr
-			}
-			return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+// logoutLocked is Logout for a caller that holds the session lock.
+func (s *Service) logoutLocked(ctx context.Context) error {
+	session, err := s.loadSession()
+	if err != nil {
+		if errors.Is(err, domain.ErrOAuthNotLoggedIn) {
+			return s.clearSession()
 		}
+		return err
+	}
 
-		token := session.Tokens.RefreshToken
-		if token == "" {
-			token = session.Tokens.AccessToken
+	// A session from another server is cleared but not revoked: sending
+	// its token here would hand it to a server that never issued it.
+	if err := s.checkIssuer(session); err != nil {
+		if clearErr := s.clearSession(); clearErr != nil {
+			return clearErr
 		}
-		revokeErr := s.client.Revoke(ctx, session.ClientID, token)
+		return fmt.Errorf("%w; the local session was cleared but not revoked", err)
+	}
 
-		if err := s.clearSession(); err != nil {
-			return err
-		}
-		return revokeErr
-	})
+	token := session.Tokens.RefreshToken
+	if token == "" {
+		token = session.Tokens.AccessToken
+	}
+	revokeErr := s.client.Revoke(ctx, session.ClientID, token)
+
+	if err := s.clearSession(); err != nil {
+		return err
+	}
+	return revokeErr
 }
 
 // loadSessionForServer loads the session only if it was issued by the server
