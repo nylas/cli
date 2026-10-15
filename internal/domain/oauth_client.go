@@ -84,13 +84,40 @@ type OAuthTokenGrant struct {
 // the resource server is what verifies it. Use them to describe a session
 // and to route a request, never to decide whether something is allowed.
 type OAuthAccessTokenClaims struct {
-	Subject   string            `json:"sub"`
-	Audience  []string          `json:"-"`
-	Scope     string            `json:"scope"`
-	Org       string            `json:"org"`
-	ClientID  string            `json:"client_id"`
-	Grants    []OAuthTokenGrant `json:"grants"`
-	ExpiresAt time.Time         `json:"-"`
+	Subject  string            `json:"sub"`
+	Audience []string          `json:"-"`
+	Scope    string            `json:"scope"`
+	Org      string            `json:"org"`
+	ClientID string            `json:"client_id"`
+	Grants   []OAuthTokenGrant `json:"grants"`
+	// Permissions are the IAM permission ids the token authorizes.
+	Permissions []string `json:"permissions"`
+	// Principal is set only on a token narrowed by an IAM principal. Such a
+	// token is MCP-only: it must never become a dashboard session.
+	Principal *OAuthTokenPrincipal `json:"principal,omitempty"`
+	ExpiresAt time.Time            `json:"-"`
+}
+
+// OAuthTokenPrincipal is an access token's principal claim: the IAM
+// principal the token is narrowed by, and the region it lives in.
+type OAuthTokenPrincipal struct {
+	ID     string `json:"id"`
+	Region string `json:"region"`
+}
+
+var oauthPrincipalIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{21}$`)
+
+// ErrOAuthPrincipalClaim is returned for a principal claim that is not in
+// the shape the authorization server mints.
+var ErrOAuthPrincipalClaim = errors.New("access token has a malformed principal claim")
+
+// Validate checks the claim's shape. The CLI files a credential under the
+// principal id, so a value it would not mint is refused rather than used.
+func (p *OAuthTokenPrincipal) Validate() error {
+	if !oauthPrincipalIDPattern.MatchString(p.ID) || (p.Region != "us" && p.Region != "eu") {
+		return ErrOAuthPrincipalClaim
+	}
+	return nil
 }
 
 // Scopes returns the space-delimited scope claim as a list.

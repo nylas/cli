@@ -187,6 +187,15 @@ type OAuthError struct {
 	Code        string `json:"error"`
 	Description string `json:"error_description"`
 	StatusCode  int    `json:"-"`
+	// RetryAfter is the response's Retry-After delay, zero when absent.
+	RetryAfter time.Duration `json:"-"`
+}
+
+// IsTemporarilyUnavailable reports the 503 the authorization server answers
+// when a read it depends on failed. The refresh token was not rotated, so
+// the same request may be retried; it is not a reason to sign the user out.
+func (e *OAuthError) IsTemporarilyUnavailable() bool {
+	return e.StatusCode == 503
 }
 
 func (e *OAuthError) Error() string {

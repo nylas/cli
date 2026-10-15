@@ -224,3 +224,20 @@ func TestSessionRenewer_ClearIfOAuthEndsOnlyAnOAuthSession(t *testing.T) {
 	assert.NotContains(t, oauth.data, ports.KeyDashboardUserToken)
 	assert.NotContains(t, oauth.data, ports.KeyDashboardSessionOrigin)
 }
+
+// A principal-narrowed token is MCP-only (TW-7622): even one that also lists
+// dashboard.session must never become a full-role dashboard session.
+func TestSessionRenewer_RefusesAPrincipalTokenWithoutAskingTheServer(t *testing.T) {
+	var exchangedWith string
+	secrets := newMemSecretStore()
+	enc := base64.RawURLEncoding.EncodeToString
+	payload := `{"sub":"usr_1","org":"org_1","aud":"https://mcp.us.nylas.com","exp":4102444800,` +
+		`"scope":"openid dashboard.session","principal":{"id":"V1StGXR8_Z5jdHi6B-myT","region":"us"}}`
+	token := enc([]byte(`{"alg":"EdDSA","typ":"at+jwt"}`)) + "." + enc([]byte(payload)) + ".sig"
+
+	_, err := NewSessionRenewer(exchangingAccount("new-user", &exchangedWith), secrets, &fakeOAuthTokens{token: token}, newTestLock(t)).Login(context.Background())
+	require.ErrorIs(t, err, domain.ErrDashboardSessionNotConsented)
+	assert.Contains(t, err.Error(), "MCP-only")
+	assert.Empty(t, exchangedWith, "the server was not asked")
+	assert.Empty(t, secrets.data[ports.KeyDashboardUserToken])
+}

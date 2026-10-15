@@ -46,3 +46,24 @@ func TestClient_ServerErrorTextCannotRewriteTheTerminal(t *testing.T) {
 	}
 	assert.Contains(t, oauthErr.Description, "forged")
 }
+
+func TestClient_TemporarilyUnavailableCarriesABoundedRetryAfter(t *testing.T) {
+	for header, want := range map[string]time.Duration{"4": 4 * time.Second, "3600": maxRetryAfter, "": 0, "soon": 0, "-1": 0} {
+		t.Run(header, func(t *testing.T) {
+			server := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				if header != "" {
+					w.Header().Set("Retry-After", header)
+				}
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"error":"temporarily_unavailable"}`))
+			})
+
+			_, err := NewClient(server.URL).ExchangeCode(context.Background(), domain.OAuthCodeExchange{ClientID: "c"})
+
+			var oauthErr *domain.OAuthError
+			require.ErrorAs(t, err, &oauthErr)
+			assert.True(t, oauthErr.IsTemporarilyUnavailable())
+			assert.Equal(t, want, oauthErr.RetryAfter)
+		})
+	}
+}

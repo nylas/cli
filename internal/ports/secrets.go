@@ -57,4 +57,8 @@ const (
 	KeyOAuthIDToken      = "oauth_id_token"
 	KeyOAuthExpiresAt    = "oauth_expires_at"
 	KeyOAuthScope        = "oauth_scope"
+	// KeyOAuthMCPCredentials indexes the MCP-only credentials stored beside
+	// the default session (`nylas oauth login --mcp-only`). It holds no token:
+	// each credential's own keys are "oauth_mcp_<id>_<field>".
+	KeyOAuthMCPCredentials = "oauth_mcp_credentials"
 )

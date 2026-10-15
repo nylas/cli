@@ -9,6 +9,7 @@ package oauthas
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -118,7 +119,12 @@ func (c *Client) do(req *http.Request, result any) error {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return parseOAuthError(resp.StatusCode, body)
+		err := parseOAuthError(resp.StatusCode, body)
+		var oauthErr *domain.OAuthError
+		if errors.As(err, &oauthErr) {
+			oauthErr.RetryAfter = retryAfter(resp.Header.Get("Retry-After"))
+		}
+		return err
 	}
 
 	if result == nil {
@@ -154,4 +160,18 @@ func parseOAuthError(statusCode int, body []byte) error {
 		Description: snippet,
 		StatusCode:  statusCode,
 	}
+}
+
+// maxRetryAfter caps the delay a server can ask for, so a hostile or broken
+// Retry-After cannot hold the session lock for long.
+const maxRetryAfter = 30 * time.Second
+
+// retryAfter reads a Retry-After header in its delay-seconds form. The
+// HTTP-date form is not used by the authorization server and reads as zero.
+func retryAfter(header string) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(header))
+	if err != nil || seconds <= 0 {
+		return 0
+	}
+	return min(time.Duration(seconds)*time.Second, maxRetryAfter)
 }
