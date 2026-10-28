@@ -94,6 +94,7 @@ Go 1.24+ · Hexagonal architecture (CLI → Port → Adapter) · Cobra CLI · **
 - AI: shared helpers in `adapters/ai/base_client.go`
 
 ### Framework Gotchas
+- Go regexp counted repetitions have a maximum of 1,000; validate larger protocol length bounds explicitly and use a separate charset regex (verified by device authorization tests).
 - Go integration tests: `acquireRateLimit(t)` before API calls in parallel tests — omitting causes flaky 429s
 
 ### Environment Fixes

@@ -67,6 +67,7 @@ func WithDashboardSessionScope(scopes []string) []string {
 // OAuthServerMetadata is the subset of the RFC 8414 authorization server
 // metadata document the CLI uses.
 type OAuthServerMetadata struct {
+	DeviceAuthorizationEndpoint   string   `json:"device_authorization_endpoint"`
 	Issuer                        string   `json:"issuer"`
 	AuthorizationEndpoint         string   `json:"authorization_endpoint"`
 	TokenEndpoint                 string   `json:"token_endpoint"`
@@ -134,11 +135,12 @@ func (m *OAuthServerMetadata) ValidateFor(baseURL string) error {
 		return fmt.Errorf("%w: issuer %q does not match %q", ErrOAuthMetadata, m.Issuer, baseURL)
 	}
 	for name, endpoint := range map[string]string{
-		"authorization_endpoint": m.AuthorizationEndpoint,
-		"token_endpoint":         m.TokenEndpoint,
-		"userinfo_endpoint":      m.UserInfoEndpoint,
-		"revocation_endpoint":    m.RevocationEndpoint,
-		"jwks_uri":               m.JWKSURI,
+		"authorization_endpoint":        m.AuthorizationEndpoint,
+		"token_endpoint":                m.TokenEndpoint,
+		"userinfo_endpoint":             m.UserInfoEndpoint,
+		"revocation_endpoint":           m.RevocationEndpoint,
+		"jwks_uri":                      m.JWKSURI,
+		"device_authorization_endpoint": m.DeviceAuthorizationEndpoint,
 	} {
 		if endpoint == "" {
 			continue

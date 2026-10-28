@@ -44,3 +44,9 @@ type OAuthAuthServerClient interface {
 	// UserInfo returns the OIDC claims associated with an access token.
 	UserInfo(ctx context.Context, accessToken string) (*domain.OAuthUserInfo, error)
 }
+
+// OAuthDeviceAuthServerClient is the optional RFC 8628 transport.
+type OAuthDeviceAuthServerClient interface {
+	StartDeviceAuthorization(context.Context, string, []string, string) (*domain.OAuthDeviceAuthorization, error)
+	PollDeviceTokens(context.Context, string, string, string) (*domain.OAuthTokens, error)
+}

@@ -20,13 +20,14 @@ const refreshTimeout = 30 * time.Second
 
 // Service performs authorization server logins and owns the stored session.
 type Service struct {
-	clientID string
-	client   ports.OAuthAuthServerClient
-	server   ports.OAuthServer
-	browser  ports.Browser
-	secrets  ports.SecretStore
-	lock     ports.CrossProcessLock
-	now      func() time.Time
+	clientID   string
+	client     ports.OAuthAuthServerClient
+	server     ports.OAuthServer
+	browser    ports.Browser
+	secrets    ports.SecretStore
+	lock       ports.CrossProcessLock
+	now        func() time.Time
+	waitDevice func(context.Context, time.Duration) error
 }
 
 // NewService creates a login service for the given public client id —
@@ -92,6 +93,10 @@ type LoginResult struct {
 
 // LoginOptions shape an authorization request.
 type LoginOptions struct {
+	// Device selects RFC 8628 instead of the loopback browser flow.
+	Device bool
+	// OnDeviceAuthorization receives no bearer credential.
+	OnDeviceAuthorization func(domain.OAuthDevicePrompt) error
 	// Scopes to request; domain.DefaultOAuthScopes when empty.
 	Scopes []string
 
@@ -151,6 +156,10 @@ func (s *Service) Login(ctx context.Context, opts LoginOptions) (*LoginResult, e
 		if len(scopes) == 0 {
 			return nil, fmt.Errorf("client %s may not request any of the scopes %v", clientID, firstParty)
 		}
+	}
+
+	if opts.Device {
+		return s.loginDevice(ctx, metadata, opts, scopes, dropped)
 	}
 
 	if err := s.server.Start(); err != nil {

@@ -132,6 +132,8 @@ either it is created in the US.
 
 ```bash
 nylas oauth login                # Log in via the browser (authorization code + PKCE)
+nylas oauth login --device       # Remote/headless sign-in or signup on another device
+nylas oauth login --no-browser   # Same device flow without a local browser
 nylas oauth login --scope openid,email
 nylas oauth login --for mcp      # Scopes + resource for `nylas mcp serve --auth oauth`
 nylas oauth login --region eu    # Sign up with a new organization in the EU
@@ -148,6 +150,20 @@ address the callback server binds. Tokens are stored in the system keyring;
 a value too large for one keychain item (Windows allows 2560 bytes) is split
 across several. The ID token is not stored: the CLI neither verifies nor uses
 it.
+
+Over SSH, or with `--device` / `--no-browser`, sign-in uses the server's
+advertised device authorization endpoint instead of a local callback. Open
+the printed verification URL on another device and enter the displayed user
+code. Approve only a sign-in you started yourself. Signup uses the same page;
+if the code expires during email verification, start `nylas oauth login
+--device` again. Denial, expiry and cancellation stop polling without an
+automatic restart. The CLI follows the advertised polling interval, adds
+five seconds after every `slow_down`, and backs off on network failures.
+The region hint becomes a regional resource in device mode, fixing the token
+audience and the signup region. The device code and tokens are never printed
+by this flow. A server that
+has device sign-in disabled refuses this mode; local browser sign-in remains
+the default outside SSH, including macOS and Windows without `DISPLAY`.
 
 Every CLI process on the machine shares the one stored session. Refreshing is
 serialised by a lock file, `oauth-session.lock`: in `~/.config/nylas` of your
@@ -202,6 +218,18 @@ NYLAS_DASHBOARD_ACCOUNT_URL=http://localhost:3001 nylas oauth login
 If that server registers the CLI under a different client id, override it with
 `NYLAS_OAUTH_CLIENT_ID` (it must still allow the `http://127.0.0.1/callback`
 redirect URI).
+
+A non-production server also names its own MCP servers, and answers the
+production ones with `invalid_target`. Point the regional resource at them with
+`NYLAS_MCP_US_URL` / `NYLAS_MCP_EU_URL` (an `https://` origin; `http://` only
+for loopback). Each replaces that region's server rather than adding one, so
+an OAuth token is still only sent to the one server its audience names:
+
+```bash
+NYLAS_DASHBOARD_ACCOUNT_URL=https://dashboard-account-stg.eu.nylas.com \
+NYLAS_MCP_US_URL=https://mcp-staging.us.nylas.com \
+nylas oauth login --device
+```
 
 The dashboard session exchange only accepts tokens from dashboard-account's
 built-in first-party clients (the Nylas CLI and Nylas Mail), and only that
