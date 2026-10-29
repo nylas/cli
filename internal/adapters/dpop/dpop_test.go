@@ -323,7 +323,7 @@ func TestNew_ReadFailureDoesNotReplaceTheStoredKey(t *testing.T) {
 
 	_, err = New(readFailingStore{store})
 
-	require.ErrorIs(t, err, domain.ErrDashboardDPoP)
+	require.ErrorIs(t, err, domain.ErrDashboardDPoPKeyUnreadable)
 	assert.Equal(t, stored, store.data["dashboard_dpop_key"],
 		"the server binds sessions to this key; a failed read must not overwrite it")
 }

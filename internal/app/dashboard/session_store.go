@@ -95,8 +95,8 @@ func checkSessionServer(secrets ports.SecretStore, server string) error {
 // OAuth when the OAuth session it came from belongs to another account server.
 // That is the one case where the issuer of an old session is known.
 func checkLegacyOAuthSessionServer(secrets ports.SecretStore, server string) error {
-	if !isOAuthSession(secrets) {
-		return nil
+	if fromOAuth, err := isOAuthSession(secrets); err != nil || !fromOAuth {
+		return err
 	}
 	issuedBy, err := secrets.Get(ports.KeyOAuthServerURL)
 	if err != nil || issuedBy == "" {

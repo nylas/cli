@@ -25,7 +25,7 @@ Secrets are stored in the system keyring under service name `"nylas"`:
 | `dashboard_user_token`, `dashboard_org_token` | `ports.KeyDashboardUserToken`, `ports.KeyDashboardOrgToken` | Dashboard session tokens |
 | `dashboard_user_public_id`, `dashboard_org_public_id` | `ports.KeyDashboardUserPublicID`, `ports.KeyDashboardOrgPublicID` | Signed-in user and active organization |
 | `dashboard_app_id`, `dashboard_app_region` | `ports.KeyDashboardAppID`, `ports.KeyDashboardAppRegion` | Active application (`nylas dashboard apps use`) |
-| `dashboard_dpop_key` | `ports.KeyDashboardDPoPKey` | Ed25519 seed the dashboard session is DPoP-bound to |
+| `dashboard_dpop_key` | `ports.KeyDashboardDPoPKey` | Ed25519 seed the dashboard session is DPoP-bound to. Created only when absent; a key that cannot be read or is not valid is reported, never replaced. `nylas dashboard logout` removes a key that is not valid, with its session |
 | `dashboard_session_origin`, `dashboard_session_expires_at` | `ports.KeyDashboardSessionOrigin`, `ports.KeyDashboardSessionExpiresAt` | Set on a session exchanged from `nylas oauth login` |
 | `dashboard_session_server` | `ports.KeyDashboardSessionServer` | Servers the dashboard session was issued for; it is never sent elsewhere |
 | `oauth_access_token`, `oauth_refresh_token` | `ports.KeyOAuthAccessToken`, `ports.KeyOAuthRefreshToken` | `nylas oauth login` session |

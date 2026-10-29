@@ -179,6 +179,9 @@ url := qb.BuildURL(baseURL)
    - `llm.go` - LLM interface (AI providers)
    - `config.go` - Config interface
    - `webhook_server.go` - Webhook server interface
+   - `oauthas.go` - OAuthAuthServerClient (Nylas OAuth authorization server: discovery, PKCE code exchange, refresh, revoke)
+   - `lock.go` - CrossProcessLock (session locks shared by every CLI process on a machine)
+   - `mcp.go` - MCPCredentialSource (the API key or OAuth token `nylas mcp serve` sends)
 
 3. **Adapters** (`internal/adapters/`)
 
@@ -192,7 +195,8 @@ url := qb.BuildURL(baseURL)
    | `mcp/` | MCP proxy server for AI assistants |
    | `config/` | Configuration validation |
    | `oauth/` | OAuth callback server |
-   | `filelock/` | Cross-process advisory file lock (flock / LockFileEx) serialising OAuth token refresh |
+   | `oauthas/` | Client for the Nylas OAuth authorization server (PKCE, refresh, revoke) |
+   | `filelock/` | Cross-process advisory file lock (flock / LockFileEx): the OAuth and dashboard session locks and the encrypted file store's `.secrets.lock` |
    | `utilities/` | Services (contacts, email, scheduling, timezone, webhook) |
    | `browser/` | Browser automation |
    | `tunnel/` | Cloudflare tunnel |

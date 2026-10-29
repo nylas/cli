@@ -99,8 +99,13 @@ so a token is only ever sent to the one server its region names.`,
 			}
 
 			opts.Device = device || noBrowser || isSSHSession()
+			// The user cannot sign in without the code, so --quiet keeps it;
+			// structured output moves it to stderr, off the report stream.
 			opts.OnDeviceAuthorization = func(prompt domain.OAuthDevicePrompt) error {
 				out := cmd.OutOrStdout()
+				if structuredOutput(cmd) {
+					out = cmd.ErrOrStderr()
+				}
 				if _, err := fmt.Fprintf(out, "Open %s on a device with a browser.\nEnter code: %s\nOnly continue if you started this sign-in yourself.\n", prompt.VerificationURI, prompt.UserCode); err != nil {
 					return err
 				}
@@ -126,15 +131,27 @@ so a token is only ever sent to the one server its region names.`,
 			}
 			defer cancel()
 
-			if opts.Device {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Using device sign-in; waiting for approval...")
-			} else {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Opening your browser to complete sign-in...")
+			// Structured output keeps stdout for the report, so the prompt
+			// goes to stderr there; --quiet drops it.
+			if !quietOutput(cmd) {
+				prompt := cmd.OutOrStdout()
+				if structuredOutput(cmd) {
+					prompt = cmd.ErrOrStderr()
+				}
+				if opts.Device {
+					_, _ = fmt.Fprintln(prompt, "Using device sign-in; waiting for approval...")
+				} else {
+					_, _ = fmt.Fprintln(prompt, "Opening your browser to complete sign-in...")
+				}
 			}
 
 			result, err := svc.Login(ctx, opts)
 			if err != nil {
 				return wrapOAuthError(err)
+			}
+
+			if structuredOutput(cmd) {
+				return writeLoginReport(ctx, cmd, svc, result)
 			}
 
 			out := cmd.OutOrStdout()
@@ -165,7 +182,7 @@ so a token is only ever sent to the one server its region names.`,
 			defer cancelExchange()
 			dashboardSession, err := exchangeDashboardSessionFn(exchangeCtx, svc)
 			if errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept) {
-				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login` (run `nylas dashboard logout` first to use this login instead)")
+				_, _ = fmt.Fprintln(out, "  Dashboard:  still signed in with `nylas dashboard login`. To use this login instead, or if that session has expired, run `nylas dashboard logout` and then this command again")
 				return nil
 			}
 			if err != nil {
@@ -189,6 +206,28 @@ so a token is only ever sent to the one server its region names.`,
 	cmd.Flags().BoolVar(&device, "device", false, "sign in or sign up using a code on another device")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "use device sign-in without opening a local browser")
 	return cmd
+}
+
+// writeLoginReport is the structured form of the login output. It runs the
+// same dashboard exchange as the text form, and like it reports a failed
+// exchange instead of returning it.
+func writeLoginReport(ctx context.Context, cmd *cobra.Command, svc loginService, result *oauthlogin.LoginResult) error {
+	report := newLoginReport(result)
+
+	exchangeCtx, cancelExchange := afterConsentContext(ctx)
+	defer cancelExchange()
+	dashboardSession, err := exchangeDashboardSessionFn(exchangeCtx, svc)
+	switch {
+	case errors.Is(err, dashboardapp.ErrDashboardLoginSessionKept):
+		report.Dashboard.KeptDashboardLogin = true
+	case err != nil:
+		report.Dashboard.Error = err.Error()
+	default:
+		report.Dashboard.SignedIn = true
+		report.Dashboard.OrgPublicID = dashboardSession.OrgPublicID
+	}
+
+	return common.GetOutputWriter(cmd).Write(report)
 }
 
 // loginOptions turns the flags into a login request. A preset decides both
