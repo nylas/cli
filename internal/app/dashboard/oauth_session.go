@@ -188,11 +188,17 @@ func (r *SessionRenewer) exchange(ctx context.Context, resetAppSelection bool) (
 		return nil, err
 	}
 	// The server refuses a token without dashboard.session with a bare
-	// INVALID_TOKEN. Reading the unverified claim here only turns that into
-	// an actionable message; the server still decides.
-	if claims, err := domain.DecodeOAuthAccessToken(accessToken); err == nil &&
-		!slices.Contains(claims.Scopes(), domain.OAuthScopeDashboardSession) {
-		return nil, fmt.Errorf("%w: run `nylas oauth login` again and allow dashboard access", domain.ErrDashboardSessionNotConsented)
+	// INVALID_TOKEN, and any token narrowed by an IAM principal. Reading the
+	// unverified claims here turns that into an actionable message, and
+	// means a principal token is never sent to the exchange at all; the
+	// server still decides.
+	if claims, err := domain.DecodeOAuthAccessToken(accessToken); err == nil {
+		if claims.Principal != nil {
+			return nil, fmt.Errorf("%w: a credential narrowed by an IAM principal is MCP-only; run `nylas oauth login` for dashboard access", domain.ErrDashboardSessionNotConsented)
+		}
+		if !slices.Contains(claims.Scopes(), domain.OAuthScopeDashboardSession) {
+			return nil, fmt.Errorf("%w: run `nylas oauth login` again and allow dashboard access", domain.ErrDashboardSessionNotConsented)
+		}
 	}
 	resp, err := r.account.ExchangeOAuthToken(ctx, accessToken)
 	if err != nil {

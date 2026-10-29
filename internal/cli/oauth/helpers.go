@@ -30,9 +30,38 @@ type loginService interface {
 	AccessTokenValidFor(ctx context.Context, minValid time.Duration) (string, error)
 	UserInfo(ctx context.Context) (*domain.OAuthUserInfo, error)
 	Logout(ctx context.Context) error
+	ListMCPCredentials() ([]oauthlogin.MCPCredentialRecord, error)
+	ForMCPCredential(id string) (loginService, error)
+	LogoutMCPCredential(ctx context.Context, id string) error
 }
 
-var createLoginServiceFn = func() (loginService, error) { return createLoginService() }
+// serviceAdapter makes oauthlogin.Service a loginService: ForMCPCredential
+// returns the interface so a test fake can stand in for a credential too.
+type serviceAdapter struct{ *oauthlogin.Service }
+
+func (a serviceAdapter) ForMCPCredential(id string) (loginService, error) {
+	bound, err := a.Service.ForMCPCredential(id)
+	if err != nil {
+		return nil, err
+	}
+	return serviceAdapter{bound}, nil
+}
+
+var createLoginServiceFn = func() (loginService, error) {
+	svc, err := createLoginService()
+	if err != nil {
+		return nil, err
+	}
+	return serviceAdapter{svc}, nil
+}
+
+// forCredential is svc, or the MCP-only credential id names when id is set.
+func forCredential(svc loginService, id string) (loginService, error) {
+	if id == "" {
+		return svc, nil
+	}
+	return svc.ForMCPCredential(id)
+}
 
 var (
 	exchangeDashboardSessionFn = dashboard.ExchangeOAuthSession

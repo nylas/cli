@@ -118,23 +118,12 @@ func (s *Service) loginDevice(ctx context.Context, metadata *domain.OAuthServerM
 			return nil, errors.New("device sign-in returned no access token")
 		}
 		storeCtx, cancelStore := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
-		err = s.withSessionLock(storeCtx, func() error {
-			s.revokeReplacedSession(storeCtx)
-			if err := s.clearSession(); err != nil {
-				return err
-			}
-			if err := s.saveTokens(metadata.Issuer, opts.Resource, tokens); err != nil {
-				return errors.Join(err, s.clearSession())
-			}
-			return nil
-		})
+		credential, err := s.storeLogin(storeCtx, metadata.Issuer, opts, tokens)
 		cancelStore()
 		if err != nil {
 			return nil, fmt.Errorf("could not store device sign-in: %w", err)
 		}
-		return &LoginResult{Issuer: metadata.Issuer, ClientID: s.clientID, Scope: tokens.Scope,
-			ExpiresAt: tokens.ExpiresAt, HasRefresh: tokens.RefreshToken != "", Resource: opts.Resource,
-			DroppedScopes: dropped}, nil
+		return loginResult(metadata.Issuer, s.clientID, opts, tokens, dropped, credential), nil
 	}
 }
 

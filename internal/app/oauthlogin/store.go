@@ -57,11 +57,11 @@ func (s *Service) loadSession() (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
-		accessToken, err := s.getSecret(ports.KeyOAuthAccessToken)
+		accessToken, err := s.getSecret(s.key(ports.KeyOAuthAccessToken))
 		if err != nil {
 			return nil, err
 		}
-		serverURL, err := s.getSecret(ports.KeyOAuthServerURL)
+		serverURL, err := s.getSecret(s.key(ports.KeyOAuthServerURL))
 		if err != nil {
 			return nil, err
 		}
@@ -82,12 +82,12 @@ func (s *Service) readSession() (*Session, error) {
 		key    string
 		target *string
 	}{
-		{ports.KeyOAuthServerURL, &session.ServerURL},
-		{ports.KeyOAuthIssuer, &session.Issuer},
-		{ports.KeyOAuthResource, &session.Resource},
-		{ports.KeyOAuthScope, &session.Tokens.Scope},
-		{ports.KeyOAuthRefreshToken, &session.Tokens.RefreshToken},
-		{ports.KeyOAuthAccessToken, &session.Tokens.AccessToken},
+		{s.key(ports.KeyOAuthServerURL), &session.ServerURL},
+		{s.key(ports.KeyOAuthIssuer), &session.Issuer},
+		{s.key(ports.KeyOAuthResource), &session.Resource},
+		{s.key(ports.KeyOAuthScope), &session.Tokens.Scope},
+		{s.key(ports.KeyOAuthRefreshToken), &session.Tokens.RefreshToken},
+		{s.key(ports.KeyOAuthAccessToken), &session.Tokens.AccessToken},
 	} {
 		value, err := s.getSecret(field.key)
 		if err != nil {
@@ -99,7 +99,7 @@ func (s *Service) readSession() (*Session, error) {
 		return nil, domain.ErrOAuthNotLoggedIn
 	}
 
-	expiresAt, err := s.getSecret(ports.KeyOAuthExpiresAt)
+	expiresAt, err := s.getSecret(s.key(ports.KeyOAuthExpiresAt))
 	if err != nil {
 		return nil, err
 	}
@@ -143,15 +143,15 @@ func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens
 		key   string
 		value string
 	}{
-		{ports.KeyOAuthIssuer, issuer},
-		{ports.KeyOAuthServerURL, s.client.ServerURL()},
-		{ports.KeyOAuthResource, resource},
-		{ports.KeyOAuthScope, tokens.Scope},
-		{legacyKeyOAuthClientID, ""},
-		{ports.KeyOAuthIDToken, ""},
-		{ports.KeyOAuthRefreshToken, tokens.RefreshToken},
-		{ports.KeyOAuthAccessToken, tokens.AccessToken},
-		{ports.KeyOAuthExpiresAt, expiresAt},
+		{s.key(ports.KeyOAuthIssuer), issuer},
+		{s.key(ports.KeyOAuthServerURL), s.client.ServerURL()},
+		{s.key(ports.KeyOAuthResource), resource},
+		{s.key(ports.KeyOAuthScope), tokens.Scope},
+		{s.key(legacyKeyOAuthClientID), ""},
+		{s.key(ports.KeyOAuthIDToken), ""},
+		{s.key(ports.KeyOAuthRefreshToken), tokens.RefreshToken},
+		{s.key(ports.KeyOAuthAccessToken), tokens.AccessToken},
+		{s.key(ports.KeyOAuthExpiresAt), expiresAt},
 	}
 
 	for _, entry := range ordered {
@@ -168,20 +168,36 @@ func (s *Service) saveTokens(issuer, resource string, tokens *domain.OAuthTokens
 	return nil
 }
 
+// clearSession removes this service's credential: the default session, or
+// one MCP-only credential's keys. The MCP credential index is not touched.
 func (s *Service) clearSession() error {
-	return ClearSession(s.secrets)
+	var errs []error
+	for _, key := range sessionKeys {
+		errs = append(errs, s.deleteSecret(s.key(key)))
+	}
+	return errors.Join(errs...)
 }
 
-// ClearSessionLocked is ClearSession under the cross-process session lock, so
-// a refresh in flight in another process (`nylas mcp serve`) cannot write a
+// ClearSessionLocked removes every stored OAuth credential, the default
+// session and each MCP-only one, under the cross-process session lock, so a
+// refresh in flight in another process (`nylas mcp serve`) cannot write a
 // rotated session back after the clear.
 func ClearSessionLocked(ctx context.Context, secrets ports.SecretStore, lock ports.CrossProcessLock) error {
 	s := &Service{secrets: secrets, lock: lock}
-	return s.withSessionLock(ctx, s.clearSession)
+	return s.withSessionLock(ctx, func() error {
+		records, err := s.readIndex()
+		errs := []error{err, s.clearSession()}
+		for _, record := range records {
+			errs = append(errs, s.forCredential(record.ID).clearSession())
+		}
+		errs = append(errs, s.deleteSecret(ports.KeyOAuthMCPCredentials))
+		return errors.Join(errs...)
+	})
 }
 
-// ClearSession removes every stored OAuth session key without contacting the
-// server. The caller must hold the session lock; see ClearSessionLocked.
+// ClearSession removes every key of the default OAuth session without
+// contacting the server. The caller must hold the session lock; see
+// ClearSessionLocked.
 func ClearSession(secrets ports.SecretStore) error {
 	var errs []error
 	for _, key := range sessionKeys {
