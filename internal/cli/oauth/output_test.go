@@ -139,6 +139,7 @@ func TestLoginCmd_JSONReportsSessionAndDashboard(t *testing.T) {
 		DroppedScopes: []string{"notetaker.read"},
 	}}
 	withService(t, svc)
+	clearSSHEnv(t) // an SSH shell would select device sign-in
 
 	stdout, stderr, err := testutil.ExecuteSubCommand(newLoginCmd(), "--json")
 	require.NoError(t, err)
@@ -206,4 +207,39 @@ func TestWireDashboard_SetsTheDashboardHooks(t *testing.T) {
 
 	assert.NotNil(t, dashboard.OAuthTokenSource)
 	assert.NotNil(t, dashboard.OAuthRelogin)
+}
+
+// The device code is the only way to finish a device sign-in, so it must
+// reach the user in every output mode without corrupting the report stream.
+func TestLoginCmd_DevicePromptStaysOffStructuredStdout(t *testing.T) {
+	tests := []struct {
+		name      string
+		flags     []string
+		wantJSON  bool
+		wantEmpty bool
+	}{
+		{"json", []string{"--device", "--json"}, true, false},
+		{"quiet", []string{"--device", "--quiet"}, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withService(t, &fakeService{
+				loginResult:  &oauthlogin.LoginResult{Issuer: "i", ClientID: "c"},
+				devicePrompt: &domain.OAuthDevicePrompt{VerificationURI: "https://auth.example.test/device", UserCode: "ABCD-EFGH"},
+			})
+
+			stdout, stderr, err := testutil.ExecuteSubCommand(newLoginCmd(), tt.flags...)
+			require.NoError(t, err)
+
+			if tt.wantJSON {
+				var report loginReport
+				require.NoError(t, json.Unmarshal([]byte(stdout), &report), "stdout must be pure JSON: %q", stdout)
+			}
+			if tt.wantEmpty {
+				assert.Empty(t, stdout)
+			}
+			assert.Contains(t, stderr, "ABCD-EFGH")
+			assert.Contains(t, stderr, "https://auth.example.test/device")
+		})
+	}
 }

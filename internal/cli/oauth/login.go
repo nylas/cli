@@ -99,8 +99,13 @@ so a token is only ever sent to the one server its region names.`,
 			}
 
 			opts.Device = device || noBrowser || isSSHSession()
+			// The user cannot sign in without the code, so --quiet keeps it;
+			// structured output moves it to stderr, off the report stream.
 			opts.OnDeviceAuthorization = func(prompt domain.OAuthDevicePrompt) error {
 				out := cmd.OutOrStdout()
+				if structuredOutput(cmd) {
+					out = cmd.ErrOrStderr()
+				}
 				if _, err := fmt.Fprintf(out, "Open %s on a device with a browser.\nEnter code: %s\nOnly continue if you started this sign-in yourself.\n", prompt.VerificationURI, prompt.UserCode); err != nil {
 					return err
 				}

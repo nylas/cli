@@ -238,6 +238,33 @@ func (r *SessionRenewer) ClearIfOAuthThen(ctx context.Context, then func() error
 	if r == nil {
 		return nil, then()
 	}
+	return r.endIfOAuthThen(ctx, func() error {
+		return NewAuthService(r.account, r.secrets).WithServer(r.server).Logout(ctx)
+	}, then)
+}
+
+// ForgetIfOAuthThen is ClearIfOAuthThen without the server revocation, for
+// when the DPoP key that revocation must be signed with cannot be loaded: the
+// session is still removed, so it does not outlive the OAuth one.
+func (r *SessionRenewer) ForgetIfOAuthThen(ctx context.Context, then func() error) (clearErr, thenErr error) {
+	return r.endIfOAuthThen(ctx, func() error { return clearSessionKeys(r.secrets) }, then)
+}
+
+// ForgetSession removes the stored dashboard session and the DPoP key under
+// the lock, without revoking the session: the stored key is not valid, so no
+// proof the server would accept can be made. The next login creates a new key.
+func ForgetSession(ctx context.Context, secrets ports.SecretStore, lock ports.CrossProcessLock) error {
+	r := &SessionRenewer{secrets: secrets, lock: lock}
+	return r.withLock(ctx, func() error {
+		errs := []error{clearSessionKeys(secrets)}
+		if err := secrets.Delete(ports.KeyDashboardDPoPKey); err != nil {
+			errs = append(errs, fmt.Errorf("failed to clear %s: %w", ports.KeyDashboardDPoPKey, err))
+		}
+		return errors.Join(errs...)
+	})
+}
+
+func (r *SessionRenewer) endIfOAuthThen(ctx context.Context, end, then func() error) (clearErr, thenErr error) {
 	ran := false
 	lockErr := r.withLock(ctx, func() error {
 		ran = true
@@ -248,7 +275,7 @@ func (r *SessionRenewer) ClearIfOAuthThen(ctx context.Context, then func() error
 		case err != nil:
 			clearErr = err
 		case fromOAuth:
-			clearErr = NewAuthService(r.account, r.secrets).WithServer(r.server).Logout(ctx)
+			clearErr = end()
 		}
 		thenErr = then()
 		return nil

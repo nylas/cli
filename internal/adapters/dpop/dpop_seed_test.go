@@ -30,7 +30,7 @@ func TestNew_MalformedStoredKeyIsReportedNotReplaced(t *testing.T) {
 
 			svc, err := New(store)
 
-			require.ErrorIs(t, err, domain.ErrDashboardDPoP)
+			require.ErrorIs(t, err, domain.ErrDashboardDPoPKeyInvalid)
 			assert.Nil(t, svc)
 			assert.Equal(t, tt.stored, store.data[ports.KeyDashboardDPoPKey])
 		})

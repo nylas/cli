@@ -166,7 +166,10 @@ func clearOAuthSessionThen(ctx context.Context, secretStore ports.SecretStore, l
 	}
 	dpopSvc, err := loadOrCreateDPoPKey(secretStore)
 	if err != nil {
-		return err, then()
+		// Revoking needs a proof from the key, but the session still goes,
+		// under the lock, so it does not outlive the OAuth one.
+		clearErr, thenErr := dashboardapp.NewSessionRenewer(nil, secretStore, nil, lock).ForgetIfOAuthThen(ctx, then)
+		return errors.Join(fmt.Errorf("the dashboard session was not revoked on the server: %w", err), clearErr), thenErr
 	}
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
 	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}, lock).

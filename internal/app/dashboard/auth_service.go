@@ -142,8 +142,10 @@ func (s *AuthService) logout(ctx context.Context) error {
 	userToken, orgToken, err := loadDashboardTokens(s.secrets, s.server)
 
 	// A session for other servers is cleared but not revoked: sending its
-	// tokens here would hand them to a server that never issued them.
-	if errors.Is(err, domain.ErrDashboardServerMismatch) {
+	// tokens here would hand them to a server that never issued them. So is
+	// one whose server could not be checked, and the logout says so rather
+	// than reporting a revocation that never happened.
+	if err != nil && !errors.Is(err, domain.ErrDashboardNotLoggedIn) {
 		if clearErr := s.clearTokens(); clearErr != nil {
 			return clearErr
 		}
@@ -344,9 +346,13 @@ func (s *AuthService) SetActiveOrg(orgPublicID string) error {
 // clearTokens removes all dashboard auth data from the keyring,
 // including the active app selection to prevent stale state after re-login.
 func (s *AuthService) clearTokens() error {
+	return clearSessionKeys(s.secrets)
+}
+
+func clearSessionKeys(secrets ports.SecretStore) error {
 	var errs []error
 	for _, key := range oauthSessionStateKeys {
-		if err := s.secrets.Delete(key); err != nil {
+		if err := secrets.Delete(key); err != nil {
 			errs = append(errs, fmt.Errorf("failed to clear %s: %w", key, err))
 		}
 	}

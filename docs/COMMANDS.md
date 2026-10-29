@@ -186,8 +186,11 @@ check the signature; only the resource server's answer is authoritative.
 `--format yaml` and `--quiet` flags. `oauth status --json` prints `logged_in`,
 `expired`, `server`, `issuer`, `client_id`, `resource`, `scopes`, `expires_at`,
 `has_refresh_token` and the decoded `token_claims` (plus `userinfo` with
-`--verify`); no token is ever included. `--quiet` prints nothing, so the exit
-code alone says whether a session is stored. `nylas oauth token` always prints
+`--verify`); no token is ever included. `oauth status --quiet` prints nothing,
+so the exit code alone says whether a session is stored. In device sign-in,
+`oauth login` always shows the verification URL and code, since the login
+cannot finish without them: on stderr with `--json`, `--format yaml` or
+`--quiet`, so stdout carries only the report. `nylas oauth token` always prints
 the bare token.
 
 Default scopes are `openid`, `email`, `offline_access` and `dashboard.session`.
@@ -284,6 +287,14 @@ and both gateway URLs (`NYLAS_DASHBOARD_ACCOUNT_URL`,
 the stored session is refused rather than sent to a server that did not issue
 it; log in again, or restore the settings. `nylas dashboard logout` then clears
 it locally without contacting the new server.
+
+The session is also DPoP-bound to the Ed25519 key in `dashboard_dpop_key`. The
+CLI never replaces a stored key that it cannot read or that is not valid,
+because that would orphan every session bound to it; dashboard commands fail
+instead. If the key is not valid, run `nylas dashboard logout`: it removes the
+session and the key locally (the session cannot be revoked without the key),
+and the next login creates a new key. `nylas oauth logout` in that state still
+removes a dashboard session from OAuth, and reports that it was not revoked.
 
 ### SSO (Direct)
 
