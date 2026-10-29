@@ -61,6 +61,13 @@ MCP-only credential.`,
 			if logoutErr != nil {
 				return wrapOAuthError(logoutErr)
 			}
+			if structuredOutput(cmd) {
+				report := logoutReport{LoggedOut: true}
+				if dashboardErr != nil {
+					report.DashboardError = dashboardErr.Error()
+				}
+				return common.GetOutputWriter(cmd).Write(report)
+			}
 			if dashboardErr != nil {
 				_, _ = common.Yellow.Fprintf(cmd.OutOrStdout(),
 					"  Could not end the dashboard session: %v\n", dashboardErr)

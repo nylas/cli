@@ -29,7 +29,7 @@ const oauthSessionRenewBefore = time.Minute
 // session from `nylas dashboard login` is stored. It is left in place: its
 // app selection and organization are the user's, and replacing it would leave
 // it live on the server.
-var ErrDashboardLoginSessionKept = errors.New("the dashboard commands stay signed in with `nylas dashboard login`")
+var ErrDashboardLoginSessionKept = errors.New("the dashboard commands stay signed in with `nylas dashboard login`; run `nylas dashboard logout` first to use this login instead, or if that session has expired")
 
 var oauthSessionStateKeys = append(
 	append([]string{}, dashboardSessionStateKeys...),
@@ -98,7 +98,14 @@ func (r *SessionRenewer) Login(ctx context.Context) (*domain.DashboardOAuthExcha
 			return ErrDashboardLoginSessionKept
 		}
 		resp, err = r.exchange(ctx, true)
-		if err != nil && isOAuthSession(r.secrets) {
+		if err == nil {
+			return nil
+		}
+		fromOAuth, originErr := isOAuthSession(r.secrets)
+		if originErr != nil {
+			return errors.Join(err, originErr)
+		}
+		if fromOAuth {
 			// The OAuth session this one was exchanged from has just been
 			// replaced. Keeping it would leave every dashboard command acting
 			// as the previous user or organization until it expires.
@@ -113,15 +120,23 @@ func (r *SessionRenewer) Login(ctx context.Context) (*domain.DashboardOAuthExcha
 // EnsureFresh re-exchanges the stored session when it came from OAuth and is
 // about to expire. Sessions from `nylas dashboard login` are left alone.
 func (r *SessionRenewer) EnsureFresh(ctx context.Context) error {
-	if r == nil || !isOAuthSession(r.secrets) || !r.needsRenewal() {
+	if r == nil {
 		return nil
+	}
+	// A keyring that cannot say where the session came from is reported: read
+	// as "not from OAuth", the session would go to a refresh the server
+	// refuses, or be sent past its expiry.
+	fromOAuth, err := isOAuthSession(r.secrets)
+	if err != nil || !fromOAuth || !r.needsRenewal() {
+		return err
 	}
 	return r.withLock(ctx, func() error {
 		// Another process may have renewed while this one waited.
-		if !isOAuthSession(r.secrets) || !r.needsRenewal() {
-			return nil
+		fromOAuth, err := isOAuthSession(r.secrets)
+		if err != nil || !fromOAuth || !r.needsRenewal() {
+			return err
 		}
-		_, err := r.exchange(ctx, false)
+		_, err = r.exchange(ctx, false)
 		return err
 	})
 }
@@ -133,7 +148,11 @@ func (r *SessionRenewer) EnsureFresh(ctx context.Context) error {
 // refused like on every other load path rather than sent here.
 func (r *SessionRenewer) renewRejected(ctx context.Context, rejected string) (userToken, orgToken string, err error) {
 	err = r.withLock(ctx, func() error {
-		if isOAuthSession(r.secrets) && !r.needsRenewal() {
+		fromOAuth, err := isOAuthSession(r.secrets)
+		if err != nil {
+			return err
+		}
+		if fromOAuth && !r.needsRenewal() {
 			u, o, loadErr := loadDashboardTokens(r.secrets, r.server)
 			if loadErr == nil && u != rejected {
 				userToken, orgToken = u, o
@@ -225,17 +244,44 @@ func (r *SessionRenewer) ClearIfOAuthThen(ctx context.Context, then func() error
 	if r == nil {
 		return nil, then()
 	}
+	return r.endIfOAuthThen(ctx, func() error {
+		return NewAuthService(r.account, r.secrets).WithServer(r.server).Logout(ctx)
+	}, then)
+}
+
+// ForgetIfOAuthThen is ClearIfOAuthThen without the server revocation, for
+// when the DPoP key that revocation must be signed with cannot be loaded: the
+// session is still removed, so it does not outlive the OAuth one.
+func (r *SessionRenewer) ForgetIfOAuthThen(ctx context.Context, then func() error) (clearErr, thenErr error) {
+	return r.endIfOAuthThen(ctx, func() error { return clearSessionKeys(r.secrets) }, then)
+}
+
+// ForgetSession removes the stored dashboard session and the DPoP key under
+// the lock, without revoking the session: the stored key is not valid, so no
+// proof the server would accept can be made. The next login creates a new key.
+func ForgetSession(ctx context.Context, secrets ports.SecretStore, lock ports.CrossProcessLock) error {
+	r := &SessionRenewer{secrets: secrets, lock: lock}
+	return r.withLock(ctx, func() error {
+		errs := []error{clearSessionKeys(secrets)}
+		if err := secrets.Delete(ports.KeyDashboardDPoPKey); err != nil {
+			errs = append(errs, fmt.Errorf("failed to clear %s: %w", ports.KeyDashboardDPoPKey, err))
+		}
+		return errors.Join(errs...)
+	})
+}
+
+func (r *SessionRenewer) endIfOAuthThen(ctx context.Context, end, then func() error) (clearErr, thenErr error) {
 	ran := false
 	lockErr := r.withLock(ctx, func() error {
 		ran = true
 		// A keyring that cannot say where the session came from is reported,
 		// not read as "not from OAuth": that would leave the session behind
 		// while the logout reports success.
-		switch fromOAuth, err := oauthSessionOrigin(r.secrets); {
+		switch fromOAuth, err := isOAuthSession(r.secrets); {
 		case err != nil:
 			clearErr = err
 		case fromOAuth:
-			clearErr = NewAuthService(r.account, r.secrets).WithServer(r.server).Logout(ctx)
+			clearErr = end()
 		}
 		thenErr = then()
 		return nil
@@ -248,14 +294,16 @@ func (r *SessionRenewer) ClearIfOAuthThen(ctx context.Context, then func() error
 	return errors.Join(clearErr, lockErr), thenErr
 }
 
-func isOAuthSession(secrets ports.SecretStore) bool {
-	fromOAuth, err := oauthSessionOrigin(secrets)
-	return err == nil && fromOAuth
+// IsOAuthSession reports whether the session in secrets was exchanged from
+// `nylas oauth login`. A keyring that cannot be read is an error, not "no":
+// callers decide from the answer whether to revoke, refresh or keep a session.
+func IsOAuthSession(secrets ports.SecretStore) (bool, error) {
+	return isOAuthSession(secrets)
 }
 
-// oauthSessionOrigin reports whether the stored session was exchanged from
-// `nylas oauth login`, telling a failed read apart from no marker.
-func oauthSessionOrigin(secrets ports.SecretStore) (bool, error) {
+// isOAuthSession tells a failed read apart from no marker; only a marker that
+// is genuinely absent means the session did not come from OAuth.
+func isOAuthSession(secrets ports.SecretStore) (bool, error) {
 	origin, err := secrets.Get(ports.KeyDashboardSessionOrigin)
 	if errors.Is(err, domain.ErrSecretNotFound) {
 		return false, nil
@@ -272,8 +320,8 @@ func oauthSessionOrigin(secrets ports.SecretStore) (bool, error) {
 // keyring that cannot be read is reported rather than taken for "no session",
 // which would let the exchange overwrite one.
 func (r *SessionRenewer) hasDashboardLoginSession() (bool, error) {
-	if isOAuthSession(r.secrets) {
-		return false, nil
+	if fromOAuth, err := isOAuthSession(r.secrets); err != nil || fromOAuth {
+		return false, err
 	}
 	_, _, err := loadDashboardTokens(r.secrets, r.server)
 	switch {

@@ -95,13 +95,13 @@ func createAppService() (*dashboardapp.AppService, error) {
 }
 
 // OAuthTokenSource builds the OAuth session a dashboard session is exchanged
-// from. The oauth command package registers it: it owns that wiring and
-// already imports this package, so this package cannot import it back.
+// from. main wires it through oauth.WireDashboard: the oauth package owns
+// that wiring and already imports this package, so this one cannot import it.
 var OAuthTokenSource func() (dashboardapp.OAuthAccessTokens, error)
 
 // OAuthRelogin runs `nylas oauth login` again and exchanges the new session,
 // which is how `orgs switch` changes the organization of an OAuth session.
-// The oauth command package registers it, like OAuthTokenSource.
+// Wired by oauth.WireDashboard, like OAuthTokenSource.
 var OAuthRelogin func(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error)
 
 // lazyOAuthTokens defers building the OAuth session until a renewal needs a
@@ -141,12 +141,61 @@ func ExchangeOAuthSession(ctx context.Context, tokens dashboardapp.OAuthAccessTo
 // then runs then, holding the dashboard session lock across both; see
 // SessionRenewer.ClearIfOAuthThen.
 func ClearOAuthSessionThen(ctx context.Context, then func() error) (clearErr, thenErr error) {
-	dpopSvc, secretStore, err := createDPoPService()
+	secretStore, err := keyring.NewSecretStore(config.DefaultConfigDir())
 	if err != nil {
 		return err, then()
 	}
+	return clearOAuthSessionThen(ctx, secretStore, common.DashboardSessionLock(secretStore), then)
+}
+
+// clearOAuthSessionThen checks where the dashboard session came from before
+// building the DPoP service, because building it creates a key when there is
+// none: `nylas oauth logout` without a dashboard session from OAuth has
+// nothing to revoke and must not leave a key behind.
+func clearOAuthSessionThen(ctx context.Context, secretStore ports.SecretStore, lock ports.CrossProcessLock, then func() error) (clearErr, thenErr error) {
+	fromOAuth, err := dashboardapp.IsOAuthSession(secretStore)
+	if err != nil {
+		return err, then()
+	}
+	if !fromOAuth {
+		ran, clearErr, thenErr := thenUnlessOAuthSession(ctx, secretStore, lock, then)
+		if ran {
+			return clearErr, thenErr
+		}
+		// A concurrent `nylas oauth login` stored one in the meantime.
+	}
+	dpopSvc, err := loadOrCreateDPoPKey(secretStore)
+	if err != nil {
+		// Revoking needs a proof from the key, but the session still goes,
+		// under the lock, so it does not outlive the OAuth one.
+		clearErr, thenErr := dashboardapp.NewSessionRenewer(nil, secretStore, nil, lock).ForgetIfOAuthThen(ctx, then)
+		return errors.Join(fmt.Errorf("the dashboard session was not revoked on the server: %w", err), clearErr), thenErr
+	}
 	accountClient := dashboard.NewAccountClient(AccountBaseURL(), dpopSvc)
-	return newSessionRenewer(accountClient, secretStore).ClearIfOAuthThen(ctx, then)
+	return dashboardapp.NewSessionRenewer(accountClient, secretStore, lazyOAuthTokens{}, lock).
+		WithServer(SessionServer()).
+		ClearIfOAuthThen(ctx, then)
+}
+
+// thenUnlessOAuthSession runs then under the dashboard session lock when no
+// dashboard session from OAuth is stored, so a concurrent login cannot store
+// one between the check and then. It reports ran=false, without running then,
+// when one has appeared by the time the lock is held.
+func thenUnlessOAuthSession(ctx context.Context, secretStore ports.SecretStore, lock ports.CrossProcessLock, then func() error) (ran bool, clearErr, thenErr error) {
+	unlock, err := lock.Lock(ctx)
+	if err != nil {
+		return true, fmt.Errorf("failed to acquire the dashboard session lock: %w", err), then()
+	}
+	fromOAuth, err := dashboardapp.IsOAuthSession(secretStore)
+	if err == nil && fromOAuth {
+		_ = unlock()
+		return false, nil, nil
+	}
+	thenErr = then()
+	if unlockErr := unlock(); unlockErr != nil {
+		err = errors.Join(err, fmt.Errorf("failed to release the dashboard session lock: %w", unlockErr))
+	}
+	return true, err, thenErr
 }
 
 // createDomainService creates the dashboard domain management service.

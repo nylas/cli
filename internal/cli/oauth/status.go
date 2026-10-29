@@ -36,11 +36,18 @@ The access token's claims (audience, principal, grants, scopes, expiry) are
 DECODED locally and NOT VERIFIED: the CLI does not check the token's
 signature. They describe what the stored token says about itself; only the
 resource server's answer is authoritative. Use --verify to ask the
-authorization server.`,
+authorization server.
+
+--json (or --format yaml) prints the same facts as structured output, still
+without any token, with MCP-only credentials under mcp_credentials; --quiet
+prints nothing and leaves the exit code to say whether a session is stored.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := createLoginServiceFn()
 			if err != nil {
 				return wrapOAuthError(err)
+			}
+			if structuredOutput(cmd) {
+				return writeStatusReport(cmd, svc, credential, remote)
 			}
 			out := cmd.OutOrStdout()
 

@@ -70,6 +70,12 @@ var (
 	ErrDashboardMFARequired         = errors.New("MFA required")
 	ErrDashboardSSOFailed           = errors.New("SSO authentication failed")
 	ErrDashboardDPoP                = errors.New("DPoP proof generation failed")
+	// ErrDashboardDPoPKeyUnreadable: the keyring could not be read, so the
+	// stored DPoP key may still be fine.
+	ErrDashboardDPoPKeyUnreadable = errors.New("failed to read the stored dashboard DPoP key")
+	// ErrDashboardDPoPKeyInvalid: the stored DPoP key was read but is not a
+	// key. `nylas dashboard logout` removes it with the session bound to it.
+	ErrDashboardDPoPKeyInvalid = errors.New("the stored dashboard DPoP key is not valid")
 	// ErrDashboardServerMismatch: the stored dashboard session was issued for
 	// other servers than the ones the CLI is now configured for.
 	ErrDashboardServerMismatch = errors.New("the stored dashboard session belongs to a different server")

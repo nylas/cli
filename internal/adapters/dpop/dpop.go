@@ -26,6 +26,10 @@ type Service struct {
 	thumbprint string
 }
 
+// invalidKeyHint tells the user how to recover from a stored key that is not
+// a key; see the comment in New.
+const invalidKeyHint = "run `nylas dashboard logout` to remove it, then log in again"
+
 // New creates a DPoP service, loading an existing key from the secret store
 // or generating a new Ed25519 keypair if none exists.
 func New(secrets ports.SecretStore) (*Service, error) {
@@ -37,16 +41,25 @@ func New(secrets ports.SecretStore) (*Service, error) {
 	// and each CLI access token it exchanges, to the key that proved them.
 	seedB64, err := secrets.Get(ports.KeyDashboardDPoPKey)
 	if err != nil && !errors.Is(err, domain.ErrSecretNotFound) {
-		return nil, fmt.Errorf("%w: failed to read the stored key: %w", domain.ErrDashboardDPoP, err)
+		return nil, fmt.Errorf("%w: %w", domain.ErrDashboardDPoPKeyUnreadable, err)
 	}
 	if seedB64 != "" {
+		// A stored key that does not decode is reported, not replaced: it may
+		// be a damaged read rather than a damaged key, and overwriting it would
+		// orphan every session bound to the real one.
+		// `nylas dashboard logout` is the way out: it drops the key along
+		// with the sessions bound to it, and the next login creates a new one.
 		seed, decErr := base64.StdEncoding.DecodeString(seedB64)
-		if decErr == nil && len(seed) == ed25519.SeedSize {
-			s.privateKey = ed25519.NewKeyFromSeed(seed)
-			s.publicKey = s.privateKey.Public().(ed25519.PublicKey)
-			s.thumbprint = s.computeThumbprint()
-			return s, nil
+		if decErr != nil {
+			return nil, fmt.Errorf("%w (not valid base64: %w); %s", domain.ErrDashboardDPoPKeyInvalid, decErr, invalidKeyHint)
 		}
+		if len(seed) != ed25519.SeedSize {
+			return nil, fmt.Errorf("%w (%d bytes, want %d); %s", domain.ErrDashboardDPoPKeyInvalid, len(seed), ed25519.SeedSize, invalidKeyHint)
+		}
+		s.privateKey = ed25519.NewKeyFromSeed(seed)
+		s.publicKey = s.privateKey.Public().(ed25519.PublicKey)
+		s.thumbprint = s.computeThumbprint()
+		return s, nil
 	}
 
 	// Generate new keypair

@@ -26,6 +26,9 @@ type fakeService struct {
 	loginResult *oauthlogin.LoginResult
 	loginErr    error
 	loginOpts   *oauthlogin.LoginOptions
+	// devicePrompt, when set, is shown through opts.OnDeviceAuthorization
+	// as the real service does in device mode.
+	devicePrompt *domain.OAuthDevicePrompt
 
 	session   *oauthlogin.Session
 	statusErr error
@@ -42,6 +45,11 @@ type fakeService struct {
 
 func (f *fakeService) Login(_ context.Context, opts oauthlogin.LoginOptions) (*oauthlogin.LoginResult, error) {
 	f.loginOpts = &opts
+	if f.devicePrompt != nil && opts.Device {
+		if err := opts.OnDeviceAuthorization(*f.devicePrompt); err != nil {
+			return nil, err
+		}
+	}
 	return f.loginResult, f.loginErr
 }
 
@@ -514,4 +522,13 @@ func TestSessionLockPath_FileStoreLockLivesWithTheSecretsFile(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, filepath.Join(xdg, "nylas", common.OAuthSessionLockFile), common.SessionLockPath(store, common.OAuthSessionLockFile))
+}
+
+// clearSSHEnv unsets the variables isSSHSession reads, so a test run from an
+// SSH shell does not switch login to device sign-in.
+func clearSSHEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"} {
+		t.Setenv(name, "")
+	}
 }
