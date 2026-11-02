@@ -1,7 +1,9 @@
 package nylas
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -60,28 +62,24 @@ func (d *DemoClient) GetSendEvent(ctx context.Context, eventID string) (*domain.
 
 func (d *DemoClient) GetSendMessageActivity(ctx context.Context, messageID string) (*domain.SendMessageActivity, error) {
 	events := demoSendEvents(time.Now().Unix())
-	delivered, bounced, aliceAccepted, bobAccepted := events[0], events[1], events[2], events[3]
-	return &domain.SendMessageActivity{
-		Message: domain.SendMessageEnvelope{MessageID: messageID, ApplicationID: demoDeliverabilityApp,
-			From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain,
-			SentAt: aliceAccepted.Timestamp, LastEventAt: delivered.Timestamp},
-		Recipients: []domain.SendMessageRecipient{
-			{Recipient: delivered.Recipient, RecipientDomain: delivered.RecipientDomain, CurrentStatus: "delivered",
-				Events: timelineOf(aliceAccepted, delivered)},
-			{Recipient: bounced.Recipient, RecipientDomain: bounced.RecipientDomain, CurrentStatus: "bounced", BounceClass: "hard",
-				Events: timelineOf(bobAccepted, bounced)},
-		},
-	}, nil
-}
+	slices.SortFunc(events, func(a, b domain.SendEvent) int { return cmp.Compare(a.Timestamp, b.Timestamp) })
 
-// timelineOf turns send events, oldest first, into a recipient timeline.
-func timelineOf(events ...domain.SendEvent) []domain.SendTimelineEvent {
-	timeline := make([]domain.SendTimelineEvent, 0, len(events))
-	for _, e := range events {
-		timeline = append(timeline, domain.SendTimelineEvent{ID: e.ID, EventType: e.EventType, Timestamp: e.Timestamp,
-			BounceClass: e.BounceClass, Reason: e.Reason, Detail: e.Detail})
+	activity := &domain.SendMessageActivity{Message: domain.SendMessageEnvelope{MessageID: messageID,
+		ApplicationID: demoDeliverabilityApp, From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain,
+		SentAt: events[0].Timestamp, LastEventAt: events[len(events)-1].Timestamp}}
+	for _, recipient := range []string{"alice@example.org", "bob@example.net"} {
+		r := domain.SendMessageRecipient{Recipient: recipient}
+		for _, e := range events {
+			if e.Recipient != recipient {
+				continue
+			}
+			r.RecipientDomain, r.CurrentStatus, r.BounceClass = e.RecipientDomain, e.EventType, e.BounceClass
+			r.Events = append(r.Events, domain.SendTimelineEvent{ID: e.ID, EventType: e.EventType, Timestamp: e.Timestamp,
+				BounceClass: e.BounceClass, Reason: e.Reason, Detail: e.Detail})
+		}
+		activity.Recipients = append(activity.Recipients, r)
 	}
-	return timeline
+	return activity, nil
 }
 
 func (d *DemoClient) ListTrackingEvents(ctx context.Context, params *domain.TrackingEventListParams) (*domain.TrackingEventListResponse, error) {

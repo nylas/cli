@@ -21,20 +21,27 @@ var (
 	thresholdPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})(\.[0-9]{1,2})?$`)
 )
 
-// activityTimeLayouts are the absolute --start/--end forms; each means the same instant on every run.
-var activityTimeLayouts = []string{time.RFC3339, "2006-01-02 15:04"}
+const displayTimeLayout = "2006-01-02 15:04:05"
+
+// activityTimeLayouts are the absolute --start/--end forms; zoneless ones are UTC, so each means the same instant on every run.
+var activityTimeLayouts = []string{
+	time.RFC3339,
+	displayTimeLayout, "2006-01-02 15:04",
+	"2006-01-02T15:04:05", "2006-01-02T15:04",
+}
 
 // parseActivityTime turns a --start/--end value into Unix seconds. It accepts Unix seconds, a UTC
-// date (its last second for --end), "YYYY-MM-DD HH:MM" in UTC, RFC3339, or a look-back such as 24h
-// or 7d. relative is true for look-backs, the only form that moves between runs.
+// date (its last second for --end), a UTC date-time with or without seconds (an optional trailing
+// " UTC", as the CLI prints it), RFC3339, or a look-back such as 24h or 7d. relative is true for
+// look-backs, the only form that moves between runs.
 func parseActivityTime(flag, value string, now time.Time, isEnd bool) (ts int64, relative bool, err error) {
-	value = strings.TrimSpace(value)
+	value = strings.TrimSuffix(strings.TrimSpace(value), " UTC")
 	if value == "" {
 		return 0, false, nil
 	}
 	invalid := common.NewUserError(
 		fmt.Sprintf("invalid --%s value %q", flag, value),
-		`Use Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM" (UTC), RFC3339, or a look-back such as 24h or 7d`,
+		`Use Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" (UTC), RFC3339, or a look-back such as 24h or 7d`,
 	)
 
 	if day, dateErr := time.ParseInLocation(metricsDateLayout, value, time.UTC); dateErr == nil {
@@ -88,11 +95,12 @@ func validateEventID(id string) error {
 	return nil
 }
 
+// formatUnix prints a time in UTC, in a form --start/--end accept back.
 func formatUnix(ts int64) string {
 	if ts == 0 {
 		return ""
 	}
-	return time.Unix(ts, 0).Local().Format("2006-01-02 15:04:05")
+	return time.Unix(ts, 0).UTC().Format(displayTimeLayout) + " UTC"
 }
 
 // formatRate prints a percentage; nil means no data (a zero denominator), never 0%.
@@ -132,12 +140,27 @@ func nextCursorNote(w io.Writer, nextCursor, pageFlags string) {
 
 // writeStructuredList writes a list response as JSON/YAML, or only the row IDs in quiet mode.
 func writeStructuredList(cmd *cobra.Command, resp, rows any) (bool, error) {
-	quiet, _ := cmd.Flags().GetBool("quiet")
-	format, _ := cmd.Flags().GetString("format")
-	if quiet || format == "quiet" {
+	if isQuiet(cmd) {
 		return true, common.GetOutputWriter(cmd).WriteList(rows, nil)
 	}
 	return writeStructured(cmd, resp)
+}
+
+// writeStructuredPage is writeStructuredList for a paged feed. Stdout stays the IDs or the API
+// envelope; the next-page line goes to stderr whenever stdout does not already carry it: always in
+// quiet mode, and after a look-back in JSON/YAML (the envelope has next_cursor but not the window).
+func writeStructuredPage(cmd *cobra.Command, resp, rows any, nextCursor, pageFlags string) (bool, error) {
+	done, err := writeStructuredList(cmd, resp, rows)
+	if done && err == nil && (isQuiet(cmd) || pageFlags != "") {
+		nextCursorNote(cmd.ErrOrStderr(), nextCursor, pageFlags)
+	}
+	return done, err
+}
+
+func isQuiet(cmd *cobra.Command) bool {
+	quiet, _ := cmd.Flags().GetBool("quiet")
+	format, _ := cmd.Flags().GetString("format")
+	return quiet || format == "quiet"
 }
 
 // writeStructured writes v as JSON/YAML/quiet and reports whether it did.

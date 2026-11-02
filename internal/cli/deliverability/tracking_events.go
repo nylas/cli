@@ -50,11 +50,7 @@ func runTrackingEventsList(ctx context.Context, cmd *cobra.Command, client ports
 	if err != nil {
 		return common.WrapListError("tracking events", err)
 	}
-	if done, err := writeStructuredList(cmd, resp, resp.Data); done {
-		// Stdout stays the API envelope; a look-back's resolved window goes to stderr so scripts can page.
-		if err == nil && pageFlags != "" {
-			nextCursorNote(cmd.ErrOrStderr(), resp.NextCursor, pageFlags)
-		}
+	if done, err := writeStructuredPage(cmd, resp, resp.Data, resp.NextCursor, pageFlags); done {
 		return err
 	}
 	if len(resp.Data) == 0 {

@@ -265,6 +265,10 @@ func TestParseActivityTime(t *testing.T) {
 		// Without a zone the result must not depend on the laptop's time zone.
 		{name: "zoneless date-time is UTC", value: "2026-10-01 07:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
 		{name: "RFC3339 keeps its zone", value: "2026-10-01T07:00:00-04:00", want: time.Date(2026, 10, 1, 11, 0, 0, 0, time.UTC)},
+		{name: "zoneless ISO with seconds is UTC", value: "2026-10-01T07:00:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
+		{name: "zoneless ISO without seconds is UTC", value: "2026-10-01T07:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
+		{name: "date-time with seconds is UTC", value: "2026-10-01 07:00:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
+		{name: "printed form with UTC suffix", value: "2026-10-01 07:00:00 UTC", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
 		// Keyword and time-of-day forms resolve differently from run to run (and 9am rolls to tomorrow),
 		// which breaks --page-token, so only look-backs may move and they are flagged as relative.
 		{name: "today rejected", value: "today", wantErr: true},
@@ -371,4 +375,32 @@ func TestSendEventsList_JSONLookBackPrintsNextPageOnStderr(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
 	assert.Contains(t, stderr, "Next page: --page-token tok-2 --start "+reqs[0].query["start"][0])
+}
+
+func TestFormatUnix_RoundTripsAsInput(t *testing.T) {
+	// Users copy times from the tables into --start/--end, so every printed time must parse back to itself.
+	ts := time.Date(2026, 10, 29, 16, 13, 55, 0, time.UTC).Unix()
+	printed := formatUnix(ts)
+	assert.Equal(t, "2026-10-29 16:13:55 UTC", printed)
+	got, relative, err := parseActivityTime("start", printed, time.Now(), false)
+	require.NoError(t, err)
+	assert.False(t, relative)
+	assert.Equal(t, ts, got)
+}
+
+func TestSendEventsList_QuietPrintsNextPageOnStderr(t *testing.T) {
+	stdout, stderr, _, err := runAgainstFakeAPIWithStderr(t, http.StatusOK, sendEventsPage,
+		"send-events", "list", "--start", "2026-10-29", "--quiet")
+	require.NoError(t, err)
+	// Quiet stdout is only IDs, so the token must go to stderr or a script can never reach page 2.
+	assert.Equal(t, "aaa\nbbb\n", stdout)
+	assert.Contains(t, stderr, "Next page token: tok-2")
+}
+
+func TestSendEventsList_EndJustInsideRetentionIsSent(t *testing.T) {
+	// Guards the edge of the 90-day check: one hour inside the server's floor must still be allowed.
+	end := time.Now().UTC().Add(-activityRetention + time.Hour).Format("2006-01-02 15:04")
+	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", end)
+	require.NoError(t, err)
+	require.Len(t, reqs, 1)
 }

@@ -434,7 +434,22 @@ func TestDemoClientSendEventsAgree(t *testing.T) {
 		want[e.ID] = e.EventType
 	}
 	for _, r := range activity.Recipients {
+		if len(r.Events) == 0 {
+			t.Fatalf("recipient %s has no timeline", r.Recipient)
+		}
+		// A recipient's status is where its timeline ends, and the timeline reads oldest first.
+		if last := r.Events[len(r.Events)-1]; r.CurrentStatus != last.EventType {
+			t.Errorf("%s status is %s but the timeline ends with %s", r.Recipient, r.CurrentStatus, last.EventType)
+		}
+		for i := 1; i < len(r.Events); i++ {
+			if r.Events[i].Timestamp < r.Events[i-1].Timestamp {
+				t.Errorf("%s timeline is not oldest first", r.Recipient)
+			}
+		}
 		for _, e := range r.Events {
+			if got, err := client.GetSendEvent(ctx, e.ID); err != nil || got.Recipient != r.Recipient {
+				t.Errorf("event %s is listed under %s but belongs to another recipient", e.ID, r.Recipient)
+			}
 			// GetSendEvent falls back for unknown IDs, so a timeline-only ID must be caught here.
 			typ, ok := want[e.ID]
 			if !ok {

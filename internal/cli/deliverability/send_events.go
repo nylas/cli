@@ -21,7 +21,7 @@ type activityWindowFlags struct {
 }
 
 func addActivityWindowFlags(cmd *cobra.Command, f *activityWindowFlags, order *string, limit *int, pageToken *string) {
-	cmd.Flags().StringVar(&f.start, "start", "", `Window start: Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM" (UTC), RFC3339, or look-back like 24h/7d (default: UTC midnight 6 days before --end, or before today)`)
+	cmd.Flags().StringVar(&f.start, "start", "", `Window start: Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" (UTC), RFC3339, or look-back like 24h/7d (default: UTC midnight 6 days before --end, or before today)`)
 	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive, within the last 90 days; a date means the end of that UTC day (same formats; default: now)")
 	cmd.Flags().StringVar(order, "order", "", "Sort order: desc (newest first, default) or asc")
 	common.AddLimitFlag(cmd, limit, 50)
@@ -110,11 +110,7 @@ func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.Nyl
 	if err != nil {
 		return common.WrapListError("send events", err)
 	}
-	if done, err := writeStructuredList(cmd, resp, resp.Data); done {
-		// Stdout stays the API envelope; a look-back's resolved window goes to stderr so scripts can page.
-		if err == nil && pageFlags != "" {
-			nextCursorNote(cmd.ErrOrStderr(), resp.NextCursor, pageFlags)
-		}
+	if done, err := writeStructuredPage(cmd, resp, resp.Data, resp.NextCursor, pageFlags); done {
 		return err
 	}
 	if len(resp.Data) == 0 {
