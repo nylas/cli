@@ -456,3 +456,21 @@ func TestAlertFlagHelp(t *testing.T) {
 	}
 	assert.Contains(t, del.Flags().Lookup("yes").Usage, "required")
 }
+
+func TestSendEventsList_JSONBeatsFormatQuiet(t *testing.T) {
+	// The shape must follow the CLI-wide precedence (--quiet, then --json, then --format),
+	// or a script asking for JSON gets a bare array with no next_cursor.
+	out, _, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--start", "2026-10-29", "--format", "quiet", "--json")
+	require.NoError(t, err)
+	var resp struct {
+		Data       []map[string]any `json:"data"`
+		NextCursor string           `json:"next_cursor"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &resp), out)
+	assert.Len(t, resp.Data, 2)
+	assert.Equal(t, "tok-2", resp.NextCursor)
+
+	out, _, err = runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--start", "2026-10-29", "--quiet", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "aaa\nbbb\n", out)
+}

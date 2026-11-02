@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -162,10 +163,9 @@ func writeStructuredPage(cmd *cobra.Command, resp, rows any, nextCursor, pageFla
 	return done, err
 }
 
+// isQuiet uses the shared format resolution (--quiet, then --json, then --format) so it agrees with the writer.
 func isQuiet(cmd *cobra.Command) bool {
-	quiet, _ := cmd.Flags().GetBool("quiet")
-	format, _ := cmd.Flags().GetString("format")
-	return quiet || format == "quiet"
+	return common.GetOutputOptions(cmd, nil).Format == ports.FormatQuiet
 }
 
 // writeStructured writes v as JSON/YAML/quiet and reports whether it did.

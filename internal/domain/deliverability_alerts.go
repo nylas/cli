@@ -7,15 +7,15 @@ var SendAlertMetrics = []string{"bounce_rate", "complaint_rate", "delivery_rate"
 
 // SendAlertRule is a send alert rule. Direction is "below" for delivery_rate and "above" otherwise.
 type SendAlertRule struct {
-	ID            string  `json:"id"`
-	ApplicationID string  `json:"application_id"`
-	Metric        string  `json:"metric"`
-	Direction     string  `json:"direction"`
-	Threshold     float64 `json:"threshold"`
-	WindowHours   int64   `json:"window_hours"`
-	MinVolume     int64   `json:"min_volume"`
-	CreatedAt     int64   `json:"created_at"`
-	UpdatedAt     int64   `json:"updated_at"`
+	ID            string  `yaml:"id" json:"id"`
+	ApplicationID string  `yaml:"application_id" json:"application_id"`
+	Metric        string  `yaml:"metric" json:"metric"`
+	Direction     string  `yaml:"direction" json:"direction"`
+	Threshold     float64 `yaml:"threshold" json:"threshold"`
+	WindowHours   int64   `yaml:"window_hours" json:"window_hours"`
+	MinVolume     int64   `yaml:"min_volume" json:"min_volume"`
+	CreatedAt     int64   `yaml:"created_at" json:"created_at"`
+	UpdatedAt     int64   `yaml:"updated_at" json:"updated_at"`
 }
 
 // QuietField returns the rule ID for quiet output.
