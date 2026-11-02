@@ -26,9 +26,10 @@ func newTrackingEventsListCmd() *cobra.Command {
 			if params.Start, params.End, err = window.resolve(time.Now()); err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
-				return runTrackingEventsList(ctx, cmd, client, &params)
+			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				return struct{}{}, runTrackingEventsList(ctx, cmd, client, &params)
 			})
+			return err
 		},
 	}
 
@@ -76,17 +77,18 @@ func newTrackingEventsShowCmd() *cobra.Command {
 			if err := validateEventID(args[0]); err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				event, err := client.GetTrackingEvent(ctx, args[0])
 				if err != nil {
-					return common.WrapGetError("tracking event", err)
+					return struct{}{}, common.WrapGetError("tracking event", err)
 				}
 				if done, err := writeStructured(cmd, event); done {
-					return err
+					return struct{}{}, err
 				}
 				printTrackingEvent(cmd, event)
-				return nil
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 }
@@ -122,17 +124,18 @@ func newTrackingEventsMessageCmd() *cobra.Command {
 		Short: "Show open and click totals and the newest 100 interactions for one message",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				activity, err := client.GetTrackingMessageActivity(ctx, args[0])
 				if err != nil {
-					return common.WrapGetError("tracking activity for message", err)
+					return struct{}{}, common.WrapGetError("tracking activity for message", err)
 				}
 				if done, err := writeStructured(cmd, activity); done {
-					return err
+					return struct{}{}, err
 				}
 				printTrackingMessageActivity(cmd, activity)
-				return nil
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 }

@@ -233,3 +233,61 @@ func TestCommandTree(t *testing.T) {
 		assert.ElementsMatch(t, subs, got, group)
 	}
 }
+
+func TestParseActivityTime(t *testing.T) {
+	now := time.Date(2026, 11, 2, 15, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		value   string
+		isEnd   bool
+		want    time.Time
+		wantErr bool
+	}{
+		{name: "empty means server default", value: ""},
+		// Dates are UTC days and --end is inclusive, so a one-day window covers the whole day.
+		{name: "date start is UTC midnight", value: "2026-10-01", want: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{name: "date end is last second of the UTC day", value: "2026-10-01", isEnd: true, want: time.Date(2026, 10, 1, 23, 59, 59, 0, time.UTC)},
+		// Without a zone the result must not depend on the laptop's time zone.
+		{name: "zoneless date-time is UTC", value: "2026-10-01 07:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
+		{name: "look-back counts back from now", value: "7d", want: now.Add(-7 * 24 * time.Hour)},
+		{name: "unix seconds", value: "1730000000", want: time.Unix(1730000000, 0)},
+		// A non-positive look-back would put start at or after now and silently return nothing.
+		{name: "negative look-back rejected", value: "-7d", wantErr: true},
+		{name: "zero look-back rejected", value: "0", wantErr: true},
+		{name: "garbage rejected", value: "soon", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseActivityTime("start", tt.value, now, tt.isEnd)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.want.IsZero() {
+				assert.Zero(t, got)
+				return
+			}
+			assert.Equal(t, tt.want.Unix(), got)
+		})
+	}
+}
+
+func TestSendAlertsCreate_RejectsThresholdsThatAreNotJSONNumbers(t *testing.T) {
+	// These parse as floats but are not JSON numbers, so they would fail when the request body is built.
+	for _, threshold := range []string{".5", "+5", "5.", "NaN", "1e2", "-1"} {
+		_, reqs, err := runAgainstFakeAPI(t, http.StatusCreated, ruleResp,
+			"send-alerts", "create", "--metric", "bounce_rate", "--threshold", threshold, "--window-hours", "1")
+		require.Error(t, err, threshold)
+		assert.Contains(t, err.Error(), "invalid --threshold", threshold)
+		assert.Empty(t, reqs, threshold)
+	}
+}
+
+func TestSendAlertsDelete_JSONOutputHasNoText(t *testing.T) {
+	out, reqs, err := runAgainstFakeAPI(t, http.StatusOK, `{"request_id":"r"}`, "send-alerts", "delete", "rule-1", "--yes", "--json")
+	require.NoError(t, err)
+	require.Len(t, reqs, 1)
+	// Scripts pipe --json output to a parser, so no human text may reach stdout.
+	assert.NotContains(t, out, "Deleted")
+}

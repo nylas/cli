@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/nylas/cli/internal/cli/common"
@@ -35,10 +34,11 @@ func buildAlertRuleRequest(cmd *cobra.Command, f *alertRuleFlags) (*domain.SendA
 		req.Metric = &f.metric
 	}
 	if cmd.Flags().Changed("threshold") {
-		if _, err := strconv.ParseFloat(f.threshold, 64); err != nil {
+		threshold := strings.TrimSpace(f.threshold)
+		if !thresholdPattern.MatchString(threshold) {
 			return nil, common.NewUserError(fmt.Sprintf("invalid --threshold value %q", f.threshold), "Use a percentage such as 5 or 0.25")
 		}
-		n := json.Number(strings.TrimSpace(f.threshold))
+		n := json.Number(threshold)
 		req.Threshold = &n
 	}
 	if cmd.Flags().Changed("window-hours") {
@@ -56,26 +56,27 @@ func newSendAlertsListCmd() *cobra.Command {
 		Short: "List send alert rules",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				rules, err := client.ListSendAlertRules(ctx)
 				if err != nil {
-					return common.WrapListError("send alert rules", err)
+					return struct{}{}, common.WrapListError("send alert rules", err)
 				}
 				if done, err := writeStructuredList(cmd, rules, rules); done {
-					return err
+					return struct{}{}, err
 				}
 				if len(rules) == 0 {
 					common.PrintEmptyStateWithHint("send alert rules",
 						"Create one with: nylas deliverability send-alerts create --metric bounce_rate --threshold 5 --window-hours 1")
-					return nil
+					return struct{}{}, nil
 				}
 				table := newTable(cmd.OutOrStdout(), "ID", "FIRES WHEN", "WINDOW", "MIN VOLUME", "UPDATED")
 				for _, r := range rules {
 					table.AddRow(r.ID, ruleCondition(r), fmt.Sprintf("%dh", r.WindowHours), formatCount(r.MinVolume), formatUnix(r.UpdatedAt))
 				}
 				table.Render()
-				return nil
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 }
@@ -86,13 +87,14 @@ func newSendAlertsShowCmd() *cobra.Command {
 		Short: "Show a send alert rule",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				rule, err := client.GetSendAlertRule(ctx, args[0])
 				if err != nil {
-					return common.WrapGetError("send alert rule", err)
+					return struct{}{}, common.WrapGetError("send alert rule", err)
 				}
-				return writeRule(cmd, rule)
+				return struct{}{}, writeRule(cmd, rule)
 			})
+			return err
 		},
 	}
 }
@@ -110,16 +112,17 @@ func newSendAlertsCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				rule, err := client.CreateSendAlertRule(ctx, req)
 				if err != nil {
-					return common.WrapCreateError("send alert rule", err)
+					return struct{}{}, common.WrapCreateError("send alert rule", err)
 				}
 				if !common.IsStructuredOutput(cmd) {
 					common.PrintSuccess("Created send alert rule %s", rule.ID)
 				}
-				return writeRule(cmd, rule)
+				return struct{}{}, writeRule(cmd, rule)
 			})
+			return err
 		},
 	}
 	addAlertRuleFlags(cmd, &flags)
@@ -144,16 +147,17 @@ func newSendAlertsUpdateCmd() *cobra.Command {
 			if *req == (domain.SendAlertRuleRequest{}) {
 				return common.NewUserError("nothing to update", "Set at least one of --metric, --threshold, --window-hours, --min-volume")
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				rule, err := client.UpdateSendAlertRule(ctx, args[0], req)
 				if err != nil {
-					return common.WrapUpdateError("send alert rule", err)
+					return struct{}{}, common.WrapUpdateError("send alert rule", err)
 				}
 				if !common.IsStructuredOutput(cmd) {
 					common.PrintSuccess("Updated send alert rule %s", rule.ID)
 				}
-				return writeRule(cmd, rule)
+				return struct{}{}, writeRule(cmd, rule)
 			})
+			return err
 		},
 	}
 	addAlertRuleFlags(cmd, &flags)
@@ -171,13 +175,16 @@ func newSendAlertsDeleteCmd() *cobra.Command {
 			if !yes {
 				return common.NewUserError("deletion requires confirmation", "Re-run with --yes to delete the rule")
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				if err := client.DeleteSendAlertRule(ctx, args[0]); err != nil {
-					return common.WrapDeleteError("send alert rule", err)
+					return struct{}{}, common.WrapDeleteError("send alert rule", err)
 				}
-				common.PrintSuccess("Deleted send alert rule %s", args[0])
-				return nil
+				if !common.IsStructuredOutput(cmd) {
+					common.PrintSuccess("Deleted send alert rule %s", args[0])
+				}
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 	common.AddYesFlag(cmd, &yes)

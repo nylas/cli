@@ -13,6 +13,8 @@ const (
 	demoDeliverabilityFrom   = "agent@mail.example.com"
 	demoDeliverabilityMsgID  = "<demo-message-1@mail.example.com>"
 	demoSendEventID          = "5f2c7a4e9b1d3c8f0a6e2d4b7c9f1a3e5d7b9c2f4a6e8d0b1c3f5a7e9d2b4c6f"
+	demoAcceptedEventID      = "e7f9b1d3a5c70829416b8d0f2a4c6e8b1d3f5a7c9e2b4d6f8a0c3e5b7d9f1a2c"
+	demoBouncedEventID       = "c4e6a8b0d2f41638507a9cbe1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f"
 	demoTrackingEventID      = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
 	demoSendAlertRuleID      = "3d6f8a1c-2b4e-4c7d-9f0a-1b2c3d4e5f60"
 )
@@ -26,7 +28,7 @@ func (d *DemoClient) ListSendEvents(ctx context.Context, params *domain.SendEven
 			{ID: demoSendEventID, EventType: "delivered", Timestamp: now - 60, ApplicationID: demoDeliverabilityApp,
 				MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain,
 				Recipient: "alice@example.org", RecipientDomain: "example.org", Reason: "250 2.0.0 OK"},
-			{ID: demoTrackingEventID, EventType: "bounced", BounceClass: "hard", Timestamp: now - 120,
+			{ID: demoBouncedEventID, EventType: "bounced", BounceClass: "hard", Timestamp: now - 120,
 				ApplicationID: demoDeliverabilityApp, MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom,
 				SendingDomain: demoDeliverabilityDomain, Recipient: "bob@example.net", RecipientDomain: "example.net",
 				Reason: "General (5.1.1)"},
@@ -36,6 +38,12 @@ func (d *DemoClient) ListSendEvents(ctx context.Context, params *domain.SendEven
 }
 
 func (d *DemoClient) GetSendEvent(ctx context.Context, eventID string) (*domain.SendEvent, error) {
+	list, _ := d.ListSendEvents(ctx, nil)
+	for _, e := range list.Data {
+		if e.ID == eventID {
+			return &e, nil
+		}
+	}
 	return &domain.SendEvent{ID: eventID, EventType: "delivered", Timestamp: time.Now().Unix() - 60,
 		ApplicationID: demoDeliverabilityApp, MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom,
 		SendingDomain: demoDeliverabilityDomain, Recipient: "alice@example.org", RecipientDomain: "example.org",
@@ -50,8 +58,8 @@ func (d *DemoClient) GetSendMessageActivity(ctx context.Context, messageID strin
 		Recipients: []domain.SendMessageRecipient{{
 			Recipient: "alice@example.org", RecipientDomain: "example.org", CurrentStatus: "delivered",
 			Events: []domain.SendTimelineEvent{
-				{ID: demoSendEventID, EventType: "accepted", Timestamp: now - 120},
-				{ID: demoTrackingEventID, EventType: "delivered", Timestamp: now - 60, Reason: "250 2.0.0 OK"},
+				{ID: demoAcceptedEventID, EventType: "accepted", Timestamp: now - 120},
+				{ID: demoSendEventID, EventType: "delivered", Timestamp: now - 60, Reason: "250 2.0.0 OK"},
 			},
 		}},
 	}, nil

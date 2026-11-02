@@ -47,28 +47,25 @@ func getMetrics[T any](ctx context.Context, c *HTTPClient, queryURL string) (*T,
 	return &result.Data, nil
 }
 
+// metricsWindowQuery adds the window params every metrics route takes.
 func metricsWindowQuery(params *domain.MetricsParams) *QueryBuilder {
-	if params == nil {
-		params = &domain.MetricsParams{}
-	}
-	return NewQueryBuilder().
-		Add("start", params.Start).
-		Add("end", params.End).
-		Add("sending_domain", params.SendingDomain)
+	p := orEmptyMetricsParams(params)
+	return NewQueryBuilder().Add("start", p.Start).Add("end", p.End).Add("sending_domain", p.SendingDomain)
 }
 
 func metricsTimeseriesURL(base string, params *domain.MetricsParams) string {
-	qb := metricsWindowQuery(params)
-	if params != nil {
-		qb.Add("granularity", params.Granularity)
-	}
-	return qb.BuildURL(base)
+	p := orEmptyMetricsParams(params)
+	return metricsWindowQuery(p).Add("granularity", p.Granularity).BuildURL(base)
 }
 
 func metricsBreakdownURL(base string, params *domain.MetricsParams) string {
-	qb := metricsWindowQuery(params)
-	if params != nil {
-		qb.Add("group_by", params.GroupBy).Add("sort", params.Sort).AddInt("limit", params.Limit)
+	p := orEmptyMetricsParams(params)
+	return metricsWindowQuery(p).Add("group_by", p.GroupBy).Add("sort", p.Sort).AddInt("limit", p.Limit).BuildURL(base)
+}
+
+func orEmptyMetricsParams(params *domain.MetricsParams) *domain.MetricsParams {
+	if params == nil {
+		return &domain.MetricsParams{}
 	}
-	return qb.BuildURL(base)
+	return params
 }

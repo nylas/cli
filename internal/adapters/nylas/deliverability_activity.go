@@ -3,7 +3,6 @@ package nylas
 import (
 	"context"
 	"net/url"
-	"strconv"
 
 	"github.com/nylas/cli/internal/domain"
 )
@@ -113,12 +112,10 @@ func (c *HTTPClient) GetTrackingMessageActivity(ctx context.Context, messageID s
 
 // activityWindowQuery adds the window and paging params shared by both feeds; zero means server default.
 func activityWindowQuery(start, end int64, order string, limit int, pageToken string) *QueryBuilder {
-	qb := NewQueryBuilder()
-	if start != 0 {
-		qb.Add("start", strconv.FormatInt(start, 10))
-	}
-	if end != 0 {
-		qb.Add("end", strconv.FormatInt(end, 10))
-	}
-	return qb.Add("order", order).AddInt("limit", limit).Add("page_token", pageToken)
+	return NewQueryBuilder().
+		AddInt64("start", start).
+		AddInt64("end", end).
+		Add("order", order).
+		AddInt("limit", limit).
+		Add("page_token", pageToken)
 }

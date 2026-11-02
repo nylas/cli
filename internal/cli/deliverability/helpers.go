@@ -1,7 +1,6 @@
 package deliverability
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -10,37 +9,44 @@ import (
 	"time"
 
 	"github.com/nylas/cli/internal/cli/common"
-	"github.com/nylas/cli/internal/ports"
 	"github.com/spf13/cobra"
 )
 
 const metricsDateLayout = "2006-01-02"
 
-var eventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var (
+	eventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// thresholdPattern is a plain non-negative JSON number; the API rejects exponents and strings.
+	thresholdPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
+)
 
-// withClient runs fn with an application-level client (no grant needed).
-func withClient(fn func(ctx context.Context, client ports.NylasClient) error) error {
-	_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-		return struct{}{}, fn(ctx, client)
-	})
-	return err
-}
-
-// parseActivityTime turns a --start/--end value into Unix seconds; a duration such as 24h or 7d means that long ago.
-func parseActivityTime(flag, value string, now time.Time) (int64, error) {
+// parseActivityTime turns a --start/--end value into Unix seconds. Times without a zone are UTC,
+// a bare date is a whole UTC day (its end for --end), and a duration such as 24h or 7d means that long ago.
+func parseActivityTime(flag, value string, now time.Time, isEnd bool) (int64, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return 0, nil
 	}
+	invalid := common.NewUserError(
+		fmt.Sprintf("invalid --%s value %q", flag, value),
+		"Use a Unix timestamp, YYYY-MM-DD (UTC), RFC3339, or a look-back such as 24h or 7d",
+	)
+
+	if day, err := time.ParseInLocation(metricsDateLayout, value, time.UTC); err == nil {
+		if isEnd {
+			return day.Add(24*time.Hour - time.Second).Unix(), nil
+		}
+		return day.Unix(), nil
+	}
 	if d, err := common.ParseDuration(value); err == nil {
+		if d <= 0 {
+			return 0, invalid
+		}
 		return now.Add(-d).Unix(), nil
 	}
-	t, err := common.ParseHumanTime(value, common.ParseHumanTimeOpts{Now: now})
+	t, err := common.ParseHumanTime(value, common.ParseHumanTimeOpts{Now: now.UTC(), Loc: time.UTC})
 	if err != nil {
-		return 0, common.NewUserError(
-			fmt.Sprintf("invalid --%s value %q", flag, value),
-			"Use a Unix timestamp, YYYY-MM-DD, RFC3339, or a look-back such as 24h or 7d",
-		)
+		return 0, invalid
 	}
 	return t.Unix(), nil
 }

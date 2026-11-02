@@ -27,9 +27,10 @@ func newMetricsCmd(use, short, example string, run metricsRunner, extraFlags fun
 			if err := validateMetricsDate("end", params.End); err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
-				return run(ctx, cmd, client, &params)
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				return struct{}{}, run(ctx, cmd, client, &params)
 			})
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&params.Start, "start", "", "First UTC day, YYYY-MM-DD (default: 6 days before --end)")

@@ -17,19 +17,19 @@ type activityWindowFlags struct {
 }
 
 func addActivityWindowFlags(cmd *cobra.Command, f *activityWindowFlags, order *string, limit *int, pageToken *string) {
-	cmd.Flags().StringVar(&f.start, "start", "", "Window start: Unix timestamp, YYYY-MM-DD, RFC3339, or look-back like 24h/7d (default: 6 days ago, UTC midnight)")
-	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive (same formats; default: now)")
+	cmd.Flags().StringVar(&f.start, "start", "", "Window start: Unix timestamp, YYYY-MM-DD (UTC), RFC3339, or look-back like 24h/7d (default: 6 days ago, UTC midnight)")
+	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive; a date means the end of that UTC day (same formats; default: now)")
 	cmd.Flags().StringVar(order, "order", "", "Sort order: desc (newest first, default) or asc")
 	common.AddLimitFlag(cmd, limit, 50)
 	common.AddPageTokenFlag(cmd, pageToken)
 }
 
 func (f activityWindowFlags) resolve(now time.Time) (int64, int64, error) {
-	start, err := parseActivityTime("start", f.start, now)
+	start, err := parseActivityTime("start", f.start, now, false)
 	if err != nil {
 		return 0, 0, err
 	}
-	end, err := parseActivityTime("end", f.end, now)
+	end, err := parseActivityTime("end", f.end, now, true)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -52,9 +52,10 @@ func newSendEventsListCmd() *cobra.Command {
 			if params.Start, params.End, err = window.resolve(time.Now()); err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
-				return runSendEventsList(ctx, cmd, client, &params)
+			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
+				return struct{}{}, runSendEventsList(ctx, cmd, client, &params)
 			})
+			return err
 		},
 	}
 
@@ -105,17 +106,18 @@ func newSendEventsShowCmd() *cobra.Command {
 			if err := validateEventID(args[0]); err != nil {
 				return err
 			}
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				event, err := client.GetSendEvent(ctx, args[0])
 				if err != nil {
-					return common.WrapGetError("send event", err)
+					return struct{}{}, common.WrapGetError("send event", err)
 				}
 				if done, err := writeStructured(cmd, event); done {
-					return err
+					return struct{}{}, err
 				}
 				printSendEvent(cmd, event)
-				return nil
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 }
@@ -161,17 +163,18 @@ func newSendEventsMessageCmd() *cobra.Command {
 		Short: "Show every recipient's send timeline for one message",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withClient(func(ctx context.Context, client ports.NylasClient) error {
+			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				activity, err := client.GetSendMessageActivity(ctx, args[0])
 				if err != nil {
-					return common.WrapGetError("send activity for message", err)
+					return struct{}{}, common.WrapGetError("send activity for message", err)
 				}
 				if done, err := writeStructured(cmd, activity); done {
-					return err
+					return struct{}{}, err
 				}
 				printSendMessageActivity(cmd, activity)
-				return nil
+				return struct{}{}, nil
 			})
+			return err
 		},
 	}
 }

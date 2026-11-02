@@ -21,7 +21,7 @@ The two kinds of command take different time formats:
 | `list` (activity) | Unix timestamp, `YYYY-MM-DD`, RFC3339, or a look-back such as `24h`, `7d`, `2w` | UTC midnight 6 days ago → now | 90 days. An older start is moved to 90 days ago. |
 | `summary`, `timeseries`, `breakdown` (metrics) | UTC date, `YYYY-MM-DD`, both days included | `--end` = today, `--start` = 6 days before `--end` | 365 days |
 
-A look-back value counts back from now. For example, `--start 24h` means "24 hours ago".
+A look-back value counts back from now. For example, `--start 24h` means "24 hours ago". On `list`, a time without a zone is UTC, and a bare date is a whole UTC day: `--start 2026-10-01` starts at 00:00:00Z and `--end 2026-10-01` ends at 23:59:59Z.
 
 ---
 
