@@ -175,6 +175,25 @@ type MockClient struct {
 
 	// Contact functions
 	GetContactsFunc func(ctx context.Context, grantID string, params *domain.ContactQueryParams) ([]domain.Contact, error)
+
+	// Deliverability functions
+	ListSendEventsFunc               func(ctx context.Context, params *domain.SendEventListParams) (*domain.SendEventListResponse, error)
+	GetSendEventFunc                 func(ctx context.Context, eventID string) (*domain.SendEvent, error)
+	GetSendMessageActivityFunc       func(ctx context.Context, messageID string) (*domain.SendMessageActivity, error)
+	ListTrackingEventsFunc           func(ctx context.Context, params *domain.TrackingEventListParams) (*domain.TrackingEventListResponse, error)
+	GetTrackingEventFunc             func(ctx context.Context, eventID string) (*domain.TrackingEvent, error)
+	GetTrackingMessageActivityFunc   func(ctx context.Context, messageID string) (*domain.TrackingMessageActivity, error)
+	GetSendMetricsSummaryFunc        func(ctx context.Context, params *domain.MetricsParams) (*domain.SendMetricsSummary, error)
+	GetSendMetricsTimeseriesFunc     func(ctx context.Context, params *domain.MetricsParams) (*domain.SendMetricsTimeseries, error)
+	GetSendMetricsBreakdownFunc      func(ctx context.Context, params *domain.MetricsParams) (*domain.SendMetricsBreakdown, error)
+	GetTrackingMetricsSummaryFunc    func(ctx context.Context, params *domain.MetricsParams) (*domain.TrackingMetricsSummary, error)
+	GetTrackingMetricsTimeseriesFunc func(ctx context.Context, params *domain.MetricsParams) (*domain.TrackingMetricsTimeseries, error)
+	GetTrackingMetricsBreakdownFunc  func(ctx context.Context, params *domain.MetricsParams) (*domain.TrackingMetricsBreakdown, error)
+	ListSendAlertRulesFunc           func(ctx context.Context) ([]domain.SendAlertRule, error)
+	GetSendAlertRuleFunc             func(ctx context.Context, ruleID string) (*domain.SendAlertRule, error)
+	CreateSendAlertRuleFunc          func(ctx context.Context, req *domain.SendAlertRuleRequest) (*domain.SendAlertRule, error)
+	UpdateSendAlertRuleFunc          func(ctx context.Context, ruleID string, req *domain.SendAlertRuleRequest) (*domain.SendAlertRule, error)
+	DeleteSendAlertRuleFunc          func(ctx context.Context, ruleID string) error
 }
 
 // NewMockClient creates a new MockClient.

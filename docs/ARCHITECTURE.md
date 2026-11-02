@@ -37,6 +37,7 @@ internal/
     auth/                     # Authentication
     calendar/                 # Calendar & events
     contacts/                 # Contact management
+    deliverability/           # Send/tracking events, metrics, send alerts
     email/                    # Email operations
     integration/              # CLI integration tests
     mcp/                      # MCP server command

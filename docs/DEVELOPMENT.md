@@ -68,6 +68,8 @@ make test-integration
 
 **CRITICAL:** Integration tests create real resources. Always use `make ci-full` for automatic cleanup.
 
+`internal/cli/integration/deliverability_test.go` needs only `NYLAS_API_KEY` (no grant). It reads send and tracking activity and metrics, and creates, updates and deletes one send alert rule. It skips the rule test when the application already has 20 rules.
+
 ### OAuth authorization server tests
 
 `internal/cli/integration/oauth_test.go` drives a real dashboard-account

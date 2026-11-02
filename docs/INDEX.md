@@ -81,6 +81,7 @@ Quick navigation guide to find the right documentation for your needs.
 - **TUI** → [commands/tui.md](commands/tui.md)
 - **Workflows (OTP)** → [commands/workflows.md](commands/workflows.md)
 - **Templates** → [commands/templates.md](commands/templates.md)
+- **Deliverability (send/tracking events, send alerts)** → [commands/deliverability.md](commands/deliverability.md)
 
 ### AI & MCP
 
@@ -141,6 +142,7 @@ docs/
 │   ├── audit.md           # Audit logging & invoker tracking
 │   ├── tui.md             # Terminal UI
 │   ├── templates.md       # Email templates
+│   ├── deliverability.md  # Send/tracking events & send alerts
 │   └── workflows.md       # OTP & automation
 │
 ├── ai/                    # AI configuration (8 files)
