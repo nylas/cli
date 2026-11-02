@@ -21,7 +21,7 @@ type activityWindowFlags struct {
 }
 
 func addActivityWindowFlags(cmd *cobra.Command, f *activityWindowFlags, order *string, limit *int, pageToken *string) {
-	cmd.Flags().StringVar(&f.start, "start", "", `Window start: Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" (UTC), RFC3339, or look-back like 24h/7d (default: UTC midnight 6 days before --end, or before today)`)
+	cmd.Flags().StringVar(&f.start, "start", "", `Window start: Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" or YYYY-MM-DDTHH:MM[:SS] (UTC), RFC3339, or look-back like 24h/7d (default: UTC midnight 6 days before --end, or before today)`)
 	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive, within the last 90 days; a date means the end of that UTC day (same formats; default: now)")
 	cmd.Flags().StringVar(order, "order", "", "Sort order: desc (newest first, default) or asc")
 	common.AddLimitFlag(cmd, limit, 50)
@@ -74,6 +74,7 @@ func newSendEventsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List send events (newest first)",
+		Long:  longHelp("List send events, newest first."),
 		Example: `  nylas deliverability send-events list --event-type bounced --start 24h
   nylas deliverability send-events list --recipient-domain gmail.com --event-type bounced --event-type complaint
   nylas deliverability send-events list --message-id "<abc@mail.example.com>" --json`,
@@ -132,7 +133,10 @@ func newSendEventsShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <event-id>",
 		Short: "Show one send event with its provider detail",
-		Args:  cobra.ExactArgs(1),
+		Long: longHelp("Show one send event with its provider detail.",
+			"Use an ID from the EVENT ID column of `send-events list`, or `id` in `list --json`."),
+		Example: `  nylas deliverability send-events show 5f2c7a4e9b1d3c8f0a6e2d4b7c9f1a3e5d7b9c2f4a6e8d0b1c3f5a7e9d2b4c6f`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateEventID(args[0]); err != nil {
 				return err
@@ -190,9 +194,11 @@ func printSendEvent(cmd *cobra.Command, e *domain.SendEvent) {
 
 func newSendEventsMessageCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "message <message-id>",
-		Short: "Show every recipient's send timeline for one message",
-		Args:  cobra.ExactArgs(1),
+		Use:     "message <message-id>",
+		Short:   "Show every recipient's send timeline for one message",
+		Long:    longHelp("Show every recipient's send timeline for one message.", messageIDNote),
+		Example: `  nylas deliverability send-events message "<abc@mail.example.com>"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				activity, err := client.GetSendMessageActivity(ctx, args[0])

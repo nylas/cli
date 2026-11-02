@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/fatih/color"
 	"github.com/nylas/cli/internal/cli/testutil"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -406,4 +408,51 @@ func TestSendEventsList_EndJustInsideRetentionIsSent(t *testing.T) {
 	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", end)
 	require.NoError(t, err)
 	require.Len(t, reqs, 1)
+}
+
+// allCommands returns root and every descendant command.
+func allCommands(cmd *cobra.Command) []*cobra.Command {
+	cmds := []*cobra.Command{cmd}
+	for _, c := range cmd.Commands() {
+		cmds = append(cmds, allCommands(c)...)
+	}
+	return cmds
+}
+
+func TestHelpStatesScope(t *testing.T) {
+	// Users must see that sends from connected grants (Google, Microsoft) are not in this data;
+	// a new subcommand without the note should fail here.
+	for _, c := range allCommands(NewDeliverabilityCmd()) {
+		assert.Contains(t, c.Long, "Agent Account", c.CommandPath())
+		assert.Contains(t, c.Long, "Transactional send", c.CommandPath())
+	}
+}
+
+func TestIDCommandsHaveExamples(t *testing.T) {
+	// A command that takes an ID must show what the ID looks like.
+	for _, c := range allCommands(NewDeliverabilityCmd()) {
+		if strings.Contains(c.Use, "<") {
+			assert.NotEmpty(t, c.Example, c.CommandPath())
+		}
+	}
+}
+
+func TestAlertFlagHelp(t *testing.T) {
+	root := NewDeliverabilityCmd()
+	find := func(args ...string) *cobra.Command {
+		c, _, err := root.Find(args)
+		require.NoError(t, err)
+		return c
+	}
+	create, update, del := find("send-alerts", "create"), find("send-alerts", "update"), find("send-alerts", "delete")
+	// create rejects a request without these, so the help must say so up front.
+	for _, name := range []string{"metric", "threshold", "window-hours"} {
+		assert.Contains(t, create.Flags().Lookup(name).Usage, "(required)", name)
+	}
+	// update is a partial PUT, so no flag has a default that would overwrite the rule.
+	for _, name := range []string{"metric", "threshold", "window-hours", "min-volume"} {
+		assert.Contains(t, update.Flags().Lookup(name).Usage, "unchanged if not set", name)
+		assert.NotContains(t, update.Flags().Lookup(name).Usage, "default", name)
+	}
+	assert.Contains(t, del.Flags().Lookup("yes").Usage, "required")
 }

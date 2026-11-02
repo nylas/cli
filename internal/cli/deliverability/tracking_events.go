@@ -18,6 +18,7 @@ func newTrackingEventsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List opens and link clicks (newest first)",
+		Long:  longHelp("List opens and link clicks, newest first.", trackingNote),
 		Example: `  nylas deliverability tracking-events list --event-type link_clicked --start 7d
   nylas deliverability tracking-events list --label welcome-campaign --json`,
 		Args: cobra.NoArgs,
@@ -72,7 +73,10 @@ func newTrackingEventsShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <event-id>",
 		Short: "Show one open or link click",
-		Args:  cobra.ExactArgs(1),
+		Long: longHelp("Show one open or link click.", trackingNote,
+			"Use an ID from the EVENT ID column of `tracking-events list`, or `id` in `list --json`."),
+		Example: `  nylas deliverability tracking-events show 5f2c7a4e9b1d3c8f0a6e2d4b7c9f1a3e5d7b9c2f4a6e8d0b1c3f5a7e9d2b4c6f`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateEventID(args[0]); err != nil {
 				return err
@@ -122,7 +126,10 @@ func newTrackingEventsMessageCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "message <message-id>",
 		Short: "Show open and click totals and the newest 100 interactions for one message",
-		Args:  cobra.ExactArgs(1),
+		Long: longHelp("Show open and click totals, clicks per link, and the newest 100 interactions for one message.",
+			trackingNote, messageIDNote),
+		Example: `  nylas deliverability tracking-events message "<abc@mail.example.com>"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
 				activity, err := client.GetTrackingMessageActivity(ctx, args[0])

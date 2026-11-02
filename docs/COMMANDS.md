@@ -539,7 +539,7 @@ nylas deliverability send-alerts update <rule-id> --threshold 3
 nylas deliverability send-alerts delete <rule-id> --yes
 ```
 
-**Auth:** application-level (API key, no grant). **Time:** activity `--start/--end` take timestamps or look-backs (`24h`, `7d`); metrics take UTC dates `YYYY-MM-DD`.
+**Scope:** Agent Account and Transactional send messages only; connected-grant (Google, Microsoft) sends are not included. **Auth:** application-level (API key, no grant). **Time:** activity `--start/--end` take timestamps or look-backs (`24h`, `7d`); metrics take UTC dates `YYYY-MM-DD`.
 
 **Details:** `docs/commands/deliverability.md`
 

@@ -14,6 +14,10 @@ import (
 
 const metricsDateLayout = "2006-01-02"
 
+// messageIDNote tells users where a message ID comes from and how to pass one with angle brackets.
+const messageIDNote = "Use `message_id` from `list --json` or from the send response. For a Transactional send " +
+	"this is the Message-ID header, angle brackets included; quote it in the shell."
+
 var (
 	eventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	unixPattern    = regexp.MustCompile(`^[0-9]{10,12}$`)
@@ -42,7 +46,7 @@ func parseActivityTime(flag, value string, now time.Time, isEnd bool) (ts int64,
 	}
 	invalid := common.NewUserError(
 		fmt.Sprintf("invalid --%s value %q", flag, value),
-		`Use Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" (UTC), RFC3339, or a look-back such as 24h or 7d`,
+		`Use Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM[:SS]" or YYYY-MM-DDTHH:MM[:SS] (UTC), RFC3339, or a look-back such as 24h or 7d`,
 	)
 
 	if day, dateErr := time.ParseInLocation(metricsDateLayout, value, time.UTC); dateErr == nil {

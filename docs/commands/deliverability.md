@@ -8,6 +8,8 @@ Use `nylas deliverability` to see what happened to the email your application se
 | `tracking-events` | Opens, link clicks and engagement metrics | `/v3/activity/tracking`, `/v3/metrics/tracking` |
 | `send-alerts` | Alert rules on send rates | `/v3/alerts/send` |
 
+**These commands cover Agent Account and Transactional send messages only.** Messages sent from a connected grant, such as a Google or Microsoft account, aren't included. Tracking events exist only for messages sent with open or link tracking turned on. See [Monitor delivery and engagement](https://developer.nylas.com/docs/v3/agent-accounts/monitor-delivery-engagement/) in the API docs.
+
 All of these routes are application-level. They use your API key (`nylas auth config` or `NYLAS_API_KEY`) and do not take a grant. A grant access token gets `403 api.forbidden`.
 
 ---

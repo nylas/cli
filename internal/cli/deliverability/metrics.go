@@ -13,11 +13,12 @@ import (
 type metricsRunner func(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, params *domain.MetricsParams) error
 
 // newMetricsCmd builds a metrics command with the shared --start/--end/--sending-domain flags.
-func newMetricsCmd(use, short, example string, run metricsRunner, extraFlags func(*cobra.Command, *domain.MetricsParams)) *cobra.Command {
+func newMetricsCmd(use, short, long, example string, run metricsRunner, extraFlags func(*cobra.Command, *domain.MetricsParams)) *cobra.Command {
 	var params domain.MetricsParams
 	cmd := &cobra.Command{
 		Use:     use,
 		Short:   short,
+		Long:    long,
 		Example: example,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -57,6 +58,7 @@ func addBreakdownFlags(groupBy []string, sortKeys string) func(*cobra.Command, *
 
 func newSendSummaryCmd() *cobra.Command {
 	return newMetricsCmd("summary", "Show send health, totals, and rates",
+		longHelp("Show send health, totals, and rates. Health always grades the last 7 days."),
 		`  nylas deliverability send-events summary
   nylas deliverability send-events summary --start 2026-10-01 --end 2026-10-31 --sending-domain mail.example.com`,
 		runSendSummary, nil)
@@ -64,30 +66,35 @@ func newSendSummaryCmd() *cobra.Command {
 
 func newSendTimeseriesCmd() *cobra.Command {
 	return newMetricsCmd("timeseries", "Show send counts and rates per day, week, or month",
+		longHelp("Show send counts and rates per day, week, or month."),
 		`  nylas deliverability send-events timeseries --granularity week --start 2026-08-01`,
 		runSendTimeseries, addGranularityFlag)
 }
 
 func newSendBreakdownCmd() *cobra.Command {
 	return newMetricsCmd("breakdown", "Show send counts and rates per sending domain, agent account, or recipient domain",
+		longHelp("Show send counts and rates per sending domain, agent account, or recipient domain."),
 		`  nylas deliverability send-events breakdown --group-by recipient_domain --sort bounce_rate:desc`,
 		runSendBreakdown, addBreakdownFlags(domain.SendMetricsGroupBy, "key, sent, delivery_rate, bounce_rate, complaint_rate (default sent:desc)"))
 }
 
 func newTrackingSummaryCmd() *cobra.Command {
 	return newMetricsCmd("summary", "Show engagement totals and open and click rates",
+		longHelp("Show engagement totals and open and click rates.", trackingNote),
 		`  nylas deliverability tracking-events summary --start 2026-10-01`,
 		runTrackingSummary, nil)
 }
 
 func newTrackingTimeseriesCmd() *cobra.Command {
 	return newMetricsCmd("timeseries", "Show engagement counts and rates per day, week, or month",
+		longHelp("Show engagement counts and rates per day, week, or month.", trackingNote),
 		`  nylas deliverability tracking-events timeseries --granularity day`,
 		runTrackingTimeseries, addGranularityFlag)
 }
 
 func newTrackingBreakdownCmd() *cobra.Command {
 	return newMetricsCmd("breakdown", "Show engagement per sending domain or agent account",
+		longHelp("Show engagement per sending domain or agent account.", trackingNote),
 		`  nylas deliverability tracking-events breakdown --group-by agent_account --sort open_rate:desc`,
 		runTrackingBreakdown, addBreakdownFlags(domain.TrackingMetricsGroupBy, "key, tracked_opens, tracked_links, open_rate, click_rate (default tracked_opens:desc)"))
 }
