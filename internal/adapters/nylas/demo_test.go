@@ -435,10 +435,15 @@ func TestDemoClientSendEventsAgree(t *testing.T) {
 	}
 	for _, r := range activity.Recipients {
 		for _, e := range r.Events {
-			if typ, ok := want[e.ID]; ok && typ != e.EventType {
+			// GetSendEvent falls back for unknown IDs, so a timeline-only ID must be caught here.
+			typ, ok := want[e.ID]
+			if !ok {
+				t.Errorf("timeline event %s is missing from the list", e.ID)
+				continue
+			}
+			if typ != e.EventType {
 				t.Errorf("event %s is %s in list but %s in the timeline", e.ID, typ, e.EventType)
 			}
-			want[e.ID] = e.EventType
 		}
 	}
 	for id, typ := range want {

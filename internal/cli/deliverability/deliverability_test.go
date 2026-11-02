@@ -26,6 +26,13 @@ type capturedRequest struct {
 // runAgainstFakeAPI runs the real command tree against a fake Nylas API that answers every request with respBody.
 func runAgainstFakeAPI(t *testing.T, status int, respBody string, args ...string) (string, []capturedRequest, error) {
 	t.Helper()
+	stdout, _, requests, err := runAgainstFakeAPIWithStderr(t, status, respBody, args...)
+	return stdout, requests, err
+}
+
+// runAgainstFakeAPIWithStderr is runAgainstFakeAPI that also returns stderr.
+func runAgainstFakeAPIWithStderr(t *testing.T, status int, respBody string, args ...string) (string, string, []capturedRequest, error) {
+	t.Helper()
 	var requests []capturedRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -48,8 +55,8 @@ func runAgainstFakeAPI(t *testing.T, status int, respBody string, args ...string
 	color.Output = &colorOut
 	t.Cleanup(func() { color.Output = oldColorOut })
 
-	stdout, _, err := testutil.ExecuteSubCommand(NewDeliverabilityCmd(), args...)
-	return stdout + colorOut.String(), requests, err
+	stdout, stderr, err := testutil.ExecuteSubCommand(NewDeliverabilityCmd(), args...)
+	return stdout + colorOut.String(), stderr, requests, err
 }
 
 const sendEventsPage = `{"request_id":"req-1","next_cursor":"tok-2","data":[
@@ -257,6 +264,13 @@ func TestParseActivityTime(t *testing.T) {
 		{name: "date end is last second of the UTC day", value: "2026-10-01", isEnd: true, want: time.Date(2026, 10, 1, 23, 59, 59, 0, time.UTC)},
 		// Without a zone the result must not depend on the laptop's time zone.
 		{name: "zoneless date-time is UTC", value: "2026-10-01 07:00", want: time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC)},
+		{name: "RFC3339 keeps its zone", value: "2026-10-01T07:00:00-04:00", want: time.Date(2026, 10, 1, 11, 0, 0, 0, time.UTC)},
+		// Keyword and time-of-day forms resolve differently from run to run (and 9am rolls to tomorrow),
+		// which breaks --page-token, so only look-backs may move and they are flagged as relative.
+		{name: "today rejected", value: "today", wantErr: true},
+		{name: "tomorrow rejected", value: "tomorrow", wantErr: true},
+		{name: "time of day rejected", value: "9am", wantErr: true},
+		{name: "month-day time rejected", value: "Jan 2 3pm", wantErr: true},
 		{name: "look-back counts back from now", value: "7d", want: now.Add(-7 * 24 * time.Hour)},
 		{name: "unix seconds", value: "1730000000", want: time.Unix(1730000000, 0)},
 		// A non-positive look-back would put start at or after now and silently return nothing.
@@ -332,9 +346,29 @@ func TestSendEventsList_LookBackPrintsReusableNextPage(t *testing.T) {
 
 func TestSendEventsList_EndOnlyAnchorsDefaultStart(t *testing.T) {
 	// Without this, an --end older than 6 days is before the server's default start and returns 400.
-	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", "2026-10-01")
+	endDay := time.Now().UTC().AddDate(0, 0, -30).Truncate(24 * time.Hour)
+	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", endDay.Format("2006-01-02"))
 	require.NoError(t, err)
 	require.Len(t, reqs, 1)
-	assert.Equal(t, []string{strconv.FormatInt(time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC).Unix(), 10)}, reqs[0].query["start"])
-	assert.Equal(t, []string{strconv.FormatInt(time.Date(2026, 10, 1, 23, 59, 59, 0, time.UTC).Unix(), 10)}, reqs[0].query["end"])
+	assert.Equal(t, []string{strconv.FormatInt(endDay.AddDate(0, 0, -6).Unix(), 10)}, reqs[0].query["start"])
+	assert.Equal(t, []string{strconv.FormatInt(endDay.Add(24*time.Hour-time.Second).Unix(), 10)}, reqs[0].query["end"])
+}
+
+func TestSendEventsList_EndOlderThanRetentionFailsLocally(t *testing.T) {
+	// The server clamps start to 90 days ago, so an older --end would return an empty list with no error.
+	old := time.Now().UTC().AddDate(0, 0, -100).Format("2006-01-02")
+	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", old)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "90 days")
+	assert.Empty(t, reqs)
+}
+
+func TestSendEventsList_JSONLookBackPrintsNextPageOnStderr(t *testing.T) {
+	stdout, stderr, reqs, err := runAgainstFakeAPIWithStderr(t, http.StatusOK, sendEventsPage, "send-events", "list", "--start", "7d", "--json")
+	require.NoError(t, err)
+	require.Len(t, reqs, 1)
+	// Stdout must stay parseable; scripts need the resolved start to page, since 7d is refused with --page-token.
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
+	assert.Contains(t, stderr, "Next page: --page-token tok-2 --start "+reqs[0].query["start"][0])
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const activityRetention = 90 * 24 * time.Hour
+
 type activityWindowFlags struct {
 	start, end string
 	// pageFlags repeats a look-back window as epochs, because the page token is bound to the exact start and end.
@@ -19,8 +21,8 @@ type activityWindowFlags struct {
 }
 
 func addActivityWindowFlags(cmd *cobra.Command, f *activityWindowFlags, order *string, limit *int, pageToken *string) {
-	cmd.Flags().StringVar(&f.start, "start", "", "Window start: Unix timestamp, YYYY-MM-DD, RFC3339, or look-back like 24h/7d; no zone means UTC (default: UTC midnight 6 days before --end, or before today)")
-	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive; a date means the end of that UTC day (same formats; default: now)")
+	cmd.Flags().StringVar(&f.start, "start", "", `Window start: Unix seconds, YYYY-MM-DD, "YYYY-MM-DD HH:MM" (UTC), RFC3339, or look-back like 24h/7d (default: UTC midnight 6 days before --end, or before today)`)
+	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive, within the last 90 days; a date means the end of that UTC day (same formats; default: now)")
 	cmd.Flags().StringVar(order, "order", "", "Sort order: desc (newest first, default) or asc")
 	common.AddLimitFlag(cmd, limit, 50)
 	common.AddPageTokenFlag(cmd, pageToken)
@@ -35,6 +37,10 @@ func (f *activityWindowFlags) resolve(now time.Time, pageToken string) (int64, i
 	end, endRelative, err := parseActivityTime("end", f.end, now, true)
 	if err != nil {
 		return 0, 0, err
+	}
+	// The server clamps start to its 90-day retention, so an older --end would return nothing with no error.
+	if end != 0 && end < now.Add(-activityRetention).Unix() {
+		return 0, 0, common.NewUserError("--end is more than 90 days ago", "Activity is kept for 90 days; use a more recent --end")
 	}
 	// Mirror the server's default start, anchored on --end, so an older --end is not before the default start.
 	if start == 0 && end != 0 {
@@ -105,6 +111,10 @@ func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.Nyl
 		return common.WrapListError("send events", err)
 	}
 	if done, err := writeStructuredList(cmd, resp, resp.Data); done {
+		// Stdout stays the API envelope; a look-back's resolved window goes to stderr so scripts can page.
+		if err == nil && pageFlags != "" {
+			nextCursorNote(cmd.ErrOrStderr(), resp.NextCursor, pageFlags)
+		}
 		return err
 	}
 	if len(resp.Data) == 0 {
@@ -118,7 +128,7 @@ func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.Nyl
 		table.AddRow(formatUnix(e.Timestamp), sendEventLabel(e.EventType, e.BounceClass), e.Recipient, e.From, e.Reason, e.ID)
 	}
 	table.Render()
-	nextCursorNote(cmd, resp.NextCursor, pageFlags)
+	nextCursorNote(cmd.OutOrStdout(), resp.NextCursor, pageFlags)
 	return nil
 }
 
