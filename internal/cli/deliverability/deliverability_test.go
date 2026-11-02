@@ -388,13 +388,16 @@ func TestFormatUnix_RoundTripsAsInput(t *testing.T) {
 	assert.Equal(t, ts, got)
 }
 
-func TestSendEventsList_QuietPrintsNextPageOnStderr(t *testing.T) {
-	stdout, stderr, _, err := runAgainstFakeAPIWithStderr(t, http.StatusOK, sendEventsPage,
-		"send-events", "list", "--start", "2026-10-29", "--quiet")
-	require.NoError(t, err)
-	// Quiet stdout is only IDs, so the token must go to stderr or a script can never reach page 2.
-	assert.Equal(t, "aaa\nbbb\n", stdout)
-	assert.Contains(t, stderr, "Next page token: tok-2")
+func TestSendEventsList_QuietPrintsOnlyIDs(t *testing.T) {
+	// Pipelines such as `list -q 2>&1 | xargs ... show` merge stderr into stdout, so quiet must print
+	// only IDs, even when there is a next page or a look-back; scripts page with --json instead.
+	for _, start := range []string{"2026-10-29", "7d"} {
+		stdout, stderr, _, err := runAgainstFakeAPIWithStderr(t, http.StatusOK, sendEventsPage,
+			"send-events", "list", "--start", start, "--quiet")
+		require.NoError(t, err, start)
+		assert.Equal(t, "aaa\nbbb\n", stdout, start)
+		assert.Empty(t, stderr, start)
+	}
 }
 
 func TestSendEventsList_EndJustInsideRetentionIsSent(t *testing.T) {

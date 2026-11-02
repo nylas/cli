@@ -21,6 +21,7 @@ var (
 	thresholdPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})(\.[0-9]{1,2})?$`)
 )
 
+// displayTimeLayout is UTC, unlike the CLI's local common.Display* layouts, so printed times paste back into --start/--end.
 const displayTimeLayout = "2006-01-02 15:04:05"
 
 // activityTimeLayouts are the absolute --start/--end forms; zoneless ones are UTC, so each means the same instant on every run.
@@ -146,12 +147,12 @@ func writeStructuredList(cmd *cobra.Command, resp, rows any) (bool, error) {
 	return writeStructured(cmd, resp)
 }
 
-// writeStructuredPage is writeStructuredList for a paged feed. Stdout stays the IDs or the API
-// envelope; the next-page line goes to stderr whenever stdout does not already carry it: always in
-// quiet mode, and after a look-back in JSON/YAML (the envelope has next_cursor but not the window).
+// writeStructuredPage is writeStructuredList for a paged feed. Quiet prints only IDs, so pipelines
+// that merge stderr stay clean; after a look-back, JSON/YAML also gets the next-page line on stderr,
+// because the envelope has next_cursor but not the resolved window.
 func writeStructuredPage(cmd *cobra.Command, resp, rows any, nextCursor, pageFlags string) (bool, error) {
 	done, err := writeStructuredList(cmd, resp, rows)
-	if done && err == nil && (isQuiet(cmd) || pageFlags != "") {
+	if done && err == nil && !isQuiet(cmd) && pageFlags != "" {
 		nextCursorNote(cmd.ErrOrStderr(), nextCursor, pageFlags)
 	}
 	return done, err
