@@ -523,6 +523,28 @@ nylas workflow delete <workflow-id> --yes
 
 ---
 
+## Deliverability
+
+```bash
+nylas deliverability send-events list [--event-type bounced] [--start 24h]   # Send activity
+nylas deliverability send-events show <event-id>                            # One send event
+nylas deliverability send-events message <message-id>                       # Per-recipient timeline
+nylas deliverability send-events summary [--start YYYY-MM-DD --end YYYY-MM-DD]  # Health, totals, rates
+nylas deliverability send-events timeseries [--granularity day|week|month]
+nylas deliverability send-events breakdown [--group-by recipient_domain]
+nylas deliverability tracking-events list|show|message|summary|timeseries|breakdown
+nylas deliverability send-alerts list
+nylas deliverability send-alerts create --metric bounce_rate --threshold 5 --window-hours 1
+nylas deliverability send-alerts update <rule-id> --threshold 3
+nylas deliverability send-alerts delete <rule-id> --yes
+```
+
+**Scope:** Agent Account and Transactional send messages only; connected-grant (Google, Microsoft) sends are not included. **Auth:** application-level (API key, no grant). **Time:** activity `--start/--end` take timestamps or look-backs (`24h`, `7d`); metrics take UTC dates `YYYY-MM-DD`.
+
+**Details:** `docs/commands/deliverability.md`
+
+---
+
 ## Folders & Threads
 
 ```bash

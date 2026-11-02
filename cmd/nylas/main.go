@@ -16,6 +16,7 @@ import (
 	"github.com/nylas/cli/internal/cli/config"
 	"github.com/nylas/cli/internal/cli/contacts"
 	"github.com/nylas/cli/internal/cli/dashboard"
+	"github.com/nylas/cli/internal/cli/deliverability"
 	"github.com/nylas/cli/internal/cli/demo"
 	"github.com/nylas/cli/internal/cli/email"
 	"github.com/nylas/cli/internal/cli/mcp"
@@ -49,6 +50,7 @@ func main() {
 	rootCmd.AddCommand(calendar.NewCalendarCmd())
 	rootCmd.AddCommand(contacts.NewContactsCmd())
 	rootCmd.AddCommand(dashboard.NewDashboardCmd())
+	rootCmd.AddCommand(deliverability.NewDeliverabilityCmd())
 	rootCmd.AddCommand(oauthcmd.NewOAuthCmd())
 	// The dashboard commands renew OAuth-backed sessions through `nylas oauth`.
 	oauthcmd.WireDashboard()

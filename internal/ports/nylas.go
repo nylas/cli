@@ -25,6 +25,7 @@ type NylasClient interface {
 	AdminClient
 	TransactionalClient
 	TemplateWorkflowClient
+	DeliverabilityClient
 
 	// Configuration methods
 	SetRegion(region string)
