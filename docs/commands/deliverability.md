@@ -18,10 +18,10 @@ The two kinds of command take different time formats:
 
 | Commands | `--start` / `--end` | Default | Limit |
 |---|---|---|---|
-| `list` (activity) | Unix timestamp, `YYYY-MM-DD`, RFC3339, or a look-back such as `24h`, `7d`, `2w` | UTC midnight 6 days ago → now | 90 days. An older start is moved to 90 days ago. |
+| `list` (activity) | Unix timestamp, `YYYY-MM-DD`, RFC3339, or a look-back such as `24h`, `7d`, `2w` | `--end` = now, `--start` = UTC midnight 6 days before `--end` | 90 days. An older start is moved to 90 days ago. |
 | `summary`, `timeseries`, `breakdown` (metrics) | UTC date, `YYYY-MM-DD`, both days included | `--end` = today, `--start` = 6 days before `--end` | 365 days |
 
-A look-back value counts back from now. For example, `--start 24h` means "24 hours ago". On `list`, a time without a zone is UTC, and a bare date is a whole UTC day: `--start 2026-10-01` starts at 00:00:00Z and `--end 2026-10-01` ends at 23:59:59Z.
+A look-back value counts back from now. For example, `--start 24h` means "24 hours ago". On `list`, every time without a zone is UTC, including `today`, `tomorrow`, `9am` and `Jan 2 3pm`. A bare date is a whole UTC day: `--start 2026-10-01` starts at 00:00:00Z and `--end 2026-10-01` ends at 23:59:59Z. Times at or before 1970-01-01 are rejected.
 
 ---
 
@@ -49,7 +49,7 @@ nylas deliverability send-events breakdown --group-by recipient_domain --sort bo
 
 **`list` filters:** `--event-type` (repeatable: `accepted`, `delivered`, `bounced`, `complaint`, `rejected`), `--bounce-class` (`hard`, `soft`, `undetermined`), `--sending-domain`, `--from`, `--grant-id`, `--recipient`, `--recipient-domain`, `--message-id`, `--thread-id`, `--order asc|desc`.
 
-**Paging:** `list` shows one page (`--limit`, default 50, max 200). When there are more rows it prints `Next page token: …`. Pass that token with `--page-token`. Keep the other flags the same, because the token belongs to that exact query.
+**Paging:** `list` shows one page (`--limit`, default 50, max 200). When there are more rows it prints `Next page token: …`. Pass that token with `--page-token`. Keep the other flags the same, because the token belongs to that exact query, including `--start` and `--end`. A look-back such as `7d` gives a different time on every run, so it cannot be used with `--page-token`. When page 1 used a look-back, the CLI prints `Next page: --page-token … --start <epoch> --end <epoch>` instead; use those values for the next page. Scripts that page with `--json` should pass absolute times.
 
 **`summary`:** health is always graded on the **last 7 days**, whatever window you ask for. The states are `healthy`, `at_risk`, `critical` and `insufficient_data` (fewer than 100 sends). Totals and rate tiles use your window and compare it with the period of the same length just before it. When the state is `at_risk` or `critical`, `summary` also lists up to 3 findings.
 

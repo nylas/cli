@@ -36,7 +36,7 @@ func buildAlertRuleRequest(cmd *cobra.Command, f *alertRuleFlags) (*domain.SendA
 	if cmd.Flags().Changed("threshold") {
 		threshold := strings.TrimSpace(f.threshold)
 		if !thresholdPattern.MatchString(threshold) {
-			return nil, common.NewUserError(fmt.Sprintf("invalid --threshold value %q", f.threshold), "Use a percentage such as 5 or 0.25")
+			return nil, common.NewUserError(fmt.Sprintf("invalid --threshold value %q", f.threshold), "Use a percentage with at most 2 decimals, such as 5 or 0.25")
 		}
 		n := json.Number(threshold)
 		req.Threshold = &n

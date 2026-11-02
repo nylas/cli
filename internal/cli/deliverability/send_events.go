@@ -14,26 +14,51 @@ import (
 
 type activityWindowFlags struct {
 	start, end string
+	// pageFlags repeats a look-back window as epochs, because the page token is bound to the exact start and end.
+	pageFlags string
 }
 
 func addActivityWindowFlags(cmd *cobra.Command, f *activityWindowFlags, order *string, limit *int, pageToken *string) {
-	cmd.Flags().StringVar(&f.start, "start", "", "Window start: Unix timestamp, YYYY-MM-DD (UTC), RFC3339, or look-back like 24h/7d (default: 6 days ago, UTC midnight)")
+	cmd.Flags().StringVar(&f.start, "start", "", "Window start: Unix timestamp, YYYY-MM-DD, RFC3339, or look-back like 24h/7d; no zone means UTC (default: UTC midnight 6 days before --end, or before today)")
 	cmd.Flags().StringVar(&f.end, "end", "", "Window end, inclusive; a date means the end of that UTC day (same formats; default: now)")
 	cmd.Flags().StringVar(order, "order", "", "Sort order: desc (newest first, default) or asc")
 	common.AddLimitFlag(cmd, limit, 50)
 	common.AddPageTokenFlag(cmd, pageToken)
 }
 
-func (f activityWindowFlags) resolve(now time.Time) (int64, int64, error) {
-	start, err := parseActivityTime("start", f.start, now, false)
+// resolve returns the start and end to send, in Unix seconds; 0 leaves the server default.
+func (f *activityWindowFlags) resolve(now time.Time, pageToken string) (int64, int64, error) {
+	start, startRelative, err := parseActivityTime("start", f.start, now, false)
 	if err != nil {
 		return 0, 0, err
 	}
-	end, err := parseActivityTime("end", f.end, now, true)
+	end, endRelative, err := parseActivityTime("end", f.end, now, true)
 	if err != nil {
 		return 0, 0, err
 	}
+	// Mirror the server's default start, anchored on --end, so an older --end is not before the default start.
+	if start == 0 && end != 0 {
+		endDay := time.Unix(end, 0).UTC().Truncate(24 * time.Hour)
+		start = endDay.AddDate(0, 0, -6).Unix()
+	}
+	if !startRelative && !endRelative {
+		return start, end, nil
+	}
+	if pageToken != "" {
+		return 0, 0, common.NewUserError(
+			"a look-back --start/--end cannot be used with --page-token",
+			"Look-backs move between runs; repeat the --start/--end values printed with the page token",
+		)
+	}
+	f.pageFlags = strings.TrimSpace(epochFlag("start", start) + " " + epochFlag("end", end))
 	return start, end, nil
+}
+
+func epochFlag(name string, ts int64) string {
+	if ts == 0 {
+		return ""
+	}
+	return fmt.Sprintf("--%s %d", name, ts)
 }
 
 func newSendEventsListCmd() *cobra.Command {
@@ -49,11 +74,11 @@ func newSendEventsListCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var err error
-			if params.Start, params.End, err = window.resolve(time.Now()); err != nil {
+			if params.Start, params.End, err = window.resolve(time.Now(), params.PageToken); err != nil {
 				return err
 			}
 			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-				return struct{}{}, runSendEventsList(ctx, cmd, client, &params)
+				return struct{}{}, runSendEventsList(ctx, cmd, client, &params, window.pageFlags)
 			})
 			return err
 		},
@@ -74,7 +99,7 @@ func newSendEventsListCmd() *cobra.Command {
 	return cmd
 }
 
-func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, params *domain.SendEventListParams) error {
+func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, params *domain.SendEventListParams, pageFlags string) error {
 	resp, err := client.ListSendEvents(ctx, params)
 	if err != nil {
 		return common.WrapListError("send events", err)
@@ -93,7 +118,7 @@ func runSendEventsList(ctx context.Context, cmd *cobra.Command, client ports.Nyl
 		table.AddRow(formatUnix(e.Timestamp), sendEventLabel(e.EventType, e.BounceClass), e.Recipient, e.From, e.Reason, e.ID)
 	}
 	table.Render()
-	nextCursorNote(cmd, resp.NextCursor)
+	nextCursorNote(cmd, resp.NextCursor, pageFlags)
 	return nil
 }
 

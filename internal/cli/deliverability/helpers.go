@@ -16,39 +16,47 @@ const metricsDateLayout = "2006-01-02"
 
 var (
 	eventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	// thresholdPattern is a plain non-negative JSON number; the API rejects exponents and strings.
-	thresholdPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
+	// thresholdPattern matches the API's threshold literal: no sign or exponent, up to 9 integer digits and 2 decimals.
+	thresholdPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})(\.[0-9]{1,2})?$`)
 )
 
-// parseActivityTime turns a --start/--end value into Unix seconds. Times without a zone are UTC,
-// a bare date is a whole UTC day (its end for --end), and a duration such as 24h or 7d means that long ago.
-func parseActivityTime(flag, value string, now time.Time, isEnd bool) (int64, error) {
+// parseActivityTime turns a --start/--end value into Unix seconds. Every time without a zone is UTC
+// (including today, tomorrow and 9am), a bare date is a whole UTC day (its end for --end), and a
+// duration such as 24h or 7d means that long ago. relative is true for durations, which move between runs.
+func parseActivityTime(flag, value string, now time.Time, isEnd bool) (ts int64, relative bool, err error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return 0, nil
+		return 0, false, nil
 	}
 	invalid := common.NewUserError(
 		fmt.Sprintf("invalid --%s value %q", flag, value),
-		"Use a Unix timestamp, YYYY-MM-DD (UTC), RFC3339, or a look-back such as 24h or 7d",
+		"Use a Unix timestamp, YYYY-MM-DD, RFC3339, or a look-back such as 24h or 7d; times without a zone are UTC",
 	)
 
-	if day, err := time.ParseInLocation(metricsDateLayout, value, time.UTC); err == nil {
-		if isEnd {
-			return day.Add(24*time.Hour - time.Second).Unix(), nil
+	switch day, dateErr := time.ParseInLocation(metricsDateLayout, value, time.UTC); {
+	case dateErr == nil && isEnd:
+		ts = day.Add(24*time.Hour - time.Second).Unix()
+	case dateErr == nil:
+		ts = day.Unix()
+	default:
+		if d, durErr := common.ParseDuration(value); durErr == nil {
+			if d <= 0 {
+				return 0, false, invalid
+			}
+			ts, relative = now.Add(-d).Unix(), true
+		} else {
+			t, parseErr := common.ParseHumanTime(value, common.ParseHumanTimeOpts{Now: now.UTC(), Loc: time.UTC})
+			if parseErr != nil {
+				return 0, false, invalid
+			}
+			ts = t.Unix()
 		}
-		return day.Unix(), nil
 	}
-	if d, err := common.ParseDuration(value); err == nil {
-		if d <= 0 {
-			return 0, invalid
-		}
-		return now.Add(-d).Unix(), nil
+	// The API reads 0 and below as "not set", so such a time would silently fall back to the default window.
+	if ts <= 0 {
+		return 0, false, invalid
 	}
-	t, err := common.ParseHumanTime(value, common.ParseHumanTimeOpts{Now: now.UTC(), Loc: time.UTC})
-	if err != nil {
-		return 0, invalid
-	}
-	return t.Unix(), nil
+	return ts, relative, nil
 }
 
 // validateMetricsDate checks a --start/--end metrics value is YYYY-MM-DD.
@@ -100,11 +108,16 @@ func newTable(w io.Writer, headers ...string) *common.Table {
 	return common.NewTable(headers...).SetWriter(w)
 }
 
-func nextCursorNote(cmd *cobra.Command, nextCursor string) {
+// nextCursorNote prints the next page token; pageFlags, when set, are window flags the next page must repeat.
+func nextCursorNote(cmd *cobra.Command, nextCursor, pageFlags string) {
 	if nextCursor == "" {
 		return
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nNext page token: %s\n", nextCursor)
+	if pageFlags == "" {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nNext page token: %s\n", nextCursor)
+		return
+	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nNext page: --page-token %s %s\n", nextCursor, pageFlags)
 }
 
 // writeStructuredList writes a list response as JSON/YAML, or only the row IDs in quiet mode.

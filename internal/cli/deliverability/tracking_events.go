@@ -23,11 +23,11 @@ func newTrackingEventsListCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var err error
-			if params.Start, params.End, err = window.resolve(time.Now()); err != nil {
+			if params.Start, params.End, err = window.resolve(time.Now(), params.PageToken); err != nil {
 				return err
 			}
 			_, err = common.WithClientNoGrant(func(ctx context.Context, client ports.NylasClient) (struct{}, error) {
-				return struct{}{}, runTrackingEventsList(ctx, cmd, client, &params)
+				return struct{}{}, runTrackingEventsList(ctx, cmd, client, &params, window.pageFlags)
 			})
 			return err
 		},
@@ -45,7 +45,7 @@ func newTrackingEventsListCmd() *cobra.Command {
 	return cmd
 }
 
-func runTrackingEventsList(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, params *domain.TrackingEventListParams) error {
+func runTrackingEventsList(ctx context.Context, cmd *cobra.Command, client ports.NylasClient, params *domain.TrackingEventListParams, pageFlags string) error {
 	resp, err := client.ListTrackingEvents(ctx, params)
 	if err != nil {
 		return common.WrapListError("tracking events", err)
@@ -64,7 +64,7 @@ func runTrackingEventsList(ctx context.Context, cmd *cobra.Command, client ports
 		table.AddRow(formatUnix(e.Timestamp), e.EventType, yesNo(e.IsFirst), e.From, e.Label, derefString(e.URL), e.ID)
 	}
 	table.Render()
-	nextCursorNote(cmd, resp.NextCursor)
+	nextCursorNote(cmd, resp.NextCursor, pageFlags)
 	return nil
 }
 

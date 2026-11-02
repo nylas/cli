@@ -1,6 +1,7 @@
 package deliverability
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/nylas/cli/internal/cli/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,8 +42,14 @@ func runAgainstFakeAPI(t *testing.T, status int, respBody string, args ...string
 	t.Setenv("NYLAS_API_KEY", "test-api-key")
 	t.Setenv("NYLAS_API_BASE_URL", server.URL)
 
+	// common.PrintSuccess writes through fatih/color, whose Output is bound to the real stdout at init.
+	var colorOut bytes.Buffer
+	oldColorOut := color.Output
+	color.Output = &colorOut
+	t.Cleanup(func() { color.Output = oldColorOut })
+
 	stdout, _, err := testutil.ExecuteSubCommand(NewDeliverabilityCmd(), args...)
-	return stdout, requests, err
+	return stdout + colorOut.String(), requests, err
 }
 
 const sendEventsPage = `{"request_id":"req-1","next_cursor":"tok-2","data":[
@@ -65,7 +73,7 @@ func TestSendEventsList_FlagsBecomeQuery(t *testing.T) {
 	assert.InDelta(t, before, start, 5)
 
 	assert.Contains(t, out, "bounced (hard)")
-	assert.Contains(t, out, "Next page token: tok-2")
+	assert.Contains(t, out, "Next page: --page-token tok-2")
 }
 
 func TestSendEventsList_JSONKeepsEnvelope(t *testing.T) {
@@ -255,10 +263,13 @@ func TestParseActivityTime(t *testing.T) {
 		{name: "negative look-back rejected", value: "-7d", wantErr: true},
 		{name: "zero look-back rejected", value: "0", wantErr: true},
 		{name: "garbage rejected", value: "soon", wantErr: true},
+		// The API treats 0 and below as "not set", so these would silently become the default window.
+		{name: "pre-1970 date rejected", value: "1969-12-31", wantErr: true},
+		{name: "epoch zero rejected", value: "1970-01-01", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseActivityTime("start", tt.value, now, tt.isEnd)
+			got, _, err := parseActivityTime("start", tt.value, now, tt.isEnd)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -274,8 +285,10 @@ func TestParseActivityTime(t *testing.T) {
 }
 
 func TestSendAlertsCreate_RejectsThresholdsThatAreNotJSONNumbers(t *testing.T) {
-	// These parse as floats but are not JSON numbers, so they would fail when the request body is built.
-	for _, threshold := range []string{".5", "+5", "5.", "NaN", "1e2", "-1"} {
+	// Rejected locally so the user gets a clear error, not a marshal failure or a server 400:
+	// .5, +5, 5. and NaN are not JSON numbers; the API refuses exponents, negatives, more than
+	// 2 decimals and more than 9 integer digits.
+	for _, threshold := range []string{".5", "+5", "5.", "NaN", "1e2", "-1", "0.125", "1234567890"} {
 		_, reqs, err := runAgainstFakeAPI(t, http.StatusCreated, ruleResp,
 			"send-alerts", "create", "--metric", "bounce_rate", "--threshold", threshold, "--window-hours", "1")
 		require.Error(t, err, threshold)
@@ -290,4 +303,38 @@ func TestSendAlertsDelete_JSONOutputHasNoText(t *testing.T) {
 	require.Len(t, reqs, 1)
 	// Scripts pipe --json output to a parser, so no human text may reach stdout.
 	assert.NotContains(t, out, "Deleted")
+}
+
+func TestSendAlertsCreate_AcceptsThresholdsTheAPIAccepts(t *testing.T) {
+	for _, threshold := range []string{"0", "5", "99.99"} {
+		_, reqs, err := runAgainstFakeAPI(t, http.StatusCreated, ruleResp,
+			"send-alerts", "create", "--metric", "bounce_rate", "--threshold", threshold, "--window-hours", "1")
+		require.NoError(t, err, threshold)
+		require.Len(t, reqs, 1, threshold)
+	}
+}
+
+func TestSendEventsList_LookBackWithPageTokenFailsLocally(t *testing.T) {
+	// The page token is bound to the exact start/end, and a look-back resolves differently on every run.
+	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--start", "7d", "--page-token", "tok-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--page-token")
+	assert.Empty(t, reqs)
+}
+
+func TestSendEventsList_LookBackPrintsReusableNextPage(t *testing.T) {
+	out, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--start", "7d")
+	require.NoError(t, err)
+	require.Len(t, reqs, 1)
+	// The next-page line must repeat the epoch actually sent, so pasting it reproduces the same query.
+	assert.Contains(t, out, "Next page: --page-token tok-2 --start "+reqs[0].query["start"][0])
+}
+
+func TestSendEventsList_EndOnlyAnchorsDefaultStart(t *testing.T) {
+	// Without this, an --end older than 6 days is before the server's default start and returns 400.
+	_, reqs, err := runAgainstFakeAPI(t, http.StatusOK, sendEventsPage, "send-events", "list", "--end", "2026-10-01")
+	require.NoError(t, err)
+	require.Len(t, reqs, 1)
+	assert.Equal(t, []string{strconv.FormatInt(time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC).Unix(), 10)}, reqs[0].query["start"])
+	assert.Equal(t, []string{strconv.FormatInt(time.Date(2026, 10, 1, 23, 59, 59, 0, time.UTC).Unix(), 10)}, reqs[0].query["end"])
 }

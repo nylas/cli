@@ -414,3 +414,40 @@ func TestDemoClientSendMessageWithTracking(t *testing.T) {
 		}
 	})
 }
+
+// Demo mode is used for screenshots, so list, show and message must tell the same story for every event ID.
+func TestDemoClientSendEventsAgree(t *testing.T) {
+	client := NewDemoClient()
+	ctx := context.Background()
+
+	list, err := client.ListSendEvents(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListSendEvents failed: %v", err)
+	}
+	activity, err := client.GetSendMessageActivity(ctx, demoDeliverabilityMsgID)
+	if err != nil {
+		t.Fatalf("GetSendMessageActivity failed: %v", err)
+	}
+
+	want := map[string]string{}
+	for _, e := range list.Data {
+		want[e.ID] = e.EventType
+	}
+	for _, r := range activity.Recipients {
+		for _, e := range r.Events {
+			if typ, ok := want[e.ID]; ok && typ != e.EventType {
+				t.Errorf("event %s is %s in list but %s in the timeline", e.ID, typ, e.EventType)
+			}
+			want[e.ID] = e.EventType
+		}
+	}
+	for id, typ := range want {
+		got, err := client.GetSendEvent(ctx, id)
+		if err != nil {
+			t.Fatalf("GetSendEvent(%s) failed: %v", id, err)
+		}
+		if got.EventType != typ {
+			t.Errorf("show %s returns %s, want %s", id, got.EventType, typ)
+		}
+	}
+}

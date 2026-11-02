@@ -1,7 +1,9 @@
 package nylas
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"time"
 
 	"github.com/nylas/cli/internal/domain"
@@ -21,48 +23,71 @@ const (
 
 func demoRate(v float64) *float64 { return &v }
 
+// demoSendEvents is the one source of demo send events, so list, show and message agree on every ID.
+func demoSendEvents(now int64) []domain.SendEvent {
+	base := domain.SendEvent{ApplicationID: demoDeliverabilityApp, MessageID: demoDeliverabilityMsgID,
+		From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain}
+	accepted, delivered, bounced := base, base, base
+
+	accepted.ID, accepted.EventType, accepted.Timestamp = demoAcceptedEventID, "accepted", now-120
+	accepted.Recipient, accepted.RecipientDomain = "alice@example.org", "example.org"
+
+	delivered.ID, delivered.EventType, delivered.Timestamp = demoSendEventID, "delivered", now-60
+	delivered.Recipient, delivered.RecipientDomain, delivered.Reason = "alice@example.org", "example.org", "250 2.0.0 OK"
+	delivered.Detail = &domain.SendEventDetail{SMTPResponse: "250 2.0.0 OK", ProcessingTimeMs: 812}
+
+	bounced.ID, bounced.EventType, bounced.BounceClass, bounced.Timestamp = demoBouncedEventID, "bounced", "hard", now-90
+	bounced.Recipient, bounced.RecipientDomain, bounced.Reason = "bob@example.net", "example.net", "General (5.1.1)"
+
+	return []domain.SendEvent{delivered, bounced, accepted}
+}
+
 func (d *DemoClient) ListSendEvents(ctx context.Context, params *domain.SendEventListParams) (*domain.SendEventListResponse, error) {
-	now := time.Now().Unix()
-	return &domain.SendEventListResponse{
-		Data: []domain.SendEvent{
-			{ID: demoSendEventID, EventType: "delivered", Timestamp: now - 60, ApplicationID: demoDeliverabilityApp,
-				MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain,
-				Recipient: "alice@example.org", RecipientDomain: "example.org", Reason: "250 2.0.0 OK"},
-			{ID: demoBouncedEventID, EventType: "bounced", BounceClass: "hard", Timestamp: now - 120,
-				ApplicationID: demoDeliverabilityApp, MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom,
-				SendingDomain: demoDeliverabilityDomain, Recipient: "bob@example.net", RecipientDomain: "example.net",
-				Reason: "General (5.1.1)"},
-		},
-		RequestID: "demo-request-id",
-	}, nil
+	return &domain.SendEventListResponse{Data: demoSendEvents(time.Now().Unix()), RequestID: "demo-request-id"}, nil
 }
 
 func (d *DemoClient) GetSendEvent(ctx context.Context, eventID string) (*domain.SendEvent, error) {
-	list, _ := d.ListSendEvents(ctx, nil)
-	for _, e := range list.Data {
-		if e.ID == eventID {
-			return &e, nil
+	events := demoSendEvents(time.Now().Unix())
+	for i := range events {
+		if events[i].ID == eventID {
+			return &events[i], nil
 		}
 	}
-	return &domain.SendEvent{ID: eventID, EventType: "delivered", Timestamp: time.Now().Unix() - 60,
-		ApplicationID: demoDeliverabilityApp, MessageID: demoDeliverabilityMsgID, From: demoDeliverabilityFrom,
-		SendingDomain: demoDeliverabilityDomain, Recipient: "alice@example.org", RecipientDomain: "example.org",
-		Reason: "250 2.0.0 OK", Detail: &domain.SendEventDetail{SMTPResponse: "250 2.0.0 OK", ProcessingTimeMs: 812}}, nil
+	fallback := events[0]
+	fallback.ID = eventID
+	return &fallback, nil
 }
 
 func (d *DemoClient) GetSendMessageActivity(ctx context.Context, messageID string) (*domain.SendMessageActivity, error) {
-	now := time.Now().Unix()
-	return &domain.SendMessageActivity{
-		Message: domain.SendMessageEnvelope{MessageID: messageID, ApplicationID: demoDeliverabilityApp,
-			From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain, SentAt: now - 120, LastEventAt: now - 60},
-		Recipients: []domain.SendMessageRecipient{{
-			Recipient: "alice@example.org", RecipientDomain: "example.org", CurrentStatus: "delivered",
-			Events: []domain.SendTimelineEvent{
-				{ID: demoAcceptedEventID, EventType: "accepted", Timestamp: now - 120},
-				{ID: demoSendEventID, EventType: "delivered", Timestamp: now - 60, Reason: "250 2.0.0 OK"},
-			},
-		}},
-	}, nil
+	events := demoSendEvents(time.Now().Unix())
+	recipients := map[string]*domain.SendMessageRecipient{}
+	var order []string
+	for _, e := range events {
+		r, ok := recipients[e.Recipient]
+		if !ok {
+			r = &domain.SendMessageRecipient{Recipient: e.Recipient, RecipientDomain: e.RecipientDomain}
+			recipients[e.Recipient] = r
+			order = append(order, e.Recipient)
+		}
+		r.Events = append(r.Events, domain.SendTimelineEvent{ID: e.ID, EventType: e.EventType, Timestamp: e.Timestamp,
+			BounceClass: e.BounceClass, Reason: e.Reason, Detail: e.Detail})
+	}
+
+	activity := &domain.SendMessageActivity{Message: domain.SendMessageEnvelope{MessageID: messageID,
+		ApplicationID: demoDeliverabilityApp, From: demoDeliverabilityFrom, SendingDomain: demoDeliverabilityDomain}}
+	slices.Sort(order)
+	for _, name := range order {
+		r := recipients[name]
+		slices.SortFunc(r.Events, func(a, b domain.SendTimelineEvent) int { return cmp.Compare(a.Timestamp, b.Timestamp) })
+		last := r.Events[len(r.Events)-1]
+		r.CurrentStatus, r.BounceClass = last.EventType, last.BounceClass
+		activity.Recipients = append(activity.Recipients, *r)
+		if activity.Message.SentAt == 0 || r.Events[0].Timestamp < activity.Message.SentAt {
+			activity.Message.SentAt = r.Events[0].Timestamp
+		}
+		activity.Message.LastEventAt = max(activity.Message.LastEventAt, last.Timestamp)
+	}
+	return activity, nil
 }
 
 func (d *DemoClient) ListTrackingEvents(ctx context.Context, params *domain.TrackingEventListParams) (*domain.TrackingEventListResponse, error) {
