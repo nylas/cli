@@ -76,10 +76,14 @@ Use --region to filter to a specific region.`,
 				if !errors.As(err, &partialErr) || len(apps) == 0 {
 					return wrapDashboardError(err)
 				}
-				common.PrintWarning("%v", partialErr)
+				if structuredOutput(cmd) {
+					common.PrintWarningStderr("%v", partialErr)
+				} else {
+					common.PrintWarning("%v", partialErr)
+				}
 			}
 
-			if len(apps) == 0 {
+			if len(apps) == 0 && !structuredOutput(cmd) {
 				fmt.Println("No applications found.")
 				fmt.Println("\nCreate one with: nylas dashboard apps create --name MyApp --region us")
 				return nil
@@ -127,7 +131,8 @@ func newAppsCreateCmd() *cobra.Command {
 			if err := validateSecretDelivery(secretDelivery); err != nil {
 				return err
 			}
-			if !isInteractive() && secretDelivery == "" {
+			structured := structuredOutput(cmd)
+			if secretDelivery == "" && (structured || !isInteractive()) {
 				return dashboardError(
 					"client secret delivery requires an explicit choice in non-interactive runs",
 					"Pass --secret-delivery clipboard or --secret-delivery file",
@@ -150,6 +155,10 @@ func newAppsCreateCmd() *cobra.Command {
 			app, err := appSvc.CreateApplication(ctx, orgPublicID, region, name)
 			if err != nil {
 				return wrapDashboardError(err)
+			}
+
+			if structured {
+				return writeAppCreated(cmd, app, secretDelivery)
 			}
 
 			_, _ = common.Green.Println("✓ Application created!")
@@ -208,7 +217,7 @@ When called without arguments, lists your applications and lets you pick one int
 
 			// If no app ID provided, show interactive selector
 			if appID == "" {
-				if !isInteractive() {
+				if structuredOutput(cmd) || !isInteractive() {
 					return dashboardError(
 						"application selection requires an interactive terminal",
 						"Pass the application ID and --region in non-interactive runs",
@@ -234,6 +243,9 @@ When called without arguments, lists your applications and lets you pick one int
 				return wrapDashboardError(err)
 			}
 
+			if structuredOutput(cmd) {
+				return common.GetOutputWriter(cmd).Write(activeAppReport{ApplicationID: appID, Region: region})
+			}
 			_, _ = common.Green.Printf("✓ Active app: %s (%s)\n", appID, region)
 			return nil
 		},
@@ -242,6 +254,24 @@ When called without arguments, lists your applications and lets you pick one int
 	cmd.Flags().StringVarP(&region, "region", "r", "", "Region of the application (us or eu)")
 
 	return cmd
+}
+
+// writeAppCreated delivers a new application's client secret and reports the
+// application without the secret's value.
+func writeAppCreated(cmd *cobra.Command, app *domain.GatewayCreatedApplication, secretDelivery string) error {
+	report := appCreatedReport{
+		ApplicationID: app.ApplicationID,
+		Region:        app.Region,
+		Environment:   app.Environment,
+	}
+	if app.ClientSecret != "" {
+		delivered, err := deliverClientSecret(app.ClientSecret, secretDelivery)
+		if err != nil {
+			return err
+		}
+		report.ClientSecret = &delivered
+	}
+	return common.GetOutputWriter(cmd).Write(report)
 }
 
 // selectApp fetches apps and presents an interactive selector.
