@@ -40,12 +40,21 @@ organization there. --org then checks that the one chosen is the one named.`,
 			if err != nil {
 				return wrapDashboardError(err)
 			}
+			structured := structuredOutput(cmd)
 			if fromOAuth {
 				ctx, cancel := common.CreateLongContext()
 				defer cancel()
-				return switchOAuthSessionOrg(ctx, cmd.OutOrStdout(), orgFlag, OAuthRelogin)
+				if !structured {
+					return switchOAuthSessionOrg(ctx, cmd.OutOrStdout(), orgFlag, OAuthRelogin)
+				}
+				// The progress lines go to stderr so stdout is only the report.
+				chosen, relogin := captureReloginOrg(OAuthRelogin)
+				if err := switchOAuthSessionOrg(ctx, cmd.ErrOrStderr(), orgFlag, relogin); err != nil {
+					return err
+				}
+				return common.GetOutputWriter(cmd).Write(orgSwitchReport{OrganizationID: *chosen, Switched: true})
 			}
-			if orgFlag == "" && !isInteractive() {
+			if orgFlag == "" && (structured || !isInteractive()) {
 				return dashboardError(
 					"organization selection requires an interactive terminal",
 					"Pass --org to choose the organization in non-interactive runs",
@@ -66,6 +75,9 @@ organization there. --org then checks that the one chosen is the one named.`,
 			}
 
 			if len(session.Relations) == 0 {
+				if structured {
+					return dashboardError("no organizations found", "Run 'nylas dashboard orgs list' to check your memberships")
+				}
 				fmt.Println("No organizations found.")
 				return nil
 			}
@@ -79,6 +91,12 @@ organization there. --org then checks that the one chosen is the one named.`,
 			}
 
 			if targetOrgID == session.CurrentOrg {
+				if structured {
+					return common.GetOutputWriter(cmd).Write(orgSwitchReport{
+						OrganizationID:   targetOrgID,
+						OrganizationName: sessionOrgName(session, targetOrgID),
+					})
+				}
 				_, _ = common.Green.Printf("✓ Already on organization: %s\n", formatSessionOrg(session, session.CurrentOrg))
 				return nil
 			}
@@ -96,6 +114,13 @@ organization there. --org then checks that the one chosen is the one named.`,
 				return wrapDashboardError(err)
 			}
 
+			if structured {
+				return common.GetOutputWriter(cmd).Write(orgSwitchReport{
+					OrganizationID:   resp.Org.PublicID,
+					OrganizationName: resp.Org.Name,
+					Switched:         true,
+				})
+			}
 			_, _ = common.Green.Printf("✓ Switched to organization: %s\n", formatOrgLabel(resp.Org.PublicID, resp.Org.Name))
 			return nil
 		},
@@ -141,6 +166,35 @@ func switchOAuthSessionOrg(
 
 	_, _ = common.Green.Fprintf(out, "✓ Switched to organization: %s\n", resp.OrgPublicID)
 	return nil
+}
+
+// captureReloginOrg wraps relogin so the caller learns which organization the
+// new sign-in chose. A nil relogin stays nil: switchOAuthSessionOrg reports
+// that case itself.
+func captureReloginOrg(
+	relogin func(context.Context) (*domain.DashboardOAuthExchangeResponse, error),
+) (*string, func(context.Context) (*domain.DashboardOAuthExchangeResponse, error)) {
+	chosen := new(string)
+	if relogin == nil {
+		return chosen, nil
+	}
+	return chosen, func(ctx context.Context) (*domain.DashboardOAuthExchangeResponse, error) {
+		resp, err := relogin(ctx)
+		if resp != nil {
+			*chosen = resp.OrgPublicID
+		}
+		return resp, err
+	}
+}
+
+// sessionOrgName returns an organization's name from the session's relations.
+func sessionOrgName(session *domain.DashboardSessionResponse, orgPublicID string) string {
+	for _, rel := range session.Relations {
+		if rel.OrgPublicID == orgPublicID {
+			return rel.OrgName
+		}
+	}
+	return ""
 }
 
 // selectOrgFromSession prompts the user to select an org from the session's relations.

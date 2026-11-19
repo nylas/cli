@@ -41,7 +41,7 @@ func newOrgsListCmd() *cobra.Command {
 				return wrapDashboardError(err)
 			}
 
-			if len(session.Relations) == 0 {
+			if len(session.Relations) == 0 && !structuredOutput(cmd) {
 				fmt.Println("No organizations found.")
 				return nil
 			}

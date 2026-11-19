@@ -88,7 +88,7 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 				return wrapDashboardError(err)
 			}
 
-			if len(keys) == 0 {
+			if len(keys) == 0 && !structuredOutput(cmd) {
 				createCmd := "nylas dashboard apps " +
 					"apikeys create --app " + appID +
 					" --region " + region
@@ -156,7 +156,8 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 			if err := validateAPIKeyDelivery(delivery); err != nil {
 				return err
 			}
-			if !isInteractive() && delivery == "" {
+			structured := structuredOutput(cmd)
+			if delivery == "" && (structured || !isInteractive()) {
 				return dashboardError(
 					"API key delivery requires an explicit choice in non-interactive runs",
 					"Pass --delivery activate, --delivery clipboard, or --delivery file",
@@ -180,6 +181,10 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 				return wrapDashboardError(err)
 			}
 
+			if structured {
+				return writeAPIKeyCreated(cmd, key, appID, region, delivery)
+			}
+
 			_, _ = common.Green.Println("✓ API key created")
 			fmt.Printf("  ID:   %s\n", key.ID)
 			fmt.Printf("  Name: %s\n", key.Name)
@@ -195,6 +200,21 @@ Set an active app with: nylas dashboard apps use <app-id> --region <region>`,
 	cmd.Flags().StringVar(&delivery, "delivery", "", "API key delivery method (activate, clipboard, or file)")
 
 	return cmd
+}
+
+// writeAPIKeyCreated delivers a new key and reports it without its value.
+func writeAPIKeyCreated(cmd *cobra.Command, key *domain.GatewayCreatedAPIKey, appID, region, delivery string) error {
+	report, err := deliverAPIKey(key.APIKey, appID, region, delivery)
+	if err != nil {
+		return err
+	}
+	return common.GetOutputWriter(cmd).Write(apiKeyCreatedReport{
+		ID:            key.ID,
+		Name:          key.Name,
+		ApplicationID: appID,
+		Region:        region,
+		Delivery:      report,
+	})
 }
 
 // handleAPIKeyDelivery prompts the user to choose how to handle the newly created key.
@@ -219,33 +239,11 @@ func handleAPIKeyDelivery(apiKey, appID, region, delivery string) error {
 		choice = selected
 	}
 
-	switch choice {
-	case "activate":
-		if err := activateAPIKey(apiKey, appID, region, ""); err != nil {
-			_, _ = common.Yellow.Printf("  Could not activate: %v\n", err)
-			return nil
-		}
-		_, _ = common.Green.Println("✓ API key activated — CLI is ready to use")
-		_, _ = common.Dim.Println("  Try: nylas auth status")
-
-	case "clipboard":
-		if err := common.CopyToClipboard(apiKey); err != nil {
-			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
-			_, _ = common.Dim.Println("  Falling back to file save")
-			return saveSecretToFile(apiKey, "nylas-api-key.txt", "API key")
-		}
-		_, _ = common.Green.Println("✓ API key copied to clipboard")
-
-	case "file":
-		return saveSecretToFile(apiKey, "nylas-api-key.txt", "API key")
-
-	default:
-		return dashboardError(
-			"invalid API key delivery method",
-			"Use --delivery activate, --delivery clipboard, or --delivery file",
-		)
+	report, err := deliverAPIKey(apiKey, appID, region, choice)
+	if err != nil {
+		return err
 	}
-
+	printDelivery("API key", report)
 	return nil
 }
 
@@ -270,25 +268,11 @@ func handleSecretDelivery(secret, label, delivery string) error {
 		choice = selected
 	}
 
-	switch choice {
-	case "clipboard":
-		if err := common.CopyToClipboard(secret); err != nil {
-			_, _ = common.Yellow.Printf("  Clipboard unavailable: %v\n", err)
-			_, _ = common.Dim.Println("  Falling back to file save")
-			return saveSecretToFile(secret, "nylas-client-secret.txt", label)
-		}
-		_, _ = common.Green.Printf("✓ %s copied to clipboard\n", label)
-
-	case "file":
-		return saveSecretToFile(secret, "nylas-client-secret.txt", label)
-
-	default:
-		return dashboardError(
-			"invalid secret delivery method",
-			"Use --secret-delivery clipboard or --secret-delivery file",
-		)
+	report, err := deliverClientSecret(secret, choice)
+	if err != nil {
+		return err
 	}
-
+	printDelivery(label, report)
 	return nil
 }
 
@@ -314,17 +298,6 @@ func validateSecretDelivery(delivery string) error {
 			"Use --secret-delivery clipboard or --secret-delivery file",
 		)
 	}
-}
-
-// saveSecretToFile writes a secret to a temp file with restrictive permissions.
-func saveSecretToFile(secret, filename, label string) error {
-	keyFile, err := writeSecretTempFile(secret, filename)
-	if err != nil {
-		return wrapDashboardError(fmt.Errorf("failed to write file: %w", err))
-	}
-	_, _ = common.Green.Printf("✓ %s saved to: %s\n", label, keyFile)
-	_, _ = common.Dim.Println("  Read it, then delete the file")
-	return nil
 }
 
 func writeSecretTempFile(secret, filename string) (string, error) {

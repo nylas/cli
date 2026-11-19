@@ -5,7 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	dashboardapp "github.com/nylas/cli/internal/app/dashboard"
 	"github.com/nylas/cli/internal/cli/common"
+	"github.com/nylas/cli/internal/domain"
 	"github.com/nylas/cli/internal/ports"
 )
 
@@ -21,7 +23,11 @@ func newStatusCmd() *cobra.Command {
 
 			status := authSvc.GetStatus()
 
+			structured := structuredOutput(cmd)
 			if !status.LoggedIn {
+				if structured {
+					return common.GetOutputWriter(cmd).Write(statusReport{})
+				}
 				_, _ = common.Yellow.Println("Not logged in")
 				fmt.Println("  nylas dashboard login")
 				return nil
@@ -32,6 +38,14 @@ func newStatusCmd() *cobra.Command {
 			session, err := authSvc.GetCurrentSession(ctx)
 			if err != nil {
 				return wrapDashboardError(err)
+			}
+
+			if structured {
+				thumbprint := ""
+				if dpopSvc, _, err := createDPoPService(); err == nil {
+					thumbprint = dpopSvc.Thumbprint()
+				}
+				return common.GetOutputWriter(cmd).Write(newStatusReport(status, session, secrets, thumbprint))
 			}
 
 			orgLabel := status.OrgID
@@ -83,4 +97,40 @@ func presentAbsent(present bool) string {
 		return "present"
 	}
 	return "absent"
+}
+
+// newStatusReport collects what the text form prints into a statusReport.
+func newStatusReport(
+	status dashboardapp.Status,
+	session *domain.DashboardSessionResponse,
+	secrets ports.SecretStore,
+	dpopThumbprint string,
+) statusReport {
+	report := statusReport{
+		LoggedIn:          true,
+		UserID:            status.UserID,
+		OrganizationID:    status.OrgID,
+		OrganizationCount: len(session.Relations),
+		HasOrgToken:       status.HasOrgToken,
+		DPoPThumbprint:    dpopThumbprint,
+	}
+	if report.UserID == "" {
+		report.UserID = session.User.PublicID
+	}
+	if session.CurrentOrg != "" {
+		report.OrganizationID = session.CurrentOrg
+		for _, rel := range session.Relations {
+			if rel.OrgPublicID == session.CurrentOrg {
+				report.OrganizationName = rel.OrgName
+				break
+			}
+		}
+	}
+
+	appID, _ := secrets.Get(ports.KeyDashboardAppID)
+	appRegion, _ := secrets.Get(ports.KeyDashboardAppRegion)
+	if appID != "" {
+		report.ActiveApp = &activeAppReport{ApplicationID: appID, Region: appRegion}
+	}
+	return report
 }
