@@ -342,7 +342,9 @@ func chooseAuthMethod(action string) (string, error) {
 	return common.Select(fmt.Sprintf("How would you like to %s?", action), opts)
 }
 
-func isInteractive() bool {
+// isInteractive reports whether stdin is a terminal. A variable so tests can
+// stand in a terminal and prove --json alone is what stops a prompt.
+var isInteractive = func() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 

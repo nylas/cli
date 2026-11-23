@@ -366,6 +366,30 @@ nylas dashboard apps apikeys create --expires 30 # Expire in 30 days
 
 After creating a key, you choose: activate in CLI (recommended), copy to clipboard, or save to file.
 
+### Structured output
+
+`status`, `apps list|create|use`, `apps apikeys list|create` and
+`orgs list|switch` honour `--json`, `--format yaml` and `--quiet`, so scripts
+and AI agents can read the result instead of the text:
+
+```bash
+nylas dashboard status --json        # {"logged_in": true, "organization_id": ..., "active_app": {...}}
+nylas dashboard apps list --json     # [] when there are none
+nylas dashboard apps create --name "My App" --region us --secret-delivery file --json
+nylas dashboard apps apikeys create --delivery activate --json
+nylas dashboard apps apikeys create --delivery file -q   # prints only the key ID
+```
+
+- A secret is never printed in any format. `apps create` and `apikeys create`
+  report how it was delivered (`method`, `delivered`, and `file` for a file),
+  never its value. A clipboard that is unavailable falls back to a file and
+  says so in `warning`.
+- Signed out, `status --json` prints `{"logged_in": false, ...}` and exits 0,
+  like the text form.
+- A structured run never prompts: pass `--delivery` / `--secret-delivery`,
+  the application ID to `apps use`, and `--org` to `orgs switch`.
+- `apps list` partial-region warnings go to stderr, so stdout stays valid JSON.
+
 ### Domains
 
 ```bash
